@@ -1,21 +1,21 @@
-.DS_Store/
 *~
 .~*
-.idea/
-.bsp/
 nohup.out
 *.swp
 *.iml
-target/
-plot*.html
-test*.log
 *.tmp
 null
 
-project/target
+.bsp/
 .metals/
+.bloop/
+.vscode/
+.idea/
+
+target/
+project/target/
+project/project/
+project/metals.sbt
 
 tmp-*.gif
 tmp-*.png
-
-private-application*.conf
