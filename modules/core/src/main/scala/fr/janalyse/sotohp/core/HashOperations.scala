@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.core
 
 import java.nio.file.Path
 
-object HashOps {
+object HashOperations {
 
   def sha1(that: String): String = {
     import java.math.BigInteger

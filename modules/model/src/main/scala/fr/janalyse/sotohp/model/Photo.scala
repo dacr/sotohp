@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.model
 
-import java.time.OffsetDateTime
+import java.time.{Instant, OffsetDateTime}
 import java.util.UUID
 
 case class PhotoOwnerId(
@@ -46,17 +46,23 @@ enum PhotoSource {
   )
 }
 
-case class PhotoOrientation(
-  code: Int
-)
+enum PhotoOrientation(val code: Int, val description: String) {
+  case Horizontal                            extends PhotoOrientation(1, "Horizontal (normal)")
+  case MirrorHorizontal                      extends PhotoOrientation(2, "Mirror horizontal")
+  case Rotate180                             extends PhotoOrientation(3, "Rotate 180")
+  case MirrorVertical                        extends PhotoOrientation(4, "Mirror vertical")
+  case MirrorHorizontalAndRotate270ClockWise extends PhotoOrientation(5, "Mirror horizontal and rotate 270 CW")
+  case Rotate90ClockWise                     extends PhotoOrientation(6, "Rotate 90 CW")
+  case MirrorHorizontalAndRotate90ClockWise  extends PhotoOrientation(7, "Mirror horizontal and rotate 90 CW")
+  case Rotate270ClockWise                    extends PhotoOrientation(8, "Rotate 270 CW")
+}
 
 case class PhotoMetaData(
-  dimension: Dimension2D,
+  dimension: Option[Dimension2D],
   shootDateTime: Option[OffsetDateTime],
   orientation: Option[PhotoOrientation],
   cameraName: Option[String],
-  tags: Map[String, String],
-  lastUpdated: OffsetDateTime
+  tags: Map[String, String]
 )
 
 case class PhotoKeywords(
@@ -96,12 +102,12 @@ case class Photo(
   ownerId: PhotoOwnerId,
   timestamp: OffsetDateTime,
   source: PhotoSource,
-  miniatures: Option[Miniatures],
   metaData: Option[PhotoMetaData],
-  foundPlace: Option[GeoPoint],
-  foundCategory: Option[PhotoCategory],
-  foundKeywords: Option[PhotoKeywords],
-  foundClassifications: Option[PhotoClassifications],
-  foundObjects: Option[PhotoObjects],
-  foundFaces: Option[PhotoFaces]
+  miniatures: Option[Miniatures] = None,
+  foundPlace: Option[GeoPoint] = None,
+  foundCategory: Option[PhotoCategory] = None,
+  foundKeywords: Option[PhotoKeywords] = None,
+  foundClassifications: Option[PhotoClassifications] = None,
+  foundObjects: Option[PhotoObjects] = None,
+  foundFaces: Option[PhotoFaces] = None
 )
