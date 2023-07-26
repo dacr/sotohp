@@ -120,7 +120,7 @@ object PhotoOriginalsStream {
     )
   }
 
-  def makePhoto(searchPath: Path, filePath: Path): Task[Photo] = {
+  def makePhoto(photoOwnerId:PhotoOwnerId, searchPath: Path, filePath: Path): Task[Photo] = {
     for {
       metadata      <- readMetadata(filePath)
       geopoint       = extractGeoPoint(metadata)
@@ -131,7 +131,7 @@ object PhotoOriginalsStream {
     } yield {
       Photo(
         id = PhotoId(photoId),
-        ownerId = PhotoOwnerId(UUID.fromString("CAFECAFE-CAFE-CAFE-BABE-BABEBABE")),
+        ownerId = photoOwnerId,
         timestamp = photoTimestamp,
         source = photoSource,
         metaData = Some(photoMetaData)
@@ -139,10 +139,10 @@ object PhotoOriginalsStream {
     }
   }
 
-  def photoOriginalStream(searchRoots: List[String], includeMask: Option[String] = None, ignoreMask: Option[String] = None): ZStream[Any, Throwable, Photo] = {
+  def photoOriginalStream(photoOwnerId:PhotoOwnerId, searchRoots: List[String], includeMask: Option[String] = None, ignoreMask: Option[String] = None): ZStream[Any, Throwable, Photo] = {
     fileStream(searchRoots, includeMask, ignoreMask)
-      .mapZIOParUnordered(1)((searchPath, path) => makePhoto(searchPath, path))
-      .tapError(err => Console.printLine(err))
+      .mapZIOParUnordered(1)((searchPath, path) => makePhoto(photoOwnerId, searchPath, path))
+      .tapError(err => logError(s"error on stream : ${err.getMessage}"))
   }
 
 }
