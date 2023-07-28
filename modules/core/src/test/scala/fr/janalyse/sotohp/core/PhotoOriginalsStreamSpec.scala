@@ -11,33 +11,60 @@ import scala.jdk.CollectionConverters.*
 import java.util.UUID
 
 object PhotoOriginalsStreamSpec extends ZIOSpecDefault {
-  val searchPath1       = "samples/dataset1"
-  val searchRoots1      = List(searchPath1)
-  val photoFileExample1 = Path.of("samples/dataset1/example1.jpg")
-  val photoFileExample2 = Path.of("samples/dataset1/example2.jpg")
-  val photoOwnerId      = PhotoOwnerId(UUID.fromString("CAFECAFE-CAFE-CAFE-BABE-BABEBABE"))
+  val photoOwnerId = PhotoOwnerId(UUID.fromString("CAFECAFE-CAFE-CAFE-BABE-BABEBABE"))
+
+  val dataset1         = "samples/dataset1"
+  val dataset1Example1 = Path.of("samples/dataset1/example1.jpg")
+  val dataset1Example2 = Path.of("samples/dataset1/example2.jpg")
+
+  val dataset2           = "samples/dataset2"
+  val dataset2tag1       = Path.of("samples/dataset2/tags/tag1.jpg")
+  val dataset2landscape1 = Path.of("samples/dataset2/landscapes/landscape1.jpg")
 
   override def spec =
     suite("Photo original stream")(
       test("generate photo record") {
         for {
-          photo         <- makePhoto(photoOwnerId, Path.of(searchPath1), photoFileExample1)
-          photoMetaData <- from(photo.metaData)
-          cameraName    <- from(photoMetaData.cameraName)
+          photoSearchFileRoot <- from(PhotoSearchFileRoot.build(photoOwnerId, dataset1))
+          photo               <- makePhoto(photoSearchFileRoot, dataset1Example1)
+          photoMetaData       <- from(photo.metaData)
+          cameraName          <- from(photoMetaData.cameraName)
         } yield assertTrue(
           photo.source match {
-            case file: PhotoSource.PhotoFile =>
-              file.hash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae"
+            case photoFile: PhotoSource.PhotoFile =>
+              // file.hash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae"
+              photoFile.size == 472624L && photoFile.photoPath == dataset1Example1
           },
           cameraName.contains("Canon")
         )
       },
-      test("collect original photos") {
-        val originals = photoOriginalStream(photoOwnerId, searchRoots1)
+      test("collect original photos with flat dataset") {
         for {
-          originals <- originals.runCollect
+          photoSearchFileRoot <- from(PhotoSearchFileRoot.build(photoOwnerId, dataset1))
+          originalsStream      = photoOriginalStream(List(photoSearchFileRoot))
+          photos              <- originalsStream.runCollect
+          photoFileSources     = photos.map(_.source match { case p: PhotoSource.PhotoFile => p })
+          photoFilePaths       = photoFileSources.map(_.photoPath)
         } yield assertTrue(
-          originals.size == 2
+          photos.size == 2,
+          photoFileSources.head.baseDirectory == Path.of(dataset1),
+          photoFilePaths.toSet == Set(dataset1Example1, dataset1Example2),
+          photos.forall(_.category.isEmpty)
+        )
+      },
+      test("collect original photos with tree dataset") {
+        for {
+          photoSearchFileRoot <- from(PhotoSearchFileRoot.build(photoOwnerId, dataset2))
+          originalsStream      = photoOriginalStream(List(photoSearchFileRoot))
+          photos              <- originalsStream.runCollect
+          photoFileSources     = photos.map(_.source match { case p: PhotoSource.PhotoFile => p })
+          photoFilePaths       = photoFileSources.map(_.photoPath)
+          photoCategories      = photos.flatMap(_.category.map(_.text))
+        } yield assertTrue(
+          photos.size == 2,
+          photoFileSources.head.baseDirectory == Path.of(dataset2),
+          photoFilePaths.toSet == Set(dataset2tag1, dataset2landscape1),
+          photoCategories.toSet == Set("landscapes", "tags")
         )
       }
     )

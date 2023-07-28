@@ -37,15 +37,6 @@ case class DetectedFace(
   box: BoundingBox
 )
 
-enum PhotoSource {
-  case PhotoFile(
-    path: String,
-    size: Long,
-    hash: PhotoHash,
-    lastModified: OffsetDateTime
-  )
-}
-
 enum PhotoOrientation(val code: Int, val description: String) {
   case Horizontal                            extends PhotoOrientation(1, "Horizontal (normal)")
   case MirrorHorizontal                      extends PhotoOrientation(2, "Mirror horizontal")
@@ -103,9 +94,9 @@ case class Photo(
   timestamp: OffsetDateTime,
   source: PhotoSource,
   metaData: Option[PhotoMetaData],
+  category: Option[PhotoCategory] = None,
   miniatures: Option[Miniatures] = None,
   foundPlace: Option[GeoPoint] = None,
-  foundCategory: Option[PhotoCategory] = None,
   foundKeywords: Option[PhotoKeywords] = None,
   foundClassifications: Option[PhotoClassifications] = None,
   foundObjects: Option[PhotoObjects] = None,

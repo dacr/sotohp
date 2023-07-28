@@ -1,7 +1,10 @@
 package fr.janalyse.sotohp.model
 
+type XAxis = Int
+type YAxis = Int
+
 case class BoundingBox(
-  x: Int,
-  y: Int,
+  x: XAxis,
+  y: YAxis,
   dimension: Dimension2D
 )

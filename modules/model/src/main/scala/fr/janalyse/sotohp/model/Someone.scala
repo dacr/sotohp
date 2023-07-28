@@ -7,9 +7,13 @@ case class SomeoneId(
   uuid: UUID
 ) extends AnyVal
 
+type FirstName = String
+type LastName  = String
+type BirthDate = OffsetDateTime
+
 case class Someone(
   id: SomeoneId,
-  firstName: String,
-  lastName: String,
-  birthDate: Option[OffsetDateTime]
+  firstName: FirstName,
+  lastName: LastName,
+  birthDate: Option[BirthDate]
 )
