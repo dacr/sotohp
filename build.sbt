@@ -12,15 +12,15 @@ scmInfo := Some(
 )
 
 val versions = new {
-  val zio = "2.0.15"
+  val zio      = "2.0.15"
 //  val zionio     = "2.0.1"
 //  val zioconfig  = "4.0.0-RC16"
 //  val ziojson    = "0.5.0"
 //  val ziologging = "2.1.13"
 //  val ziolmdb    = "1.1.0"
 //  val tapir      = "1.5.0"
-  val metadata   = "2.18.0"
-  val uuidgen    = "4.2.0"
+  val metadata = "2.18.0"
+  val uuidgen  = "4.2.0"
 }
 
 //val sharedSettings = Seq(
@@ -75,6 +75,19 @@ lazy val moduleCore =
 //        "fr.janalyse"       %% "zio-lmdb"            % versions.ziolmdb
       )
     )
+
+lazy val userInterfacesCLI =
+  project
+    .in(file("user-interfaces/cli"))
+    .settings(sharedSettings)
+    .dependsOn(moduleCore)
+    .settings(
+      sharedSettings,
+      libraryDependencies ++= Seq(
+        "dev.zio" %% "zio" % versions.zio
+      )
+    )
+
 //
 //lazy val webapi =
 //  project

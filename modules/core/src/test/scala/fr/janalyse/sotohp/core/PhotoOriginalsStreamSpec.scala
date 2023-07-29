@@ -30,11 +30,8 @@ object PhotoOriginalsStreamSpec extends ZIOSpecDefault {
           photoMetaData       <- from(photo.metaData)
           cameraName          <- from(photoMetaData.cameraName)
         } yield assertTrue(
-          photo.source match {
-            case photoFile: PhotoSource.PhotoFile =>
-              // file.hash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae"
-              photoFile.size == 472624L && photoFile.photoPath == dataset1Example1
-          },
+          // photo.source.hash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae"
+          photo.source.size == 472624L && photo.source.photoPath == dataset1Example1,
           cameraName.contains("Canon")
         )
       },
@@ -43,7 +40,7 @@ object PhotoOriginalsStreamSpec extends ZIOSpecDefault {
           photoSearchFileRoot <- from(PhotoSearchFileRoot.build(photoOwnerId, dataset1))
           originalsStream      = photoOriginalStream(List(photoSearchFileRoot))
           photos              <- originalsStream.runCollect
-          photoFileSources     = photos.map(_.source match { case p: PhotoSource.PhotoFile => p })
+          photoFileSources     = photos.map(_.source)
           photoFilePaths       = photoFileSources.map(_.photoPath)
         } yield assertTrue(
           photos.size == 2,
@@ -57,7 +54,7 @@ object PhotoOriginalsStreamSpec extends ZIOSpecDefault {
           photoSearchFileRoot <- from(PhotoSearchFileRoot.build(photoOwnerId, dataset2))
           originalsStream      = photoOriginalStream(List(photoSearchFileRoot))
           photos              <- originalsStream.runCollect
-          photoFileSources     = photos.map(_.source match { case p: PhotoSource.PhotoFile => p })
+          photoFileSources     = photos.map(_.source)
           photoFilePaths       = photoFileSources.map(_.photoPath)
           photoCategories      = photos.flatMap(_.category.map(_.text))
         } yield assertTrue(

@@ -8,12 +8,10 @@ type PhotoPath         = Path
 type FileSize          = Long
 type FileLastModified  = OffsetDateTime
 
-enum PhotoSource {
-  case PhotoFile(
-    baseDirectory: BaseDirectoryPath,
-    photoPath: PhotoPath,
-    size: FileSize,
-    hash: Option[PhotoHash],
-    lastModified: FileLastModified
-  )
-}
+case class PhotoSource(
+  baseDirectory: BaseDirectoryPath,
+  photoPath: PhotoPath,
+  size: FileSize,
+  hash: Option[PhotoHash],
+  lastModified: FileLastModified
+)

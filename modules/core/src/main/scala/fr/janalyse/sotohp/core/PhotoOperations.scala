@@ -18,15 +18,33 @@ import java.io.{File, IOException}
 import java.nio.charset.Charset
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, Path, Paths}
+import java.util.UUID
 import java.time.*
-import scala.Console.*
 import scala.jdk.CollectionConverters.*
+import com.fasterxml.uuid.Generators
+
 import scala.util.Try
-import scala.util.matching.Regex
 
 object PhotoOperations {
 
-  def readMetadata(filePath: Path): IO[IOException, Metadata] = {
+  private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
+
+  def computePhotoId(photoSource: PhotoSource, photoMetaData: PhotoMetaData): UUID = {
+    // Using photo file path for identifier generation
+    // as the same photo can be used within several directories
+    import photoSource.photoPath
+    val key = s"$photoPath"
+    nameBaseUUIDGenerator.generate(key)
+  }
+
+  def computePhotoTimestamp(photoSource: PhotoSource, photoMetaData: PhotoMetaData): OffsetDateTime = {
+    photoMetaData.shootDateTime match {
+      // case Some(shootDateTime) if checkTimestampValid(shootDateTime) => shootDateTime
+      case Some(shootDateTime) => shootDateTime
+      case _                   => photoSource.lastModified
+    }
+  }
+  def readMetadata(filePath: Path): IO[IOException, Metadata]                                       = {
     attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
       .tapError(th => ZIO.logWarning(s"Couldn't read image meta data in file $filePath : ${th.getMessage}"))
   }
@@ -80,18 +98,29 @@ object PhotoOperations {
     }
   }
 
-  def extractDimension(metadata: Metadata): Option[Dimension2D] = {
-    lazy val jpgDir =
-      Option(metadata.getFirstDirectoryOfType(classOf[JpegDirectory]))
-        .map(dir => Dimension2D(dir.getImageWidth, dir.getImageHeight))
-    lazy val pngDir =
-      Option(metadata.getFirstDirectoryOfType(classOf[PngDirectory]))
-        .map(dir => Dimension2D(dir.getInt(PngDirectory.TAG_IMAGE_WIDTH), dir.getInt(PngDirectory.TAG_IMAGE_HEIGHT)))
-    lazy val gifDir =
-      Option(metadata.getFirstDirectoryOfType(classOf[GifImageDirectory]))
-        .map(dir => Dimension2D(dir.getInt(GifImageDirectory.TAG_WIDTH), dir.getInt(GifImageDirectory.TAG_HEIGHT)))
+  private def makeDimension2D(getWidth: => Width, getHeight: => Height): Option[Dimension2D] = {
+    val result = for {
+      width  <- Try(getWidth)
+      height <- Try(getHeight)
+    } yield Dimension2D(width, height)
+    result.toOption
+  }
 
-    jpgDir.orElse(pngDir).orElse(gifDir)
+  def extractDimension(metadata: Metadata): Option[Dimension2D] = {
+    lazy val dimensionFromJpeg =
+      Option(metadata.getFirstDirectoryOfType(classOf[JpegDirectory]))
+        .flatMap(dir => makeDimension2D(dir.getImageWidth, dir.getImageHeight))
+    lazy val dimensionFromPng  =
+      Option(metadata.getFirstDirectoryOfType(classOf[PngDirectory]))
+        .flatMap(dir => makeDimension2D(dir.getInt(PngDirectory.TAG_IMAGE_WIDTH), dir.getInt(PngDirectory.TAG_IMAGE_HEIGHT)))
+    lazy val dimensionFromGif  =
+      Option(metadata.getFirstDirectoryOfType(classOf[GifImageDirectory]))
+        .flatMap(dir => makeDimension2D(dir.getInt(GifImageDirectory.TAG_WIDTH), dir.getInt(GifImageDirectory.TAG_HEIGHT)))
+    lazy val dimensionFromExif =
+      Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+        .flatMap(dir => makeDimension2D(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH), dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT)))
+
+    dimensionFromJpeg.orElse(dimensionFromPng).orElse(dimensionFromGif).orElse(dimensionFromExif)
   }
 
   def extractOrientation(metadata: Metadata): Option[PhotoOrientation] = {

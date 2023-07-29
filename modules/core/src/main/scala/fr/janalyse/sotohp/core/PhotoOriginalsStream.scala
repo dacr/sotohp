@@ -4,58 +4,21 @@ import zio.*
 import zio.ZIO.*
 import zio.stream.*
 
-import scala.util.Try
-import scala.util.matching.Regex
-import zio.stream.ZPipeline.{splitLines, utf8Decode}
-
 import java.io.{File, IOException}
-import java.nio.charset.Charset
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, Path, Paths}
-import java.time.{Instant, OffsetDateTime, ZoneId, ZoneOffset, ZonedDateTime}
-import scala.Console.{BLUE, GREEN, RED, RESET, YELLOW}
-import com.drew.imaging.ImageMetadataReader
+import java.time.{Instant, OffsetDateTime, ZoneId}
 import com.drew.metadata.Metadata
-import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, ExifSubIFDDirectory, GpsDirectory}
-import com.drew.metadata.jpeg.JpegDirectory
-import com.drew.metadata.png.PngDirectory
-import com.drew.metadata.gif.GifImageDirectory
 import fr.janalyse.sotohp.model.{PhotoMetaData, *}
 import fr.janalyse.sotohp.model.DegreeMinuteSeconds.*
 import fr.janalyse.sotohp.model.DecimalDegrees.*
-import com.fasterxml.uuid.Generators
 
 import scala.jdk.CollectionConverters.*
 import PhotoOperations.*
-import fr.janalyse.sotohp.model.PhotoSource.PhotoFile
+import fr.janalyse.sotohp.model.*
 import java.util.UUID
 
 object PhotoOriginalsStream {
-
-  private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
-
-  def computePhotoId(photoSource: PhotoSource, photoMetaData: PhotoMetaData): UUID = {
-    // Using photo file path for identifier generation
-    // as the same photo can be used within several directories
-    photoSource match {
-      case photoFile: PhotoSource.PhotoFile =>
-        import photoFile.photoPath
-        val key = s"$photoPath"
-        println(key)
-        nameBaseUUIDGenerator.generate(key)
-    }
-  }
-
-  def computePhotoTimestamp(photoSource: PhotoSource, photoMetaData: PhotoMetaData): OffsetDateTime = {
-    photoMetaData.shootDateTime match {
-      // case Some(shootDateTime) if checkTimestampValid(shootDateTime) => shootDateTime
-      case Some(shootDateTime) => shootDateTime
-      case _                   =>
-        photoSource match {
-          case photoFile: PhotoSource.PhotoFile => photoFile.lastModified
-        }
-    }
-  }
 
   def searchPredicate(includeMaskRegex: Option[IncludeMaskRegex], ignoreMaskRegex: Option[IgnoreMaskRegex])(path: Path, attrs: BasicFileAttributes): Boolean = {
     attrs.isRegularFile &&
@@ -94,11 +57,11 @@ object PhotoOriginalsStream {
                             .logError(s"Unable to get file last modified of $photoPath")
       // fileHash         <- attemptBlockingIO(HashOperations.fileDigest(filePath))
       //                      .logError(s"Unable to compute file hash of $filePath")
-    } yield PhotoSource.PhotoFile(
+    } yield PhotoSource(
       baseDirectory = baseDirectory,
       photoPath = photoPath,
       size = fileSize,
-      // hash = PhotoHash(fileHash),
+      // hash = PhotoHash(fileHash), // Computer later asynchronously
       hash = None,
       lastModified = fileLastModified
     )
@@ -130,7 +93,7 @@ object PhotoOriginalsStream {
               .trim
           PhotoCategory(text)
         }
-        category.filter(_.text.size>0)
+        category.filter(_.text.size > 0)
     }
   }
 
