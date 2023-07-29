@@ -15,9 +15,9 @@ val versions = new {
   val zio      = "2.0.15"
 //  val zionio     = "2.0.1"
 //  val zioconfig  = "4.0.0-RC16"
-//  val ziojson    = "0.5.0"
+  val ziojson  = "0.6.0"
 //  val ziologging = "2.1.13"
-//  val ziolmdb    = "1.1.0"
+  val ziolmdb  = "1.2.0"
 //  val tapir      = "1.5.0"
   val metadata = "2.18.0"
   val uuidgen  = "4.2.0"
@@ -66,13 +66,13 @@ lazy val moduleCore =
       sharedSettings,
       libraryDependencies ++= Seq(
         "dev.zio"           %% "zio-streams"         % versions.zio,
-//        "dev.zio"           %% "zio-nio"             % versions.zionio,
+        "dev.zio"           %% "zio-json"            % versions.ziojson,
 //        "dev.zio"           %% "zio-config"          % versions.zioconfig,
 //        "dev.zio"           %% "zio-config-typesafe" % versions.zioconfig,
 //        "dev.zio"           %% "zio-config-magnolia" % versions.zioconfig,
         "com.drewnoakes"     % "metadata-extractor"  % versions.metadata,
-        "com.fasterxml.uuid" % "java-uuid-generator" % versions.uuidgen
-//        "fr.janalyse"       %% "zio-lmdb"            % versions.ziolmdb
+        "com.fasterxml.uuid" % "java-uuid-generator" % versions.uuidgen,
+        "fr.janalyse"       %% "zio-lmdb"            % versions.ziolmdb
       )
     )
 

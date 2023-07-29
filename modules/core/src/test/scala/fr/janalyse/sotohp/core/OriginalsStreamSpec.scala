@@ -5,12 +5,12 @@ import zio.ZIO.*
 import zio.test.*
 
 import fr.janalyse.sotohp.model.*
-import PhotoOriginalsStream.*
+import OriginalsStream.*
 import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters.*
 import java.util.UUID
 
-object PhotoOriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
+object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
 
   override def spec =
     suite("Photo original stream")(

@@ -18,7 +18,7 @@ import PhotoOperations.*
 import fr.janalyse.sotohp.model.*
 import java.util.UUID
 
-object PhotoOriginalsStream {
+object OriginalsStream {
 
   private def searchPredicate(includeMaskRegex: Option[IncludeMaskRegex], ignoreMaskRegex: Option[IgnoreMaskRegex])(path: Path, attrs: BasicFileAttributes): Boolean = {
     attrs.isRegularFile &&
