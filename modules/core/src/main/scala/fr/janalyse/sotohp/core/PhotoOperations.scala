@@ -30,21 +30,34 @@ object PhotoOperations {
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
   def computePhotoId(photoSource: PhotoSource, photoMetaData: PhotoMetaData): UUID = {
-    // Using photo file path for identifier generation
-    // as the same photo can be used within several directories
-    import photoSource.photoPath
-    val key = s"$photoPath"
+    // Using photo file path and owner id for photo identifier generation
+    // as the same photo can be used within several directories or people
+    import photoSource.{photoPath, ownerId}
+    val key = s"$ownerId:$photoPath"
     nameBaseUUIDGenerator.generate(key)
+  }
+
+  def computePhotoCategory(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath): Option[PhotoCategory] = {
+    val category = Option(photoPath.getParent).map { parentDir =>
+      val text =
+        parentDir.toString
+          .replaceAll(baseDirectory.toString, "")
+          .replaceAll("^/", "")
+          .replaceAll("/$", "")
+          .trim
+      PhotoCategory(text)
+    }
+    category.filter(_.text.size > 0)
   }
 
   def computePhotoTimestamp(photoSource: PhotoSource, photoMetaData: PhotoMetaData): OffsetDateTime = {
     photoMetaData.shootDateTime match {
-      // case Some(shootDateTime) if checkTimestampValid(shootDateTime) => shootDateTime
       case Some(shootDateTime) => shootDateTime
       case _                   => photoSource.lastModified
     }
   }
-  def readMetadata(filePath: Path): IO[IOException, Metadata]                                       = {
+
+  def readMetadata(filePath: Path): IO[IOException, Metadata] = {
     attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
       .tapError(th => ZIO.logWarning(s"Couldn't read image meta data in file $filePath : ${th.getMessage}"))
   }
@@ -133,4 +146,60 @@ object PhotoOperations {
     result.flatten
   }
 
+  def makePhotoSource(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): Task[PhotoSource] = {
+    for {
+      fileSize         <- attemptBlockingIO(photoPath.toFile.length())
+                            .logError(s"Unable to read file size of $photoPath")
+      fileLastModified <- attemptBlockingIO(photoPath.toFile.lastModified())
+                            .mapAttempt(Instant.ofEpochMilli)
+                            .map(_.atZone(ZoneId.systemDefault()))
+                            .map(_.toOffsetDateTime)
+                            .logError(s"Unable to get file last modified of $photoPath")
+      // fileHash         <- attemptBlockingIO(HashOperations.fileDigest(filePath))
+      //                      .logError(s"Unable to compute file hash of $filePath")
+    } yield PhotoSource(
+      ownerId = photoOwnerId,
+      baseDirectory = baseDirectory,
+      photoPath = photoPath,
+      size = fileSize,
+      // hash = PhotoHash(fileHash), // Computer later asynchronously
+      hash = None,
+      lastModified = fileLastModified
+    )
+  }
+
+  def makePhotoMetaData(metadata: Metadata): PhotoMetaData = {
+    val shootDateTime = extractShootDateTime(metadata)
+    val cameraName    = extractCameraName(metadata)
+    val genericTags   = extractGenericTags(metadata)
+    val dimension     = extractDimension(metadata)
+    val orientation   = extractOrientation(metadata)
+    PhotoMetaData(
+      dimension = dimension,
+      shootDateTime = shootDateTime,
+      orientation = orientation,
+      cameraName = cameraName,
+      tags = genericTags
+    )
+  }
+
+  def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): Task[Photo] = {
+    for {
+      metadata      <- readMetadata(photoPath)
+      geopoint       = extractGeoPoint(metadata)
+      photoSource   <- makePhotoSource(baseDirectory, photoPath, photoOwnerId)
+      photoMetaData  = makePhotoMetaData(metadata)
+      photoId        = computePhotoId(photoSource, photoMetaData)
+      photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
+      photoCategory  = computePhotoCategory(baseDirectory, photoPath)
+    } yield {
+      Photo(
+        id = PhotoId(photoId),
+        timestamp = photoTimestamp,
+        source = photoSource,
+        metaData = Some(photoMetaData),
+        category = photoCategory
+      )
+    }
+  }
 }

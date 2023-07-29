@@ -8,23 +8,21 @@ import scala.util.matching.Regex
 type IncludeMaskRegex = Regex
 type IgnoreMaskRegex  = Regex
 
-sealed trait PhotoSearchRoot
-
-case class PhotoSearchFileRoot protected (
+case class PhotoSearchRoot private (
   id: UUID,
   photoOwnerId: PhotoOwnerId,
-  baseDirectory: Path,
+  baseDirectory: BaseDirectoryPath,
   includeMask: Option[IncludeMaskRegex],
   ignoreMask: Option[IgnoreMaskRegex]
-) extends PhotoSearchRoot
+)
 
-object PhotoSearchFileRoot {
+object PhotoSearchRoot {
   def build(
     photoOwnerId: PhotoOwnerId,
     baseDirectorySpec: String,
     includeMaskPattern: Option[String] = None,
     ignoreMaskPattern: Option[String] = None
-  ): Try[PhotoSearchFileRoot] =
+  ): Try[PhotoSearchRoot] =
     for {
       baseDirectory <- Try(Path.of(baseDirectorySpec).normalize())
                          .transform(
@@ -42,7 +40,7 @@ object PhotoSearchFileRoot {
                            err => Failure(IllegalArgumentException("Given ignore mask regex pattern is invalid", err))
                          )
       id             = UUID.randomUUID()
-    } yield PhotoSearchFileRoot(
+    } yield PhotoSearchRoot(
       id = id,
       photoOwnerId = photoOwnerId,
       baseDirectory = baseDirectory,

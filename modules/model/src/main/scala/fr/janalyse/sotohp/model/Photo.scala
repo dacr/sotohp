@@ -3,10 +3,6 @@ package fr.janalyse.sotohp.model
 import java.time.{Instant, OffsetDateTime}
 import java.util.UUID
 
-case class PhotoOwnerId(
-  uuid: UUID
-) extends AnyVal
-
 case class PhotoId(
   uuid: UUID
 ) extends AnyVal
@@ -90,7 +86,6 @@ case class Miniatures(
 
 case class Photo(
   id: PhotoId,
-  ownerId: PhotoOwnerId,
   timestamp: OffsetDateTime,
   source: PhotoSource,
   metaData: Option[PhotoMetaData],
