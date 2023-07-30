@@ -6,6 +6,7 @@ import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, ExifSubIFDD
 import com.drew.metadata.gif.GifImageDirectory
 import com.drew.metadata.jpeg.JpegDirectory
 import com.drew.metadata.png.PngDirectory
+import com.drew.metadata.bmp.BmpHeaderDirectory
 import fr.janalyse.sotohp.model.DecimalDegrees.*
 import fr.janalyse.sotohp.model.DegreeMinuteSeconds.*
 import fr.janalyse.sotohp.model.*
@@ -29,7 +30,7 @@ object PhotoOperations {
 
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
-  def computePhotoId(photoSource: PhotoSource, photoMetaData: PhotoMetaData): UUID = {
+  def computePhotoId(photoSource: PhotoSource): UUID = {
     // Using photo file path and owner id for photo identifier generation
     // as the same photo can be used within several directories or people
     import photoSource.{photoPath, ownerId}
@@ -83,23 +84,29 @@ object PhotoOperations {
   }
 
   def extractShootDateTime(metadata: Metadata): Option[OffsetDateTime] = {
+    val tagName = ExifDirectoryBase.TAG_DATETIME
     for {
       exif          <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
-      shootDateTime <- Option(exif.getDate(ExifDirectoryBase.TAG_DATETIME))
+      if exif.containsTag(tagName)
+      shootDateTime <- Option(exif.getDate(tagName))
     } yield shootDateTime.toInstant.atOffset(ZoneOffset.UTC)
   }
 
   def extractCameraName(metadata: Metadata): Option[String] = {
+    val tagName = ExifDirectoryBase.TAG_MODEL
     for {
       exif       <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
-      cameraName <- Option(exif.getString(ExifDirectoryBase.TAG_MODEL))
+      if exif.containsTag(tagName)
+      cameraName <- Option(exif.getString(tagName))
     } yield cameraName
   }
 
   def extractGeoPoint(metadata: Metadata): Option[GeoPoint] = {
+    val tagName = GpsDirectory.TAG_ALTITUDE
     for {
       gps       <- Option(metadata.getFirstDirectoryOfType(classOf[GpsDirectory]))
-      altitude  <- Option(gps.getDouble(GpsDirectory.TAG_ALTITUDE))
+      if gps.containsTag(tagName)
+      altitude  <- Option(gps.getDouble(tagName))
       latitude  <- Option(gps.getGeoLocation).map(_.getLatitude).map(LatitudeDecimalDegrees.apply)
       longitude <- Option(gps.getGeoLocation).map(_.getLongitude).map(LongitudeDecimalDegrees.apply)
     } yield {
@@ -129,17 +136,26 @@ object PhotoOperations {
     lazy val dimensionFromGif  =
       Option(metadata.getFirstDirectoryOfType(classOf[GifImageDirectory]))
         .flatMap(dir => makeDimension2D(dir.getInt(GifImageDirectory.TAG_WIDTH), dir.getInt(GifImageDirectory.TAG_HEIGHT)))
+    lazy val dimensionFromBmp  =
+      Option(metadata.getFirstDirectoryOfType(classOf[BmpHeaderDirectory]))
+        .flatMap(dir => makeDimension2D(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_WIDTH), dir.getInt(BmpHeaderDirectory.TAG_IMAGE_HEIGHT)))
     lazy val dimensionFromExif =
       Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
         .flatMap(dir => makeDimension2D(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH), dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT)))
 
-    dimensionFromJpeg.orElse(dimensionFromPng).orElse(dimensionFromGif).orElse(dimensionFromExif)
+    dimensionFromJpeg
+      .orElse(dimensionFromPng)
+      .orElse(dimensionFromGif)
+      .orElse(dimensionFromBmp)
+      .orElse(dimensionFromExif) // Remember that exif dimensions declaration may lie if the image have been altered
   }
 
   def extractOrientation(metadata: Metadata): Option[PhotoOrientation] = {
-    val result = for {
+    val tagName = ExifDirectoryBase.TAG_ORIENTATION
+    val result  = for {
       exif            <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
-      orientationCode <- Option(exif.getInt(ExifDirectoryBase.TAG_ORIENTATION))
+      if exif.containsTag(tagName)
+      orientationCode <- Option(exif.getInt(tagName))
     } yield {
       PhotoOrientation.values.find(_.code == orientationCode)
     }
@@ -155,15 +171,14 @@ object PhotoOperations {
                             .map(_.atZone(ZoneId.systemDefault()))
                             .map(_.toOffsetDateTime)
                             .logError(s"Unable to get file last modified of $photoPath")
-      // fileHash         <- attemptBlockingIO(HashOperations.fileDigest(filePath))
-      //                      .logError(s"Unable to compute file hash of $filePath")
+      fileHash         <- attemptBlockingIO(HashOperations.fileDigest(photoPath))
+                            .logError(s"Unable to compute file hash of $photoPath")
     } yield PhotoSource(
       ownerId = photoOwnerId,
       baseDirectory = baseDirectory,
       photoPath = photoPath,
       size = fileSize,
-      // hash = PhotoHash(fileHash), // Computer later asynchronously
-      hash = None,
+      hash = PhotoHash(fileHash),
       lastModified = fileLastModified
     )
   }
@@ -188,8 +203,8 @@ object PhotoOperations {
       metadata      <- readMetadata(photoPath)
       geopoint       = extractGeoPoint(metadata)
       photoSource   <- makePhotoSource(baseDirectory, photoPath, photoOwnerId)
+      photoId        = computePhotoId(photoSource)
       photoMetaData  = makePhotoMetaData(metadata)
-      photoId        = computePhotoId(photoSource, photoMetaData)
       photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
       photoCategory  = computePhotoCategory(baseDirectory, photoPath)
     } yield {

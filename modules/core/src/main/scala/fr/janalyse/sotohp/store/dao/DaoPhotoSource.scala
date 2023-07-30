@@ -10,6 +10,6 @@ case class DaoPhotoSource(
   baseDirectory: String,
   photoPath: String,
   size: Long,
-  hash: Option[String],
+  hash: String,
   lastModified: OffsetDateTime
 ) derives JsonCodec

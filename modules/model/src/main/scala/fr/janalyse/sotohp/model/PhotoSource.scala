@@ -18,6 +18,6 @@ case class PhotoSource(
   baseDirectory: BaseDirectoryPath,
   photoPath: PhotoPath,
   size: FileSize,
-  hash: Option[PhotoHash],
+  hash: PhotoHash,
   lastModified: FileLastModified
 )

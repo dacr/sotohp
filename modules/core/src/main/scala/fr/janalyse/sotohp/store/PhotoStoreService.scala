@@ -10,11 +10,7 @@ trait PhotoStoreService {
   def photoStateUpsert(photoState: PhotoState): Task[PhotoState]
   def photoStateDelete(photoId: PhotoId): Task[Unit]
 
-  // photo hashes collection
-  def photoHashGet(photoId: PhotoId): Task[Option[PhotoHash]]
-  def photoHashAdd(photoId: PhotoId, hash: PhotoHash): Task[PhotoHash]
-
-  // photos collection (with subqueries to complete data structure)
+  // photos collection
   def photoGet(photoId: PhotoId): Task[Photo]
   def photoUpsert(photo: Photo): Task[Photo]
   def photoDelete(photoId: PhotoId): Task[Unit]
