@@ -2,8 +2,10 @@ package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.model.{PhotoOwnerId, PhotoSearchRoot}
 import fr.janalyse.sotohp.core.OriginalsStream
+import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
 import zio.ZIO.*
+import zio.lmdb.LMDB
 
 import java.util.UUID
 
@@ -29,5 +31,11 @@ object Synchronize extends ZIOAppDefault {
     _                  <- logInfo(s"Found $count photos")
   } yield ()
 
-  override def run = synchronizeLogic
+  override def run =
+    synchronizeLogic
+      .provide(
+        LMDB.liveWithDatabaseName("photos"),
+        PhotoStoreService.live,
+        Scope.default
+      )
 }

@@ -1,5 +1,6 @@
 package fr.janalyse.sotohp.model
 
+import java.nio.file.Path
 import java.time.{Instant, OffsetDateTime}
 import java.util.UUID
 
@@ -72,12 +73,10 @@ case class PhotoFaces(
   lastUpdated: OffsetDateTime
 )
 
-enum MiniatureSource {
-  case MiniatureFile(
-    path: String,
-    dimension: Dimension2D
-  )
-}
+case class MiniatureSource(
+  path: Path,
+  dimension: Dimension2D
+)
 
 case class Miniatures(
   sources: List[MiniatureSource],
@@ -86,12 +85,15 @@ case class Miniatures(
 
 case class Photo(
   id: PhotoId,
-  timestamp: OffsetDateTime,
-  source: PhotoSource,
-  metaData: Option[PhotoMetaData],
-  category: Option[PhotoCategory] = None,
-  place: Option[GeoPoint] = None,
-  miniatures: Option[Miniatures] = None,
+  timestamp: OffsetDateTime,              // Reference timestamp of the photo, either the shoot date time or the last modified date if the first is unknown
+  source: PhotoSource,                    // All information about the original photo file
+  metaData: Option[PhotoMetaData],        // Dimension, exif, camera, ... meta data
+  category: Option[PhotoCategory] = None, // from user directory tree where photo are store
+  place: Option[PhotoPlace] = None,       // where it has been taken
+
+  description: Option[String] = None,       // given user description
+  miniatures: Option[Miniatures] = None,    // all computed and available miniatures
+  normalizedPhotoPath: Option[Path] = None, // cleaned, recompressed, resized, optimized photo for quick display
   foundKeywords: Option[PhotoKeywords] = None,
   foundClassifications: Option[PhotoClassifications] = None,
   foundObjects: Option[PhotoObjects] = None,

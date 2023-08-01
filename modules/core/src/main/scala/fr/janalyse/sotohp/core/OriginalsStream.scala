@@ -18,6 +18,8 @@ import PhotoOperations.*
 import fr.janalyse.sotohp.model.*
 import java.util.UUID
 
+import fr.janalyse.sotohp.store.PhotoStoreService
+
 object OriginalsStream {
 
   private def searchPredicate(includeMaskRegex: Option[IncludeMaskRegex], ignoreMaskRegex: Option[IgnoreMaskRegex])(path: Path, attrs: BasicFileAttributes): Boolean = {
@@ -43,9 +45,9 @@ object OriginalsStream {
     foundFilesStream
   }
 
-  def photoStream(searchRoots: List[PhotoSearchRoot]): ZStream[Any, Throwable, Photo] = {
+  def photoStream(searchRoots: List[PhotoSearchRoot]): ZStream[PhotoStoreService, Throwable, Photo] = {
     photoPathStream(searchRoots)
-      .mapZIOParUnordered(1)((searchRoot, photoPath) => makePhoto(searchRoot.baseDirectory, photoPath, searchRoot.photoOwnerId))
+      .mapZIOParUnordered(4)((searchRoot, photoPath) => makePhoto(searchRoot.baseDirectory, photoPath, searchRoot.photoOwnerId))
       .tapError(err => logError(s"error on stream : ${err.getMessage}"))
   }
 

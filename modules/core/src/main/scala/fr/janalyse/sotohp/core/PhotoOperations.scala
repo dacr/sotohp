@@ -2,27 +2,23 @@ package fr.janalyse.sotohp.core
 
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.Metadata
-import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, ExifSubIFDDirectory, GpsDirectory}
+import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, GpsDirectory}
 import com.drew.metadata.gif.GifImageDirectory
 import com.drew.metadata.jpeg.JpegDirectory
 import com.drew.metadata.png.PngDirectory
 import com.drew.metadata.bmp.BmpHeaderDirectory
 import fr.janalyse.sotohp.model.DecimalDegrees.*
-import fr.janalyse.sotohp.model.DegreeMinuteSeconds.*
 import fr.janalyse.sotohp.model.*
 import zio.*
 import zio.ZIO.*
-import zio.stream.*
-import zio.stream.ZPipeline.{splitLines, utf8Decode}
 
-import java.io.{File, IOException}
-import java.nio.charset.Charset
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{Files, Path, Paths}
-import java.util.UUID
-import java.time.*
+import java.io.IOException
+import java.nio.file.Path
+import java.time.{OffsetDateTime, ZoneOffset, Instant,ZoneId}
 import scala.jdk.CollectionConverters.*
 import com.fasterxml.uuid.Generators
+
+import fr.janalyse.sotohp.store.PhotoStoreService
 
 import scala.util.Try
 
@@ -30,12 +26,12 @@ object PhotoOperations {
 
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
-  def computePhotoId(photoSource: PhotoSource): UUID = {
+  def computePhotoId(photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): PhotoId = {
     // Using photo file path and owner id for photo identifier generation
     // as the same photo can be used within several directories or people
-    import photoSource.{photoPath, ownerId}
-    val key = s"$ownerId:$photoPath"
-    nameBaseUUIDGenerator.generate(key)
+    val key  = s"$photoOwnerId:$photoPath"
+    val uuid = nameBaseUUIDGenerator.generate(key)
+    PhotoId(uuid)
   }
 
   def computePhotoCategory(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath): Option[PhotoCategory] = {
@@ -54,11 +50,11 @@ object PhotoOperations {
   def computePhotoTimestamp(photoSource: PhotoSource, photoMetaData: PhotoMetaData): OffsetDateTime = {
     photoMetaData.shootDateTime match {
       case Some(shootDateTime) => shootDateTime
-      case _                   => photoSource.lastModified
+      case _                   => photoSource.fileLastModified
     }
   }
 
-  def readMetadata(filePath: Path): IO[IOException, Metadata] = {
+  def readDrewMetadata(filePath: Path): IO[IOException, Metadata] = {
     attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
       .tapError(th => ZIO.logWarning(s"Couldn't read image meta data in file $filePath : ${th.getMessage}"))
   }
@@ -101,7 +97,7 @@ object PhotoOperations {
     } yield cameraName
   }
 
-  def extractGeoPoint(metadata: Metadata): Option[GeoPoint] = {
+  def extractPlace(metadata: Metadata): Option[PhotoPlace] = {
     val tagName = GpsDirectory.TAG_ALTITUDE
     for {
       gps       <- Option(metadata.getFirstDirectoryOfType(classOf[GpsDirectory]))
@@ -110,7 +106,7 @@ object PhotoOperations {
       latitude  <- Option(gps.getGeoLocation).map(_.getLatitude).map(LatitudeDecimalDegrees.apply)
       longitude <- Option(gps.getGeoLocation).map(_.getLongitude).map(LongitudeDecimalDegrees.apply)
     } yield {
-      GeoPoint(
+      PhotoPlace(
         latitude,
         longitude,
         altitude
@@ -177,9 +173,9 @@ object PhotoOperations {
       ownerId = photoOwnerId,
       baseDirectory = baseDirectory,
       photoPath = photoPath,
-      size = fileSize,
-      hash = PhotoHash(fileHash),
-      lastModified = fileLastModified
+      fileSize = fileSize,
+      fileHash = PhotoHash(fileHash),
+      fileLastModified = fileLastModified
     )
   }
 
@@ -198,23 +194,65 @@ object PhotoOperations {
     )
   }
 
-  def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): Task[Photo] = {
+  def makePhotoFromFile(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, Throwable, Photo] = {
     for {
-      metadata      <- readMetadata(photoPath)
-      geopoint       = extractGeoPoint(metadata)
-      photoSource   <- makePhotoSource(baseDirectory, photoPath, photoOwnerId)
-      photoId        = computePhotoId(photoSource)
-      photoMetaData  = makePhotoMetaData(metadata)
-      photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
-      photoCategory  = computePhotoCategory(baseDirectory, photoPath)
+      drewMetadata    <- readDrewMetadata(photoPath)
+      photoMetaData    = makePhotoMetaData(drewMetadata)
+      photoSource     <- makePhotoSource(baseDirectory, photoPath, photoOwnerId)
+      foundPlace       = extractPlace(drewMetadata)
+      photoTimestamp   = computePhotoTimestamp(photoSource, photoMetaData)
+      photoCategory    = computePhotoCategory(baseDirectory, photoPath)
+      _               <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData).mapError(err => Exception(s"TODO - temporary exception $err"))                           // TODO enhance error management
+      _               <- PhotoStoreService.photoSourceUpsert(photoId, photoSource).mapError(err => Exception(s"TODO - temporary exception $err"))                               // TODO enhance error management
+      _               <- foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place)).mapError(err => Exception(s"TODO - temporary exception $err")) // TODO enhance error management
+      currentDateTime <- Clock.currentDateTime
+      state            = PhotoState(
+                           photoId = photoId,
+                           photoHash = photoSource.fileHash,
+                           lastSynchronized = currentDateTime,
+                           lastUpdated = currentDateTime,
+                           firstSeen = currentDateTime
+                         )
+      _               <- PhotoStoreService.photoStateUpsert(photoId, state).mapError(err => Exception(s"TODO - temporary exception $err"))                                      // TODO enhance error management
     } yield {
       Photo(
-        id = PhotoId(photoId),
+        id = photoId,
         timestamp = photoTimestamp,
         source = photoSource,
         metaData = Some(photoMetaData),
+        place = foundPlace,
         category = photoCategory
       )
     }
+  }
+
+  def makePhotoFromStore(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, Throwable, Photo] = {
+    val result = for {
+//      state           <- PhotoStoreService.photoStateGet(photoId).some
+//      currentDateTime <- Clock.currentDateTime
+//      updatedState     = state.copy(lastSynchronized = currentDateTime)
+//      _               <- PhotoStoreService.photoStateUpsert(photoId, updatedState)
+      photoMetaData   <- PhotoStoreService.photoMetaDataGet(photoId).some
+      photoSource     <- PhotoStoreService.photoSourceGet(photoId).some
+      photoPlace      <- PhotoStoreService.photoPlaceGet(photoId)
+      photoTimestamp   = computePhotoTimestamp(photoSource, photoMetaData)
+      photoCategory    = computePhotoCategory(baseDirectory, photoPath)
+    } yield {
+      Photo(
+        id = photoId,
+        timestamp = photoTimestamp,
+        source = photoSource,
+        metaData = Some(photoMetaData),
+        place = photoPlace,
+        category = photoCategory
+      )
+    }
+    result.mapError(err => Exception(s"TODO - temporary exception $err")) // TODO enhance error management
+  }
+
+  def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, Throwable, Photo] = {
+    val photoId = computePhotoId(photoPath, photoOwnerId)
+    makePhotoFromStore(photoId, baseDirectory, photoPath, photoOwnerId)
+      .orElse(makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId))
   }
 }

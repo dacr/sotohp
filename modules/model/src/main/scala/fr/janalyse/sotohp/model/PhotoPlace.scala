@@ -103,19 +103,19 @@ object DegreeMinuteSeconds {
   }
 }
 
-case class GeoPoint(
+case class PhotoPlace(
   latitude: LatitudeDecimalDegrees,
   longitude: LongitudeDecimalDegrees,
   altitude: AltitudeMeanSeaLevel
 )
 
-object GeoPoint {
+object PhotoPlace {
   def apply(
     latitudeDMS: LatitudeDegreeMinuteSeconds,
     longitudeDMS: LongitudeDegreeMinuteSeconds,
     altitudeMeanSeaLevel: AltitudeMeanSeaLevel
-  ): GeoPoint = {
-    GeoPoint(
+  ): PhotoPlace = {
+    PhotoPlace(
       latitudeDMS.toDecimalDegrees,
       longitudeDMS.toDecimalDegrees,
       altitudeMeanSeaLevel

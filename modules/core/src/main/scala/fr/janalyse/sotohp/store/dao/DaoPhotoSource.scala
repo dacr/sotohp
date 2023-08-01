@@ -9,7 +9,7 @@ case class DaoPhotoSource(
   ownerId: UUID,
   baseDirectory: String,
   photoPath: String,
-  size: Long,
-  hash: String,
-  lastModified: OffsetDateTime
+  fileSize: Long,
+  fileHash: String,
+  fileLastModified: OffsetDateTime
 ) derives JsonCodec

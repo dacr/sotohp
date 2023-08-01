@@ -8,7 +8,7 @@ import fr.janalyse.sotohp.model.DecimalDegrees.*
 
 import scala.util.{Success, Try}
 
-object GeoPointSpec extends ZIOSpecDefault {
+object PhotoPlaceSpec extends ZIOSpecDefault {
 
   case class TestDataSet(testName: String, givenDMSSpec: String, expectedDegrees: Double)
 

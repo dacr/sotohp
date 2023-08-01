@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.store.dao
 
 import zio.json.*
 
-case class DaoGeoPoint(
+case class DaoPhotoPlace(
   latitude: Double,
   longitude: Double,
   altitude: Double

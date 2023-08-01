@@ -17,7 +17,7 @@ case class PhotoSource(
   ownerId: PhotoOwnerId,
   baseDirectory: BaseDirectoryPath,
   photoPath: PhotoPath,
-  size: FileSize,
-  hash: PhotoHash,
-  lastModified: FileLastModified
+  fileSize: FileSize,
+  fileHash: PhotoHash,
+  fileLastModified: FileLastModified
 )

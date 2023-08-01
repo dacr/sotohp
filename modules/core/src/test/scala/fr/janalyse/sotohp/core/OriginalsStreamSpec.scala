@@ -12,7 +12,9 @@ import java.util.UUID
 
 object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
 
-  override def spec =
+  override def spec = testLogic.provideLayer(PhotoStoreServiceFake.default)
+
+  val testLogic =
     suite("Photo original stream")(
       test("collect original photos with flat dataset") {
         for {
