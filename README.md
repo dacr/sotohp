@@ -5,7 +5,9 @@ photos, and more than 4600 videos. Once again this project has first started as 
 
 ## Principles
 
-1. The photos referential is always your photos directories as you've organized them
-2. 
+1. The photos referential is always your photos directories as you've organized them,
+2. Your photos directories are left unchanged, only read operations are done,
+3. A local LMDB database is used to store/cache, serialization is JSON based,
+4. Background jobs are run to update, to enrich, to analyze, to process your photos
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
