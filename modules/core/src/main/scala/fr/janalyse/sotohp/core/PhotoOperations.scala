@@ -255,5 +255,6 @@ object PhotoOperations {
     val photoId = computePhotoId(photoPath, photoOwnerId)
     makePhotoFromStore(photoId, baseDirectory, photoPath, photoOwnerId)
       .orElse(makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId))
+    // TODO refactor with a more incremental step way part by part
   }
 }
