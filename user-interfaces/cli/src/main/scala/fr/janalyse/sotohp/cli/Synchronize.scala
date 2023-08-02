@@ -29,6 +29,8 @@ object Synchronize extends ZIOAppDefault {
     originals           = OriginalsStream.photoStream(searchRoots)
     count              <- originals.runCount
     _                  <- logInfo(s"Found $count photos")
+    // photoFiles         <- originals.map(_.source.photoPath.toString).runCollect
+    // _                  <- foreach(photoFiles.sorted)(f => Console.printLine(f))
   } yield ()
 
   override def run =

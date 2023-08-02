@@ -14,7 +14,7 @@ import zio.ZIO.*
 
 import java.io.IOException
 import java.nio.file.Path
-import java.time.{OffsetDateTime, ZoneOffset, Instant,ZoneId}
+import java.time.{OffsetDateTime, ZoneOffset, Instant, ZoneId}
 import scala.jdk.CollectionConverters.*
 import com.fasterxml.uuid.Generators
 
@@ -196,6 +196,7 @@ object PhotoOperations {
 
   def makePhotoFromFile(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, Throwable, Photo] = {
     for {
+      _               <- logInfo(s"New photo found $photoPath $photoId")
       drewMetadata    <- readDrewMetadata(photoPath)
       photoMetaData    = makePhotoMetaData(drewMetadata)
       photoSource     <- makePhotoSource(baseDirectory, photoPath, photoOwnerId)
@@ -232,11 +233,11 @@ object PhotoOperations {
 //      currentDateTime <- Clock.currentDateTime
 //      updatedState     = state.copy(lastSynchronized = currentDateTime)
 //      _               <- PhotoStoreService.photoStateUpsert(photoId, updatedState)
-      photoMetaData   <- PhotoStoreService.photoMetaDataGet(photoId).some
-      photoSource     <- PhotoStoreService.photoSourceGet(photoId).some
-      photoPlace      <- PhotoStoreService.photoPlaceGet(photoId)
-      photoTimestamp   = computePhotoTimestamp(photoSource, photoMetaData)
-      photoCategory    = computePhotoCategory(baseDirectory, photoPath)
+      photoMetaData <- PhotoStoreService.photoMetaDataGet(photoId).some
+      photoSource   <- PhotoStoreService.photoSourceGet(photoId).some
+      photoPlace    <- PhotoStoreService.photoPlaceGet(photoId)
+      photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
+      photoCategory  = computePhotoCategory(baseDirectory, photoPath)
     } yield {
       Photo(
         id = photoId,

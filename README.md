@@ -10,4 +10,13 @@ photos, and more than 4600 videos. Once again this project has first started as 
 3. A local LMDB database is used to store/cache, serialization is JSON based,
 4. Background jobs are run to update, to enrich, to analyze, to process your photos
 
+## TODO
+
+- [ ] enhanced photo classification
+- [ ] [instance segmentation](instseg)
+- [ ] text in photos extraction
+- [ ] faces detection/extraction
+- [ ] faces clustering
+
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
+[instseg]: https://www.reasonfieldlab.com/post/instance-segmentation-algorithms-overview
