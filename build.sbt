@@ -76,6 +76,16 @@ lazy val moduleCore =
       )
     )
 
+lazy val moduleDaemon =
+  project
+    .in(file("modules/daemon"))
+    .dependsOn(moduleCore)
+    .settings(
+      sharedSettings,
+      libraryDependencies ++= Seq(
+      )
+    )
+
 lazy val userInterfacesCLI =
   project
     .in(file("user-interfaces/cli"))
