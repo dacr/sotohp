@@ -12,21 +12,27 @@ import fr.janalyse.sotohp.model.*
 import zio.*
 import zio.ZIO.*
 
-import java.io.IOException
 import java.nio.file.Path
-import java.time.{OffsetDateTime, ZoneOffset, Instant, ZoneId}
+import java.time.{Instant, OffsetDateTime, ZoneId, ZoneOffset}
 import scala.jdk.CollectionConverters.*
 import com.fasterxml.uuid.Generators
-
-import fr.janalyse.sotohp.store.PhotoStoreService
+import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
 import scala.util.Try
 
 object PhotoOperations {
 
+  case class NotFoundInStore(message: String, photoId: PhotoId)
+  case class PhotoFileIssue(message: String, filePath: Path, throwable: Throwable)
+
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
-  def computePhotoId(photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): PhotoId = {
+  def readDrewMetadata(filePath: Path): IO[PhotoFileIssue, Metadata] = {
+    attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
+      .mapError(exception => PhotoFileIssue(s"Couldn't read image meta data in file", filePath, exception))
+  }
+
+  def buildPhotoId(photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): PhotoId = {
     // Using photo file path and owner id for photo identifier generation
     // as the same photo can be used within several directories or people
     val key  = s"$photoOwnerId:$photoPath"
@@ -34,7 +40,7 @@ object PhotoOperations {
     PhotoId(uuid)
   }
 
-  def computePhotoCategory(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath): Option[PhotoCategory] = {
+  def buildPhotoCategory(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath): Option[PhotoCategory] = {
     val category = Option(photoPath.getParent).map { parentDir =>
       val text =
         parentDir.toString
@@ -54,12 +60,7 @@ object PhotoOperations {
     }
   }
 
-  def readDrewMetadata(filePath: Path): IO[IOException, Metadata] = {
-    attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
-      .tapError(th => ZIO.logWarning(s"Couldn't read image meta data in file $filePath : ${th.getMessage}"))
-  }
-
-  private def makeGenericTagKey(tag: com.drew.metadata.Tag): String = {
+  private def buildGenericTagKey(tag: com.drew.metadata.Tag): String = {
     val prefix = tag.getDirectoryName().trim.replaceAll("""[^a-zA-Z0-9]+""", "")
     val name   = tag.getTagName().trim.replaceAll("""[^a-zA-Z0-9]+""", "")
     s"${prefix}_$name"
@@ -69,7 +70,7 @@ object PhotoOperations {
     tags
       .filter(_.hasTagName)
       .filter(_.getDescription != null)
-      .map(tag => makeGenericTagKey(tag) -> tag.getDescription)
+      .map(tag => buildGenericTagKey(tag) -> tag.getDescription)
       .toMap
   }
 
@@ -114,7 +115,7 @@ object PhotoOperations {
     }
   }
 
-  private def makeDimension2D(getWidth: => Width, getHeight: => Height): Option[Dimension2D] = {
+  private def buildDimension2D(getWidth: => Width, getHeight: => Height): Option[Dimension2D] = {
     val result = for {
       width  <- Try(getWidth)
       height <- Try(getHeight)
@@ -125,19 +126,19 @@ object PhotoOperations {
   def extractDimension(metadata: Metadata): Option[Dimension2D] = {
     lazy val dimensionFromJpeg =
       Option(metadata.getFirstDirectoryOfType(classOf[JpegDirectory]))
-        .flatMap(dir => makeDimension2D(dir.getImageWidth, dir.getImageHeight))
+        .flatMap(dir => buildDimension2D(dir.getImageWidth, dir.getImageHeight))
     lazy val dimensionFromPng  =
       Option(metadata.getFirstDirectoryOfType(classOf[PngDirectory]))
-        .flatMap(dir => makeDimension2D(dir.getInt(PngDirectory.TAG_IMAGE_WIDTH), dir.getInt(PngDirectory.TAG_IMAGE_HEIGHT)))
+        .flatMap(dir => buildDimension2D(dir.getInt(PngDirectory.TAG_IMAGE_WIDTH), dir.getInt(PngDirectory.TAG_IMAGE_HEIGHT)))
     lazy val dimensionFromGif  =
       Option(metadata.getFirstDirectoryOfType(classOf[GifImageDirectory]))
-        .flatMap(dir => makeDimension2D(dir.getInt(GifImageDirectory.TAG_WIDTH), dir.getInt(GifImageDirectory.TAG_HEIGHT)))
+        .flatMap(dir => buildDimension2D(dir.getInt(GifImageDirectory.TAG_WIDTH), dir.getInt(GifImageDirectory.TAG_HEIGHT)))
     lazy val dimensionFromBmp  =
       Option(metadata.getFirstDirectoryOfType(classOf[BmpHeaderDirectory]))
-        .flatMap(dir => makeDimension2D(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_WIDTH), dir.getInt(BmpHeaderDirectory.TAG_IMAGE_HEIGHT)))
+        .flatMap(dir => buildDimension2D(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_WIDTH), dir.getInt(BmpHeaderDirectory.TAG_IMAGE_HEIGHT)))
     lazy val dimensionFromExif =
       Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
-        .flatMap(dir => makeDimension2D(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH), dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT)))
+        .flatMap(dir => buildDimension2D(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH), dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT)))
 
     dimensionFromJpeg
       .orElse(dimensionFromPng)
@@ -158,17 +159,16 @@ object PhotoOperations {
     result.flatten
   }
 
-  def makePhotoSource(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): Task[PhotoSource] = {
+  def buildPhotoSource(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): IO[PhotoFileIssue, PhotoSource] = {
     for {
       fileSize         <- attemptBlockingIO(photoPath.toFile.length())
-                            .logError(s"Unable to read file size of $photoPath")
+                            .mapError(exception => PhotoFileIssue(s"Unable to read file size", photoPath, exception))
       fileLastModified <- attemptBlockingIO(photoPath.toFile.lastModified())
                             .mapAttempt(Instant.ofEpochMilli)
-                            .map(_.atZone(ZoneId.systemDefault()))
-                            .map(_.toOffsetDateTime)
-                            .logError(s"Unable to get file last modified of $photoPath")
+                            .mapAttempt(_.atZone(ZoneId.systemDefault()).toOffsetDateTime)
+                            .mapError(exception => PhotoFileIssue(s"Unable to get file last modified", photoPath, exception))
       fileHash         <- attemptBlockingIO(HashOperations.fileDigest(photoPath))
-                            .logError(s"Unable to compute file hash of $photoPath")
+                            .mapError(exception => PhotoFileIssue(s"Unable to compute file hash", photoPath, exception))
     } yield PhotoSource(
       ownerId = photoOwnerId,
       baseDirectory = baseDirectory,
@@ -179,7 +179,7 @@ object PhotoOperations {
     )
   }
 
-  def makePhotoMetaData(metadata: Metadata): PhotoMetaData = {
+  def buildPhotoMetaData(metadata: Metadata): PhotoMetaData = {
     val shootDateTime = extractShootDateTime(metadata)
     val cameraName    = extractCameraName(metadata)
     val genericTags   = extractGenericTags(metadata)
@@ -194,27 +194,33 @@ object PhotoOperations {
     )
   }
 
-  def makePhotoFromFile(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, Throwable, Photo] = {
+  private def setupPhotoInitialState(photoId: PhotoId, photoHash: PhotoHash): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = {
     for {
-      _               <- logInfo(s"New photo found $photoPath $photoId")
-      drewMetadata    <- readDrewMetadata(photoPath)
-      photoMetaData    = makePhotoMetaData(drewMetadata)
-      photoSource     <- makePhotoSource(baseDirectory, photoPath, photoOwnerId)
-      foundPlace       = extractPlace(drewMetadata)
-      photoTimestamp   = computePhotoTimestamp(photoSource, photoMetaData)
-      photoCategory    = computePhotoCategory(baseDirectory, photoPath)
-      _               <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData).mapError(err => Exception(s"TODO - temporary exception $err"))                           // TODO enhance error management
-      _               <- PhotoStoreService.photoSourceUpsert(photoId, photoSource).mapError(err => Exception(s"TODO - temporary exception $err"))                               // TODO enhance error management
-      _               <- foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place)).mapError(err => Exception(s"TODO - temporary exception $err")) // TODO enhance error management
       currentDateTime <- Clock.currentDateTime
       state            = PhotoState(
                            photoId = photoId,
-                           photoHash = photoSource.fileHash,
-                           lastSynchronized = currentDateTime,
-                           lastUpdated = currentDateTime,
-                           firstSeen = currentDateTime
+                           photoHash = photoHash,
+                           firstSeen = currentDateTime,
+                           lastSeen = currentDateTime,
+                           lastUpdated = currentDateTime
                          )
-      _               <- PhotoStoreService.photoStateUpsert(photoId, state).mapError(err => Exception(s"TODO - temporary exception $err"))                                      // TODO enhance error management
+      _               <- PhotoStoreService.photoStateUpsert(photoId, state)
+    } yield ()
+  }
+
+  private def makePhotoFromFile(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue, Photo] = {
+    for {
+      _             <- logInfo(s"New photo found $photoPath $photoId")
+      drewMetadata  <- readDrewMetadata(photoPath)
+      photoMetaData  = buildPhotoMetaData(drewMetadata)
+      photoSource   <- buildPhotoSource(baseDirectory, photoPath, photoOwnerId)
+      foundPlace     = extractPlace(drewMetadata)
+      photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
+      photoCategory  = buildPhotoCategory(baseDirectory, photoPath)
+      _             <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
+      _             <- PhotoStoreService.photoSourceUpsert(photoId, photoSource)
+      _             <- foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
+      _             <- setupPhotoInitialState(photoId, photoSource.fileHash)
     } yield {
       Photo(
         id = photoId,
@@ -227,17 +233,24 @@ object PhotoOperations {
     }
   }
 
-  def makePhotoFromStore(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, Throwable, Photo] = {
-    val result = for {
-//      state           <- PhotoStoreService.photoStateGet(photoId).some
-//      currentDateTime <- Clock.currentDateTime
-//      updatedState     = state.copy(lastSynchronized = currentDateTime)
-//      _               <- PhotoStoreService.photoStateUpsert(photoId, updatedState)
-      photoMetaData <- PhotoStoreService.photoMetaDataGet(photoId).some
-      photoSource   <- PhotoStoreService.photoSourceGet(photoId).some
+  private def makePhotoFromStore(
+    photoId: PhotoId,
+    baseDirectory: BaseDirectoryPath,
+    photoPath: PhotoPath,
+    photoOwnerId: PhotoOwnerId
+  ): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
+    for {
+      photoMetaData <- PhotoStoreService
+                         .photoMetaDataGet(photoId)
+                         .some
+                         .mapError(someError => someError.getOrElse(NotFoundInStore("no meta data in store", photoId)))
+      photoSource   <- PhotoStoreService
+                         .photoSourceGet(photoId)
+                         .some
+                         .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", photoId)))
       photoPlace    <- PhotoStoreService.photoPlaceGet(photoId)
       photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
-      photoCategory  = computePhotoCategory(baseDirectory, photoPath)
+      photoCategory  = buildPhotoCategory(baseDirectory, photoPath)
     } yield {
       Photo(
         id = photoId,
@@ -248,13 +261,26 @@ object PhotoOperations {
         category = photoCategory
       )
     }
-    result.mapError(err => Exception(s"TODO - temporary exception $err")) // TODO enhance error management
   }
 
-  def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, Throwable, Photo] = {
-    val photoId = computePhotoId(photoPath, photoOwnerId)
-    makePhotoFromStore(photoId, baseDirectory, photoPath, photoOwnerId)
-      .orElse(makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId))
-    // TODO refactor with a more incremental step way part by part
+  private def updateStateLastSeen(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue | NotFoundInStore, Unit] = {
+    for {
+      state           <- PhotoStoreService
+                           .photoStateGet(photoId)
+                           .some
+                           .mapError(someError => someError.getOrElse(NotFoundInStore("no photo state in store", photoId)))
+      currentDateTime <- Clock.currentDateTime
+      updatedState     = state.copy(lastSeen = currentDateTime)
+      _               <- PhotoStoreService.photoStateUpsert(photoId, updatedState)
+    } yield ()
+  }
+
+  def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
+    val photoId = buildPhotoId(photoPath, photoOwnerId)
+    for {
+      photo <- makePhotoFromStore(photoId, baseDirectory, photoPath, photoOwnerId)
+                 .orElse(makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId))
+      _     <- updateStateLastSeen(photoId)
+    } yield photo
   }
 }

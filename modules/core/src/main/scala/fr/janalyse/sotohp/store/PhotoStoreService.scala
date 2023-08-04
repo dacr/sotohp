@@ -10,28 +10,6 @@ case class PhotoStoreSystemIssue(message: String)
 type PhotoStoreIssue = PhotoStoreUserIssue | PhotoStoreSystemIssue
 type LMDBIssues      = StorageUserError | StorageSystemError
 
-trait PhotoStoreService {
-  // photo states collection
-  def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
-  def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit]
-  def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
-
-  // photo sources collection
-  def photoSourceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoSource]]
-  def photoSourceUpsert(photoId: PhotoId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit]
-  def photoSourceDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
-
-  // photos metadata collection
-  def photoMetaDataGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoMetaData]]
-  def photoMetaDataUpsert(photoId: PhotoId, metaData: PhotoMetaData): IO[PhotoStoreIssue, Unit]
-  def photoMetaDataDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
-
-  // photos places collection
-  def photoPlaceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoPlace]]
-  def photoPlaceUpsert(photoId: PhotoId, place: PhotoPlace): IO[PhotoStoreIssue, Unit]
-  def photoPlaceDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
-}
-
 object PhotoStoreService {
   def photoStateGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoState]]              = serviceWithZIO(_.photoStateGet(photoId))
   def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoStateUpsert(photoId, photoState))
@@ -55,4 +33,26 @@ object PhotoStoreService {
       photoStoreServiceLive <- PhotoStoreServiceLive.setup(lmdb)
     } yield photoStoreServiceLive
   )
+}
+
+trait PhotoStoreService {
+  // photo states collection
+  def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
+  def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit]
+  def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+
+  // photo sources collection
+  def photoSourceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoSource]]
+  def photoSourceUpsert(photoId: PhotoId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit]
+  def photoSourceDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+
+  // photos metadata collection
+  def photoMetaDataGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoMetaData]]
+  def photoMetaDataUpsert(photoId: PhotoId, metaData: PhotoMetaData): IO[PhotoStoreIssue, Unit]
+  def photoMetaDataDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+
+  // photos places collection
+  def photoPlaceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoPlace]]
+  def photoPlaceUpsert(photoId: PhotoId, place: PhotoPlace): IO[PhotoStoreIssue, Unit]
+  def photoPlaceDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
 }

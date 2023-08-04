@@ -43,7 +43,7 @@ class PhotoStoreServiceLive private (
       PhotoState(
         photoId = PhotoId(daoState.photoId),
         photoHash = PhotoHash(daoState.photoHash),
-        lastSynchronized = daoState.lastSynchronized,
+        lastSeen = daoState.lastSynchronized,
         lastUpdated = daoState.lastUpdated,
         firstSeen = daoState.firstSeen
       )
@@ -54,7 +54,7 @@ class PhotoStoreServiceLive private (
     DaoPhotoState(
       photoId = from.photoId.uuid,
       photoHash = from.photoHash.code,
-      lastSynchronized = from.lastSynchronized,
+      lastSynchronized = from.lastSeen,
       lastUpdated = from.lastUpdated,
       firstSeen = from.firstSeen
     )

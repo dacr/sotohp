@@ -4,23 +4,18 @@ import zio.*
 import zio.ZIO.*
 import zio.stream.*
 
-import java.io.{File, IOException}
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{Files, Path, Paths}
-import java.time.{Instant, OffsetDateTime, ZoneId}
-import com.drew.metadata.Metadata
-import fr.janalyse.sotohp.model.{PhotoMetaData, *}
-import fr.janalyse.sotohp.model.DegreeMinuteSeconds.*
-import fr.janalyse.sotohp.model.DecimalDegrees.*
+import java.nio.file.{Files, Path}
 
-import scala.jdk.CollectionConverters.*
-import PhotoOperations.*
 import fr.janalyse.sotohp.model.*
-import java.util.UUID
 
-import fr.janalyse.sotohp.store.PhotoStoreService
+import PhotoOperations.*
+
+import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
 object OriginalsStream {
+
+  case class StreamIOIssue(message: String, exception: Throwable)
 
   private def searchPredicate(includeMaskRegex: Option[IncludeMaskRegex], ignoreMaskRegex: Option[IgnoreMaskRegex])(path: Path, attrs: BasicFileAttributes): Boolean = {
     attrs.isRegularFile &&
@@ -30,25 +25,29 @@ object OriginalsStream {
 
   private def findFromSearchRoot(
     searchRoot: PhotoSearchRoot
-  ): ZStream[Any, Throwable, (PhotoSearchRoot, PhotoPath)] = {
+  ): ZStream[Any, StreamIOIssue, (PhotoSearchRoot, PhotoPath)] = {
     import searchRoot.{baseDirectory, includeMask, ignoreMask}
-    val foundRelativeFilesJavaStream = Files.find(baseDirectory, 10, searchPredicate(includeMask, ignoreMask))
-    val foundFileStream              = ZStream
-      .fromJavaStream(foundRelativeFilesJavaStream)
-      .map(photoPath => searchRoot -> photoPath)
-    foundFileStream
+
+    val result = for {
+      foundRelativeFilesJavaStream <- ZIO
+                                        .attempt(Files.find(baseDirectory, 10, searchPredicate(includeMask, ignoreMask)))
+                                        .mapError(err => StreamIOIssue("Couldn't create file stream", err))
+      foundFileStream               = ZStream
+                                        .fromJavaStream(foundRelativeFilesJavaStream)
+                                        .mapBoth(err => StreamIOIssue("Couldn't convert file stream", err), photoPath => searchRoot -> photoPath)
+    } yield foundFileStream
+    ZStream.unwrap(result)
   }
 
-  private def photoPathStream(searchRoots: List[PhotoSearchRoot]): ZStream[Any, Throwable, (PhotoSearchRoot, PhotoPath)] = {
+  private def photoPathStream(searchRoots: List[PhotoSearchRoot]): ZStream[Any, StreamIOIssue, (PhotoSearchRoot, PhotoPath)] = {
     val foundFilesStreams = Chunk.fromIterable(searchRoots).map(searchRoot => findFromSearchRoot(searchRoot))
     val foundFilesStream  = ZStream.concatAll(foundFilesStreams)
     foundFilesStream
   }
 
-  def photoStream(searchRoots: List[PhotoSearchRoot]): ZStream[PhotoStoreService, Throwable, Photo] = {
+  def photoStream(searchRoots: List[PhotoSearchRoot]): ZStream[PhotoStoreService, StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore, Photo] = {
     photoPathStream(searchRoots)
       .mapZIOParUnordered(4)((searchRoot, photoPath) => makePhoto(searchRoot.baseDirectory, photoPath, searchRoot.photoOwnerId))
-      .tapError(err => logError(s"error on stream : ${err.getMessage}"))
   }
 
 }
