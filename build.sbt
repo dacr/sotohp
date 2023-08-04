@@ -83,6 +83,7 @@ lazy val moduleDaemon =
     .settings(
       sharedSettings,
       libraryDependencies ++= Seq(
+        "net.coobird" % "thumbnailator" % "0.4.20" // https://github.com/coobird/thumbnailator
       )
     )
 
