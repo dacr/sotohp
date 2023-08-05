@@ -7,7 +7,8 @@ import zio.config.*
 case class NormalizerConfig(
   baseDirectory: String,
   referenceSize: Int,
-  quality: Double
+  quality: Double,
+  format: String
 )
 
 object NormalizerConfig {

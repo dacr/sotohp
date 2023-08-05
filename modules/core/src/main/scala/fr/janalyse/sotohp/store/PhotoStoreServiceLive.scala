@@ -9,16 +9,20 @@ import zio.lmdb.*
 import java.nio.file.Path
 
 trait PhotoStoreCollections {
-  val photoStatesCollectionName   = "photo-states"
-  val photoSourcesCollectionName  = "photo-sources"
-  val photoMetaDataCollectionName = "photo-metadata"
-  val photoPlacesCollectionName   = "photo-places"
+  val photoStatesCollectionName     = "photo-states"
+  val photoSourcesCollectionName    = "photo-sources"
+  val photoMetaDataCollectionName   = "photo-metadata"
+  val photoPlacesCollectionName     = "photo-places"
+  val photoMiniaturesCollectionName = "photo-miniatures"
+  val photoNormalizedCollectionName = "photo-normalized"
 
   val allCollections = List(
     photoStatesCollectionName,
     photoSourcesCollectionName,
     photoMetaDataCollectionName,
-    photoPlacesCollectionName
+    photoPlacesCollectionName,
+    photoMiniaturesCollectionName,
+    photoNormalizedCollectionName
   )
 }
 
@@ -27,7 +31,9 @@ class PhotoStoreServiceLive private (
   statesCollection: LMDBCollection[DaoPhotoState],
   sourcesCollection: LMDBCollection[DaoPhotoSource],
   metaDataCollection: LMDBCollection[DaoPhotoMetaData],
-  placesCollection: LMDBCollection[DaoPhotoPlace]
+  placesCollection: LMDBCollection[DaoPhotoPlace],
+  miniaturesCollection: LMDBCollection[DaoMiniatures],
+  normalizedCollection: LMDBCollection[DaoNormalizedPhoto]
 ) extends PhotoStoreService {
 
   private def convertFailures: PartialFunction[StorageSystemError | StorageUserError, PhotoStoreIssue] = {
@@ -64,6 +70,11 @@ class PhotoStoreServiceLive private (
     statesCollection
       .fetch(photoIdToCollectionKey(photoId))
       .mapBoth(convertFailures, daoStateToState)
+
+  override def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    statesCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
 
   override def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit] =
     statesCollection
@@ -105,6 +116,11 @@ class PhotoStoreServiceLive private (
       .fetch(photoIdToCollectionKey(photoId))
       .mapBoth(convertFailures, daoSourceToSource)
 
+  override def photoSourceContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    sourcesCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
   override def photoSourceUpsert(photoId: PhotoId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit] =
     sourcesCollection
       .upsertOverwrite(photoIdToCollectionKey(photoId), sourceToDaoSource(photoSource))
@@ -143,6 +159,11 @@ class PhotoStoreServiceLive private (
       .fetch(photoIdToCollectionKey(photoId))
       .mapBoth(convertFailures, daoMetaDataToMetaData)
 
+  override def photoMetaDataContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    metaDataCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
   override def photoMetaDataUpsert(photoId: PhotoId, photoMetaData: PhotoMetaData): IO[PhotoStoreIssue, Unit] =
     metaDataCollection
       .upsertOverwrite(photoIdToCollectionKey(photoId), metaDataToDaoMetaData(photoMetaData))
@@ -176,6 +197,11 @@ class PhotoStoreServiceLive private (
       .fetch(photoIdToCollectionKey(photoId))
       .mapBoth(convertFailures, daoPlaceToPlace)
 
+  override def photoPlaceContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    placesCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
   override def photoPlaceUpsert(photoId: PhotoId, place: PhotoPlace): IO[PhotoStoreIssue, Unit] =
     placesCollection
       .upsertOverwrite(photoIdToCollectionKey(photoId), placeToDaoPlace(place))
@@ -187,15 +213,103 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
+  def daoMiniaturesToMiniatures(from: Option[DaoMiniatures]): Option[Miniatures] = {
+    from.map(daoMiniatures =>
+      Miniatures(
+        sources = daoMiniatures.sources.map(s => MiniatureSource(path = Path.of(s.path), referenceSize = s.referenceSize)),
+        lastUpdated = daoMiniatures.lastUpdated
+      )
+    )
+  }
+
+  def miniaturesToDaoMiniatures(from: Miniatures): DaoMiniatures =
+    DaoMiniatures(
+      sources = from.sources.map(s => DaoMiniatureSource(path = s.path.toString, referenceSize = s.referenceSize)),
+      lastUpdated = from.lastUpdated
+    )
+
+  override def photoMiniaturesGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[Miniatures]] =
+    miniaturesCollection
+      .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, daoMiniaturesToMiniatures)
+
+  override def photoMiniaturesContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    miniaturesCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
+  override def photoMiniaturesUpsert(photoId: PhotoId, miniatures: Miniatures): IO[PhotoStoreIssue, Unit] =
+    miniaturesCollection
+      .upsertOverwrite(photoIdToCollectionKey(photoId), miniaturesToDaoMiniatures(miniatures))
+      .mapBoth(convertFailures, _ => ())
+
+  override def photoMiniaturesDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    miniaturesCollection
+      .delete(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _ => ())
+
+  // ===================================================================================================================  // ===================================================================================================================
+  def daoNormalizedToNormalized(from: Option[DaoNormalizedPhoto]): Option[NormalizedPhoto] = {
+    from.map(daoNormalized =>
+      NormalizedPhoto(
+        path = Path.of(daoNormalized.path),
+        dimension = Dimension2D(
+          width = daoNormalized.dimension.width,
+          height = daoNormalized.dimension.height
+        )
+      )
+    )
+  }
+
+  def normalizedToDaoNormalized(from: NormalizedPhoto): DaoNormalizedPhoto =
+    DaoNormalizedPhoto(
+      path = from.path.toString,
+      dimension = DaoDimension2D(
+        width = from.dimension.width,
+        height = from.dimension.height
+      )
+    )
+
+  override def photoNormalizedGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[NormalizedPhoto]] =
+    normalizedCollection
+      .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, daoNormalizedToNormalized)
+
+  override def photoNormalizedContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    normalizedCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
+  override def photoNormalizedUpsert(photoId: PhotoId, normalized: NormalizedPhoto): IO[PhotoStoreIssue, Unit] =
+    normalizedCollection
+      .upsertOverwrite(photoIdToCollectionKey(photoId), normalizedToDaoNormalized(normalized))
+      .mapBoth(convertFailures, _ => ())
+
+  override def photoNormalizedDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    normalizedCollection
+      .delete(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _ => ())
+
+  // ===================================================================================================================
 }
 
 object PhotoStoreServiceLive extends PhotoStoreCollections {
 
   def setup(lmdb: LMDB) = for {
-    _                  <- foreach(allCollections)(col => lmdb.collectionAllocate(col).ignore)
-    statesCollection   <- lmdb.collectionGet[DaoPhotoState](photoStatesCollectionName)
-    sourcesCollection  <- lmdb.collectionGet[DaoPhotoSource](photoSourcesCollectionName)
-    metaDataCollection <- lmdb.collectionGet[DaoPhotoMetaData](photoMetaDataCollectionName)
-    placesCollection   <- lmdb.collectionGet[DaoPhotoPlace](photoPlacesCollectionName)
-  } yield PhotoStoreServiceLive(lmdb, statesCollection, sourcesCollection, metaDataCollection, placesCollection)
+    _                    <- foreach(allCollections)(col => lmdb.collectionAllocate(col).ignore)
+    statesCollection     <- lmdb.collectionGet[DaoPhotoState](photoStatesCollectionName)
+    sourcesCollection    <- lmdb.collectionGet[DaoPhotoSource](photoSourcesCollectionName)
+    metaDataCollection   <- lmdb.collectionGet[DaoPhotoMetaData](photoMetaDataCollectionName)
+    placesCollection     <- lmdb.collectionGet[DaoPhotoPlace](photoPlacesCollectionName)
+    miniaturesCollection <- lmdb.collectionGet[DaoMiniatures](photoMiniaturesCollectionName)
+    normalizedCollection <- lmdb.collectionGet[DaoNormalizedPhoto](photoNormalizedCollectionName)
+  } yield PhotoStoreServiceLive(
+    lmdb,
+    statesCollection,
+    sourcesCollection,
+    metaDataCollection,
+    placesCollection,
+    miniaturesCollection,
+    normalizedCollection
+  )
 }

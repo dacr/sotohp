@@ -28,7 +28,7 @@ object MiniaturizerDaemon {
       .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file $target", photo.id, th))
   }
 
-  def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, Unit] = {
+  def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, MiniatureSource] = {
     for {
       input  <- ZIO
                   .attempt(photo.source.photoPath.toAbsolutePath)
@@ -53,11 +53,18 @@ object MiniaturizerDaemon {
                   )
                   .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature with reference size $size", photo.id, th))
                   .when(!output.toFile.exists())
-    } yield ()
+    } yield MiniatureSource(path = output, referenceSize = size)
   }
 
   def buildMiniatures(photo: Photo, config: MiniaturizerConfig): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue, Unit] = {
-    ZIO.foreachDiscard(config.referenceSizes)(size => buildMiniature(photo, size, config))
+    for {
+      miniaturesSources <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config))
+      currentDateTime   <- Clock.currentDateTime
+      miniatures         = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
+      _                 <- PhotoStoreService
+                             .photoMiniaturesUpsert(photo.id, miniatures)
+                             .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.id).map(!_))
+    } yield ()
   }
 
   type MiniaturizeIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore | MiniaturizeIssue | MiniaturizeConfigIssue
@@ -65,7 +72,9 @@ object MiniaturizerDaemon {
   def miniaturize(photosStream: OriginalsStream.PhotoStream): ZIO[PhotoStoreService, MiniaturizeIssues, Unit] = {
     for {
       config <- miniaturizerConfig
-      _      <- photosStream.runForeach(original => buildMiniatures(original, config))
+      _      <- photosStream
+                  .mapZIOParUnordered(8)(original => buildMiniatures(original, config))
+                  .runDrain
     } yield ()
   }
 }

@@ -73,15 +73,6 @@ case class PhotoFaces(
   lastUpdated: OffsetDateTime
 )
 
-case class MiniatureSource(
-  path: Path,
-  dimension: Dimension2D
-)
-
-case class Miniatures(
-  sources: List[MiniatureSource],
-  lastUpdated: OffsetDateTime
-)
 
 case class Photo(
   id: PhotoId,
@@ -90,10 +81,11 @@ case class Photo(
   metaData: Option[PhotoMetaData],        // Dimension, exif, camera, ... meta data
   category: Option[PhotoCategory] = None, // from user directory tree where photo are store
   place: Option[PhotoPlace] = None,       // where it has been taken
+  description: Option[String] = None,     // given user description
 
-  description: Option[String] = None,       // given user description
-  miniatures: Option[Miniatures] = None,    // all computed and available miniatures
-  normalizedPhotoPath: Option[Path] = None, // cleaned, recompressed, resized, optimized photo for quick display
+  miniatures: Option[Miniatures] = None,      // all computed and available miniatures
+  normalized: Option[NormalizedPhoto] = None, // cleaned, recompressed, resized, optimized photo for quick display and processing
+
   foundKeywords: Option[PhotoKeywords] = None,
   foundClassifications: Option[PhotoClassifications] = None,
   foundObjects: Option[PhotoObjects] = None,
