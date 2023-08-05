@@ -2,11 +2,12 @@ package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.OriginalsStream
 import fr.janalyse.sotohp.store.PhotoStoreService
+import fr.janalyse.sotohp.daemon.MiniaturizerDaemon
 import zio.*
-import zio.lmdb.LMDB
 import zio.config.typesafe.*
+import zio.lmdb.LMDB
 
-object Synchronize extends ZIOAppDefault with CommonsCLI {
+object Miniaturize extends ZIOAppDefault with CommonsCLI {
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
     Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
@@ -20,13 +21,9 @@ object Synchronize extends ZIOAppDefault with CommonsCLI {
       )
 
   val logic = for {
-    _           <- ZIO.logInfo("photos synchronization")
+    _           <- ZIO.logInfo("photos miniaturization")
     searchRoots <- getSearchRoots
     originals    = OriginalsStream.photoStream(searchRoots)
-    count       <- originals.runCount
-    _           <- ZIO.logInfo(s"Found $count photos")
-    // photoFiles         <- originals.map(_.source.photoPath.toString).runCollect
-    // _                  <- ZIO.foreach(photoFiles.sorted)(f => Console.printLine(f))
+    _           <- MiniaturizerDaemon.miniaturize(originals)
   } yield ()
-
 }

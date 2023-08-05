@@ -13,9 +13,9 @@ import PhotoOperations.*
 
 import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
-object OriginalsStream {
+case class StreamIOIssue(message: String, exception: Throwable)
 
-  case class StreamIOIssue(message: String, exception: Throwable)
+object OriginalsStream {
 
   private def searchPredicate(includeMaskRegex: Option[IncludeMaskRegex], ignoreMaskRegex: Option[IgnoreMaskRegex])(path: Path, attrs: BasicFileAttributes): Boolean = {
     attrs.isRegularFile &&
@@ -45,7 +45,10 @@ object OriginalsStream {
     foundFilesStream
   }
 
-  def photoStream(searchRoots: List[PhotoSearchRoot]): ZStream[PhotoStoreService, StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore, Photo] = {
+  type PhotoStreamIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore
+  type PhotoStream       = ZStream[PhotoStoreService, PhotoStreamIssues, Photo]
+  
+  def photoStream(searchRoots: List[PhotoSearchRoot]): PhotoStream = {
     photoPathStream(searchRoots)
       .mapZIOParUnordered(4)((searchRoot, photoPath) => makePhoto(searchRoot.baseDirectory, photoPath, searchRoot.photoOwnerId))
   }

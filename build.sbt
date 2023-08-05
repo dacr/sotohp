@@ -12,15 +12,15 @@ scmInfo := Some(
 )
 
 val versions = new {
-  val zio      = "2.0.15"
+  val zio       = "2.0.15"
 //  val zionio     = "2.0.1"
-//  val zioconfig  = "4.0.0-RC16"
-  val ziojson  = "0.6.0"
+  val zioconfig = "4.0.0-RC16"
+  val ziojson   = "0.6.0"
 //  val ziologging = "2.1.13"
-  val ziolmdb  = "1.2.1"
+  val ziolmdb   = "1.2.1"
 //  val tapir      = "1.5.0"
-  val metadata = "2.18.0"
-  val uuidgen  = "4.2.0"
+  val metadata  = "2.18.0"
+  val uuidgen   = "4.2.0"
 }
 
 //val sharedSettings = Seq(
@@ -67,9 +67,6 @@ lazy val moduleCore =
       libraryDependencies ++= Seq(
         "dev.zio"           %% "zio-streams"         % versions.zio,
         "dev.zio"           %% "zio-json"            % versions.ziojson,
-//        "dev.zio"           %% "zio-config"          % versions.zioconfig,
-//        "dev.zio"           %% "zio-config-typesafe" % versions.zioconfig,
-//        "dev.zio"           %% "zio-config-magnolia" % versions.zioconfig,
         "com.drewnoakes"     % "metadata-extractor"  % versions.metadata,
         "com.fasterxml.uuid" % "java-uuid-generator" % versions.uuidgen,
         "fr.janalyse"       %% "zio-lmdb"            % versions.ziolmdb
@@ -82,8 +79,13 @@ lazy val moduleDaemon =
     .dependsOn(moduleCore)
     .settings(
       sharedSettings,
+      fork := true,
+      javaOptions ++= Seq("--add-opens", "java.base/java.nio=ALL-UNNAMED", "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"),
       libraryDependencies ++= Seq(
-        "net.coobird" % "thumbnailator" % "0.4.20" // https://github.com/coobird/thumbnailator
+        "net.coobird" % "thumbnailator"       % "0.4.20", // https://github.com/coobird/thumbnailator
+        "dev.zio"    %% "zio-config"          % versions.zioconfig,
+        "dev.zio"    %% "zio-config-typesafe" % versions.zioconfig,
+        "dev.zio"    %% "zio-config-magnolia" % versions.zioconfig
       )
     )
 
@@ -91,13 +93,16 @@ lazy val userInterfacesCLI =
   project
     .in(file("user-interfaces/cli"))
     .settings(sharedSettings)
-    .dependsOn(moduleCore)
+    .dependsOn(moduleCore, moduleDaemon)
     .settings(
       sharedSettings,
       fork := true,
       javaOptions ++= Seq("--add-opens", "java.base/java.nio=ALL-UNNAMED", "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"),
       libraryDependencies ++= Seq(
-        "dev.zio" %% "zio" % versions.zio
+        "dev.zio" %% "zio"                 % versions.zio,
+        "dev.zio" %% "zio-config"          % versions.zioconfig,
+        "dev.zio" %% "zio-config-typesafe" % versions.zioconfig,
+        "dev.zio" %% "zio-config-magnolia" % versions.zioconfig
       )
     )
 

@@ -20,10 +20,11 @@ import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
 import scala.util.Try
 
-object PhotoOperations {
+case class NotFoundInStore(message: String, photoId: PhotoId)
 
-  case class NotFoundInStore(message: String, photoId: PhotoId)
-  case class PhotoFileIssue(message: String, filePath: Path, throwable: Throwable)
+case class PhotoFileIssue(message: String, filePath: Path, throwable: Throwable)
+
+object PhotoOperations {
 
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
