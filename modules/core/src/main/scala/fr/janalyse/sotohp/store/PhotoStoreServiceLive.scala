@@ -216,7 +216,7 @@ class PhotoStoreServiceLive private (
   def daoMiniaturesToMiniatures(from: Option[DaoMiniatures]): Option[Miniatures] = {
     from.map(daoMiniatures =>
       Miniatures(
-        sources = daoMiniatures.sources.map(s => MiniatureSource(path = Path.of(s.path), referenceSize = s.referenceSize)),
+        sources = daoMiniatures.sources.map(s => MiniatureSource(path = Path.of(s.path), dimension = Dimension2D(width = s.dimension.width, height = s.dimension.height))),
         lastUpdated = daoMiniatures.lastUpdated
       )
     )
@@ -224,7 +224,7 @@ class PhotoStoreServiceLive private (
 
   def miniaturesToDaoMiniatures(from: Miniatures): DaoMiniatures =
     DaoMiniatures(
-      sources = from.sources.map(s => DaoMiniatureSource(path = s.path.toString, referenceSize = s.referenceSize)),
+      sources = from.sources.map(s => DaoMiniatureSource(path = s.path.toString, dimension = DaoDimension2D(width = s.dimension.width, height = s.dimension.height))),
       lastUpdated = from.lastUpdated
     )
 

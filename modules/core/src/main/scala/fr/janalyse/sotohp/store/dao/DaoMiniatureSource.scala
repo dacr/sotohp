@@ -6,5 +6,5 @@ import java.nio.file.Path
 
 case class DaoMiniatureSource(
   path: String,
-  referenceSize: Int
+  dimension: DaoDimension2D
 ) derives JsonCodec

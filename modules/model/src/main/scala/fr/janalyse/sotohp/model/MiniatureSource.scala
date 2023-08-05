@@ -4,5 +4,5 @@ import java.nio.file.Path
 
 case class MiniatureSource(
   path: Path,
-  referenceSize: Int
+  dimension: Dimension2D
 )

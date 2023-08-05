@@ -2,14 +2,14 @@ package fr.janalyse.sotohp.daemon
 
 import zio.*
 import zio.config.*
-import zio.config.typesafe.*
-import zio.config.magnolia.*
 import java.io.File
 import java.nio.file.Path
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.store.{PhotoStoreService, PhotoStoreIssue}
+
 import net.coobird.thumbnailator.Thumbnails
+import org.apache.commons.imaging.Imaging
 
 case class MiniaturizeIssue(message: String, photoId: PhotoId, exception: Throwable)
 case class MiniaturizeConfigIssue(message: String, exception: Throwable)
@@ -30,30 +30,34 @@ object MiniaturizerDaemon {
 
   def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, MiniatureSource] = {
     for {
-      input  <- ZIO
-                  .attempt(photo.source.photoPath.toAbsolutePath)
-                  .mapError(th => MiniaturizeIssue(s"Couldn't build input path", photo.id, th))
-      output <- makeMiniatureFilePath(photo, size, config)
-      _      <- ZIO
-                  .attempt(output.getParent.toFile.mkdirs())
-                  .mapError(th => MiniaturizeIssue(s"Couldn't target path", photo.id, th))
-      _      <- ZIO
-                  .logInfo(s"Build $size miniature for ${photo.id} - ${photo.source.photoPath}")
-                  .when(!output.toFile.exists())
-      _      <- ZIO
-                  .attemptBlockingIO(
-                    Thumbnails
-                      .of(input.toFile)
-                      .useExifOrientation(true)
-                      .size(size, size)
-                      .keepAspectRatio(true)
-                      .outputQuality(config.quality)
-                      .allowOverwrite(false)
-                      .toFile(output.toFile)
-                  )
-                  .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature with reference size $size", photo.id, th))
-                  .when(!output.toFile.exists())
-    } yield MiniatureSource(path = output, referenceSize = size)
+      input     <- ZIO
+                     .attempt(photo.source.photoPath.toAbsolutePath)
+                     .mapError(th => MiniaturizeIssue(s"Couldn't build input path", photo.id, th))
+      output    <- makeMiniatureFilePath(photo, size, config)
+      _         <- ZIO
+                     .attempt(output.getParent.toFile.mkdirs())
+                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", photo.id, th))
+      _         <- ZIO
+                     .logInfo(s"Build $size miniature for ${photo.id} - ${photo.source.photoPath}")
+                     .when(!output.toFile.exists())
+      _         <- ZIO
+                     .attemptBlockingIO(
+                       Thumbnails
+                         .of(input.toFile)
+                         .useExifOrientation(true)
+                         .size(size, size)
+                         .keepAspectRatio(true)
+                         .outputQuality(config.quality)
+                         .allowOverwrite(false)
+                         .toFile(output.toFile)
+                     )
+                     .uninterruptible
+                     .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature with reference size $size", photo.id, th))
+                     .when(!output.toFile.exists())
+      dimension <- ZIO
+                     .attempt(Imaging.getImageSize(output.toFile))
+                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", photo.id, th))
+    } yield MiniatureSource(path = output, dimension = Dimension2D(width = dimension.getWidth.toInt, height = dimension.getHeight.toInt))
   }
 
   def buildMiniatures(photo: Photo, config: MiniaturizerConfig): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue, Unit] = {
@@ -63,7 +67,7 @@ object MiniaturizerDaemon {
       miniatures         = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
       _                 <- PhotoStoreService
                              .photoMiniaturesUpsert(photo.id, miniatures)
-                             .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.id).map(!_))
+      // .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.id).map(!_))
     } yield ()
   }
 
@@ -73,7 +77,7 @@ object MiniaturizerDaemon {
     for {
       config <- miniaturizerConfig
       _      <- photosStream
-                  .mapZIOParUnordered(8)(original => buildMiniatures(original, config))
+                  .mapZIOParUnordered(4)(original => buildMiniatures(original, config))
                   .runDrain
     } yield ()
   }

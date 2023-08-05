@@ -82,10 +82,11 @@ lazy val moduleDaemon =
       fork := true,
       javaOptions ++= Seq("--add-opens", "java.base/java.nio=ALL-UNNAMED", "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"),
       libraryDependencies ++= Seq(
-        "net.coobird" % "thumbnailator"       % "0.4.20", // https://github.com/coobird/thumbnailator
-        "dev.zio"    %% "zio-config"          % versions.zioconfig,
-        "dev.zio"    %% "zio-config-typesafe" % versions.zioconfig,
-        "dev.zio"    %% "zio-config-magnolia" % versions.zioconfig
+        "net.coobird"        % "thumbnailator"       % "0.4.20",     // https://github.com/coobird/thumbnailator
+        "org.apache.commons" % "commons-imaging"     % "1.0-alpha3", // https://commons.apache.org/proper/commons-imaging/
+        "dev.zio"           %% "zio-config"          % versions.zioconfig,
+        "dev.zio"           %% "zio-config-typesafe" % versions.zioconfig,
+        "dev.zio"           %% "zio-config-magnolia" % versions.zioconfig
       )
     )
 
