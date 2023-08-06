@@ -103,8 +103,7 @@ object PhotoOperations {
     val tagName = GpsDirectory.TAG_ALTITUDE
     for {
       gps       <- Option(metadata.getFirstDirectoryOfType(classOf[GpsDirectory]))
-      if gps.containsTag(tagName)
-      altitude  <- Option(gps.getDouble(tagName))
+      altitude   = if (gps.containsTag(tagName)) Option(gps.getDouble(tagName)) else None
       latitude  <- Option(gps.getGeoLocation).map(_.getLatitude).map(LatitudeDecimalDegrees.apply)
       longitude <- Option(gps.getGeoLocation).map(_.getLongitude).map(LongitudeDecimalDegrees.apply)
     } yield {
@@ -250,6 +249,8 @@ object PhotoOperations {
                          .some
                          .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", photoId)))
       photoPlace    <- PhotoStoreService.photoPlaceGet(photoId)
+      // miniatures      <- PhotoStoreService.photoMiniaturesGet(photoId)
+      // normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
       photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
       photoCategory  = buildPhotoCategory(baseDirectory, photoPath)
     } yield {
@@ -260,6 +261,8 @@ object PhotoOperations {
         metaData = Some(photoMetaData),
         place = photoPlace,
         category = photoCategory
+        // miniatures = miniatures,
+        // normalized = normalizedPhoto
       )
     }
   }
@@ -278,10 +281,17 @@ object PhotoOperations {
 
   def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
     val photoId = buildPhotoId(photoPath, photoOwnerId)
-    for {
+    val makeIt  = for {
+      //photo <- makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId)
       photo <- makePhotoFromStore(photoId, baseDirectory, photoPath, photoOwnerId)
+                 .tapError(err =>
+                   ZIO
+                     .logWarning(err.toString)
+                     .when(!err.isInstanceOf[NotFoundInStore]) // NotFound so it is a new photo to be computed from file
+                 )
                  .orElse(makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId))
       _     <- updateStateLastSeen(photoId)
     } yield photo
+    makeIt.uninterruptible
   }
 }

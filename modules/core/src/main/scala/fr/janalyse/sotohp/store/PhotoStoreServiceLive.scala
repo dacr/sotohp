@@ -189,7 +189,7 @@ class PhotoStoreServiceLive private (
     DaoPhotoPlace(
       latitude = from.latitude.doubleValue,
       longitude = from.longitude.doubleValue,
-      altitude = from.altitude.doubleValue
+      altitude = from.altitude.map(_.doubleValue)
     )
 
   override def photoPlaceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoPlace]] =
@@ -256,7 +256,8 @@ class PhotoStoreServiceLive private (
         dimension = Dimension2D(
           width = daoNormalized.dimension.width,
           height = daoNormalized.dimension.height
-        )
+        ),
+        lastUpdated = daoNormalized.lastUpdated
       )
     )
   }
@@ -267,7 +268,8 @@ class PhotoStoreServiceLive private (
       dimension = DaoDimension2D(
         width = from.dimension.width,
         height = from.dimension.height
-      )
+      ),
+      lastUpdated = from.lastUpdated
     )
 
   override def photoNormalizedGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[NormalizedPhoto]] =

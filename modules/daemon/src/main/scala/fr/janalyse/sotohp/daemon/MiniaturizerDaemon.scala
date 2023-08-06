@@ -28,6 +28,24 @@ object MiniaturizerDaemon {
       .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file $target", photo.id, th))
   }
 
+  private def miniaturizePhoto(photoId: PhotoId, referenceSize: Int, input: Path, output: Path, config: MiniaturizerConfig) = {
+    ZIO
+      .attemptBlockingIO(
+        Thumbnails
+          .of(input.toFile)
+          .useExifOrientation(true)
+          .size(referenceSize, referenceSize)
+          .keepAspectRatio(true)
+          .outputQuality(config.quality)
+          .allowOverwrite(false)
+          .toFile(output.toFile)
+      )
+      .tap(_ => ZIO.logInfo(s"Miniaturize $input - ${photoId.uuid} - $referenceSize"))
+      .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo with reference size $referenceSize", photoId, th))
+      .uninterruptible
+      .when(!output.toFile.exists())
+  }
+
   def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, MiniatureSource] = {
     for {
       input     <- ZIO
@@ -37,23 +55,7 @@ object MiniaturizerDaemon {
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
                      .mapError(th => MiniaturizeIssue(s"Couldn't target path", photo.id, th))
-      _         <- ZIO
-                     .logInfo(s"Build $size miniature for ${photo.id} - ${photo.source.photoPath}")
-                     .when(!output.toFile.exists())
-      _         <- ZIO
-                     .attemptBlockingIO(
-                       Thumbnails
-                         .of(input.toFile)
-                         .useExifOrientation(true)
-                         .size(size, size)
-                         .keepAspectRatio(true)
-                         .outputQuality(config.quality)
-                         .allowOverwrite(false)
-                         .toFile(output.toFile)
-                     )
-                     .uninterruptible
-                     .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature with reference size $size", photo.id, th))
-                     .when(!output.toFile.exists())
+      _         <- miniaturizePhoto(photo.id, size, input, output, config)
       dimension <- ZIO
                      .attempt(Imaging.getImageSize(output.toFile))
                      .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", photo.id, th))
@@ -67,7 +69,7 @@ object MiniaturizerDaemon {
       miniatures         = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
       _                 <- PhotoStoreService
                              .photoMiniaturesUpsert(photo.id, miniatures)
-      // .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.id).map(!_))
+                             .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.id).map(!_))
     } yield ()
   }
 

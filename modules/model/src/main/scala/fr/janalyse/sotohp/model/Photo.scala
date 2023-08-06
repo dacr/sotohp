@@ -73,20 +73,18 @@ case class PhotoFaces(
   lastUpdated: OffsetDateTime
 )
 
-
 case class Photo(
   id: PhotoId,
-  timestamp: OffsetDateTime,              // Reference timestamp of the photo, either the shoot date time or the last modified date if the first is unknown
-  source: PhotoSource,                    // All information about the original photo file
-  metaData: Option[PhotoMetaData],        // Dimension, exif, camera, ... meta data
-  category: Option[PhotoCategory] = None, // from user directory tree where photo are store
-  place: Option[PhotoPlace] = None,       // where it has been taken
-  description: Option[String] = None,     // given user description
-
+  timestamp: OffsetDateTime,                  // Reference timestamp of the photo, either the shoot date time or the last modified date if the first is unknown
+  source: PhotoSource,                        // All information about the original photo file
+  metaData: Option[PhotoMetaData],            // Dimension, exif, camera, ... meta data
+  category: Option[PhotoCategory] = None,     // from user directory tree where photo are store
+  place: Option[PhotoPlace] = None,           // where it has been taken
   miniatures: Option[Miniatures] = None,      // all computed and available miniatures
   normalized: Option[NormalizedPhoto] = None, // cleaned, recompressed, resized, optimized photo for quick display and processing
 
-  foundKeywords: Option[PhotoKeywords] = None,
+  description: Option[PhotoDescription] = None, // given user description
+
   foundClassifications: Option[PhotoClassifications] = None,
   foundObjects: Option[PhotoObjects] = None,
   foundFaces: Option[PhotoFaces] = None

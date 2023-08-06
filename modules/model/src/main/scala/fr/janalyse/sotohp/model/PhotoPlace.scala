@@ -106,14 +106,14 @@ object DegreeMinuteSeconds {
 case class PhotoPlace(
   latitude: LatitudeDecimalDegrees,
   longitude: LongitudeDecimalDegrees,
-  altitude: AltitudeMeanSeaLevel
+  altitude: Option[AltitudeMeanSeaLevel]
 )
 
 object PhotoPlace {
   def apply(
     latitudeDMS: LatitudeDegreeMinuteSeconds,
     longitudeDMS: LongitudeDegreeMinuteSeconds,
-    altitudeMeanSeaLevel: AltitudeMeanSeaLevel
+    altitudeMeanSeaLevel: Option[AltitudeMeanSeaLevel]
   ): PhotoPlace = {
     PhotoPlace(
       latitudeDMS.toDecimalDegrees,
