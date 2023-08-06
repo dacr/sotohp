@@ -246,19 +246,19 @@ object PhotoOperations {
     photoOwnerId: PhotoOwnerId
   ): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
     for {
-      photoMetaData <- PhotoStoreService
-                         .photoMetaDataGet(photoId)
-                         .some
-                         .mapError(someError => someError.getOrElse(NotFoundInStore("no meta data in store", photoId)))
-      photoSource   <- PhotoStoreService
-                         .photoSourceGet(photoId)
-                         .some
-                         .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", photoId)))
-      photoPlace    <- PhotoStoreService.photoPlaceGet(photoId)
-      // miniatures      <- PhotoStoreService.photoMiniaturesGet(photoId)
-      // normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
-      photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
-      photoCategory  = buildPhotoCategory(baseDirectory, photoPath)
+      photoMetaData   <- PhotoStoreService
+                           .photoMetaDataGet(photoId)
+                           .some
+                           .mapError(someError => someError.getOrElse(NotFoundInStore("no meta data in store", photoId)))
+      photoSource     <- PhotoStoreService
+                           .photoSourceGet(photoId)
+                           .some
+                           .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", photoId)))
+      photoPlace      <- PhotoStoreService.photoPlaceGet(photoId)
+      miniatures      <- PhotoStoreService.photoMiniaturesGet(photoId)
+      normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
+      photoTimestamp   = computePhotoTimestamp(photoSource, photoMetaData)
+      photoCategory    = buildPhotoCategory(baseDirectory, photoPath)
     } yield {
       Photo(
         id = photoId,
@@ -266,9 +266,9 @@ object PhotoOperations {
         source = photoSource,
         metaData = Some(photoMetaData),
         place = photoPlace,
-        category = photoCategory
-        // miniatures = miniatures,
-        // normalized = normalizedPhoto
+        category = photoCategory,
+        miniatures = miniatures,
+        normalized = normalizedPhoto
       )
     }
   }
@@ -288,7 +288,7 @@ object PhotoOperations {
   def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
     val photoId = buildPhotoId(photoPath, photoOwnerId)
     val makeIt  = for {
-      //photo <- makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId)
+      // photo <- makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId)
       photo <- makePhotoFromStore(photoId, baseDirectory, photoPath, photoOwnerId)
                  .tapError(err =>
                    ZIO
