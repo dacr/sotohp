@@ -12,8 +12,9 @@ photos, and more than 4600 videos. Once again this project has first started as 
 
 ## TODO
 
+- [ ] add photo files checker daemon for both originals and generated (miniatures, normalized, ...)
 - [ ] enhanced photo classification
-- [ ] [instance segmentation](instseg)
+- [ ] [instance segmentation][instseg]
 - [ ] text in photos extraction
 - [ ] faces detection/extraction
 - [ ] faces clustering
