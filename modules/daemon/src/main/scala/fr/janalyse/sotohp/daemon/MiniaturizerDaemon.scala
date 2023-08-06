@@ -40,10 +40,10 @@ object MiniaturizerDaemon {
           .allowOverwrite(false)
           .toFile(output.toFile)
       )
-      .uninterruptible
       .tap(_ => ZIO.logInfo(s"Miniaturize $input - ${photoId.uuid} - $referenceSize"))
       .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", photoId, th))
-      .when(!output.toFile.exists())
+      .tapError(err => ZIO.logWarning(err.toString))
+      .uninterruptible
   }
 
   def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, MiniatureSource] = {
@@ -56,19 +56,24 @@ object MiniaturizerDaemon {
                      .attempt(output.getParent.toFile.mkdirs())
                      .mapError(th => MiniaturizeIssue(s"Couldn't target path", photo.id, th))
       _         <- miniaturizePhoto(photo.id, size, input, output, config)
+                     .when(!output.toFile.exists())
       dimension <- ZIO
                      .attempt(Imaging.getImageSize(output.toFile))
                      .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", photo.id, th))
     } yield MiniatureSource(path = output, dimension = Dimension2D(width = dimension.getWidth.toInt, height = dimension.getHeight.toInt))
   }
 
+  def upsertMiniaturesRecord(photo: Photo, miniaturesSources: List[MiniatureSource]) = for {
+    currentDateTime <- Clock.currentDateTime
+    miniatures       = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
+    _               <- PhotoStoreService
+                         .photoMiniaturesUpsert(photo.id, miniatures)
+  } yield ()
+
   def buildMiniatures(photo: Photo, config: MiniaturizerConfig): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue, Unit] = {
     for {
       miniaturesSources <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config))
-      currentDateTime   <- Clock.currentDateTime
-      miniatures         = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
-      _                 <- PhotoStoreService
-                             .photoMiniaturesUpsert(photo.id, miniatures)
+      _                 <- upsertMiniaturesRecord(photo, miniaturesSources)
                              .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.id).map(!_))
     } yield ()
   }
@@ -79,7 +84,7 @@ object MiniaturizerDaemon {
     for {
       config <- miniaturizerConfig
       _      <- photosStream
-                  .mapZIOParUnordered(4)(original => buildMiniatures(original, config).ignoreLogged)
+                  .mapZIOParUnordered(4)(original => buildMiniatures(original, config).ignore)
                   .runDrain
     } yield ()
   }
