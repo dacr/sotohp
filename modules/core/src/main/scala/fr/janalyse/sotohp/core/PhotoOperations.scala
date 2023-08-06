@@ -296,7 +296,7 @@ object PhotoOperations {
                      .when(!err.isInstanceOf[NotFoundInStore]) // NotFound so it is a new photo to be computed from file
                  )
                  .orElse(makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId))
-      _     <- updateStateLastSeen(photoId)
+      // _     <- updateStateLastSeen(photoId)
     } yield photo
     makeIt.uninterruptible
   }

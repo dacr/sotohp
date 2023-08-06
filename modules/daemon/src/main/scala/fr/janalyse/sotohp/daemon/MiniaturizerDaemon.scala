@@ -40,9 +40,9 @@ object MiniaturizerDaemon {
           .allowOverwrite(false)
           .toFile(output.toFile)
       )
-      .tap(_ => ZIO.logInfo(s"Miniaturize $input - ${photoId.uuid} - $referenceSize"))
-      .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo with reference size $referenceSize", photoId, th))
       .uninterruptible
+      .tap(_ => ZIO.logInfo(s"Miniaturize $input - ${photoId.uuid} - $referenceSize"))
+      .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", photoId, th))
       .when(!output.toFile.exists())
   }
 
@@ -79,7 +79,7 @@ object MiniaturizerDaemon {
     for {
       config <- miniaturizerConfig
       _      <- photosStream
-                  .mapZIOParUnordered(4)(original => buildMiniatures(original, config))
+                  .mapZIOParUnordered(4)(original => buildMiniatures(original, config).ignoreLogged)
                   .runDrain
     } yield ()
   }

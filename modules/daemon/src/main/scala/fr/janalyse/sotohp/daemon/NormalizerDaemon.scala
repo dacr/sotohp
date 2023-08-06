@@ -39,9 +39,9 @@ object NormalizerDaemon {
           .allowOverwrite(false)
           .toFile(output.toFile)
       )
-      .tap(_ => ZIO.logInfo(s"Normalize $input - ${photoId.uuid}"))
-      .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo with reference size ${config.referenceSize}", photoId, th))
       .uninterruptible
+      .tap(_ => ZIO.logInfo(s"Normalize $input - ${photoId.uuid}"))
+      .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size ${config.referenceSize}", photoId, th))
       .when(!output.toFile.exists())
   }
 
@@ -76,7 +76,7 @@ object NormalizerDaemon {
     for {
       config <- normalizerConfig
       _      <- photosStream
-                  .mapZIOParUnordered(4)(original => buildNormalizedPhoto(original, config))
+                  .mapZIOParUnordered(4)(original => buildNormalizedPhoto(original, config).ignoreLogged)
                   .runDrain
     } yield ()
   }
