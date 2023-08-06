@@ -159,7 +159,7 @@ object PhotoOperations {
     result.flatten
   }
 
-  def buildPhotoSource(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): IO[PhotoFileIssue, PhotoSource] = {
+  def buildPhotoSource(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoFileIssue, PhotoSource] = {
     for {
       fileSize         <- attemptBlockingIO(photoPath.toFile.length())
                             .mapError(exception => PhotoFileIssue(s"Unable to read file size", photoPath, exception))
@@ -167,8 +167,14 @@ object PhotoOperations {
                             .mapAttempt(Instant.ofEpochMilli)
                             .mapAttempt(_.atZone(ZoneId.systemDefault()).toOffsetDateTime)
                             .mapError(exception => PhotoFileIssue(s"Unable to get file last modified", photoPath, exception))
-      fileHash         <- attemptBlockingIO(HashOperations.fileDigest(photoPath))
-                            .mapError(exception => PhotoFileIssue(s"Unable to compute file hash", photoPath, exception))
+      fileHash         <- PhotoStoreService
+                            .photoStateGet(photoId)
+                            .map(r => r.map(_.photoHash.code))
+                            .some
+                            .orElse(
+                              attemptBlockingIO(HashOperations.fileDigest(photoPath))
+                                .mapError(exception => PhotoFileIssue(s"Unable to compute file hash", photoPath, exception))
+                            )
     } yield PhotoSource(
       ownerId = photoOwnerId,
       baseDirectory = baseDirectory,
@@ -213,7 +219,7 @@ object PhotoOperations {
       _             <- logInfo(s"New photo found $photoPath $photoId")
       drewMetadata  <- readDrewMetadata(photoPath)
       photoMetaData  = buildPhotoMetaData(drewMetadata)
-      photoSource   <- buildPhotoSource(baseDirectory, photoPath, photoOwnerId)
+      photoSource   <- buildPhotoSource(photoId, baseDirectory, photoPath, photoOwnerId)
       foundPlace     = extractPlace(drewMetadata)
       photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
       photoCategory  = buildPhotoCategory(baseDirectory, photoPath)
