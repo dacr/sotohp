@@ -9,6 +9,7 @@ photos, and more than 4600 videos. Once again this project has first started as 
 2. Your photos directories are left unchanged, only read operations are done,
 3. A local LMDB database is used to store/cache, serialization is JSON based,
 4. Background jobs are run to update, to enrich, to analyze, to process your photos
+5. Dedicated Filesystem targets for pre-processed photos 
 
 ## TODO
 
