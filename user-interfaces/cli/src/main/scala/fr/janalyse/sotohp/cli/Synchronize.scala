@@ -19,14 +19,16 @@ object Synchronize extends ZIOAppDefault with CommonsCLI {
         Scope.default
       )
 
-  val logic = for {
-    _           <- ZIO.logInfo("photos synchronization")
-    searchRoots <- getSearchRoots
-    originals    = OriginalsStream.photoStream(searchRoots)
-    count       <- originals.runCount
-    _           <- ZIO.logInfo(s"Found $count photos")
-    // photoFiles         <- originals.map(_.source.photoPath.toString).runCollect
-    // _                  <- ZIO.foreach(photoFiles.sorted)(f => Console.printLine(f))
-  } yield ()
+  val logic = ZIO.logSpan("synchronize") {
+    for {
+      _           <- ZIO.logInfo("photos synchronization")
+      searchRoots <- getSearchRoots
+      originals    = OriginalsStream.photoStream(searchRoots)
+      count       <- originals.runCount
+      _           <- ZIO.logInfo(s"Synchronization done - found $count photos")
+      // photoFiles         <- originals.map(_.source.photoPath.toString).runCollect
+      // _                  <- ZIO.foreach(photoFiles.sorted)(f => Console.printLine(f))
+    } yield ()
+  }
 
 }

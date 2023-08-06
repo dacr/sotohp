@@ -20,10 +20,12 @@ object Normalize extends ZIOAppDefault with CommonsCLI {
         Scope.default
       )
 
-  val logic = for {
-    _           <- ZIO.logInfo("photos normalization")
-    searchRoots <- getSearchRoots
-    originals    = OriginalsStream.photoStream(searchRoots)
-    _           <- NormalizerDaemon.normalize(originals)
-  } yield ()
+  val logic = ZIO.logSpan("normalize") {
+    for {
+      searchRoots <- getSearchRoots
+      originals    = OriginalsStream.photoStream(searchRoots)
+      _           <- NormalizerDaemon.normalize(originals)
+      _           <- ZIO.logInfo("Normalization done")
+    } yield ()
+  }
 }
