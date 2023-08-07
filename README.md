@@ -13,6 +13,7 @@ photos, and more than 4600 videos. Once again this project has first started as 
 
 ## TODO
 
+- [ ] switch to ULID for photo identifiers
 - [ ] add photo files checker daemon for both originals and generated (miniatures, normalized, ...)
 - [ ] enhanced photo classification
 - [ ] [instance segmentation][instseg]
