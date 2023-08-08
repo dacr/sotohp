@@ -16,12 +16,12 @@ case class MiniaturizeConfigIssue(message: String, exception: Throwable)
 
 object MiniaturizerDaemon {
 
-  val miniaturizerConfig =
+  private val miniaturizerConfig =
     ZIO
       .config(MiniaturizerConfig.config)
       .mapError(th => MiniaturizeConfigIssue(s"Couldn't configure miniaturizer", th))
 
-  def makeMiniatureFilePath(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, Path] = {
+  private def makeMiniatureFilePath(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, Path] = {
     val target = s"${config.baseDirectory}/${photo.source.original.ownerId}/${photo.source.photoId}/$size.${config.format}"
     ZIO
       .attempt(Path.of(target))
@@ -46,7 +46,7 @@ object MiniaturizerDaemon {
       .uninterruptible
   }
 
-  def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig, alreadyKnownMiniatures: Option[Miniatures]): IO[MiniaturizeIssue, MiniatureSource] = {
+  private def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig, alreadyKnownMiniatures: Option[Miniatures]): IO[MiniaturizeIssue, MiniatureSource] = {
     for {
       input     <- ZIO
                      .attempt(photo.source.original.path.toAbsolutePath)
@@ -68,15 +68,16 @@ object MiniaturizerDaemon {
     } yield MiniatureSource(path = output, dimension = dimension)
   }
 
-  def upsertMiniaturesRecord(photo: Photo, miniaturesSources: List[MiniatureSource]) = for {
+  private def upsertMiniaturesRecord(photo: Photo, miniaturesSources: List[MiniatureSource]) = for {
     currentDateTime <- Clock.currentDateTime
     miniatures       = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
     _               <- PhotoStoreService
                          .photoMiniaturesUpsert(photo.source.photoId, miniatures)
   } yield ()
 
-  def buildMiniatures(photo: Photo, config: MiniaturizerConfig): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue, Unit] = {
+  def miniaturize(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue | MiniaturizeConfigIssue, Unit] = {
     for {
+      config                 <- miniaturizerConfig
       alreadyKnownMiniatures <- PhotoStoreService.photoMiniaturesGet(photo.source.photoId)
       miniaturesSources      <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config, alreadyKnownMiniatures))
       _                      <- upsertMiniaturesRecord(photo, miniaturesSources)
@@ -86,12 +87,9 @@ object MiniaturizerDaemon {
 
   type MiniaturizeIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore | MiniaturizeIssue | MiniaturizeConfigIssue
 
-  def miniaturize(photosStream: OriginalsStream.PhotoStream): ZIO[PhotoStoreService, MiniaturizeIssues, Unit] = {
-    for {
-      config <- miniaturizerConfig
-      _      <- photosStream
-                  .mapZIOParUnordered(4)(original => buildMiniatures(original, config).ignore)
-                  .runDrain
-    } yield ()
+  def miniaturizeStream(photosStream: OriginalsStream.PhotoStream): ZIO[PhotoStoreService, MiniaturizeIssues, Unit] = {
+    photosStream
+      .mapZIOParUnordered(4)(original => miniaturize(original).ignore)
+      .runDrain
   }
 }

@@ -14,12 +14,12 @@ case class NormalizeIssue(message: String, photoId: PhotoId, exception: Throwabl
 case class NormalizeConfigIssue(message: String, exception: Throwable)
 
 object NormalizerDaemon {
-  val normalizerConfig =
+  private val normalizerConfig =
     ZIO
       .config(NormalizerConfig.config)
       .mapError(th => NormalizeConfigIssue(s"Couldn't configure normalizer", th))
 
-  def makeNormalizedFilePath(photo: Photo, config: NormalizerConfig): IO[NormalizeIssue, Path] = {
+  private def makeNormalizedFilePath(photo: Photo, config: NormalizerConfig): IO[NormalizeIssue, Path] = {
     val target = s"${config.baseDirectory}/${photo.source.original.ownerId}/${photo.source.photoId}.${config.format}"
     ZIO
       .attempt(Path.of(target))
@@ -45,7 +45,7 @@ object NormalizerDaemon {
       .uninterruptible
   }
 
-  def upsertNormalizedPhotoRecord(photo: Photo, output: Path) = for {
+  private def upsertNormalizedPhotoRecord(photo: Photo, output: Path) = for {
     dimension       <- ZIO
                          .attempt(Imaging.getImageSize(output.toFile))
                          .mapError(th => NormalizeIssue(s"Couldn't get normalized photo size", photo.source.photoId, th))
@@ -59,8 +59,9 @@ object NormalizerDaemon {
                          .photoNormalizedUpsert(photo.source.photoId, normalizedPhoto)
   } yield normalizedPhoto
 
-  def buildNormalizedPhoto(photo: Photo, config: NormalizerConfig): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue, Unit] = {
+  def normalize(photo: Photo): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue | NormalizeConfigIssue, Unit] = {
     for {
+      config <- normalizerConfig
       input  <- ZIO
                   .attempt(photo.source.original.path.toAbsolutePath)
                   .mapError(th => NormalizeIssue(s"Couldn't build input path", photo.source.photoId, th))
@@ -77,12 +78,9 @@ object NormalizerDaemon {
 
   type NormalizeIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore | NormalizeIssue | NormalizeConfigIssue
 
-  def normalize(photosStream: OriginalsStream.PhotoStream): ZIO[PhotoStoreService, NormalizeIssues, Unit] = {
-    for {
-      config <- normalizerConfig
-      _      <- photosStream
-                  .mapZIOParUnordered(4)(original => buildNormalizedPhoto(original, config).ignore)
-                  .runDrain
-    } yield ()
+  def normalizeStream(photosStream: OriginalsStream.PhotoStream): ZIO[PhotoStoreService, NormalizeIssues, Unit] = {
+    photosStream
+      .mapZIOParUnordered(4)(original => normalize(original).ignore)
+      .runDrain
   }
 }
