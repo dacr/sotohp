@@ -46,7 +46,7 @@ object MiniaturizerDaemon {
       .uninterruptible
   }
 
-  def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, MiniatureSource] = {
+  def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig, alreadyKnownMiniatures: Option[Miniatures]): IO[MiniaturizeIssue, MiniatureSource] = {
     for {
       input     <- ZIO
                      .attempt(photo.source.original.path.toAbsolutePath)
@@ -58,9 +58,14 @@ object MiniaturizerDaemon {
       _         <- miniaturizePhoto(photo.source.photoId, size, input, output, config)
                      .when(!output.toFile.exists())
       dimension <- ZIO
-                     .attempt(Imaging.getImageSize(output.toFile))
+                     .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(s => math.max(s.dimension.width, s.dimension.height) == size)).map(_.dimension))
+                     .orElse(
+                       ZIO
+                         .attempt(Imaging.getImageSize(output.toFile))
+                         .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
+                     )
                      .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", photo.source.photoId, th))
-    } yield MiniatureSource(path = output, dimension = Dimension2D(width = dimension.getWidth.toInt, height = dimension.getHeight.toInt))
+    } yield MiniatureSource(path = output, dimension = dimension)
   }
 
   def upsertMiniaturesRecord(photo: Photo, miniaturesSources: List[MiniatureSource]) = for {
@@ -72,9 +77,10 @@ object MiniaturizerDaemon {
 
   def buildMiniatures(photo: Photo, config: MiniaturizerConfig): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue, Unit] = {
     for {
-      miniaturesSources <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config))
-      _                 <- upsertMiniaturesRecord(photo, miniaturesSources)
-                             .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.source.photoId).map(!_))
+      alreadyKnownMiniatures <- PhotoStoreService.photoMiniaturesGet(photo.source.photoId)
+      miniaturesSources      <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config, alreadyKnownMiniatures))
+      _                      <- upsertMiniaturesRecord(photo, miniaturesSources)
+                                  .when(alreadyKnownMiniatures.map(_.sources).contains(miniaturesSources))
     } yield ()
   }
 

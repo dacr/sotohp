@@ -10,10 +10,13 @@ photos, and more than 4600 videos. Once again this project has first started as 
 3. A local LMDB database is used to store/cache, serialization is JSON based,
 4. Background jobs are run to update, to enrich, to analyze, to process your photos
 5. Dedicated Filesystem targets for pre-processed photos 
+6. Photos are identified using an [ULID][ulid] identifier computed from the shoot timestamp
+  - if shoot timestamp is missing or invalid, file last modified is used (at first seen)
+  - SO photos stream is automatically ordered by this timestamp   
 
 ## TODO
 
-- [ ] switch to ULID for photo identifiers
+- [x] switch to [ULID][ulid] for photo identifiers
 - [ ] add photo files checker daemon for both originals and generated (miniatures, normalized, ...)
 - [ ] enhanced photo classification
 - [ ] [instance segmentation][instseg]
@@ -23,3 +26,4 @@ photos, and more than 4600 videos. Once again this project has first started as 
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
 [instseg]: https://www.reasonfieldlab.com/post/instance-segmentation-algorithms-overview
+[ulid]: https://github.com/ulid/spec
