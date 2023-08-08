@@ -18,10 +18,10 @@ trait PhotoStoreService {
   def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
 
   // photo sources collection
-  def photoSourceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoSource]]
-  def photoSourceContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean]
-  def photoSourceUpsert(photoId: PhotoId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit]
-  def photoSourceDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+  def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]]
+  def photoSourceContains(originalId: OriginalId): IO[PhotoStoreIssue, Boolean]
+  def photoSourceUpsert(originalId: OriginalId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit]
+  def photoSourceDelete(originalId: OriginalId): IO[PhotoStoreIssue, Unit]
 
   // photos metadata collection
   def photoMetaDataGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoMetaData]]
@@ -54,10 +54,10 @@ object PhotoStoreService {
   def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoStateUpsert(photoId, photoState))
   def photoStateDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                         = serviceWithZIO(_.photoStateDelete(photoId))
 
-  def photoSourceGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoSource]]               = serviceWithZIO(_.photoSourceGet(photoId))
-  def photoSourceContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                      = serviceWithZIO(_.photoSourceContains(photoId))
-  def photoSourceUpsert(photoId: PhotoId, photoSource: PhotoSource): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoSourceUpsert(photoId, photoSource))
-  def photoSourceDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                           = serviceWithZIO(_.photoStateDelete(photoId))
+  def photoSourceGet(originalId: OriginalId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoSource]]               = serviceWithZIO(_.photoSourceGet(originalId))
+  def photoSourceContains(OriginalId: OriginalId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                      = serviceWithZIO(_.photoSourceContains(OriginalId))
+  def photoSourceUpsert(originalId: OriginalId, photoSource: PhotoSource): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoSourceUpsert(originalId, photoSource))
+  def photoSourceDelete(originalId: OriginalId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                           = serviceWithZIO(_.photoSourceDelete(originalId))
 
   def photoMetaDataGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoMetaData]]            = serviceWithZIO(_.photoMetaDataGet(photoId))
   def photoMetaDataContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                     = serviceWithZIO(_.photoMetaDataContains(photoId))

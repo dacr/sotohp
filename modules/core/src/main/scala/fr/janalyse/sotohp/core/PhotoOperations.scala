@@ -17,10 +17,11 @@ import java.time.{Instant, OffsetDateTime, ZoneId, ZoneOffset}
 import scala.jdk.CollectionConverters.*
 import com.fasterxml.uuid.Generators
 import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
+import wvlet.airframe.ulid.ULID
 
 import scala.util.Try
 
-case class NotFoundInStore(message: String, photoId: PhotoId)
+case class NotFoundInStore(message: String, id: String)
 
 case class PhotoFileIssue(message: String, filePath: Path, throwable: Throwable)
 
@@ -33,31 +34,43 @@ object PhotoOperations {
       .mapError(exception => PhotoFileIssue(s"Couldn't read image meta data in file", filePath, exception))
   }
 
-  def buildPhotoId(photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): PhotoId = {
-    // Using photo file path and owner id for photo identifier generation
+  def buildOriginalId(original: Original): OriginalId = {
+    // Using photo relative file path and owner id for photo identifier generation
     // as the same photo can be used within several directories or people
-    val key  = s"$photoOwnerId:$photoPath"
-    val uuid = nameBaseUUIDGenerator.generate(key)
-    PhotoId(uuid)
+    import original.*
+    val relativePath = baseDirectory.relativize(path)
+    val key          = s"$ownerId:$relativePath"
+    val uuid         = nameBaseUUIDGenerator.generate(key)
+    OriginalId(uuid)
+  }
+
+  def buildPhotoId(timestamp: OffsetDateTime): PhotoId = {
+    val ulid = ULID.ofMillis(timestamp.toInstant.toEpochMilli)
+    PhotoId(ulid)
   }
 
   def buildPhotoCategory(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath): Option[PhotoCategory] = {
-    val category = Option(photoPath.getParent).map { parentDir =>
-      val text =
-        parentDir.toString
-          .replaceAll(baseDirectory.toString, "")
-          .replaceAll("^/", "")
-          .replaceAll("/$", "")
-          .trim
+    val category = Option(photoPath.getParent).map { photoParentDir =>
+      val text = baseDirectory.relativize(photoParentDir).toString
       PhotoCategory(text)
     }
     category.filter(_.text.size > 0)
   }
 
-  def computePhotoTimestamp(photoSource: PhotoSource, photoMetaData: PhotoMetaData): OffsetDateTime = {
-    photoMetaData.shootDateTime match {
-      case Some(shootDateTime) => shootDateTime
-      case _                   => photoSource.fileLastModified
+  def getOriginalFileLastModified(original: Original): IO[PhotoFileIssue, OffsetDateTime] = {
+    ZIO
+      .attemptBlockingIO(original.path.toFile.lastModified())
+      .mapAttempt(Instant.ofEpochMilli)
+      .mapAttempt(_.atZone(ZoneId.systemDefault()).toOffsetDateTime)
+      .mapError(exception => PhotoFileIssue(s"Unable to get file last modified", original.path, exception))
+  }
+
+  def computePhotoTimestamp(original: Original, photoMetaData: PhotoMetaData): IO[PhotoFileIssue, OffsetDateTime] = {
+    val sdt = photoMetaData.shootDateTime.filter(_.getYear >= 1990) // TODO - Add rule/config to control shootDataTime validity !
+    sdt match {
+      case Some(shootDateTime) => ZIO.succeed(shootDateTime)
+      case _                   => getOriginalFileLastModified(original)
+
     }
   }
 
@@ -159,26 +172,22 @@ object PhotoOperations {
     result.flatten
   }
 
-  def buildPhotoSource(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoFileIssue, PhotoSource] = {
+  def buildPhotoSource(photoId: PhotoId, original: Original): ZIO[PhotoStoreService, PhotoFileIssue, PhotoSource] = {
     for {
-      fileSize         <- attemptBlockingIO(photoPath.toFile.length())
-                            .mapError(exception => PhotoFileIssue(s"Unable to read file size", photoPath, exception))
-      fileLastModified <- attemptBlockingIO(photoPath.toFile.lastModified())
-                            .mapAttempt(Instant.ofEpochMilli)
-                            .mapAttempt(_.atZone(ZoneId.systemDefault()).toOffsetDateTime)
-                            .mapError(exception => PhotoFileIssue(s"Unable to get file last modified", photoPath, exception))
+      fileSize         <- attemptBlockingIO(original.path.toFile.length())
+                            .mapError(exception => PhotoFileIssue(s"Unable to read file size", original.path, exception))
+      fileLastModified <- getOriginalFileLastModified(original)
       fileHash         <- PhotoStoreService
                             .photoStateGet(photoId)
                             .map(r => r.map(_.photoHash.code))
                             .some
                             .orElse(
-                              attemptBlockingIO(HashOperations.fileDigest(photoPath))
-                                .mapError(exception => PhotoFileIssue(s"Unable to compute file hash", photoPath, exception))
+                              attemptBlockingIO(HashOperations.fileDigest(original.path))
+                                .mapError(exception => PhotoFileIssue(s"Unable to compute file hash", original.path, exception))
                             )
     } yield PhotoSource(
-      ownerId = photoOwnerId,
-      baseDirectory = baseDirectory,
-      photoPath = photoPath,
+      photoId = photoId,
+      original = original,
       fileSize = fileSize,
       fileHash = PhotoHash(fileHash),
       fileLastModified = fileLastModified
@@ -214,22 +223,35 @@ object PhotoOperations {
     } yield ()
   }
 
-  private def makePhotoFromFile(photoId: PhotoId, baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue, Photo] = {
+  private def updateStateLastSeen(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue | NotFoundInStore, Unit] = {
     for {
-      _             <- logInfo(s"New photo found $photoPath $photoId")
-      drewMetadata  <- readDrewMetadata(photoPath)
-      photoMetaData  = buildPhotoMetaData(drewMetadata)
-      photoSource   <- buildPhotoSource(photoId, baseDirectory, photoPath, photoOwnerId)
-      foundPlace     = extractPlace(drewMetadata)
-      photoTimestamp = computePhotoTimestamp(photoSource, photoMetaData)
-      photoCategory  = buildPhotoCategory(baseDirectory, photoPath)
-      _             <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
-      _             <- PhotoStoreService.photoSourceUpsert(photoId, photoSource)
-      _             <- foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
-      _             <- setupPhotoInitialState(photoId, photoSource.fileHash)
+      state           <- PhotoStoreService
+                           .photoStateGet(photoId)
+                           .some
+                           .mapError(someError => someError.getOrElse(NotFoundInStore("no photo state in store", photoId.toString)))
+      currentDateTime <- Clock.currentDateTime
+      updatedState     = state.copy(lastSeen = currentDateTime)
+      _               <- PhotoStoreService.photoStateUpsert(photoId, updatedState)
+    } yield ()
+  }
+
+  private def makePhotoFromFile(original: Original): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue, Photo] = {
+    val originalId = buildOriginalId(original)
+    for {
+      drewMetadata   <- readDrewMetadata(original.path)
+      photoMetaData   = buildPhotoMetaData(drewMetadata)
+      photoTimestamp <- computePhotoTimestamp(original, photoMetaData)
+      photoId         = buildPhotoId(photoTimestamp)
+      photoSource    <- buildPhotoSource(photoId, original)
+      foundPlace      = extractPlace(drewMetadata)
+      photoCategory   = buildPhotoCategory(original.baseDirectory, original.path)
+      _              <- PhotoStoreService.photoSourceUpsert(originalId, photoSource)
+      _              <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
+      _              <- foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
+      _              <- setupPhotoInitialState(photoId, photoSource.fileHash)
+      _              <- logInfo(s"New photo found $originalId - $photoTimestamp - ${photoMetaData.shootDateTime} - ${original.path} ")
     } yield {
       Photo(
-        id = photoId,
         timestamp = photoTimestamp,
         source = photoSource,
         metaData = Some(photoMetaData),
@@ -240,28 +262,28 @@ object PhotoOperations {
   }
 
   private def makePhotoFromStore(
-    photoId: PhotoId,
-    baseDirectory: BaseDirectoryPath,
-    photoPath: PhotoPath,
-    photoOwnerId: PhotoOwnerId
+    original: Original
   ): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
+    import original.*
+    val originalId = buildOriginalId(original)
     for {
+      photoSource     <- PhotoStoreService
+                           .photoSourceGet(originalId)
+                           .some
+                           .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", originalId.toString)))
+      photoId          = photoSource.photoId
       photoMetaData   <- PhotoStoreService
                            .photoMetaDataGet(photoId)
                            .some
-                           .mapError(someError => someError.getOrElse(NotFoundInStore("no meta data in store", photoId)))
-      photoSource     <- PhotoStoreService
-                           .photoSourceGet(photoId)
-                           .some
-                           .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", photoId)))
+                           .mapError(someError => someError.getOrElse(NotFoundInStore("no meta data in store", photoId.toString)))
       photoPlace      <- PhotoStoreService.photoPlaceGet(photoId)
       miniatures      <- PhotoStoreService.photoMiniaturesGet(photoId)
       normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
-      photoTimestamp   = computePhotoTimestamp(photoSource, photoMetaData)
-      photoCategory    = buildPhotoCategory(baseDirectory, photoPath)
+      photoTimestamp  <- computePhotoTimestamp(original, photoMetaData)
+      photoCategory    = buildPhotoCategory(baseDirectory, path)
+      // _               <- updateStateLastSeen(photoId)
     } yield {
       Photo(
-        id = photoId,
         timestamp = photoTimestamp,
         source = photoSource,
         metaData = Some(photoMetaData),
@@ -273,31 +295,17 @@ object PhotoOperations {
     }
   }
 
-  private def updateStateLastSeen(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue | NotFoundInStore, Unit] = {
-    for {
-      state           <- PhotoStoreService
-                           .photoStateGet(photoId)
-                           .some
-                           .mapError(someError => someError.getOrElse(NotFoundInStore("no photo state in store", photoId)))
-      currentDateTime <- Clock.currentDateTime
-      updatedState     = state.copy(lastSeen = currentDateTime)
-      _               <- PhotoStoreService.photoStateUpsert(photoId, updatedState)
-    } yield ()
-  }
-
-  def makePhoto(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath, photoOwnerId: PhotoOwnerId): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
-    val photoId = buildPhotoId(photoPath, photoOwnerId)
-    val makeIt  = for {
-      // photo <- makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId)
-      photo <- makePhotoFromStore(photoId, baseDirectory, photoPath, photoOwnerId)
+  def makePhoto(original: Original): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
+    val makeIt = for {
+      photo <- makePhotoFromStore(original)
                  .tapError(err =>
                    ZIO
                      .logWarning(err.toString)
                      .when(!err.isInstanceOf[NotFoundInStore]) // NotFound so it is a new photo to be computed from file
                  )
-                 .orElse(makePhotoFromFile(photoId, baseDirectory, photoPath, photoOwnerId))
-      // _     <- updateStateLastSeen(photoId)
+                 .orElse(makePhotoFromFile(original))
     } yield photo
+
     makeIt.uninterruptible
   }
 }

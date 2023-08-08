@@ -3,10 +3,9 @@ package fr.janalyse.sotohp.store.dao
 import zio.json.JsonCodec
 
 import java.time.OffsetDateTime
-import java.util.UUID
 
 case class DaoPhotoState(
-  photoId: UUID,
+  photoId: String,
   photoHash: String,
   lastSynchronized: OffsetDateTime,
   lastUpdated: OffsetDateTime,

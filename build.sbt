@@ -56,7 +56,12 @@ val sharedSettings = Seq(
 lazy val moduleModel =
   project
     .in(file("modules/model"))
-    .settings(sharedSettings)
+    .settings(
+      sharedSettings,
+      libraryDependencies ++= Seq(
+        "org.wvlet.airframe" %% "airframe-ulid" % "23.8.0"
+      )
+    )
 
 lazy val moduleCore =
   project

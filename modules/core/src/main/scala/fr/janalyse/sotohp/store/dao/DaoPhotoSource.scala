@@ -6,9 +6,10 @@ import java.util.UUID
 import zio.json.*
 
 case class DaoPhotoSource(
-  ownerId: UUID,
-  baseDirectory: String,
-  photoPath: String,
+  photoId: String,
+  originalOwnerId: UUID,
+  originalBaseDirectory: String,
+  originalPath: String,
   fileSize: Long,
   fileHash: String,
   fileLastModified: OffsetDateTime

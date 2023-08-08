@@ -22,10 +22,10 @@ object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
           originalsStream      = photoStream(List(photoSearchFileRoot))
           photos              <- originalsStream.runCollect
           photoFileSources     = photos.map(_.source)
-          photoFilePaths       = photoFileSources.map(_.photoPath)
+          photoFilePaths       = photoFileSources.map(_.original.path)
         } yield assertTrue(
           photos.size == 5,
-          photoFileSources.head.baseDirectory == dataset1,
+          photoFileSources.head.original.baseDirectory == dataset1,
           photoFilePaths.toSet == Set(dataset1Example1, dataset1Example2, dataset1Example3, dataset1Example4, dataset1Example5),
           photos.forall(_.category.isEmpty)
         )
@@ -36,11 +36,11 @@ object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
           originalsStream      = photoStream(List(photoSearchFileRoot))
           photos              <- originalsStream.runCollect
           photoFileSources     = photos.map(_.source)
-          photoFilePaths       = photoFileSources.map(_.photoPath)
+          photoFilePaths       = photoFileSources.map(_.original.path)
           photoCategories      = photos.flatMap(_.category.map(_.text))
         } yield assertTrue(
           photos.size == 2,
-          photoFileSources.head.baseDirectory == dataset2,
+          photoFileSources.head.original.baseDirectory == dataset2,
           photoFilePaths.toSet == Set(dataset2tag1, dataset2landscape1),
           photoCategories.toSet == Set("landscapes", "tags")
         )

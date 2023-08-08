@@ -1,12 +1,9 @@
 package fr.janalyse.sotohp.model
 
+import wvlet.airframe.ulid.ULID
+
 import java.nio.file.Path
 import java.time.{Instant, OffsetDateTime}
-import java.util.UUID
-
-case class PhotoId(
-  uuid: UUID
-) extends AnyVal
 
 case class PhotoHash(
   code: String
@@ -74,12 +71,12 @@ case class PhotoFaces(
 )
 
 case class Photo(
-  id: PhotoId,
-  timestamp: OffsetDateTime,                  // Reference timestamp of the photo, either the shoot date time or the last modified date if the first is unknown
-  source: PhotoSource,                        // All information about the original photo file
-  metaData: Option[PhotoMetaData],            // Dimension, exif, camera, ... meta data
-  category: Option[PhotoCategory] = None,     // from user directory tree where photo are store
-  place: Option[PhotoPlace] = None,           // where it has been taken
+  timestamp: OffsetDateTime,              // Reference timestamp of the photo, either the shoot date time or the last modified date if the first is unknown
+  source: PhotoSource,                    // All information about the original photo file
+  metaData: Option[PhotoMetaData],        // Dimension, exif, camera, ... meta data
+  category: Option[PhotoCategory] = None, // from user directory tree where photo are store
+  place: Option[PhotoPlace] = None,       // where it has been taken
+
   miniatures: Option[Miniatures] = None,      // all computed and available miniatures
   normalized: Option[NormalizedPhoto] = None, // cleaned, recompressed, resized, optimized photo for quick display and processing
 

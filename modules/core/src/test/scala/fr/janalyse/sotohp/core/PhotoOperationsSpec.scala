@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.core
 
 import fr.janalyse.sotohp.core.PhotoOperations.*
-import fr.janalyse.sotohp.model.PhotoCategory
+import fr.janalyse.sotohp.model.*
 import zio.*
 import zio.ZIO.*
 import zio.test.*
@@ -56,10 +56,10 @@ object PhotoOperationsSpec extends ZIOSpecDefault with TestDatasets {
         } yield assertTrue(
           geoloc1.latitude.doubleValue == 48.264875d,
           geoloc1.longitude.doubleValue == -1.666195d,
-          geoloc1.altitude == 53.8d,
+          geoloc1.altitude == Some(53.8d),
           geoloc2.latitude.doubleValue == 45.3453827d,
           geoloc2.longitude.doubleValue == 6.617216499722223d,
-          geoloc2.altitude == 2081.0d
+          geoloc2.altitude == Some(2081.0d)
         )
       ),
       test("dimension can be extracted")(
@@ -82,12 +82,12 @@ object PhotoOperationsSpec extends ZIOSpecDefault with TestDatasets {
       ),
       test("generate photo record") {
         for {
-          photo         <- makePhoto(dataset1, dataset1Example1, photoOwnerId)
+          photo         <- makePhoto(Original(photoOwnerId, dataset1, dataset1Example1))
           photoMetaData <- from(photo.metaData)
           cameraName    <- from(photoMetaData.cameraName)
         } yield assertTrue(
           // photo.source.hash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae"
-          photo.source.fileSize == 472624L && photo.source.photoPath == dataset1Example1,
+          photo.source.fileSize == 472624L && photo.source.original.path == dataset1Example1,
           cameraName.contains("Canon")
         )
       }

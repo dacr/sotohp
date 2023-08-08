@@ -22,10 +22,10 @@ object MiniaturizerDaemon {
       .mapError(th => MiniaturizeConfigIssue(s"Couldn't configure miniaturizer", th))
 
   def makeMiniatureFilePath(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, Path] = {
-    val target = s"${config.baseDirectory}/${photo.source.ownerId.uuid}/${photo.id.uuid}/$size.${config.format}"
+    val target = s"${config.baseDirectory}/${photo.source.original.ownerId}/${photo.source.photoId}/$size.${config.format}"
     ZIO
       .attempt(Path.of(target))
-      .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file $target", photo.id, th))
+      .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file $target", photo.source.photoId, th))
   }
 
   private def miniaturizePhoto(photoId: PhotoId, referenceSize: Int, input: Path, output: Path, config: MiniaturizerConfig) = {
@@ -40,7 +40,7 @@ object MiniaturizerDaemon {
           .allowOverwrite(false)
           .toFile(output.toFile)
       )
-      .tap(_ => ZIO.logInfo(s"Miniaturize $input - ${photoId.uuid} - $referenceSize"))
+      .tap(_ => ZIO.logInfo(s"Miniaturize $input - ${photoId.id} - $referenceSize"))
       .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", photoId, th))
       .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
@@ -49,17 +49,17 @@ object MiniaturizerDaemon {
   def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, MiniatureSource] = {
     for {
       input     <- ZIO
-                     .attempt(photo.source.photoPath.toAbsolutePath)
-                     .mapError(th => MiniaturizeIssue(s"Couldn't build input path", photo.id, th))
+                     .attempt(photo.source.original.path.toAbsolutePath)
+                     .mapError(th => MiniaturizeIssue(s"Couldn't build input path", photo.source.photoId, th))
       output    <- makeMiniatureFilePath(photo, size, config)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
-                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", photo.id, th))
-      _         <- miniaturizePhoto(photo.id, size, input, output, config)
+                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", photo.source.photoId, th))
+      _         <- miniaturizePhoto(photo.source.photoId, size, input, output, config)
                      .when(!output.toFile.exists())
       dimension <- ZIO
                      .attempt(Imaging.getImageSize(output.toFile))
-                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", photo.id, th))
+                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", photo.source.photoId, th))
     } yield MiniatureSource(path = output, dimension = Dimension2D(width = dimension.getWidth.toInt, height = dimension.getHeight.toInt))
   }
 
@@ -67,14 +67,14 @@ object MiniaturizerDaemon {
     currentDateTime <- Clock.currentDateTime
     miniatures       = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
     _               <- PhotoStoreService
-                         .photoMiniaturesUpsert(photo.id, miniatures)
+                         .photoMiniaturesUpsert(photo.source.photoId, miniatures)
   } yield ()
 
   def buildMiniatures(photo: Photo, config: MiniaturizerConfig): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue, Unit] = {
     for {
       miniaturesSources <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config))
       _                 <- upsertMiniaturesRecord(photo, miniaturesSources)
-                             .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.id).map(!_))
+                             .whenZIO(PhotoStoreService.photoMiniaturesContains(photo.source.photoId).map(!_))
     } yield ()
   }
 

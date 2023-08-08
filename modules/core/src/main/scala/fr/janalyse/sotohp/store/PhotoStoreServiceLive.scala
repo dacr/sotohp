@@ -3,10 +3,13 @@ package fr.janalyse.sotohp.store
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.model.DecimalDegrees.*
 import fr.janalyse.sotohp.store.dao.*
+import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.ZIO.*
 import zio.lmdb.*
+
 import java.nio.file.Path
+import java.util.UUID
 
 trait PhotoStoreCollections {
   val photoStatesCollectionName     = "photo-states"
@@ -41,13 +44,14 @@ class PhotoStoreServiceLive private (
     case e: StorageUserError   => PhotoStoreUserIssue(e.toString)
   }
 
-  private def photoIdToCollectionKey(photoId: PhotoId): String = photoId.uuid.toString
+  private def photoIdToCollectionKey(photoId: PhotoId): String = photoId.id.toString
+  private def originalIdToCollectionKey(originalId: OriginalId): String = originalId.id.toString
 
   // ===================================================================================================================
   def daoStateToState(from: Option[DaoPhotoState]): Option[PhotoState] = {
     from.map(daoState =>
       PhotoState(
-        photoId = PhotoId(daoState.photoId),
+        photoId = PhotoId(ULID(daoState.photoId)),
         photoHash = PhotoHash(daoState.photoHash),
         lastSeen = daoState.lastSynchronized,
         lastUpdated = daoState.lastUpdated,
@@ -58,7 +62,7 @@ class PhotoStoreServiceLive private (
 
   def stateToDaoState(from: PhotoState): DaoPhotoState = {
     DaoPhotoState(
-      photoId = from.photoId.uuid,
+      photoId = from.photoId.id.toString,
       photoHash = from.photoHash.code,
       lastSynchronized = from.lastSeen,
       lastUpdated = from.lastUpdated,
@@ -90,9 +94,12 @@ class PhotoStoreServiceLive private (
   def daoSourceToSource(from: Option[DaoPhotoSource]): Option[PhotoSource] = {
     from.map(daoSource =>
       PhotoSource(
-        ownerId = PhotoOwnerId(daoSource.ownerId),
-        baseDirectory = Path.of(daoSource.baseDirectory),
-        photoPath = Path.of(daoSource.photoPath),
+        photoId = PhotoId(ULID(daoSource.photoId)),
+        original = Original(
+          ownerId = PhotoOwnerId(daoSource.originalOwnerId),
+          baseDirectory = Path.of(daoSource.originalBaseDirectory),
+          path = Path.of(daoSource.originalPath)
+        ),
         fileSize = daoSource.fileSize,
         fileHash = PhotoHash(daoSource.fileHash),
         fileLastModified = daoSource.fileLastModified
@@ -102,33 +109,34 @@ class PhotoStoreServiceLive private (
 
   def sourceToDaoSource(from: PhotoSource): DaoPhotoSource = {
     DaoPhotoSource(
-      ownerId = from.ownerId.uuid,
-      baseDirectory = from.baseDirectory.toString,
-      photoPath = from.photoPath.toString,
+      photoId = from.photoId.id.toString,
+      originalOwnerId = from.original.ownerId.id,
+      originalBaseDirectory = from.original.baseDirectory.toString,
+      originalPath = from.original.path.toString,
       fileSize = from.fileSize,
       fileHash = from.fileHash.code,
       fileLastModified = from.fileLastModified
     )
   }
 
-  override def photoSourceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoSource]] =
+  override def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]] =
     sourcesCollection
-      .fetch(photoIdToCollectionKey(photoId))
+      .fetch(originalIdToCollectionKey(originalId))
       .mapBoth(convertFailures, daoSourceToSource)
 
-  override def photoSourceContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+  override def photoSourceContains(originalId: OriginalId): IO[PhotoStoreIssue, Boolean] =
     sourcesCollection
-      .contains(photoIdToCollectionKey(photoId))
+      .contains(originalIdToCollectionKey(originalId))
       .mapError(convertFailures)
 
-  override def photoSourceUpsert(photoId: PhotoId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit] =
+  override def photoSourceUpsert(originalId: OriginalId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit] =
     sourcesCollection
-      .upsertOverwrite(photoIdToCollectionKey(photoId), sourceToDaoSource(photoSource))
+      .upsertOverwrite(originalIdToCollectionKey(originalId), sourceToDaoSource(photoSource))
       .mapBoth(convertFailures, _ => ())
 
-  override def photoSourceDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+  override def photoSourceDelete(originalId: OriginalId): IO[PhotoStoreIssue, Unit] =
     sourcesCollection
-      .delete(photoIdToCollectionKey(photoId))
+      .delete(originalIdToCollectionKey(originalId))
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================

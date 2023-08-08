@@ -7,7 +7,7 @@ import zio.ZIO.*
 
 class PhotoStoreServiceFake(
   statesCollectionRef: Ref[Map[PhotoId, PhotoState]],
-  sourcesCollectionRef: Ref[Map[PhotoId, PhotoSource]],
+  sourcesCollectionRef: Ref[Map[OriginalId, PhotoSource]],
   metaDataCollectionRef: Ref[Map[PhotoId, PhotoMetaData]],
   placesCollectionRef: Ref[Map[PhotoId, PhotoPlace]],
   miniaturesCollectionRef: Ref[Map[PhotoId, Miniatures]],
@@ -31,19 +31,19 @@ class PhotoStoreServiceFake(
     statesCollectionRef.update(collection => collection.removed(photoId))
 
   // ===================================================================================================================
-  override def photoSourceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoSource]] = for {
+  override def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]] = for {
     collection <- sourcesCollectionRef.get
-  } yield collection.get(photoId)
+  } yield collection.get(originalId)
 
-  override def photoSourceContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] = for {
+  override def photoSourceContains(originalId: OriginalId): IO[PhotoStoreIssue, Boolean] = for {
     collection <- sourcesCollectionRef.get
-  } yield collection.contains(photoId)
+  } yield collection.contains(originalId)
 
-  override def photoSourceUpsert(photoId: PhotoId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit] =
-    sourcesCollectionRef.update(_.updated(photoId, photoSource))
+  override def photoSourceUpsert(originalId: OriginalId, photoSource: PhotoSource): IO[PhotoStoreIssue, Unit] =
+    sourcesCollectionRef.update(_.updated(originalId, photoSource))
 
-  override def photoSourceDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
-    sourcesCollectionRef.update(collection => collection.removed(photoId))
+  override def photoSourceDelete(originalId: OriginalId): IO[PhotoStoreIssue, Unit] =
+    sourcesCollectionRef.update(collection => collection.removed(originalId))
 
   // ===================================================================================================================
   override def photoMetaDataGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoMetaData]] = for {
@@ -113,7 +113,7 @@ object PhotoStoreServiceFake extends PhotoStoreCollections {
   val default = ZLayer.fromZIO(
     for {
       statesCollection     <- Ref.make(Map.empty[PhotoId, PhotoState])
-      sourcesCollection    <- Ref.make(Map.empty[PhotoId, PhotoSource])
+      sourcesCollection    <- Ref.make(Map.empty[OriginalId, PhotoSource])
       metaDataCollection   <- Ref.make(Map.empty[PhotoId, PhotoMetaData])
       placesCollection     <- Ref.make(Map.empty[PhotoId, PhotoPlace])
       miniaturesCollection <- Ref.make(Map.empty[PhotoId, Miniatures])

@@ -45,12 +45,24 @@ object OriginalsStream {
     foundFilesStream
   }
 
+  type OriginalStream = ZStream[Any, StreamIOIssue, Original]
+
+  def originalStream(searchRoots: List[PhotoSearchRoot]): OriginalStream = {
+    photoPathStream(searchRoots)
+      .map((searchRoot, photoPath) =>
+        Original(
+          ownerId = searchRoot.photoOwnerId,
+          baseDirectory = searchRoot.baseDirectory,
+          path = photoPath
+        )
+      )
+  }
+
   type PhotoStreamIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore
   type PhotoStream       = ZStream[PhotoStoreService, PhotoStreamIssues, Photo]
 
   def photoStream(searchRoots: List[PhotoSearchRoot]): PhotoStream = {
-    photoPathStream(searchRoots)
-      .mapZIO((searchRoot, photoPath) => makePhoto(searchRoot.baseDirectory, photoPath, searchRoot.photoOwnerId))
+    originalStream(searchRoots).mapZIO(makePhoto)
   }
 
 }
