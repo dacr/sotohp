@@ -1,5 +1,32 @@
 package fr.janalyse.sotohp.cli
 
-object Analyze {
+import fr.janalyse.sotohp.cli.Miniaturize.getSearchRoots
+import fr.janalyse.sotohp.core.OriginalsStream
+import fr.janalyse.sotohp.daemon.ContentAnalyzerDaemon
+import fr.janalyse.sotohp.store.PhotoStoreService
+import zio.{Runtime, Scope, ZIO, ZIOAppArgs, ZIOAppDefault, ZLayer}
+import zio.config.typesafe.TypesafeConfigProvider
+import zio.lmdb.LMDB
 
+object Analyze extends ZIOAppDefault with CommonsCLI {
+
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
+    Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
+
+  override def run =
+    logic
+      .provide(
+        LMDB.liveWithDatabaseName("photos"),
+        PhotoStoreService.live,
+        Scope.default
+      )
+
+  val logic = ZIO.logSpan("analyze") {
+    for {
+      searchRoots <- getSearchRoots
+      originals    = OriginalsStream.photoStream(searchRoots)
+      _           <- originals.mapZIO(ContentAnalyzerDaemon.analyze).runDrain
+      _           <- ZIO.logInfo("Miniaturization done")
+    } yield ()
+  }
 }

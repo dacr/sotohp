@@ -23,6 +23,16 @@ val versions = new {
   val uuidgen   = "4.2.0"
 }
 
+lazy val deepJavaLearningLibs = Seq(
+  "ai.djl"           % "api"               % "0.23.0",
+  "ai.djl"           % "basicdataset"      % "0.23.0",
+  "ai.djl"           % "model-zoo"         % "0.23.0",
+  "ai.djl.mxnet"     % "mxnet-engine"      % "0.23.0",
+  "ai.djl.mxnet"     % "mxnet-model-zoo"   % "0.23.0",
+  "ai.djl.mxnet"     % "mxnet-native-auto" % "1.8.0",
+  "net.java.dev.jna" % "jna"               % "5.13.0"
+)
+
 //val sharedSettings = Seq(
 //  scalaVersion := "3.3.0",
 //  Test / fork  := true,
@@ -92,7 +102,8 @@ lazy val moduleDaemon =
         "dev.zio"           %% "zio-config"          % versions.zioconfig,
         "dev.zio"           %% "zio-config-typesafe" % versions.zioconfig,
         "dev.zio"           %% "zio-config-magnolia" % versions.zioconfig
-      )
+      ),
+      libraryDependencies ++= deepJavaLearningLibs
     )
 
 lazy val userInterfacesCLI =
