@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.OriginalsStream
-import fr.janalyse.sotohp.daemon.{MiniaturizerDaemon, NormalizerDaemon}
+import fr.janalyse.sotohp.daemon.{MiniaturizerDaemon, NormalizerDaemon, ContentAnalyzerDaemon}
 import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
 import zio.config.typesafe.*
@@ -28,6 +28,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                            .photoStream(searchRoots)
                            .mapZIOParUnordered(4)(NormalizerDaemon.normalize)
                            .mapZIOParUnordered(4)(MiniaturizerDaemon.miniaturize)
+                           //.map(ContentAnalyzerDaemon.analyze)
       count           <- processingStream.runCount
       _               <- ZIO.logInfo(s"found $count photos")
     } yield ()

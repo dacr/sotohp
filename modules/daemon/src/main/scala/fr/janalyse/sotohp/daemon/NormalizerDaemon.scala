@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.daemon
 
 import zio.*
+import zio.ZIOAspect.*
 import zio.config.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.core.*
@@ -10,7 +11,7 @@ import java.nio.file.Path
 import org.apache.commons.imaging.Imaging
 import net.coobird.thumbnailator.Thumbnails
 
-case class NormalizeIssue(message: String, photoId: PhotoId, exception: Throwable)
+case class NormalizeIssue(message: String, exception: Throwable)
 case class NormalizeConfigIssue(message: String, exception: Throwable)
 
 object NormalizerDaemon {
@@ -23,10 +24,10 @@ object NormalizerDaemon {
     val target = s"${config.baseDirectory}/${photo.source.original.ownerId}/${photo.source.photoId}.${config.format}"
     ZIO
       .attempt(Path.of(target))
-      .mapError(th => NormalizeIssue(s"Invalid normalized destination file $target", photo.source.photoId, th))
+      .mapError(th => NormalizeIssue(s"Invalid normalized destination file $target", th))
   }
 
-  private def resizePhoto(photoId: PhotoId, input: Path, output: Path, config: NormalizerConfig) = {
+  private def resizePhoto(input: Path, output: Path, config: NormalizerConfig) = {
     import config.referenceSize
     ZIO
       .attemptBlockingIO(
@@ -39,8 +40,8 @@ object NormalizerDaemon {
           .allowOverwrite(false)
           .toFile(output.toFile)
       )
-      .tap(_ => ZIO.logInfo(s"Normalize $input - ${photoId.id}"))
-      .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size ${config.referenceSize}", photoId, th))
+      .tap(_ => ZIO.logInfo(s"Normalize"))
+      .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size ${config.referenceSize}", th))
       .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
       .ignore // Photo file may have internal issues
@@ -55,7 +56,7 @@ object NormalizerDaemon {
                                    ZIO
                                      .attempt(Imaging.getImageSize(output.toFile))
                                      .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
-                                     .mapError(th => NormalizeIssue(s"Couldn't get normalized photo size", photo.source.photoId, th))
+                                     .mapError(th => NormalizeIssue(s"Couldn't get normalized photo size", th))
                                  )
       currentDateTime       <- Clock.currentDateTime
       updatedNormalizedPhoto = NormalizedPhoto(
@@ -73,10 +74,10 @@ object NormalizerDaemon {
     } yield normalizedPhoto
   }
 
-  private def makeOutputDirectories(photo: Photo, output: Path) = {
+  private def makeOutputDirectories(output: Path) = {
     ZIO
       .attempt(output.getParent.toFile.mkdirs())
-      .mapError(th => NormalizeIssue(s"Couldn't target path", photo.source.photoId, th))
+      .mapError(th => NormalizeIssue(s"Couldn't target path", th))
   }
 
   /** generates normalized photo
@@ -90,19 +91,22 @@ object NormalizerDaemon {
       config          <- normalizerConfig
       input           <- ZIO
                            .attempt(photo.source.original.path.toAbsolutePath)
-                           .mapError(th => NormalizeIssue(s"Couldn't build input path", photo.source.photoId, th))
+                           .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
       output          <- makeNormalizedFilePath(photo, config)
-      _               <- makeOutputDirectories(photo, output)
-      _               <- resizePhoto(photo.source.photoId, input, output, config)
+      _               <- makeOutputDirectories(output)
+      _               <- resizePhoto(input, output, config)
                            .when(!output.toFile.exists())
       normalizedPhoto <- upsertNormalizedPhotoIfNeeded(photo, output)
                            .logError("Couldn't upsert normalized photo in datastore")
     } yield photo.copy(normalized = Some(normalizedPhoto))
 
     logic
-      .logError(s"Normalization issue for ${photo.source.photoId} ${photo.source.original.path}")
+      .logError(s"Normalization issue")
       .option
       .someOrElse(photo)
+      @@ annotated("photoId" -> photo.source.photoId.toString())
+      @@ annotated("photoPath" -> photo.source.original.path.toString)
+
   }
-  
+
 }

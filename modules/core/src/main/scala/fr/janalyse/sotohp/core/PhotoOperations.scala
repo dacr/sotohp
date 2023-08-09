@@ -10,7 +10,7 @@ import com.drew.metadata.bmp.BmpHeaderDirectory
 import fr.janalyse.sotohp.model.DecimalDegrees.*
 import fr.janalyse.sotohp.model.*
 import zio.*
-import zio.ZIO.*
+import zio.ZIOAspect.*
 
 import java.nio.file.Path
 import java.time.{Instant, OffsetDateTime, ZoneId, ZoneOffset}
@@ -30,7 +30,8 @@ object PhotoOperations {
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
   def readDrewMetadata(filePath: Path): IO[PhotoFileIssue, Metadata] = {
-    attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
+    ZIO
+      .attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
       .mapError(exception => PhotoFileIssue(s"Couldn't read image meta data in file", filePath, exception))
   }
 
@@ -174,7 +175,8 @@ object PhotoOperations {
 
   def buildPhotoSource(photoId: PhotoId, original: Original): ZIO[PhotoStoreService, PhotoFileIssue, PhotoSource] = {
     for {
-      fileSize         <- attemptBlockingIO(original.path.toFile.length())
+      fileSize         <- ZIO
+                            .attemptBlockingIO(original.path.toFile.length())
                             .mapError(exception => PhotoFileIssue(s"Unable to read file size", original.path, exception))
       fileLastModified <- getOriginalFileLastModified(original)
       fileHash         <- PhotoStoreService
@@ -182,7 +184,8 @@ object PhotoOperations {
                             .map(r => r.map(_.photoHash.code))
                             .some
                             .orElse(
-                              attemptBlockingIO(HashOperations.fileDigest(original.path))
+                              ZIO
+                                .attemptBlockingIO(HashOperations.fileDigest(original.path))
                                 .mapError(exception => PhotoFileIssue(s"Unable to compute file hash", original.path, exception))
                             )
     } yield PhotoSource(
@@ -247,9 +250,9 @@ object PhotoOperations {
       photoCategory   = buildPhotoCategory(original.baseDirectory, original.path)
       _              <- PhotoStoreService.photoSourceUpsert(originalId, photoSource)
       _              <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
-      _              <- foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
+      _              <- ZIO.foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
       _              <- setupPhotoInitialState(photoId, photoSource.fileHash)
-      _              <- logInfo(s"New photo found $originalId - $photoTimestamp - ${photoMetaData.shootDateTime} - ${original.path} ")
+      _              <- ZIO.logInfo(s"New photo found $photoTimestamp - ${photoMetaData.shootDateTime}")
     } yield {
       Photo(
         timestamp = photoTimestamp,
@@ -266,7 +269,7 @@ object PhotoOperations {
   ): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
     import original.*
     val originalId = buildOriginalId(original)
-    for {
+    val logic      = for {
       photoSource     <- PhotoStoreService
                            .photoSourceGet(originalId)
                            .some
@@ -293,6 +296,8 @@ object PhotoOperations {
         normalized = normalizedPhoto
       )
     }
+
+    logic @@ annotated("originalId" -> originalId.toString)
   }
 
   def makePhoto(original: Original): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue | NotFoundInStore, Photo] = {
@@ -307,5 +312,7 @@ object PhotoOperations {
     } yield photo
 
     makeIt.uninterruptible
+      @@ annotated("originalPath" -> original.path.toString)
+      @@ annotated("ownerId" -> original.ownerId.toString)
   }
 }

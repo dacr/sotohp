@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.daemon
 
 import zio.*
+import zio.ZIOAspect.*
 import zio.config.*
 import java.io.File
 import java.nio.file.Path
@@ -11,7 +12,7 @@ import fr.janalyse.sotohp.store.{PhotoStoreService, PhotoStoreIssue}
 import net.coobird.thumbnailator.Thumbnails
 import org.apache.commons.imaging.Imaging
 
-case class MiniaturizeIssue(message: String, photoId: PhotoId, exception: Throwable)
+case class MiniaturizeIssue(message: String, exception: Throwable)
 case class MiniaturizeConfigIssue(message: String, exception: Throwable)
 
 object MiniaturizerDaemon {
@@ -25,10 +26,10 @@ object MiniaturizerDaemon {
     val target = s"${config.baseDirectory}/${photo.source.original.ownerId}/${photo.source.photoId}/$size.${config.format}"
     ZIO
       .attempt(Path.of(target))
-      .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file $target", photo.source.photoId, th))
+      .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file $target", th))
   }
 
-  private def miniaturizePhoto(photoId: PhotoId, referenceSize: Int, input: Path, output: Path, config: MiniaturizerConfig) = {
+  private def miniaturizePhoto(referenceSize: Int, input: Path, output: Path, config: MiniaturizerConfig) = {
     ZIO
       .attemptBlockingIO(
         Thumbnails
@@ -40,8 +41,8 @@ object MiniaturizerDaemon {
           .allowOverwrite(false)
           .toFile(output.toFile)
       )
-      .tap(_ => ZIO.logInfo(s"Miniaturize $input - ${photoId.id} - $referenceSize"))
-      .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", photoId, th))
+      .tap(_ => ZIO.logInfo(s"Miniaturize $referenceSize"))
+      .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", th))
       .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
       .ignore // Photo file may have internal issues
@@ -55,13 +56,13 @@ object MiniaturizerDaemon {
                      .orElse(
                        ZIO
                          .attempt(photo.source.original.path.toAbsolutePath)
-                         .mapError(th => MiniaturizeIssue(s"Couldn't build input path from original photo", photo.source.photoId, th))
+                         .mapError(th => MiniaturizeIssue(s"Couldn't build input path from original photo", th))
                      )
       output    <- makeMiniatureFilePath(photo, size, config)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
-                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", photo.source.photoId, th))
-      _         <- miniaturizePhoto(photo.source.photoId, size, input, output, config)
+                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", th))
+      _         <- miniaturizePhoto(size, input, output, config)
                      .when(!output.toFile.exists())
       dimension <- ZIO
                      .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension))
@@ -70,7 +71,7 @@ object MiniaturizerDaemon {
                          .attempt(Imaging.getImageSize(output.toFile))
                          .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
                      )
-                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", photo.source.photoId, th))
+                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", th))
     } yield MiniatureSource(path = output, dimension = dimension)
   }
 
@@ -100,10 +101,11 @@ object MiniaturizerDaemon {
     } yield photo.copy(miniatures = Some(miniatures))
 
     logic
-      .logError(s"Miniaturization issue for ${photo.source.photoId} ${photo.source.original.path}")
+      .logError(s"Miniaturization issue")
       .option
       .someOrElse(photo)
+      @@ annotated("photoId" -> photo.source.photoId.toString())
+      @@ annotated("photoPath" -> photo.source.original.path.toString)
   }
-
 
 }

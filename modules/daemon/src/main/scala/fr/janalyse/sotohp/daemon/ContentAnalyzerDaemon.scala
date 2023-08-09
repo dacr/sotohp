@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.daemon
 
 import zio.*
+import zio.ZIOAspect.*
 
 import fr.janalyse.sotohp.store.*
 import fr.janalyse.sotohp.model.*
@@ -21,7 +22,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import scala.jdk.CollectionConverters._
 
-case class AnalyzerIssue(message: String, photoId: PhotoId, exception: Throwable)
+case class AnalyzerIssue(message: String, exception: Throwable)
 case class AnalyzerConfigIssue(message: String, exception: Throwable)
 
 object ContentAnalyzerDaemon {
@@ -99,12 +100,12 @@ object ContentAnalyzerDaemon {
                    .orElse(
                      ZIO
                        .attempt(photo.source.original.path.toAbsolutePath)
-                       .mapError(th => AnalyzerIssue(s"Couldn't build input path from original photo", photo.source.photoId, th))
+                       .mapError(th => AnalyzerIssue(s"Couldn't build input path from original photo", th))
                    )
       classes <- ZIO
                    .attempt(classifyImage(input))
-                   .mapError(th => AnalyzerIssue(s"Couldn't analyze photo", photo.source.photoId, th))
-      _       <- ZIO.logInfo(s"${photo.source.photoId} : ${classes.mkString(",")}")
+                   .mapError(th => AnalyzerIssue(s"Couldn't analyze photo", th))
+      _       <- ZIO.logInfo(s"found classes : ${classes.mkString(",")}")
     } yield photo
   }
 
@@ -116,5 +117,10 @@ object ContentAnalyzerDaemon {
     */
   def analyze(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | AnalyzerIssue | AnalyzerConfigIssue, Photo] = {
     classify(photo) // TODO : quick & dirty first implementation
+      .logError(s"Analyze issue")
+      .option
+      .someOrElse(photo)
+      @@ annotated("photoId" -> photo.source.photoId.toString())
+      @@ annotated("photoPath" -> photo.source.original.path.toString)
   }
 }
