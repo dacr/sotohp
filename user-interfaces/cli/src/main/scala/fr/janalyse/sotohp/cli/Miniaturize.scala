@@ -24,7 +24,7 @@ object Miniaturize extends ZIOAppDefault with CommonsCLI {
     for {
       searchRoots <- getSearchRoots
       originals    = OriginalsStream.photoStream(searchRoots)
-      _           <- MiniaturizerDaemon.miniaturizeStream(originals)
+      _           <- originals.mapZIO(MiniaturizerDaemon.miniaturize).runDrain
       _           <- ZIO.logInfo("Miniaturization done")
     } yield ()
   }

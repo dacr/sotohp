@@ -44,13 +44,19 @@ object MiniaturizerDaemon {
       .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", photoId, th))
       .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
+      .ignore // Photo file may have internal issues
   }
 
-  private def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig, alreadyKnownMiniatures: Option[Miniatures]): IO[MiniaturizeIssue, MiniatureSource] = {
+  private def buildMiniature(photo: Photo, size: Int, config: MiniaturizerConfig): IO[MiniaturizeIssue, MiniatureSource] = {
+    val alreadyKnownMiniatures = photo.miniatures
     for {
       input     <- ZIO
-                     .attempt(photo.source.original.path.toAbsolutePath)
-                     .mapError(th => MiniaturizeIssue(s"Couldn't build input path", photo.source.photoId, th))
+                     .from(photo.normalized.map(_.path)) // faster if normalized photo is already available
+                     .orElse(
+                       ZIO
+                         .attempt(photo.source.original.path.toAbsolutePath)
+                         .mapError(th => MiniaturizeIssue(s"Couldn't build input path from original photo", photo.source.photoId, th))
+                     )
       output    <- makeMiniatureFilePath(photo, size, config)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
@@ -58,7 +64,7 @@ object MiniaturizerDaemon {
       _         <- miniaturizePhoto(photo.source.photoId, size, input, output, config)
                      .when(!output.toFile.exists())
       dimension <- ZIO
-                     .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(s => math.max(s.dimension.width, s.dimension.height) == size)).map(_.dimension))
+                     .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension))
                      .orElse(
                        ZIO
                          .attempt(Imaging.getImageSize(output.toFile))
@@ -68,28 +74,36 @@ object MiniaturizerDaemon {
     } yield MiniatureSource(path = output, dimension = dimension)
   }
 
-  private def upsertMiniaturesRecord(photo: Photo, miniaturesSources: List[MiniatureSource]) = for {
-    currentDateTime <- Clock.currentDateTime
-    miniatures       = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
-    _               <- PhotoStoreService
-                         .photoMiniaturesUpsert(photo.source.photoId, miniatures)
-  } yield ()
+  private def upsertMiniaturesRecordIfNeeded(photo: Photo, miniaturesSources: List[MiniatureSource]) = for {
+    currentDateTime       <- Clock.currentDateTime
+    alreadyKnownMiniatures = photo.miniatures
+    updatedMiniatures      = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
+    upsertNeeded           = !alreadyKnownMiniatures.map(_.sources).contains(miniaturesSources)
+    _                     <- PhotoStoreService
+                               .photoMiniaturesUpsert(photo.source.photoId, updatedMiniatures)
+                               .when(upsertNeeded)
+    miniatures             = if (upsertNeeded) updatedMiniatures else alreadyKnownMiniatures.get
+  } yield miniatures
 
-  def miniaturize(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue | MiniaturizeConfigIssue, Unit] = {
-    for {
-      config                 <- miniaturizerConfig
-      alreadyKnownMiniatures <- PhotoStoreService.photoMiniaturesGet(photo.source.photoId)
-      miniaturesSources      <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config, alreadyKnownMiniatures))
-      _                      <- upsertMiniaturesRecord(photo, miniaturesSources)
-                                  .when(alreadyKnownMiniatures.map(_.sources).contains(miniaturesSources))
-    } yield ()
+  // ===================================================================================================================
+
+  /** generates photo miniatures
+    * @param photo
+    * @return
+    *   photo with updated miniatures field if some changes have occurred
+    */
+  def miniaturize(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue | MiniaturizeConfigIssue, Photo] = {
+    val logic = for {
+      config            <- miniaturizerConfig
+      miniaturesSources <- ZIO.foreach(config.referenceSizes)(size => buildMiniature(photo, size, config))
+      miniatures        <- upsertMiniaturesRecordIfNeeded(photo, miniaturesSources)
+    } yield photo.copy(miniatures = Some(miniatures))
+
+    logic
+      .logError(s"Miniaturization issue for ${photo.source.photoId} ${photo.source.original.path}")
+      .option
+      .someOrElse(photo)
   }
 
-  type MiniaturizeIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore | MiniaturizeIssue | MiniaturizeConfigIssue
 
-  def miniaturizeStream(photosStream: OriginalsStream.PhotoStream): ZIO[PhotoStoreService, MiniaturizeIssues, Unit] = {
-    photosStream
-      .mapZIOParUnordered(4)(original => miniaturize(original).ignore)
-      .runDrain
-  }
 }

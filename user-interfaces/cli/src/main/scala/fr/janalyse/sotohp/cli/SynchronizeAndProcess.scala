@@ -24,12 +24,10 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
     for {
       _               <- ZIO.logInfo("start photos synchronization and processing")
       searchRoots     <- getSearchRoots
-      processingStream = OriginalsStream.photoStream(searchRoots).mapZIOParUnordered(4) { photo =>
-                           for {
-                             _ <- MiniaturizerDaemon.miniaturize(photo).ignore
-                             _ <- NormalizerDaemon.normalize(photo).ignore
-                           } yield ()
-                         }
+      processingStream = OriginalsStream
+                           .photoStream(searchRoots)
+                           .mapZIOParUnordered(4)(NormalizerDaemon.normalize)
+                           .mapZIOParUnordered(4)(MiniaturizerDaemon.miniaturize)
       count           <- processingStream.runCount
       _               <- ZIO.logInfo(s"found $count photos")
     } yield ()

@@ -24,7 +24,7 @@ object Normalize extends ZIOAppDefault with CommonsCLI {
     for {
       searchRoots <- getSearchRoots
       originals    = OriginalsStream.photoStream(searchRoots)
-      _           <- NormalizerDaemon.normalizeStream(originals)
+      _           <- originals.mapZIO(NormalizerDaemon.normalize).runDrain
       _           <- ZIO.logInfo("Normalization done")
     } yield ()
   }

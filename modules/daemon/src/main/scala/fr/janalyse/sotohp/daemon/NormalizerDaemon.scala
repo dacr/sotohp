@@ -43,44 +43,66 @@ object NormalizerDaemon {
       .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size ${config.referenceSize}", photoId, th))
       .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
+      .ignore // Photo file may have internal issues
   }
 
-  private def upsertNormalizedPhotoRecord(photo: Photo, output: Path) = for {
-    dimension       <- ZIO
-                         .attempt(Imaging.getImageSize(output.toFile))
-                         .mapError(th => NormalizeIssue(s"Couldn't get normalized photo size", photo.source.photoId, th))
-    currentDateTime <- Clock.currentDateTime
-    normalizedPhoto  = NormalizedPhoto(
-                         path = output,
-                         dimension = Dimension2D(width = dimension.getWidth.toInt, height = dimension.getHeight.toInt),
-                         lastUpdated = currentDateTime
-                       )
-    _               <- PhotoStoreService
-                         .photoNormalizedUpsert(photo.source.photoId, normalizedPhoto)
-  } yield normalizedPhoto
-
-  def normalize(photo: Photo): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue | NormalizeConfigIssue, Unit] = {
+  private def upsertNormalizedPhotoIfNeeded(photo: Photo, output: Path) = {
+    val currentNormalized = photo.normalized
     for {
-      config <- normalizerConfig
-      input  <- ZIO
-                  .attempt(photo.source.original.path.toAbsolutePath)
-                  .mapError(th => NormalizeIssue(s"Couldn't build input path", photo.source.photoId, th))
-      output <- makeNormalizedFilePath(photo, config)
-      _      <- ZIO
-                  .attempt(output.getParent.toFile.mkdirs())
-                  .mapError(th => NormalizeIssue(s"Couldn't target path", photo.source.photoId, th))
-      _      <- resizePhoto(photo.source.photoId, input, output, config)
-                  .when(!output.toFile.exists())
-      _      <- upsertNormalizedPhotoRecord(photo, output)
-                  .whenZIO(PhotoStoreService.photoNormalizedContains(photo.source.photoId).map(!_))
-    } yield ()
+      dimension             <- ZIO
+                                 .from(photo.normalized.map(_.dimension))
+                                 .orElse(
+                                   ZIO
+                                     .attempt(Imaging.getImageSize(output.toFile))
+                                     .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
+                                     .mapError(th => NormalizeIssue(s"Couldn't get normalized photo size", photo.source.photoId, th))
+                                 )
+      currentDateTime       <- Clock.currentDateTime
+      updatedNormalizedPhoto = NormalizedPhoto(
+                                 path = output,
+                                 dimension = dimension,
+                                 lastUpdated = currentDateTime
+                               )
+      upsertNeeded           = currentNormalized.isEmpty
+                                 || currentNormalized.get.path != updatedNormalizedPhoto.path
+                                 || currentNormalized.get.dimension != updatedNormalizedPhoto.dimension
+      _                     <- PhotoStoreService
+                                 .photoNormalizedUpsert(photo.source.photoId, updatedNormalizedPhoto)
+                                 .when(upsertNeeded)
+      normalizedPhoto        = if (upsertNeeded) updatedNormalizedPhoto else photo.normalized.get
+    } yield normalizedPhoto
   }
 
-  type NormalizeIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore | NormalizeIssue | NormalizeConfigIssue
-
-  def normalizeStream(photosStream: OriginalsStream.PhotoStream): ZIO[PhotoStoreService, NormalizeIssues, Unit] = {
-    photosStream
-      .mapZIOParUnordered(4)(original => normalize(original).ignore)
-      .runDrain
+  private def makeOutputDirectories(photo: Photo, output: Path) = {
+    ZIO
+      .attempt(output.getParent.toFile.mkdirs())
+      .mapError(th => NormalizeIssue(s"Couldn't target path", photo.source.photoId, th))
   }
+
+  /** generates normalized photo
+    *
+    * @param photo
+    * @return
+    *   photo with updated normalized field if some changes have occurred
+    */
+  def normalize(photo: Photo): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue | NormalizeConfigIssue, Photo] = {
+    val logic = for {
+      config          <- normalizerConfig
+      input           <- ZIO
+                           .attempt(photo.source.original.path.toAbsolutePath)
+                           .mapError(th => NormalizeIssue(s"Couldn't build input path", photo.source.photoId, th))
+      output          <- makeNormalizedFilePath(photo, config)
+      _               <- makeOutputDirectories(photo, output)
+      _               <- resizePhoto(photo.source.photoId, input, output, config)
+                           .when(!output.toFile.exists())
+      normalizedPhoto <- upsertNormalizedPhotoIfNeeded(photo, output)
+                           .logError("Couldn't upsert normalized photo in datastore")
+    } yield photo.copy(normalized = Some(normalizedPhoto))
+
+    logic
+      .logError(s"Normalization issue for ${photo.source.photoId} ${photo.source.original.path}")
+      .option
+      .someOrElse(photo)
+  }
+  
 }
