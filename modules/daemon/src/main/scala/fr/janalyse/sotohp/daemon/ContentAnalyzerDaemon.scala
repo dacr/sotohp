@@ -38,7 +38,7 @@ object ContentAnalyzerDaemon {
   lazy val objectDetectionsModel    = ModelZoo.loadModel(objectDetectionsCriteria)
   lazy val objectDetectionPredictor = objectDetectionsModel.newPredictor()
 
-  def detectedObjects(path: Path): List[String] = {
+  def doDetectObjects(path: Path): List[String] = {
     val loadedImage: Image         = ImageFactory.getInstance().fromFile(path)
     val detection: DetectedObjects = objectDetectionPredictor.predict(loadedImage)
     val detected: List[String]     =
@@ -77,7 +77,7 @@ object ContentAnalyzerDaemon {
   def cleanupClassName(input: String): String =
     input.replaceAll("""^n\d+ """, "")
 
-  def classifyImage(path: Path): List[String] = {
+  def doClassifyImage(path: Path): List[String] = {
     val img = ImageFactory.getInstance().fromFile(path)
 
     val found: Classifications = imageClassificationPredictor.predict(img)
@@ -93,20 +93,34 @@ object ContentAnalyzerDaemon {
       .distinct
   }
 
+  def getInputPhotoFile(photo: Photo) = {
+    ZIO
+      .from(photo.normalized.map(_.path)) // faster if normalized photo is already available
+      .orElse(
+        ZIO
+          .attempt(photo.source.original.path.toAbsolutePath)
+          .mapError(th => AnalyzerIssue(s"Couldn't build input path from original photo", th))
+      )
+  }
+
   def classify(photo: Photo) = {
     for {
-      input   <- ZIO
-                   .from(photo.normalized.map(_.path)) // faster if normalized photo is already available
-                   .orElse(
-                     ZIO
-                       .attempt(photo.source.original.path.toAbsolutePath)
-                       .mapError(th => AnalyzerIssue(s"Couldn't build input path from original photo", th))
-                   )
+      input   <- getInputPhotoFile(photo)
       classes <- ZIO
-                   .attempt(classifyImage(input))
+                   .attempt(doClassifyImage(input))
                    .mapError(th => AnalyzerIssue(s"Couldn't analyze photo", th))
       _       <- ZIO.logInfo(s"found classes : ${classes.mkString(",")}")
-    } yield photo
+    } yield photo // TODO return updated record
+  }
+
+  def detectObjects(photo: Photo) = {
+    for {
+      input   <- getInputPhotoFile(photo)
+      objects <- ZIO
+                   .attempt(doDetectObjects(input))
+                   .mapError(th => AnalyzerIssue(s"Couldn't analyze photo", th))
+      _       <- ZIO.logInfo(s"found objects : ${objects.mkString(",")}")
+    } yield photo // TODO return updated record
   }
 
   /** analyse photo content using various neural networks
@@ -116,7 +130,12 @@ object ContentAnalyzerDaemon {
     *   photo with updated miniatures field if some changes have occurred
     */
   def analyze(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | AnalyzerIssue | AnalyzerConfigIssue, Photo] = {
-    classify(photo) // TODO : quick & dirty first implementation
+    // TODO : quick, dirty & unfinished first implementation
+    val logic = for {
+      classifiedPhoto      <- classify(photo)
+      detectedObjectsPhoto <- detectObjects(classifiedPhoto)
+    } yield detectedObjectsPhoto
+    logic
       .logError(s"Analyze issue")
       .option
       .someOrElse(photo)
