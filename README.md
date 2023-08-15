@@ -14,16 +14,5 @@ photos, and more than 4600 videos. Once again this project has first started as 
   - if shoot timestamp is missing or invalid, file last modified is used (at first seen)
   - SO photos stream is automatically ordered by this timestamp   
 
-## TODO
-
-- [x] switch to [ULID][ulid] for photo identifiers
-- [ ] add photo files checker daemon for both originals and generated (miniatures, normalized, ...)
-- [ ] enhanced photo classification
-- [ ] [instance segmentation][instseg]
-- [ ] text in photos extraction
-- [ ] faces detection/extraction
-- [ ] faces clustering
-
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
-[instseg]: https://www.reasonfieldlab.com/post/instance-segmentation-algorithms-overview
 [ulid]: https://github.com/ulid/spec
