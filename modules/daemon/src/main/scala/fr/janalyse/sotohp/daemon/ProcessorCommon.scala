@@ -11,7 +11,7 @@ trait ProcessorCommon {
     val dataDir = config.internalData.baseDirectory
     val ownerId = photo.source.original.ownerId
     val photoId = photo.source.photoId
-    Path.of(dataDir, ownerId.toString, photoId.toString)
+    Path.of(dataDir, "artifacts", ownerId.toString, photoId.toString)
   }
 
   def internalDataRelativize(output: Path, config: SotohpConfig): Path = {
