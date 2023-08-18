@@ -44,9 +44,8 @@ object DegreeMinuteSeconds {
   val latitudeDmsRE  = """([-+]?\d+)°\s*([-+]?\d+)['′]\s*([-+]?\d+(?:[.,]\d+)?)(?:(?:")|(?:'')|(?:′′)|(?:″))\s+([NS])""".r
   val longitudeDmsRE = """([-+]?\d+)°\s*([-+]?\d+)['′]\s*([-+]?\d+(?:[.,]\d+)?)(?:(?:")|(?:'')|(?:′′)|(?:″))\s+([EW])""".r
 
-  private def normalize(dmsFullSpec: String):String = {
-    dmsFullSpec
-      .trim
+  private def normalize(dmsFullSpec: String): String = {
+    dmsFullSpec.trim
       .replaceAll("[,]", ".")
   }
 
@@ -106,19 +105,22 @@ object DegreeMinuteSeconds {
 case class PhotoPlace(
   latitude: LatitudeDecimalDegrees,
   longitude: LongitudeDecimalDegrees,
-  altitude: Option[AltitudeMeanSeaLevel]
+  altitude: Option[AltitudeMeanSeaLevel],
+  deducted: Boolean 
 )
 
 object PhotoPlace {
   def apply(
     latitudeDMS: LatitudeDegreeMinuteSeconds,
     longitudeDMS: LongitudeDegreeMinuteSeconds,
-    altitudeMeanSeaLevel: Option[AltitudeMeanSeaLevel]
+    altitudeMeanSeaLevel: Option[AltitudeMeanSeaLevel],
+    deducted: Boolean
   ): PhotoPlace = {
     PhotoPlace(
       latitudeDMS.toDecimalDegrees,
       longitudeDMS.toDecimalDegrees,
-      altitudeMeanSeaLevel
+      altitudeMeanSeaLevel,
+      deducted
     )
   }
 }

@@ -5,5 +5,6 @@ import zio.json.*
 case class DaoPhotoPlace(
   latitude: Double,
   longitude: Double,
-  altitude: Option[Double]
+  altitude: Option[Double],
+  deducted: Boolean
 ) derives JsonCodec

@@ -122,9 +122,10 @@ object PhotoOperations {
       longitude <- Option(gps.getGeoLocation).map(_.getLongitude).map(LongitudeDecimalDegrees.apply)
     } yield {
       PhotoPlace(
-        latitude,
-        longitude,
-        altitude
+        latitude = latitude,
+        longitude = longitude,
+        altitude = altitude,
+        deducted = false // Real GPS meta data
       )
     }
   }

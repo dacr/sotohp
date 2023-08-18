@@ -1,11 +1,13 @@
 package fr.janalyse.sotohp.core
 
 import fr.janalyse.sotohp.model.*
+import wvlet.airframe.ulid.ULID
+
 import java.util.UUID
 import java.nio.file.Path
 
 trait TestDatasets {
-  val photoOwnerId = PhotoOwnerId(UUID.fromString("CAFECAFE-CAFE-CAFE-BABE-BABEBABE"))
+  val photoOwnerId = PhotoOwnerId(ULID("01H84VVZRXZDZ5184V44KVWS3J"))
 
   val dataset1         = Path.of("samples/dataset1")
   val dataset1Example1 = Path.of("samples/dataset1/example1.jpg")

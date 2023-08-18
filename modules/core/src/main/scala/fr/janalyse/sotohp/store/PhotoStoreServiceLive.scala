@@ -188,7 +188,8 @@ class PhotoStoreServiceLive private (
       PhotoPlace(
         latitude = LatitudeDecimalDegrees(daoPlace.latitude),
         longitude = LongitudeDecimalDegrees(daoPlace.longitude),
-        altitude = daoPlace.altitude
+        altitude = daoPlace.altitude,
+        deducted = daoPlace.deducted
       )
     )
   }
@@ -197,7 +198,8 @@ class PhotoStoreServiceLive private (
     DaoPhotoPlace(
       latitude = from.latitude.doubleValue,
       longitude = from.longitude.doubleValue,
-      altitude = from.altitude.map(_.doubleValue)
+      altitude = from.altitude.map(_.doubleValue),
+      deducted = from.deducted
     )
 
   override def photoPlaceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoPlace]] =
