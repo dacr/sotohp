@@ -44,7 +44,7 @@ class PhotoStoreServiceLive private (
     case e: StorageUserError   => PhotoStoreUserIssue(e.toString)
   }
 
-  private def photoIdToCollectionKey(photoId: PhotoId): String = photoId.id.toString
+  private def photoIdToCollectionKey(photoId: PhotoId): String          = photoId.id.toString
   private def originalIdToCollectionKey(originalId: OriginalId): String = originalId.id.toString
 
   // ===================================================================================================================
@@ -96,7 +96,7 @@ class PhotoStoreServiceLive private (
       PhotoSource(
         photoId = PhotoId(ULID(daoSource.photoId)),
         original = Original(
-          ownerId = PhotoOwnerId(daoSource.originalOwnerId),
+          ownerId = PhotoOwnerId(ULID(daoSource.originalOwnerId)),
           baseDirectory = Path.of(daoSource.originalBaseDirectory),
           path = Path.of(daoSource.originalPath)
         ),
@@ -110,7 +110,7 @@ class PhotoStoreServiceLive private (
   def sourceToDaoSource(from: PhotoSource): DaoPhotoSource = {
     DaoPhotoSource(
       photoId = from.photoId.id.toString,
-      originalOwnerId = from.original.ownerId.id,
+      originalOwnerId = from.original.ownerId.id.toString,
       originalBaseDirectory = from.original.baseDirectory.toString,
       originalPath = from.original.path.toString,
       fileSize = from.fileSize,

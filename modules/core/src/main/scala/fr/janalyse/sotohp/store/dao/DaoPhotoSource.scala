@@ -7,7 +7,7 @@ import zio.json.*
 
 case class DaoPhotoSource(
   photoId: String,
-  originalOwnerId: UUID,
+  originalOwnerId: String,
   originalBaseDirectory: String,
   originalPath: String,
   fileSize: Long,

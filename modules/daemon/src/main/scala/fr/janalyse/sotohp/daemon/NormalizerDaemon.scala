@@ -1,34 +1,28 @@
 package fr.janalyse.sotohp.daemon
 
+import fr.janalyse.sotohp.config.*
 import zio.*
 import zio.ZIOAspect.*
-import zio.config.*
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.core.*
-import fr.janalyse.sotohp.store.{PhotoStoreService, PhotoStoreIssue}
+import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
 import java.nio.file.Path
 import org.apache.commons.imaging.Imaging
 import net.coobird.thumbnailator.Thumbnails
 
 case class NormalizeIssue(message: String, exception: Throwable)
-case class NormalizeConfigIssue(message: String, exception: Throwable)
 
-object NormalizerDaemon {
-  private val normalizerConfig =
-    ZIO
-      .config(NormalizerConfig.config)
-      .mapError(th => NormalizeConfigIssue(s"Couldn't configure normalizer", th))
+object NormalizerDaemon extends ProcessorCommon {
 
-  private def makeNormalizedFilePath(photo: Photo, config: NormalizerConfig): IO[NormalizeIssue, Path] = {
-    val target = s"${config.baseDirectory}/${photo.source.original.ownerId}/${photo.source.photoId}.${config.format}"
-    ZIO
-      .attempt(Path.of(target))
-      .mapError(th => NormalizeIssue(s"Invalid normalized destination file $target", th))
+  def makeNormalizedFilePath(photo: Photo, config: SotohpConfig): Path = {
+    val basePath = makePhotoInternalDataPath(photo, config)
+    val format   = config.miniaturizer.format
+    val target   = s"normalized.$format"
+    basePath.resolve(target)
   }
 
-  private def resizePhoto(input: Path, output: Path, config: NormalizerConfig) = {
-    import config.referenceSize
+  private def resizePhoto(input: Path, output: Path, config: SotohpConfig) = {
+    import config.normalizer.referenceSize
     ZIO
       .attemptBlockingIO(
         Thumbnails
@@ -36,18 +30,18 @@ object NormalizerDaemon {
           .useExifOrientation(true)
           .size(referenceSize, referenceSize)
           .keepAspectRatio(true)
-          .outputQuality(config.quality)
+          .outputQuality(config.normalizer.quality)
           .allowOverwrite(false)
           .toFile(output.toFile)
       )
       .tap(_ => ZIO.logInfo(s"Normalize"))
-      .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size ${config.referenceSize}", th))
+      .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size $referenceSize", th))
       .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
       .ignore // Photo file may have internal issues
   }
 
-  private def upsertNormalizedPhotoIfNeeded(photo: Photo, output: Path) = {
+  private def upsertNormalizedPhotoIfNeeded(photo: Photo, output: Path, config: SotohpConfig) = {
     val currentNormalized = photo.normalized
     for {
       dimension             <- ZIO
@@ -86,17 +80,19 @@ object NormalizerDaemon {
     * @return
     *   photo with updated normalized field if some changes have occurred
     */
-  def normalize(photo: Photo): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue | NormalizeConfigIssue, Photo] = {
+  def normalize(photo: Photo): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue | SotohpConfigIssue, Photo] = {
     val logic = for {
-      config          <- normalizerConfig
+      config          <- sotophConfig
       input           <- ZIO
                            .attempt(photo.source.original.path.toAbsolutePath)
                            .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
-      output          <- makeNormalizedFilePath(photo, config)
+      output          <- ZIO
+                           .attempt(makeNormalizedFilePath(photo, config))
+                           .mapError(th => NormalizeIssue(s"Couldn't build destination path target", th))
       _               <- makeOutputDirectories(output)
       _               <- resizePhoto(input, output, config)
                            .when(!output.toFile.exists())
-      normalizedPhoto <- upsertNormalizedPhotoIfNeeded(photo, output)
+      normalizedPhoto <- upsertNormalizedPhotoIfNeeded(photo, output, config)
                            .logError("Couldn't upsert normalized photo in datastore")
     } yield photo.copy(normalized = Some(normalizedPhoto))
 

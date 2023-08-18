@@ -7,7 +7,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 case class PhotoOwnerId(
-  id: UUID
+  id: ULID
 ) extends AnyVal {
   override def toString: String = id.toString
 }
