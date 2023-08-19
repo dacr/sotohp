@@ -46,6 +46,13 @@ trait PhotoStoreService {
   def photoNormalizedContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean]
   def photoNormalizedUpsert(photoId: PhotoId, normalized: NormalizedPhoto): IO[PhotoStoreIssue, Unit]
   def photoNormalizedDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+
+  // photo classifications collection
+  def photoClassificationsGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoClassifications]]
+  def photoClassificationsContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean]
+  def photoClassificationsUpsert(photoId: PhotoId, normalized: PhotoClassifications): IO[PhotoStoreIssue, Unit]
+  def photoClassificationsDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+
 }
 
 object PhotoStoreService {
@@ -78,6 +85,11 @@ object PhotoStoreService {
   def photoNormalizedContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                         = serviceWithZIO(_.photoNormalizedContains(photoId))
   def photoNormalizedUpsert(photoId: PhotoId, normalized: NormalizedPhoto): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoNormalizedUpsert(photoId, normalized))
   def photoNormalizedDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                              = serviceWithZIO(_.photoNormalizedDelete(photoId))
+
+  def photoClassificationsGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoClassifications]]            = serviceWithZIO(_.photoClassificationsGet(photoId))
+  def photoClassificationsContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                            = serviceWithZIO(_.photoClassificationsContains(photoId))
+  def photoClassificationsUpsert(photoId: PhotoId, metaData: PhotoClassifications): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoClassificationsUpsert(photoId, metaData))
+  def photoClassificationsDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                                 = serviceWithZIO(_.photoClassificationsDelete(photoId))
 
   val live: ZLayer[LMDB, LMDBIssues, PhotoStoreService] = ZLayer.fromZIO(
     for {

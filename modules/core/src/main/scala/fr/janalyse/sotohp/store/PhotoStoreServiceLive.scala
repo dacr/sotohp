@@ -12,12 +12,13 @@ import java.nio.file.Path
 import java.util.UUID
 
 trait PhotoStoreCollections {
-  val photoStatesCollectionName     = "photo-states"
-  val photoSourcesCollectionName    = "photo-sources"
-  val photoMetaDataCollectionName   = "photo-metadata"
-  val photoPlacesCollectionName     = "photo-places"
-  val photoMiniaturesCollectionName = "photo-miniatures"
-  val photoNormalizedCollectionName = "photo-normalized"
+  val photoStatesCollectionName          = "photo-states"
+  val photoSourcesCollectionName         = "photo-sources"
+  val photoMetaDataCollectionName        = "photo-metadata"
+  val photoPlacesCollectionName          = "photo-places"
+  val photoMiniaturesCollectionName      = "photo-miniatures"
+  val photoNormalizedCollectionName      = "photo-normalized"
+  val photoClassificationsCollectionName = "photo-classifications"
 
   val allCollections = List(
     photoStatesCollectionName,
@@ -25,7 +26,8 @@ trait PhotoStoreCollections {
     photoMetaDataCollectionName,
     photoPlacesCollectionName,
     photoMiniaturesCollectionName,
-    photoNormalizedCollectionName
+    photoNormalizedCollectionName,
+    photoClassificationsCollectionName
   )
 }
 
@@ -36,7 +38,8 @@ class PhotoStoreServiceLive private (
   metaDataCollection: LMDBCollection[DaoPhotoMetaData],
   placesCollection: LMDBCollection[DaoPhotoPlace],
   miniaturesCollection: LMDBCollection[DaoMiniatures],
-  normalizedCollection: LMDBCollection[DaoNormalizedPhoto]
+  normalizedCollection: LMDBCollection[DaoNormalizedPhoto],
+  classificationsCollection: LMDBCollection[DaoPhotoClassifications]
 ) extends PhotoStoreService {
 
   private def convertFailures: PartialFunction[StorageSystemError | StorageUserError, PhotoStoreIssue] = {
@@ -301,18 +304,54 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
+  def daoClassificationsToClassifications(from: Option[DaoPhotoClassifications]): Option[PhotoClassifications] = {
+    from.map(daoClassifications =>
+      PhotoClassifications(
+        classifications = daoClassifications.classifications.map(that => DetectedClassification(that.name))
+      )
+    )
+  }
+
+  def classificationsToDaoClassifications(from: PhotoClassifications): DaoPhotoClassifications = {
+    DaoPhotoClassifications(
+      classifications = from.classifications.map(that => DaoDetectedClassification(name = that.name))
+    )
+  }
+
+  override def photoClassificationsGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoClassifications]] =
+    classificationsCollection
+      .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, daoClassificationsToClassifications)
+
+  override def photoClassificationsContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    classificationsCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
+  override def photoClassificationsUpsert(photoId: PhotoId, photoClassifications: PhotoClassifications): IO[PhotoStoreIssue, Unit] =
+    classificationsCollection
+      .upsertOverwrite(photoIdToCollectionKey(photoId), classificationsToDaoClassifications(photoClassifications))
+      .mapBoth(convertFailures, _ => ())
+
+  override def photoClassificationsDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    classificationsCollection
+      .delete(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _ => ())
+
+  // ===================================================================================================================
 }
 
 object PhotoStoreServiceLive extends PhotoStoreCollections {
 
   def setup(lmdb: LMDB) = for {
-    _                    <- foreach(allCollections)(col => lmdb.collectionAllocate(col).ignore)
-    statesCollection     <- lmdb.collectionGet[DaoPhotoState](photoStatesCollectionName)
-    sourcesCollection    <- lmdb.collectionGet[DaoPhotoSource](photoSourcesCollectionName)
-    metaDataCollection   <- lmdb.collectionGet[DaoPhotoMetaData](photoMetaDataCollectionName)
-    placesCollection     <- lmdb.collectionGet[DaoPhotoPlace](photoPlacesCollectionName)
-    miniaturesCollection <- lmdb.collectionGet[DaoMiniatures](photoMiniaturesCollectionName)
-    normalizedCollection <- lmdb.collectionGet[DaoNormalizedPhoto](photoNormalizedCollectionName)
+    _                         <- foreach(allCollections)(col => lmdb.collectionAllocate(col).ignore)
+    statesCollection          <- lmdb.collectionGet[DaoPhotoState](photoStatesCollectionName)
+    sourcesCollection         <- lmdb.collectionGet[DaoPhotoSource](photoSourcesCollectionName)
+    metaDataCollection        <- lmdb.collectionGet[DaoPhotoMetaData](photoMetaDataCollectionName)
+    placesCollection          <- lmdb.collectionGet[DaoPhotoPlace](photoPlacesCollectionName)
+    miniaturesCollection      <- lmdb.collectionGet[DaoMiniatures](photoMiniaturesCollectionName)
+    normalizedCollection      <- lmdb.collectionGet[DaoNormalizedPhoto](photoNormalizedCollectionName)
+    classificationsCollection <- lmdb.collectionGet[DaoPhotoClassifications](photoClassificationsCollectionName)
   } yield PhotoStoreServiceLive(
     lmdb,
     statesCollection,
@@ -320,6 +359,7 @@ object PhotoStoreServiceLive extends PhotoStoreCollections {
     metaDataCollection,
     placesCollection,
     miniaturesCollection,
-    normalizedCollection
+    normalizedCollection,
+    classificationsCollection
   )
 }

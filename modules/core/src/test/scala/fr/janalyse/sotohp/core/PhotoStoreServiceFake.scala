@@ -11,7 +11,8 @@ class PhotoStoreServiceFake(
   metaDataCollectionRef: Ref[Map[PhotoId, PhotoMetaData]],
   placesCollectionRef: Ref[Map[PhotoId, PhotoPlace]],
   miniaturesCollectionRef: Ref[Map[PhotoId, Miniatures]],
-  normalizedCollectionRef: Ref[Map[PhotoId, NormalizedPhoto]]
+  normalizedCollectionRef: Ref[Map[PhotoId, NormalizedPhoto]],
+  classificationsCollectionRef: Ref[Map[PhotoId, PhotoClassifications]]
 ) extends PhotoStoreService {
 
   // ===================================================================================================================
@@ -106,25 +107,42 @@ class PhotoStoreServiceFake(
     normalizedCollectionRef.update(collection => collection.removed(photoId))
 
   // ===================================================================================================================
+  override def photoClassificationsGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoClassifications]] = for {
+    collection <- classificationsCollectionRef.get
+  } yield collection.get(photoId)
+
+  override def photoClassificationsContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] = for {
+    collection <- classificationsCollectionRef.get
+  } yield collection.contains(photoId)
+
+  override def photoClassificationsUpsert(photoId: PhotoId, photoClassifications: PhotoClassifications): IO[PhotoStoreIssue, Unit] =
+    classificationsCollectionRef.update(_.updated(photoId, photoClassifications))
+
+  override def photoClassificationsDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    classificationsCollectionRef.update(collection => collection.removed(photoId))
+
+  // ===================================================================================================================
 }
 
 object PhotoStoreServiceFake extends PhotoStoreCollections {
 
   val default = ZLayer.fromZIO(
     for {
-      statesCollection     <- Ref.make(Map.empty[PhotoId, PhotoState])
-      sourcesCollection    <- Ref.make(Map.empty[OriginalId, PhotoSource])
-      metaDataCollection   <- Ref.make(Map.empty[PhotoId, PhotoMetaData])
-      placesCollection     <- Ref.make(Map.empty[PhotoId, PhotoPlace])
-      miniaturesCollection <- Ref.make(Map.empty[PhotoId, Miniatures])
-      normalizedCollection <- Ref.make(Map.empty[PhotoId, NormalizedPhoto])
+      statesCollection          <- Ref.make(Map.empty[PhotoId, PhotoState])
+      sourcesCollection         <- Ref.make(Map.empty[OriginalId, PhotoSource])
+      metaDataCollection        <- Ref.make(Map.empty[PhotoId, PhotoMetaData])
+      placesCollection          <- Ref.make(Map.empty[PhotoId, PhotoPlace])
+      miniaturesCollection      <- Ref.make(Map.empty[PhotoId, Miniatures])
+      normalizedCollection      <- Ref.make(Map.empty[PhotoId, NormalizedPhoto])
+      classificationsCollection <- Ref.make(Map.empty[PhotoId, PhotoClassifications])
     } yield PhotoStoreServiceFake(
       statesCollection,
       sourcesCollection,
       metaDataCollection,
       placesCollection,
       miniaturesCollection,
-      normalizedCollection
+      normalizedCollection,
+      classificationsCollection
     )
   )
 
