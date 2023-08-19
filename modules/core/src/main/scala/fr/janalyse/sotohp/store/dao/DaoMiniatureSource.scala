@@ -5,6 +5,6 @@ import zio.json.JsonCodec
 import java.nio.file.Path
 
 case class DaoMiniatureSource(
-  path: String,
+  size: Int,
   dimension: DaoDimension2D
 ) derives JsonCodec

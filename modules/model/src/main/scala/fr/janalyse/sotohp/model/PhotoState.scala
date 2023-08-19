@@ -7,5 +7,6 @@ case class PhotoState(
   photoHash: PhotoHash,
   firstSeen: OffsetDateTime,
   lastSeen: OffsetDateTime,
-  lastUpdated: OffsetDateTime
+  lastUpdated: OffsetDateTime,
+  originalAddedOn: OffsetDateTime // typically initialized with file last modified (when first seen)
 )

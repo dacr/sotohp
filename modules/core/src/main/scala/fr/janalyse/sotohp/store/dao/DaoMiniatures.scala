@@ -5,6 +5,5 @@ import zio.json.JsonCodec
 import java.time.OffsetDateTime
 
 case class DaoMiniatures(
-  sources: List[DaoMiniatureSource],
-  lastUpdated: OffsetDateTime
+  sources: List[DaoMiniatureSource]
 ) derives JsonCodec

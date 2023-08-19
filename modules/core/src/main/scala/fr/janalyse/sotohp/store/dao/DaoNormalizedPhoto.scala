@@ -5,7 +5,6 @@ import zio.json.JsonCodec
 import java.time.OffsetDateTime
 
 case class DaoNormalizedPhoto(
-  path: String,
-  dimension: DaoDimension2D,
-  lastUpdated: OffsetDateTime
+  size: Int,
+  dimension: DaoDimension2D
 ) derives JsonCodec

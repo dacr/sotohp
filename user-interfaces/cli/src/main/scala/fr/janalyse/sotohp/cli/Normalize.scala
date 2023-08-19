@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.OriginalsStream
-import fr.janalyse.sotohp.daemon.NormalizerDaemon
+import fr.janalyse.sotohp.processor.NormalizeProcessor
 import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
 import zio.config.typesafe.*
@@ -24,7 +24,7 @@ object Normalize extends ZIOAppDefault with CommonsCLI {
     for {
       searchRoots <- getSearchRoots
       originals    = OriginalsStream.photoStream(searchRoots)
-      _           <- originals.mapZIO(NormalizerDaemon.normalize).runDrain
+      _           <- originals.mapZIO(NormalizeProcessor.normalize).runDrain
       _           <- ZIO.logInfo("Normalization done")
     } yield ()
   }

@@ -4,7 +4,6 @@ import java.nio.file.Path
 import java.time.OffsetDateTime
 
 case class NormalizedPhoto(
-  path: Path,
-  dimension: Dimension2D,
-  lastUpdated: OffsetDateTime
+  size: Int,
+  dimension: Dimension2D
 )

@@ -69,7 +69,7 @@ lazy val moduleModel =
     .settings(
       sharedSettings,
       libraryDependencies ++= Seq(
-        "org.wvlet.airframe" %% "airframe-ulid" % "23.8.0"
+        "org.wvlet.airframe" %% "airframe-ulid" % "23.8.3"
       )
     )
 
@@ -91,9 +91,9 @@ lazy val moduleCore =
       )
     )
 
-lazy val moduleDaemon =
+lazy val moduleProcessor =
   project
-    .in(file("modules/daemon"))
+    .in(file("modules/processor"))
     .dependsOn(moduleCore)
     .settings(
       sharedSettings,
@@ -110,7 +110,7 @@ lazy val userInterfacesCLI =
   project
     .in(file("user-interfaces/cli"))
     .settings(sharedSettings)
-    .dependsOn(moduleCore, moduleDaemon)
+    .dependsOn(moduleCore, moduleProcessor)
     .settings(
       sharedSettings,
       fork := true,

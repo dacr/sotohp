@@ -1,11 +1,11 @@
-package fr.janalyse.sotohp.daemon
+package fr.janalyse.sotohp.processor
 
 import zio.*
 import fr.janalyse.sotohp.config.*
 import fr.janalyse.sotohp.model.Photo
 import java.nio.file.Path
 
-trait ProcessorCommon {
+trait Processor {
 
   def makePhotoInternalDataPath(photo: Photo, config: SotohpConfig): Path = {
     val dataDir = config.internalData.baseDirectory

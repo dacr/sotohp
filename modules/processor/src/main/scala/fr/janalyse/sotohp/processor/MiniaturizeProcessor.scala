@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.daemon
+package fr.janalyse.sotohp.processor
 
 import zio.*
 import zio.ZIOAspect.*
@@ -15,7 +15,7 @@ import org.apache.commons.imaging.Imaging
 
 case class MiniaturizeIssue(message: String, exception: Throwable)
 
-object MiniaturizerDaemon extends ProcessorCommon {
+object MiniaturizeProcessor extends Processor {
 
   def makeMiniatureFilePath(photo: Photo, size: Int, config: SotohpConfig): Path = {
     val basePath = makePhotoInternalDataPath(photo, config)
@@ -46,42 +46,44 @@ object MiniaturizerDaemon extends ProcessorCommon {
   private def buildMiniature(photo: Photo, size: Int, config: SotohpConfig): IO[MiniaturizeIssue, MiniatureSource] = {
     val alreadyKnownMiniatures = photo.miniatures
     for {
-      input     <- ZIO
-                     .from(photo.normalized.map(_.path)) // faster if normalized photo is already available
-                     .orElse(
-                       ZIO
-                         .attempt(photo.source.original.path.toAbsolutePath)
-                         .mapError(th => MiniaturizeIssue(s"Couldn't build input path from original photo", th))
-                     )
-      output    <- ZIO
-                     .attempt(makeMiniatureFilePath(photo, size, config))
-                     .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file", th))
-      _         <- ZIO
-                     .attempt(output.getParent.toFile.mkdirs())
-                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", th))
-      _         <- miniaturizePhoto(size, input, output, config)
-                     .when(!output.toFile.exists())
-      dimension <- ZIO
-                     .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension))
-                     .orElse(
-                       ZIO
-                         .attempt(Imaging.getImageSize(output.toFile))
-                         .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
-                     )
-                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", th))
-    } yield MiniatureSource(path = output, dimension = dimension)
+      normalizedInput <- ZIO
+                           .attempt(NormalizeProcessor.makeNormalizedFilePath(photo, config))
+                           .mapError(th => MiniaturizeIssue(s"Couldn't build input path for normalized photo", th))
+      input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)
+                         else
+                           ZIO
+                             .attempt(photo.source.original.path.toAbsolutePath)
+                             .mapError(th => MiniaturizeIssue(s"Couldn't build input path for original photo", th))
+      output          <- ZIO
+                           .attempt(makeMiniatureFilePath(photo, size, config))
+                           .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file", th))
+      _               <- ZIO
+                           .attempt(output.getParent.toFile.mkdirs())
+                           .mapError(th => MiniaturizeIssue(s"Couldn't target path", th))
+      _               <- miniaturizePhoto(size, input, output, config)
+                           .when(!output.toFile.exists())
+      dimension       <- ZIO
+                           .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension)) // faster
+                           .orElse(
+                             ZIO
+                               .attempt(Imaging.getImageSize(output.toFile)) // slower
+                               .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
+                           )
+                           .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", th))
+    } yield MiniatureSource(size = size, dimension = dimension)
   } @@ annotated("size" -> size.toString)
 
-  private def upsertMiniaturesRecordIfNeeded(photo: Photo, miniaturesSources: List[MiniatureSource]) = for {
-    currentDateTime       <- Clock.currentDateTime
-    alreadyKnownMiniatures = photo.miniatures
-    updatedMiniatures      = Miniatures(sources = miniaturesSources, lastUpdated = currentDateTime)
-    upsertNeeded           = !alreadyKnownMiniatures.map(_.sources).contains(miniaturesSources)
-    _                     <- PhotoStoreService
-                               .photoMiniaturesUpsert(photo.source.photoId, updatedMiniatures)
-                               .when(upsertNeeded)
-    miniatures             = if (upsertNeeded) updatedMiniatures else alreadyKnownMiniatures.get
-  } yield miniatures
+  private def upsertMiniaturesRecordIfNeeded(photo: Photo, miniaturesSources: List[MiniatureSource]) = {
+    val alreadyKnownMiniatures = photo.miniatures
+    val updatedMiniatures      = Miniatures(sources = miniaturesSources)
+    val upsertNeeded           = !alreadyKnownMiniatures.contains(updatedMiniatures)
+    for {
+      _         <- PhotoStoreService
+                     .photoMiniaturesUpsert(photo.source.photoId, updatedMiniatures)
+                     .when(upsertNeeded)
+      miniatures = if (upsertNeeded) updatedMiniatures else alreadyKnownMiniatures.get
+    } yield miniatures
+  }
 
   // ===================================================================================================================
 

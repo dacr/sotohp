@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.OriginalsStream
 import fr.janalyse.sotohp.store.PhotoStoreService
-import fr.janalyse.sotohp.daemon.MiniaturizerDaemon
+import fr.janalyse.sotohp.processor.MiniaturizeProcessor
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
@@ -24,7 +24,7 @@ object Miniaturize extends ZIOAppDefault with CommonsCLI {
     for {
       searchRoots <- getSearchRoots
       originals    = OriginalsStream.photoStream(searchRoots)
-      _           <- originals.mapZIO(MiniaturizerDaemon.miniaturize).runDrain
+      _           <- originals.mapZIO(MiniaturizeProcessor.miniaturize).runDrain
       _           <- ZIO.logInfo("Miniaturization done")
     } yield ()
   }

@@ -213,17 +213,18 @@ object PhotoOperations {
     )
   }
 
-  private def setupPhotoInitialState(photoId: PhotoId, photoHash: PhotoHash): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = {
+  private def setupPhotoInitialState(photoSource: PhotoSource): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = {
     for {
       currentDateTime <- Clock.currentDateTime
       state            = PhotoState(
-                           photoId = photoId,
-                           photoHash = photoHash,
+                           photoId = photoSource.photoId,
+                           photoHash = photoSource.fileHash,
                            firstSeen = currentDateTime,
                            lastSeen = currentDateTime,
-                           lastUpdated = currentDateTime
+                           lastUpdated = currentDateTime,
+                           originalAddedOn = photoSource.fileLastModified
                          )
-      _               <- PhotoStoreService.photoStateUpsert(photoId, state)
+      _               <- PhotoStoreService.photoStateUpsert(photoSource.photoId, state)
     } yield ()
   }
 
@@ -252,7 +253,7 @@ object PhotoOperations {
       _              <- PhotoStoreService.photoSourceUpsert(originalId, photoSource)
       _              <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
       _              <- ZIO.foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
-      _              <- setupPhotoInitialState(photoId, photoSource.fileHash)
+      _              <- setupPhotoInitialState(photoSource)
       _              <- ZIO.logInfo(s"New photo found $photoTimestamp - ${photoMetaData.shootDateTime}")
     } yield {
       Photo(
@@ -285,7 +286,7 @@ object PhotoOperations {
       normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
       photoTimestamp  <- computePhotoTimestamp(original, photoMetaData)
       photoCategory    = buildPhotoCategory(baseDirectory, path)
-      // _               <- updateStateLastSeen(photoId)
+      _               <- updateStateLastSeen(photoId)
     } yield {
       Photo(
         timestamp = photoTimestamp,

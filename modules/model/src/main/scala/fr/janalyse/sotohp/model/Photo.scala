@@ -51,23 +51,19 @@ case class PhotoMetaData(
 )
 
 case class PhotoKeywords(
-  keywords: List[PhotoKeyword],
-  lastUpdated: OffsetDateTime
+  keywords: List[PhotoKeyword]
 )
 
 case class PhotoClassifications(
-  classifications: List[DetectedClassification],
-  lastUpdated: OffsetDateTime
+  classifications: List[DetectedClassification]
 )
 
 case class PhotoObjects(
-  objects: List[DetectedObject],
-  lastUpdated: OffsetDateTime
+  objects: List[DetectedObject]
 )
 
 case class PhotoFaces(
-  faces: List[DetectedFace],
-  lastUpdated: OffsetDateTime
+  faces: List[DetectedFace]
 )
 
 case class Photo(

@@ -1,11 +1,9 @@
-package fr.janalyse.sotohp.daemon
+package fr.janalyse.sotohp.processor
 
 import zio.*
 import zio.ZIOAspect.*
-
 import fr.janalyse.sotohp.store.*
 import fr.janalyse.sotohp.model.*
-
 import ai.djl.Application
 import ai.djl.engine.Engine
 import ai.djl.modality.cv.Image
@@ -17,15 +15,15 @@ import ai.djl.repository.zoo.ModelZoo
 import ai.djl.repository.zoo.ZooModel
 import ai.djl.training.util.ProgressBar
 import ai.djl.modality.Classifications.Classification
-import java.nio.file.Files
+import fr.janalyse.sotohp.config.{SotohpConfig, SotohpConfigIssue}
+import fr.janalyse.sotohp.processor.MiniaturizeProcessor.sotophConfig
+
 import java.nio.file.Path
-import java.nio.file.Paths
-import scala.jdk.CollectionConverters._
+import scala.jdk.CollectionConverters.*
 
 case class AnalyzerIssue(message: String, exception: Throwable)
-case class AnalyzerConfigIssue(message: String, exception: Throwable)
 
-object ContentAnalyzerDaemon {
+object ContentAnalyzerProcessor extends Processor {
 
   lazy val objectDetectionsCriteria =
     Criteria.builder
@@ -93,15 +91,17 @@ object ContentAnalyzerDaemon {
       .distinct
   }
 
-  def getInputPhotoFile(photo: Photo) = {
-    ZIO
-      .from(photo.normalized.map(_.path)) // faster if normalized photo is already available
-      .orElse(
-        ZIO
-          .attempt(photo.source.original.path.toAbsolutePath)
-          .mapError(th => AnalyzerIssue(s"Couldn't build input path from original photo", th))
-      )
-  }
+  def getInputPhotoFile(photo: Photo): IO[AnalyzerIssue | SotohpConfigIssue, Path] = for {
+    config          <- sotophConfig
+    normalizedInput <- ZIO
+                         .attempt(NormalizeProcessor.makeNormalizedFilePath(photo, config)) // faster because lighter
+                         .mapError(th => AnalyzerIssue(s"Couldn't build input path for normalized photo", th))
+    input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)
+                       else
+                         ZIO
+                           .attempt(photo.source.original.path.toAbsolutePath) // slower because original
+                           .mapError(th => AnalyzerIssue(s"Couldn't build input path for original photo", th))
+  } yield input
 
   def classify(photo: Photo) = {
     for {
@@ -129,7 +129,7 @@ object ContentAnalyzerDaemon {
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def analyze(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | AnalyzerIssue | AnalyzerConfigIssue, Photo] = {
+  def analyze(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | AnalyzerIssue | SotohpConfigIssue, Photo] = {
     // TODO : quick, dirty & unfinished first implementation
     val logic = for {
       classifiedPhoto      <- classify(photo)

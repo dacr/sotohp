@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.daemon
+package fr.janalyse.sotohp.processor
 
 import fr.janalyse.sotohp.config.*
 import zio.*
@@ -12,7 +12,7 @@ import net.coobird.thumbnailator.Thumbnails
 
 case class NormalizeIssue(message: String, exception: Throwable)
 
-object NormalizerDaemon extends ProcessorCommon {
+object NormalizeProcessor extends Processor {
 
   def makeNormalizedFilePath(photo: Photo, config: SotohpConfig): Path = {
     val basePath = makePhotoInternalDataPath(photo, config)
@@ -42,30 +42,23 @@ object NormalizerDaemon extends ProcessorCommon {
   }
 
   private def upsertNormalizedPhotoIfNeeded(photo: Photo, output: Path, config: SotohpConfig) = {
-    val currentNormalized = photo.normalized
     for {
-      dimension             <- ZIO
-                                 .from(photo.normalized.map(_.dimension))
-                                 .orElse(
-                                   ZIO
-                                     .attempt(Imaging.getImageSize(output.toFile))
-                                     .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
-                                     .mapError(th => NormalizeIssue(s"Couldn't get normalized photo size", th))
-                                 )
-      currentDateTime       <- Clock.currentDateTime
-      updatedNormalizedPhoto = NormalizedPhoto(
-                                 path = output,
-                                 dimension = dimension,
-                                 lastUpdated = currentDateTime
-                               )
-      upsertNeeded           = currentNormalized.isEmpty
-                                 || currentNormalized.get.path != updatedNormalizedPhoto.path
-                                 || currentNormalized.get.dimension != updatedNormalizedPhoto.dimension
-      _                     <- PhotoStoreService
-                                 .photoNormalizedUpsert(photo.source.photoId, updatedNormalizedPhoto)
-                                 .when(upsertNeeded)
-      normalizedPhoto        = if (upsertNeeded) updatedNormalizedPhoto else photo.normalized.get
-    } yield normalizedPhoto
+      dimension        <- ZIO
+                            .from(photo.normalized.map(_.dimension))          // faster
+                            .orElse(
+                              ZIO
+                                .attempt(Imaging.getImageSize(output.toFile)) // slower
+                                .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
+                                .mapError(th => NormalizeIssue(s"Couldn't get normalized photo size", th))
+                            )
+      updatedNormalized = NormalizedPhoto(
+                            size = config.normalizer.referenceSize,
+                            dimension = dimension
+                          )
+      _                <- PhotoStoreService
+                            .photoNormalizedUpsert(photo.source.photoId, updatedNormalized)
+                            .when(!photo.normalized.contains(updatedNormalized))
+    } yield updatedNormalized
   }
 
   private def makeOutputDirectories(output: Path) = {

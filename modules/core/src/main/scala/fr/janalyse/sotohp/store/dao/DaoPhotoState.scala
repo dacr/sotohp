@@ -9,5 +9,6 @@ case class DaoPhotoState(
   photoHash: String,
   lastSynchronized: OffsetDateTime,
   lastUpdated: OffsetDateTime,
-  firstSeen: OffsetDateTime
+  firstSeen: OffsetDateTime,
+  originalAddedOn: OffsetDateTime
 ) derives JsonCodec

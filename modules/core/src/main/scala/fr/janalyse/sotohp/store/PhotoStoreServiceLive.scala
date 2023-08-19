@@ -55,7 +55,8 @@ class PhotoStoreServiceLive private (
         photoHash = PhotoHash(daoState.photoHash),
         lastSeen = daoState.lastSynchronized,
         lastUpdated = daoState.lastUpdated,
-        firstSeen = daoState.firstSeen
+        firstSeen = daoState.firstSeen,
+        originalAddedOn = daoState.originalAddedOn
       )
     )
   }
@@ -66,7 +67,8 @@ class PhotoStoreServiceLive private (
       photoHash = from.photoHash.code,
       lastSynchronized = from.lastSeen,
       lastUpdated = from.lastUpdated,
-      firstSeen = from.firstSeen
+      firstSeen = from.firstSeen,
+      originalAddedOn = from.originalAddedOn
     )
   }
 
@@ -226,16 +228,14 @@ class PhotoStoreServiceLive private (
   def daoMiniaturesToMiniatures(from: Option[DaoMiniatures]): Option[Miniatures] = {
     from.map(daoMiniatures =>
       Miniatures(
-        sources = daoMiniatures.sources.map(s => MiniatureSource(path = Path.of(s.path), dimension = Dimension2D(width = s.dimension.width, height = s.dimension.height))),
-        lastUpdated = daoMiniatures.lastUpdated
+        sources = daoMiniatures.sources.map(s => MiniatureSource(size = s.size, dimension = Dimension2D(width = s.dimension.width, height = s.dimension.height)))
       )
     )
   }
 
   def miniaturesToDaoMiniatures(from: Miniatures): DaoMiniatures =
     DaoMiniatures(
-      sources = from.sources.map(s => DaoMiniatureSource(path = s.path.toString, dimension = DaoDimension2D(width = s.dimension.width, height = s.dimension.height))),
-      lastUpdated = from.lastUpdated
+      sources = from.sources.map(s => DaoMiniatureSource(size = s.size, dimension = DaoDimension2D(width = s.dimension.width, height = s.dimension.height)))
     )
 
   override def photoMiniaturesGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[Miniatures]] =
@@ -262,24 +262,22 @@ class PhotoStoreServiceLive private (
   def daoNormalizedToNormalized(from: Option[DaoNormalizedPhoto]): Option[NormalizedPhoto] = {
     from.map(daoNormalized =>
       NormalizedPhoto(
-        path = Path.of(daoNormalized.path),
+        size = daoNormalized.size,
         dimension = Dimension2D(
           width = daoNormalized.dimension.width,
           height = daoNormalized.dimension.height
-        ),
-        lastUpdated = daoNormalized.lastUpdated
+        )
       )
     )
   }
 
   def normalizedToDaoNormalized(from: NormalizedPhoto): DaoNormalizedPhoto =
     DaoNormalizedPhoto(
-      path = from.path.toString,
+      size = from.size,
       dimension = DaoDimension2D(
         width = from.dimension.width,
         height = from.dimension.height
-      ),
-      lastUpdated = from.lastUpdated
+      )
     )
 
   override def photoNormalizedGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[NormalizedPhoto]] =
