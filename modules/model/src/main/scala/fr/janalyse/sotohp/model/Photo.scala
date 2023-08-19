@@ -1,9 +1,6 @@
 package fr.janalyse.sotohp.model
 
-import wvlet.airframe.ulid.ULID
-
-import java.nio.file.Path
-import java.time.{Instant, OffsetDateTime}
+import java.time.OffsetDateTime
 
 case class PhotoHash(
   code: String
@@ -17,53 +14,9 @@ case class PhotoCategory(
   text: String
 ) extends AnyVal
 
-case class DetectedClassification(
-  name: String
-)
-
-case class DetectedObject(
-  name: String,
-  box: BoundingBox
-)
-
-case class DetectedFace(
-  someoneId: Option[SomeoneId],
-  box: BoundingBox
-)
-
-enum PhotoOrientation(val code: Int, val description: String) {
-  case Horizontal                            extends PhotoOrientation(1, "Horizontal (normal)")
-  case MirrorHorizontal                      extends PhotoOrientation(2, "Mirror horizontal")
-  case Rotate180                             extends PhotoOrientation(3, "Rotate 180")
-  case MirrorVertical                        extends PhotoOrientation(4, "Mirror vertical")
-  case MirrorHorizontalAndRotate270ClockWise extends PhotoOrientation(5, "Mirror horizontal and rotate 270 CW")
-  case Rotate90ClockWise                     extends PhotoOrientation(6, "Rotate 90 CW")
-  case MirrorHorizontalAndRotate90ClockWise  extends PhotoOrientation(7, "Mirror horizontal and rotate 90 CW")
-  case Rotate270ClockWise                    extends PhotoOrientation(8, "Rotate 270 CW")
-}
-
-case class PhotoMetaData(
-  dimension: Option[Dimension2D],
-  shootDateTime: Option[OffsetDateTime],
-  orientation: Option[PhotoOrientation],
-  cameraName: Option[String],
-  tags: Map[String, String]
-)
 
 case class PhotoKeywords(
   keywords: List[PhotoKeyword]
-)
-
-case class PhotoClassifications(
-  classifications: List[DetectedClassification]
-)
-
-case class PhotoObjects(
-  objects: List[DetectedObject]
-)
-
-case class PhotoFaces(
-  faces: List[DetectedFace]
 )
 
 case class Photo(
