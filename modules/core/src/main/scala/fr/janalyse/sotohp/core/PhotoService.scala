@@ -26,6 +26,7 @@ case class CategorySimpleQuery(
   keywords: Option[List[String]]
 )
 
+// TODO move this outside code as it requires access to both the storage and the search-engine
 trait PhotoService {
   def photoGet(id: PhotoId): IO[PhotoServiceIssue, Photo]
   def photoFind(query: PhotoSimpleQuery): Stream[PhotoServiceIssue, Photo]
