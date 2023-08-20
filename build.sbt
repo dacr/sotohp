@@ -98,9 +98,9 @@ lazy val moduleSearch =
     .settings(
       sharedSettings,
       libraryDependencies ++= Seq(
-        "com.sksamuel.elastic4s" %% "elastic4s-effect-zio"    % "8.9.0",
-        "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % "8.9.0",
-        "com.sksamuel.elastic4s" %% "elastic4s-json-zio"      % "8.9.0"
+        "com.sksamuel.elastic4s" %% "elastic4s-effect-zio"    % "8.9.1",
+        "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % "8.9.1",
+        "com.sksamuel.elastic4s" %% "elastic4s-json-zio"      % "8.9.1"
       )
     )
 
