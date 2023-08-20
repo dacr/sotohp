@@ -91,6 +91,19 @@ lazy val moduleCore =
       )
     )
 
+lazy val moduleSearch =
+  project
+    .in(file("modules/search"))
+    .dependsOn(moduleCore)
+    .settings(
+      sharedSettings,
+      libraryDependencies ++= Seq(
+        "com.sksamuel.elastic4s" %% "elastic4s-effect-zio"    % "8.9.0",
+        "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % "8.9.0",
+        "com.sksamuel.elastic4s" %% "elastic4s-json-zio"      % "8.9.0"
+      )
+    )
+
 lazy val moduleProcessor =
   project
     .in(file("modules/processor"))
@@ -110,7 +123,7 @@ lazy val userInterfacesCLI =
   project
     .in(file("user-interfaces/cli"))
     .settings(sharedSettings)
-    .dependsOn(moduleCore, moduleProcessor)
+    .dependsOn(moduleCore, moduleProcessor, moduleSearch)
     .settings(
       sharedSettings,
       fork := true,
