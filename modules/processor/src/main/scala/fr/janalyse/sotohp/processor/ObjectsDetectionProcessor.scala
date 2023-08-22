@@ -53,21 +53,21 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
 
   def detectObjects(photo: Photo) = {
     for {
-      input       <- getBestInputPhotoFile(photo)
-      // knownObjects <- PhotoStoreService.photoObjectsGet(photo.source.photoId)
-      knownObjects = None
-      objects     <- ZIO
-                       .from(knownObjects)
-                       .orElse(
-                         ZIO
-                           .attempt(doDetectObjects(input))
-                           .tap(objs => ZIO.log(s"found objects : ${objs.mkString(",")}"))
-                           .mapError(th => ObjectsDetectionIssue(s"Couldn't analyze photo", th))
-                           .map(detectedObjects => PhotoObjects(objects = detectedObjects))
-                       )
-      _           <- PhotoStoreService
-                       .photoObjectsUpsert(photo.source.photoId, objects)
-                       .when(knownObjects.isEmpty)
+      input        <- getBestInputPhotoFile(photo)
+      knownObjects <- PhotoStoreService.photoObjectsGet(photo.source.photoId)
+      // knownObjects = None
+      objects      <- ZIO
+                        .from(knownObjects)
+                        .orElse(
+                          ZIO
+                            .attempt(doDetectObjects(input))
+                            .tap(objs => ZIO.log(s"found objects : ${objs.mkString(",")}"))
+                            .mapError(th => ObjectsDetectionIssue(s"Couldn't analyze photo", th))
+                            .map(detectedObjects => PhotoObjects(objects = detectedObjects))
+                        )
+      _            <- PhotoStoreService
+                        .photoObjectsUpsert(photo.source.photoId, objects)
+                        .when(knownObjects.isEmpty)
     } yield photo.copy(foundObjects = Some(objects))
   }
 
