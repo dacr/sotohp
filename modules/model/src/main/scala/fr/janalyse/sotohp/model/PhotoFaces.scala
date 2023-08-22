@@ -2,7 +2,8 @@ package fr.janalyse.sotohp.model
 
 case class DetectedFace(
   someoneId: Option[SomeoneId],
-  box: BoundingBox
+  box: BoundingBox,
+  features: Option[List[Float]]
 )
 
 case class PhotoFaces(

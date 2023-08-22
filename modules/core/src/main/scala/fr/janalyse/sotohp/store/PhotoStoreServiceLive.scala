@@ -412,7 +412,8 @@ class PhotoStoreServiceLive private (
               y = that.box.y,
               width = that.box.width,
               height = that.box.height
-            )
+            ),
+            features = that.features
           )
         )
       )
@@ -430,7 +431,8 @@ class PhotoStoreServiceLive private (
             y = that.box.y,
             width = that.box.width,
             height = that.box.height
-          )
+          ),
+          features = that.features
         )
       )
     )

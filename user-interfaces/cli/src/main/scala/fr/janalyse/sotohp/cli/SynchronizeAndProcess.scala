@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.OriginalsStream
-import fr.janalyse.sotohp.processor.{ClassificationProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
+import fr.janalyse.sotohp.processor.{ClassificationProcessor, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
@@ -33,11 +33,11 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
       facesProcessor            = FacesProcessor.allocate()
       processingStream          = OriginalsStream
                                     .photoStream(searchRoots)
-                                    .mapZIOParUnordered(4)(NormalizeProcessor.normalize) // First ! as normalized photos will accelerate next steps 
+                                    .mapZIOParUnordered(4)(NormalizeProcessor.normalize) // First ! as normalized photos will accelerate next steps
                                     .mapZIOParUnordered(4)(MiniaturizeProcessor.miniaturize)
                                     .mapZIO(classificationProcessor.analyze)
                                     .mapZIO(objectsDetectionProcessor.analyze)
-                                    // .mapZIO(FacesProcessor.analyze)
+                                    // .mapZIO(FacesProcessor.analyze) // TODO activate once face features extraction is available 
                                     .grouped(500)
                                     .mapZIO(photos => SearchService.publish(photos))
                                     .map(_.size)

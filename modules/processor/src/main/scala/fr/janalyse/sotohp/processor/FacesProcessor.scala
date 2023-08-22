@@ -44,7 +44,8 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
               y = ob.getBoundingBox.getBounds.getY,
               width = ob.getBoundingBox.getBounds.getWidth,
               height = ob.getBoundingBox.getBounds.getHeight
-            )
+            ),
+            features = None // TODO add extracted features
           )
         )
 
