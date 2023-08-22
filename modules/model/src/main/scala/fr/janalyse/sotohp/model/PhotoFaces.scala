@@ -6,5 +6,6 @@ case class DetectedFace(
 )
 
 case class PhotoFaces(
-  faces: List[DetectedFace]
+  faces: List[DetectedFace],
+  count: Int
 )

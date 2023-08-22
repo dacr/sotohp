@@ -43,33 +43,26 @@ object MiniaturizeProcessor extends Processor {
       .ignore // Photo file may have internal issues
   }
 
-  private def buildMiniature(photo: Photo, size: Int, config: SotohpConfig): IO[MiniaturizeIssue, MiniatureSource] = {
+  private def buildMiniature(photo: Photo, size: Int, config: SotohpConfig): IO[MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, MiniatureSource] = {
     val alreadyKnownMiniatures = photo.miniatures
     for {
-      normalizedInput <- ZIO
-                           .attempt(NormalizeProcessor.makeNormalizedFilePath(photo, config))
-                           .mapError(th => MiniaturizeIssue(s"Couldn't build input path for normalized photo", th))
-      input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)
-                         else
-                           ZIO
-                             .attempt(photo.source.original.path.toAbsolutePath)
-                             .mapError(th => MiniaturizeIssue(s"Couldn't build input path for original photo", th))
-      output          <- ZIO
-                           .attempt(makeMiniatureFilePath(photo, size, config))
-                           .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file", th))
-      _               <- ZIO
-                           .attempt(output.getParent.toFile.mkdirs())
-                           .mapError(th => MiniaturizeIssue(s"Couldn't target path", th))
-      _               <- miniaturizePhoto(size, input, output, config)
-                           .when(!output.toFile.exists())
-      dimension       <- ZIO
-                           .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension)) // faster
-                           .orElse(
-                             ZIO
-                               .attempt(Imaging.getImageSize(output.toFile)) // slower
-                               .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
-                           )
-                           .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", th))
+      input     <- getBestInputPhotoFile(photo)
+      output    <- ZIO
+                     .attempt(makeMiniatureFilePath(photo, size, config))
+                     .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file", th))
+      _         <- ZIO
+                     .attempt(output.getParent.toFile.mkdirs())
+                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", th))
+      _         <- miniaturizePhoto(size, input, output, config)
+                     .when(!output.toFile.exists())
+      dimension <- ZIO
+                     .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension)) // faster
+                     .orElse(
+                       ZIO
+                         .attempt(Imaging.getImageSize(output.toFile))                                           // slower
+                         .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
+                     )
+                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", th))
     } yield MiniatureSource(size = size, dimension = dimension)
   } @@ annotated("size" -> size.toString)
 
@@ -92,7 +85,7 @@ object MiniaturizeProcessor extends Processor {
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def miniaturize(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue | SotohpConfigIssue, Photo] = {
+  def miniaturize(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, Photo] = {
     val logic = for {
       config            <- sotophConfig
       miniaturesSources <- ZIO.foreach(config.miniaturizer.referenceSizes)(size => buildMiniature(photo, size, config))

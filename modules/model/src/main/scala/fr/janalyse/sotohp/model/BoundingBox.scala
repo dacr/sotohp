@@ -1,10 +1,11 @@
 package fr.janalyse.sotohp.model
 
-type XAxis = Int
-type YAxis = Int
+type XAxis = Double
+type YAxis = Double
 
 case class BoundingBox(
   x: XAxis,
   y: YAxis,
-  dimension: Dimension2D
+  width: Double,
+  height: Double
 )

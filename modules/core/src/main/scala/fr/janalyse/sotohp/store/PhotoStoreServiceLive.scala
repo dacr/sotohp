@@ -19,6 +19,8 @@ trait PhotoStoreCollections {
   val photoMiniaturesCollectionName      = "photo-miniatures"
   val photoNormalizedCollectionName      = "photo-normalized"
   val photoClassificationsCollectionName = "photo-classifications"
+  val photoObjectsCollectionName         = "photo-objects"
+  val photoFacesCollectionName           = "photo-faces"
 
   val allCollections = List(
     photoStatesCollectionName,
@@ -27,7 +29,9 @@ trait PhotoStoreCollections {
     photoPlacesCollectionName,
     photoMiniaturesCollectionName,
     photoNormalizedCollectionName,
-    photoClassificationsCollectionName
+    photoClassificationsCollectionName,
+    photoObjectsCollectionName,
+    photoFacesCollectionName
   )
 }
 
@@ -39,7 +43,9 @@ class PhotoStoreServiceLive private (
   placesCollection: LMDBCollection[DaoPhotoPlace],
   miniaturesCollection: LMDBCollection[DaoMiniatures],
   normalizedCollection: LMDBCollection[DaoNormalizedPhoto],
-  classificationsCollection: LMDBCollection[DaoPhotoClassifications]
+  classificationsCollection: LMDBCollection[DaoPhotoClassifications],
+  objectsCollection: LMDBCollection[DaoPhotoObjects],
+  facesCollection: LMDBCollection[DaoPhotoFaces]
 ) extends PhotoStoreService {
 
   private def convertFailures: PartialFunction[StorageSystemError | StorageUserError, PhotoStoreIssue] = {
@@ -339,6 +345,118 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
+  def daoObjectsToObjects(from: Option[DaoPhotoObjects]): Option[PhotoObjects] = {
+    from.map(daoObjects =>
+      PhotoObjects(
+        objects = daoObjects.objects.map(that =>
+          DetectedObject(
+            name = that.name,
+            box = BoundingBox(
+              x = that.box.x,
+              y = that.box.y,
+              width = that.box.width,
+              height = that.box.height
+            )
+          )
+        )
+      )
+    )
+  }
+
+  def objectsToDaoObjects(from: PhotoObjects): DaoPhotoObjects = {
+    DaoPhotoObjects(
+      objects = from.objects.map(that =>
+        DaoDetectedObject(
+          name = that.name,
+          box = DaoBoundingBox(
+            x = that.box.x,
+            y = that.box.y,
+            width = that.box.width,
+            height = that.box.height
+          )
+        )
+      )
+    )
+  }
+
+  override def photoObjectsGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoObjects]] =
+    objectsCollection
+      .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, daoObjectsToObjects)
+
+  override def photoObjectsContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    objectsCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
+  override def photoObjectsUpsert(photoId: PhotoId, photoObjects: PhotoObjects): IO[PhotoStoreIssue, Unit] =
+    objectsCollection
+      .upsertOverwrite(photoIdToCollectionKey(photoId), objectsToDaoObjects(photoObjects))
+      .mapBoth(convertFailures, _ => ())
+
+  override def photoObjectsDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    objectsCollection
+      .delete(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _ => ())
+
+  // ===================================================================================================================
+  def daoFacesToFaces(from: Option[DaoPhotoFaces]): Option[PhotoFaces] = {
+    from.map(daoFaces =>
+      PhotoFaces(
+        count = daoFaces.count,
+        faces = daoFaces.faces.map(that =>
+          DetectedFace(
+            someoneId = that.someoneId.map(id => SomeoneId(ULID.fromString(id))),
+            box = BoundingBox(
+              x = that.box.x,
+              y = that.box.y,
+              width = that.box.width,
+              height = that.box.height
+            )
+          )
+        )
+      )
+    )
+  }
+
+  def facesToDaoFaces(from: PhotoFaces): DaoPhotoFaces = {
+    DaoPhotoFaces(
+      count = from.count,
+      faces = from.faces.map(that =>
+        DaoDetectedFace(
+          someoneId = that.someoneId.map(_.toString),
+          box = DaoBoundingBox(
+            x = that.box.x,
+            y = that.box.y,
+            width = that.box.width,
+            height = that.box.height
+          )
+        )
+      )
+    )
+  }
+
+  override def photoFacesGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoFaces]] =
+    facesCollection
+      .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, daoFacesToFaces)
+
+  override def photoFacesContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    facesCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
+  override def photoFacesUpsert(photoId: PhotoId, photoFaces: PhotoFaces): IO[PhotoStoreIssue, Unit] =
+    facesCollection
+      .upsertOverwrite(photoIdToCollectionKey(photoId), facesToDaoFaces(photoFaces))
+      .mapBoth(convertFailures, _ => ())
+
+  override def photoFacesDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    facesCollection
+      .delete(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _ => ())
+
+  // ===================================================================================================================
 }
 
 object PhotoStoreServiceLive extends PhotoStoreCollections {
@@ -352,6 +470,8 @@ object PhotoStoreServiceLive extends PhotoStoreCollections {
     miniaturesCollection      <- lmdb.collectionGet[DaoMiniatures](photoMiniaturesCollectionName)
     normalizedCollection      <- lmdb.collectionGet[DaoNormalizedPhoto](photoNormalizedCollectionName)
     classificationsCollection <- lmdb.collectionGet[DaoPhotoClassifications](photoClassificationsCollectionName)
+    objectsCollection         <- lmdb.collectionGet[DaoPhotoObjects](photoObjectsCollectionName)
+    facesCollection           <- lmdb.collectionGet[DaoPhotoFaces](photoFacesCollectionName)
   } yield PhotoStoreServiceLive(
     lmdb,
     statesCollection,
@@ -360,6 +480,8 @@ object PhotoStoreServiceLive extends PhotoStoreCollections {
     placesCollection,
     miniaturesCollection,
     normalizedCollection,
-    classificationsCollection
+    classificationsCollection,
+    objectsCollection,
+    facesCollection
   )
 }

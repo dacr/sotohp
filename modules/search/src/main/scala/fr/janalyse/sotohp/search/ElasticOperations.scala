@@ -6,7 +6,7 @@ import zio.stream.*
 
 import java.time.OffsetDateTime
 
-case class ElasticOperations(config:SearchEngineConfig) {
+case class ElasticOperations(config: SearchServiceConfig) {
   import com.sksamuel.elastic4s.zio.instances.*
   import com.sksamuel.elastic4s.ziojson.*
   import com.sksamuel.elastic4s.{ElasticClient, ElasticProperties}
@@ -126,9 +126,10 @@ case class ElasticOperations(config:SearchEngineConfig) {
     }
     val upsertEffect   = for {
       response <- responseEffect
+                    .mapError(err => List(err))
       failures  = response.result.failures.flatMap(_.error).map(_.toString)
       _        <- ZIO.log(s"${if (response.isSuccess) "Upserted" else "Failed to upsert"} ${documents.size} into elasticsearch")
-      _        <- ZIO.cond(response.isSuccess, (), failures.mkString("\n"))
+      _        <- ZIO.cond(response.isSuccess, (), failures.map(err => Exception(err)))
     } yield ()
     upsertEffect.timeout(timeout).retry(retrySchedule)
   }

@@ -12,10 +12,10 @@ scmInfo := Some(
 )
 
 val versions = new {
-  val zio       = "2.0.15"
+  val zio       = "2.0.16"
 //  val zionio     = "2.0.1"
   val zioconfig = "4.0.0-RC16"
-  val ziojson   = "0.6.0"
+  val ziojson   = "0.6.1"
 //  val ziologging = "2.1.13"
   val ziolmdb   = "1.3.0"
 //  val tapir      = "1.5.0"
@@ -129,10 +129,13 @@ lazy val userInterfacesCLI =
       fork := true,
       javaOptions ++= Seq("--add-opens", "java.base/java.nio=ALL-UNNAMED", "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"),
       libraryDependencies ++= Seq(
-        "dev.zio" %% "zio"                 % versions.zio,
-        "dev.zio" %% "zio-config"          % versions.zioconfig,
-        "dev.zio" %% "zio-config-typesafe" % versions.zioconfig,
-        "dev.zio" %% "zio-config-magnolia" % versions.zioconfig
+        "dev.zio" %% "zio"                       % versions.zio,
+        "dev.zio" %% "zio-config"                % versions.zioconfig,
+        "dev.zio" %% "zio-config-typesafe"       % versions.zioconfig,
+        "dev.zio" %% "zio-config-magnolia"       % versions.zioconfig,
+        "dev.zio" %% "zio-logging"               % "2.1.14", // Temporary
+        "dev.zio" %% "zio-logging-slf4j2-bridge" % "2.1.14"  // Temporary
+        // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
       )
     )
 

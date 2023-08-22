@@ -1,11 +1,13 @@
 package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.OriginalsStream
-import fr.janalyse.sotohp.processor.{MiniaturizeProcessor, NormalizeProcessor, ContentAnalyzerProcessor}
+import fr.janalyse.sotohp.processor.{ClassificationProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
+import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
+import zio.logging.slf4j.bridge.Slf4jBridge
 
 object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
 
@@ -17,20 +19,28 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
       .provide(
         LMDB.liveWithDatabaseName("photos"),
         PhotoStoreService.live,
-        Scope.default
+        SearchService.live,
+        Scope.default,
+        Slf4jBridge.initialize
       )
 
   val logic = ZIO.logSpan("synchronizeAndProcess") {
     for {
-      _               <- ZIO.logInfo("start photos synchronization and processing")
-      searchRoots     <- getSearchRoots
-      processingStream = OriginalsStream
-                           .photoStream(searchRoots)
-                           .mapZIOParUnordered(4)(NormalizeProcessor.normalize)
-                           .mapZIOParUnordered(4)(MiniaturizeProcessor.miniaturize)
-                           //.map(ContentAnalyzerDaemon.analyze)
-      count           <- processingStream.runCount
-      _               <- ZIO.logInfo(s"found $count photos")
+      _                        <- ZIO.logInfo("start photos synchronization and processing")
+      searchRoots              <- getSearchRoots
+      classificationProcessor   = ClassificationProcessor.allocate()
+      objectsDetectionProcessor = ObjectsDetectionProcessor.allocate()
+      processingStream          = OriginalsStream
+                                    .photoStream(searchRoots)
+                                    .mapZIOParUnordered(4)(NormalizeProcessor.normalize)
+                                    .mapZIOParUnordered(4)(MiniaturizeProcessor.miniaturize)
+                                    .mapZIO(classificationProcessor.analyze)
+                                    .mapZIO(objectsDetectionProcessor.analyze)
+                                    .grouped(500)
+                                    .mapZIO(photos => SearchService.publish(photos))
+                                    .map(_.size)
+      count                    <- processingStream.runSum
+      _                        <- ZIO.logInfo(s"found $count photos")
     } yield ()
   }
 }
