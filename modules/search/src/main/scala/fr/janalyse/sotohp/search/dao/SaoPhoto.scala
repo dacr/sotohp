@@ -4,6 +4,7 @@ import zio.json.JsonCodec
 import fr.janalyse.sotohp.model.Photo
 
 import java.time.OffsetDateTime
+import scala.util.matching.Regex
 
 // SearchAccessObject GeoPoint
 case class SaoGeoPoint(
@@ -30,6 +31,168 @@ case class SaoPhoto(
 ) derives JsonCodec
 
 object SaoPhoto {
+  // ------------------------------------------
+  // TODO temporary keyword extraction from category
+  def camelTokenize(that: String): Array[String] = that.split("(?=[A-Z][^A-Z])|(?:(?<=[^A-Z])(?=[A-Z]+))")
+
+  def camelToKebabCase(that: String): String = camelTokenize(that).map(_.toLowerCase).mkString("-")
+
+  val excludes = Set(
+    "a",
+    "all",
+    "and",
+    "apple",
+    "archive",
+    "au",
+    "aux",
+    "avec",
+    "backup",
+    "co",
+    "d",
+    "dans",
+    "de",
+    "des",
+    "du",
+    "en",
+    "end",
+    "et",
+    "fin",
+    "htc",
+    "iphone",
+    "la",
+    "le",
+    "les",
+    "nexus",
+    "of",
+    "ou",
+    "par",
+    "photo",
+    "photos",
+    "pour",
+    "puis",
+    "semaine1",
+    "semaine2",
+    "shootings",
+    "sur",
+    "week",
+    "à",
+    "chez"
+  )
+
+  val fixes = List(
+    "(?i)(\\d+) ans"                  -> "$1ans",
+    "(?i)weenprovence"                -> "weekend en provence",
+    "(?i)montstmichelparbrieuc"       -> "mont saintmichel par brieuc",
+    "(?i)westmaloetperenoelplouasne"  -> "weekend saintmalo et père noël plouasne",
+    "(?i)stmalo"                      -> "saintmalo",
+    "(?i)saint malo"                  -> "saintmalo",
+    "(?i)montstmichel"                -> "mont saintmichel",
+    "(?i)weenprovence"                -> "weekend en provence",
+    "(?i)DiversEtWEMarne"             -> "divers et weekend marne",
+    "(?i)wemarne"                     -> "weekend marne",
+    "(?i)f[eè]reChampenois$"          -> "fèrechampenoise",
+    "(?i)week-end"                    -> "weekend",
+    "(?i)gr34"                        -> "gr34",
+    "(?i)le mans musée 24 heures"     -> "lemans musée 24heures",
+    "(?i)NOELs"                       -> "noël",
+    "(?i)WE-Fere$"                    -> "weekend fèrechampenoise",
+    "(?i)-WEFere$"                    -> "weekend fèrechampenoise",
+    "(?i)VacancesLauLauManuPlouasne$" -> "Vacances laurence manu plouasne",
+    "(?i)saint Jean de Belleville"    -> "saintjeandebelleville",
+    "(?i)Saint Martin de Belleville"  -> "saintmartindebelleville",
+    "(?i)Saint Cloud"                 -> "saintcloud",
+    "(?i)Saint Brieuc"                -> "saintbrieuc",
+    "(?i)Saint Jean"                  -> "saintjean",
+    "(?i)saint-cast-le-guildo"        -> "saintcastleguildo",
+    "(?i)saint briac sur mer"         -> "saintbriacsurmer",
+    "(?i)Saint-Michel"                -> "saintmichel",
+    "(?i)saint Mathieu"               -> "saintmathieu",
+    "(?i)saint germain"               -> "saintgermain",
+    "(?i)saint lunaire"               -> "saintlunaire",
+    "(?i)Saint Pern"                  -> "saintpern",
+    "(?i)sainte suzanne"              -> "saintesuzanne",
+    "(?i)WeekEndPlageSaintMalo"       -> "weekend plage saintmalo",
+    "(?i)Noel2006$"                   -> "noël",
+    "(?i)Sezanne ParChrist"           -> "sézanne par christiane",
+    "(?i)HTC DESIRE C"                -> "",
+    "(?i)Anniversaire 50 balais$"     -> "anniversaire 50ans david",
+    "(?i)WE-EloiseJeJe *"             -> "weekend éloise",
+    "(?i)intranode-birthdayII"        -> "intranode birthday",
+    "(?i)experiences 5d m4"           -> "experiences 5dmark4",
+    "(?i)WE10ansCooperants"           -> "weekend 10ans coopérants"
+  ).map { case (pattern, replacement) => pattern.r -> replacement }
+
+  val remap = Map(
+    "adelaide"      -> "adélaïde",
+    "agnes"         -> "agnès",
+    "annee"         -> "année",
+    "annees"        -> "année",
+    "anniv"         -> "anniversaire",
+    "anniversaires" -> "anniversaire",
+    "annivs"        -> "anniversaire",
+    "bapteme"       -> "baptême",
+    "betineuc"      -> "bétineuc",
+    "chats"         -> "chat",
+    "chiens"        -> "chien",
+    "christianne"   -> "christiane",
+    "eloise"        -> "éloise",
+    "ete"           -> "été",
+    "fete"          -> "fête",
+    "fete"          -> "fête",
+    "fetes"         -> "fête",
+    "fred"          -> "frédéric",
+    "juju"          -> "julien",
+    "lolo"          -> "éloise",
+    "maelys"        -> "maëlys",
+    "menuires"      -> "ménuires",
+    "neal"          -> "néal",
+    "noel"          -> "noël",
+    "noels"         -> "noël",
+    "paques"        -> "pâques",
+    "pere"          -> "père",
+    "rando"         -> "randonnée",
+    "randonnées"    -> "randonnée",
+    "reveillon"     -> "réveillon",
+    "seb"           -> "sébastien",
+    "sebastien"     -> "sébastien",
+    "sezanne"       -> "sézanne",
+    "skis"          -> "ski",
+    "steph"         -> "stéphanie",
+    "vaches"        -> "vache",
+    "velo"          -> "vélo",
+    "we"            -> "weekend",
+    "broceliande"   -> "brocéliande",
+    "baskets"       -> "basket",
+    "balades"       -> "balade"
+  )
+
+  def applyFixes(fixes: List[(Regex, String)], input: String): String = {
+    fixes match {
+      case Nil                            => input
+      case (regex, replacement) :: remain => applyFixes(remain, regex.replaceAllIn(input, replacement))
+    }
+  }
+
+  def extractKeywords(input: Option[String]): List[String] =
+    input match {
+      case None           => Nil
+      case Some(category) =>
+        applyFixes(fixes, category)
+          .split("[- /,]+")
+          .toList
+          .filter(_.size > 0)
+          .filterNot(_.contains("'"))
+          .flatMap(key => camelToKebabCase(key).split("-"))
+          .map(token => remap.get(token.toLowerCase).getOrElse(token))
+          .flatMap(_.split("[- ]+"))
+          .filter(_.trim.size > 0)
+          .filterNot(_.matches("^[0-9]+$"))
+          .map(_.toLowerCase)
+          .filter(_.size > 1)
+          .filterNot(key => excludes.contains(key))
+    }
+  // ------------------------------------------
+
   def fromPhoto(photo: Photo): SaoPhoto = {
     SaoPhoto(
       id = photo.source.photoId.id.toString,
@@ -42,7 +205,8 @@ object SaoPhoto {
       shootDateTime = photo.metaData.flatMap(_.shootDateTime),
       camera = photo.metaData.flatMap(_.cameraName),
       // tags = photo.metaData.map(_.tags).getOrElse(Map.empty),
-      keywords = photo.description.map(_.keywords.toList).getOrElse(Nil),
+      // keywords = photo.description.map(_.keywords.toList).getOrElse(Nil),
+      keywords = extractKeywords(photo.category.map(_.text)), // TODO temporary keyword extraction from category
       classifications = photo.foundClassifications.map(_.classifications.map(_.name).distinct).getOrElse(Nil),
       detectedObjects = photo.foundObjects.map(_.objects.map(_.name).distinct).getOrElse(Nil),
       place = photo.place.map(place => SaoGeoPoint(lat = place.latitude.doubleValue, lon = place.longitude.doubleValue))

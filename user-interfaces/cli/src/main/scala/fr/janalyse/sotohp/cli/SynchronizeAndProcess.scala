@@ -30,7 +30,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
       searchRoots              <- getSearchRoots
       classificationProcessor   = ClassificationProcessor.allocate()
       objectsDetectionProcessor = ObjectsDetectionProcessor.allocate()
-      facesProcessor            = FacesProcessor.allocate()
+      //facesProcessor            = FacesProcessor.allocate()
       processingStream          = OriginalsStream
                                     .photoStream(searchRoots)
                                     .mapZIOParUnordered(4)(NormalizeProcessor.normalize) // First ! as normalized photos will accelerate next steps
