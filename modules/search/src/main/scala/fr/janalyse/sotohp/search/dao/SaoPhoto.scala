@@ -68,6 +68,7 @@ object SaoPhoto {
     "par",
     "photo",
     "photos",
+    "photos_",
     "pour",
     "puis",
     "semaine1",
@@ -76,7 +77,9 @@ object SaoPhoto {
     "sur",
     "week",
     "à",
-    "chez"
+    "chez",
+    "notre",
+    "100nikon"
   )
 
   val fixes = List(
@@ -96,7 +99,8 @@ object SaoPhoto {
     "(?i)le mans musée 24 heures"     -> "lemans musée 24heures",
     "(?i)NOELs"                       -> "noël",
     "(?i)WE-Fere$"                    -> "weekend fèrechampenoise",
-    "(?i)-WEFere$"                    -> "weekend fèrechampenoise",
+    "(?i)WEFere$"                    -> "weekend fèrechampenoise",
+    "(?i)WE-FereChampenoise$"        -> "weekend fèrechampenoise",
     "(?i)VacancesLauLauManuPlouasne$" -> "Vacances laurence manu plouasne",
     "(?i)saint Jean de Belleville"    -> "saintjeandebelleville",
     "(?i)Saint Martin de Belleville"  -> "saintmartindebelleville",
@@ -119,7 +123,12 @@ object SaoPhoto {
     "(?i)WE-EloiseJeJe *"             -> "weekend éloise",
     "(?i)intranode-birthdayII"        -> "intranode birthday",
     "(?i)experiences 5d m4"           -> "experiences 5dmark4",
-    "(?i)WE10ansCooperants"           -> "weekend 10ans coopérants"
+    "(?i)WE10ansCooperants"           -> "weekend 10ans coopérants",
+    "(?i)Jerem30ans-et-Paques"        -> "jérémy 30ans pâques",
+    "(?i)DiverEtWEParents"            -> "divers weekend parents",
+    "(?i)VIDEO-DIVERS1"               -> "vidéo divers",
+    "(?i)WE AIN Cooperant 17ans"      -> "weekend ain coopérants 17ans",
+    "(?i)AnniversaireBrieuc1an"       -> "anniversaire brieuc 1an"
   ).map { case (pattern, replacement) => pattern.r -> replacement }
 
   val remap = Map(
@@ -163,7 +172,18 @@ object SaoPhoto {
     "we"            -> "weekend",
     "broceliande"   -> "brocéliande",
     "baskets"       -> "basket",
-    "balades"       -> "balade"
+    "balades"       -> "balade",
+    "soiree"        -> "soirée",
+    "sebast"        -> "sébastien",
+    "operation"     -> "opération",
+    "newscraft"     -> "newcrafts",
+    "naissance1"    -> "naissance",
+    "naissance2"    -> "naissance",
+    "musee"         -> "musée",
+    "maude"         -> "maud",
+    "kermess"       -> "kermesse",
+    "jerem"         -> "jérémy",
+    "adelaïde"      -> "adélaïde"
   )
 
   def applyFixes(fixes: List[(Regex, String)], input: String): String = {
