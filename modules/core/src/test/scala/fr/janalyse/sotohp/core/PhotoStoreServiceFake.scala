@@ -4,6 +4,7 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.store.*
 import zio.*
 import zio.ZIO.*
+import zio.stream.*
 
 class PhotoStoreServiceFake(
   statesCollectionRef: Ref[Map[PhotoId, PhotoState]],
@@ -22,6 +23,13 @@ class PhotoStoreServiceFake(
   override def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = for {
     collection <- statesCollectionRef.get
   } yield collection.get(photoId)
+
+  override def photoStateStream(): ZStream[Any, PhotoStoreIssue, PhotoState] = {
+    val wrappedStream = for {
+      collection <- statesCollectionRef.get
+    } yield ZStream.from(collection.values)
+    ZStream.unwrap(wrappedStream)
+  }
 
   override def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] = for {
     collection <- statesCollectionRef.get

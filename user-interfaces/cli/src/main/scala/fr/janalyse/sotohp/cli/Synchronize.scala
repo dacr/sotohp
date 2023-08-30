@@ -23,7 +23,7 @@ object Synchronize extends ZIOAppDefault with CommonsCLI {
     for {
       _           <- ZIO.logInfo("photos synchronization")
       searchRoots <- getSearchRoots
-      originals    = OriginalsStream.photoStream(searchRoots)
+      originals    = OriginalsStream.photoFromOriginalStream(searchRoots)
       count       <- originals.runCount
       _           <- ZIO.logInfo(s"Synchronization done - found $count photos")
       // photoFiles         <- originals.map(_.source.photoPath.toString).runCollect

@@ -19,7 +19,7 @@ object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
       test("collect original photos with flat dataset") {
         for {
           photoSearchFileRoot <- from(PhotoSearchRoot.build(photoOwnerId, dataset1.toString))
-          originalsStream      = photoStream(List(photoSearchFileRoot))
+          originalsStream      = photoFromOriginalStream(List(photoSearchFileRoot))
           photos              <- originalsStream.runCollect
           photoFileSources     = photos.map(_.source)
           photoFilePaths       = photoFileSources.map(_.original.path)
@@ -33,7 +33,7 @@ object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
       test("collect original photos with tree dataset") {
         for {
           photoSearchFileRoot <- from(PhotoSearchRoot.build(photoOwnerId, dataset2.toString))
-          originalsStream      = photoStream(List(photoSearchFileRoot))
+          originalsStream      = photoFromOriginalStream(List(photoSearchFileRoot))
           photos              <- originalsStream.runCollect
           photoFileSources     = photos.map(_.source)
           photoFilePaths       = photoFileSources.map(_.original.path)

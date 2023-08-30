@@ -213,18 +213,21 @@ object PhotoOperations {
     )
   }
 
-  private def setupPhotoInitialState(photoSource: PhotoSource): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = {
+  private def setupPhotoInitialState(originalId: OriginalId, photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = {
     for {
       currentDateTime <- Clock.currentDateTime
       state            = PhotoState(
-                           photoId = photoSource.photoId,
-                           photoHash = photoSource.fileHash,
+                           photoId = photo.source.photoId,
+                           originalId = originalId,
+                           photoHash = photo.source.fileHash,
+                           photoOwnerId = photo.source.original.ownerId,
+                           photoTimestamp = photo.timestamp,
                            firstSeen = currentDateTime,
                            lastSeen = currentDateTime,
                            lastUpdated = currentDateTime,
-                           originalAddedOn = photoSource.fileLastModified
+                           originalAddedOn = photo.source.fileLastModified
                          )
-      _               <- PhotoStoreService.photoStateUpsert(photoSource.photoId, state)
+      _               <- PhotoStoreService.photoStateUpsert(photo.source.photoId, state)
     } yield ()
   }
 
@@ -253,17 +256,16 @@ object PhotoOperations {
       _              <- PhotoStoreService.photoSourceUpsert(originalId, photoSource)
       _              <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
       _              <- ZIO.foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
-      _              <- setupPhotoInitialState(photoSource)
+      photo           = Photo(
+                          timestamp = photoTimestamp,
+                          source = photoSource,
+                          metaData = Some(photoMetaData),
+                          place = foundPlace,
+                          category = photoCategory
+                        )
+      _              <- setupPhotoInitialState(originalId, photo)
       _              <- ZIO.logInfo(s"New photo found $photoTimestamp - ${photoMetaData.shootDateTime}")
-    } yield {
-      Photo(
-        timestamp = photoTimestamp,
-        source = photoSource,
-        metaData = Some(photoMetaData),
-        place = foundPlace,
-        category = photoCategory
-      )
-    }
+    } yield photo
   }
 
   private def makePhotoFromStore(
@@ -316,5 +318,28 @@ object PhotoOperations {
     makeIt.uninterruptible
       @@ annotated("originalPath" -> original.path.toString)
       @@ annotated("ownerId" -> original.ownerId.toString)
+  }
+
+  def makePhotoFromStoredState(state: PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue | NotFoundInStore, Photo] = {
+    val photoId    = state.photoId
+    val originalId = state.originalId
+    for {
+      photoSource     <- PhotoStoreService.photoSourceGet(originalId).someOrFail(NotFoundInStore("Photo source not found", state.photoId.toString()))
+      photoMetaData   <- PhotoStoreService.photoMetaDataGet(photoId)
+      photoPlace      <- PhotoStoreService.photoPlaceGet(photoId)
+      miniatures      <- PhotoStoreService.photoMiniaturesGet(photoId)
+      normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
+    } yield {
+      Photo(
+        timestamp = state.photoTimestamp,
+        source = photoSource,
+        metaData = photoMetaData,
+        place = photoPlace,
+        // category = photoCategory,
+        category = ???, // TODO to be continued
+        miniatures = miniatures,
+        normalized = normalizedPhoto
+      )
+    }
   }
 }

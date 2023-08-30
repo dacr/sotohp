@@ -23,7 +23,7 @@ object Normalize extends ZIOAppDefault with CommonsCLI {
   val logic = ZIO.logSpan("normalize") {
     for {
       searchRoots <- getSearchRoots
-      originals    = OriginalsStream.photoStream(searchRoots)
+      originals    = OriginalsStream.photoFromOriginalStream(searchRoots)
       _           <- originals.mapZIO(NormalizeProcessor.normalize).runDrain
       _           <- ZIO.logInfo("Normalization done")
     } yield ()

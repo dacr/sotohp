@@ -61,7 +61,7 @@ object OriginalsStream {
   type PhotoStreamIssues = StreamIOIssue | PhotoFileIssue | PhotoStoreIssue | NotFoundInStore
   type PhotoStream       = ZStream[PhotoStoreService, PhotoStreamIssues, Photo]
 
-  def photoStream(searchRoots: List[PhotoSearchRoot]): PhotoStream = {
+  def photoFromOriginalStream(searchRoots: List[PhotoSearchRoot]): PhotoStream = {
     originalStream(searchRoots).mapZIO(makePhoto)
   }
 

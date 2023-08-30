@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.model.DecimalDegrees.*
 import fr.janalyse.sotohp.store.dao.*
 import wvlet.airframe.ulid.ULID
 import zio.*
+import zio.stream.*
 import zio.ZIO.*
 import zio.lmdb.*
 
@@ -57,23 +58,27 @@ class PhotoStoreServiceLive private (
   private def originalIdToCollectionKey(originalId: OriginalId): String = originalId.id.toString
 
   // ===================================================================================================================
-  def daoStateToState(from: Option[DaoPhotoState]): Option[PhotoState] = {
-    from.map(daoState =>
-      PhotoState(
-        photoId = PhotoId(ULID(daoState.photoId)),
-        photoHash = PhotoHash(daoState.photoHash),
-        lastSeen = daoState.lastSynchronized,
-        lastUpdated = daoState.lastUpdated,
-        firstSeen = daoState.firstSeen,
-        originalAddedOn = daoState.originalAddedOn
-      )
+  def daoStateToState(from: DaoPhotoState): PhotoState = {
+    PhotoState(
+      photoId = PhotoId(ULID(from.photoId)),
+      originalId = OriginalId(UUID.fromString(from.originalId)),
+      photoHash = PhotoHash(from.photoHash),
+      photoOwnerId = PhotoOwnerId(ULID.fromString(from.photoOwnerId)),
+      photoTimestamp = from.photoTimestamp,
+      lastSeen = from.lastSynchronized,
+      lastUpdated = from.lastUpdated,
+      firstSeen = from.firstSeen,
+      originalAddedOn = from.originalAddedOn
     )
   }
 
   def stateToDaoState(from: PhotoState): DaoPhotoState = {
     DaoPhotoState(
       photoId = from.photoId.id.toString,
+      originalId = from.originalId.id.toString,
       photoHash = from.photoHash.code,
+      photoOwnerId = from.photoOwnerId.toString,
+      photoTimestamp = from.photoTimestamp,
       lastSynchronized = from.lastSeen,
       lastUpdated = from.lastUpdated,
       firstSeen = from.firstSeen,
@@ -84,6 +89,11 @@ class PhotoStoreServiceLive private (
   override def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] =
     statesCollection
       .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, found => found.map(daoStateToState))
+
+  override def photoStateStream(): ZStream[Any, PhotoStoreIssue, PhotoState] =
+    statesCollection
+      .stream()
       .mapBoth(convertFailures, daoStateToState)
 
   override def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =

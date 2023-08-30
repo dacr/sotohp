@@ -2,6 +2,7 @@ package fr.janalyse.sotohp.store
 
 import fr.janalyse.sotohp.model.*
 import zio.*
+import zio.stream.*
 import zio.ZIO.*
 import zio.lmdb.*
 
@@ -13,6 +14,7 @@ type LMDBIssues      = StorageUserError | StorageSystemError
 trait PhotoStoreService {
   // photo states collection
   def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
+  def photoStateStream(): ZStream[Any, PhotoStoreIssue, PhotoState]
   def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean]
   def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit]
   def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
@@ -69,6 +71,7 @@ trait PhotoStoreService {
 
 object PhotoStoreService {
   def photoStateGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoState]]              = serviceWithZIO(_.photoStateGet(photoId))
+  def photoStateStream(): ZStream[PhotoStoreService, PhotoStoreIssue, PhotoState]                               = ZStream.serviceWithStream(_.photoStateStream())
   def photoStateContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                    = serviceWithZIO(_.photoStateContains(photoId))
   def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoStateUpsert(photoId, photoState))
   def photoStateDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                         = serviceWithZIO(_.photoStateDelete(photoId))

@@ -128,7 +128,8 @@ object SaoPhoto {
     "(?i)DiverEtWEParents"            -> "divers weekend parents",
     "(?i)VIDEO-DIVERS1"               -> "vidéo divers",
     "(?i)WE AIN Cooperant 17ans"      -> "weekend ain coopérants 17ans",
-    "(?i)AnniversaireBrieuc1an"       -> "anniversaire brieuc 1an"
+    "(?i)AnniversaireBrieuc1an"       -> "anniversaire brieuc 1an",
+    "(?i)2023-08-11harry"             -> "2023-08-11 harry"
   ).map { case (pattern, replacement) => pattern.r -> replacement }
 
   val remap = Map(
