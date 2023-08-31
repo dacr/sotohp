@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.model.DecimalDegrees.*
 import fr.janalyse.sotohp.store.dao.*
 import wvlet.airframe.ulid.ULID
 import zio.*
+import zio.stream.*
 import zio.ZIO.*
 import zio.lmdb.*
 
@@ -21,6 +22,7 @@ trait PhotoStoreCollections {
   val photoClassificationsCollectionName = "photo-classifications"
   val photoObjectsCollectionName         = "photo-objects"
   val photoFacesCollectionName           = "photo-faces"
+  val photoDescriptionsCollectionName    = "photo-descriptions"
 
   val allCollections = List(
     photoStatesCollectionName,
@@ -31,7 +33,8 @@ trait PhotoStoreCollections {
     photoNormalizedCollectionName,
     photoClassificationsCollectionName,
     photoObjectsCollectionName,
-    photoFacesCollectionName
+    photoFacesCollectionName,
+    photoDescriptionsCollectionName
   )
 }
 
@@ -45,7 +48,8 @@ class PhotoStoreServiceLive private (
   normalizedCollection: LMDBCollection[DaoNormalizedPhoto],
   classificationsCollection: LMDBCollection[DaoPhotoClassifications],
   objectsCollection: LMDBCollection[DaoPhotoObjects],
-  facesCollection: LMDBCollection[DaoPhotoFaces]
+  facesCollection: LMDBCollection[DaoPhotoFaces],
+  descriptionsCollection: LMDBCollection[DaoPhotoDescription]
 ) extends PhotoStoreService {
 
   private def convertFailures: PartialFunction[StorageSystemError | StorageUserError, PhotoStoreIssue] = {
@@ -57,33 +61,38 @@ class PhotoStoreServiceLive private (
   private def originalIdToCollectionKey(originalId: OriginalId): String = originalId.id.toString
 
   // ===================================================================================================================
-  def daoStateToState(from: Option[DaoPhotoState]): Option[PhotoState] = {
-    from.map(daoState =>
-      PhotoState(
-        photoId = PhotoId(ULID(daoState.photoId)),
-        photoHash = PhotoHash(daoState.photoHash),
-        lastSeen = daoState.lastSynchronized,
-        lastUpdated = daoState.lastUpdated,
-        firstSeen = daoState.firstSeen,
-        originalAddedOn = daoState.originalAddedOn
-      )
+  def daoStateToState(from: DaoPhotoState): PhotoState = {
+    PhotoState(
+      photoId = PhotoId(ULID(from.photoId)),
+      originalId = OriginalId(UUID.fromString(from.originalId)),
+      photoHash = PhotoHash(from.photoHash),
+      photoOwnerId = PhotoOwnerId(ULID.fromString(from.photoOwnerId)),
+      photoTimestamp = from.photoTimestamp,
+      lastSeen = from.lastSeen,
+      firstSeen = from.firstSeen
     )
   }
 
   def stateToDaoState(from: PhotoState): DaoPhotoState = {
     DaoPhotoState(
       photoId = from.photoId.id.toString,
+      originalId = from.originalId.id.toString,
       photoHash = from.photoHash.code,
-      lastSynchronized = from.lastSeen,
-      lastUpdated = from.lastUpdated,
-      firstSeen = from.firstSeen,
-      originalAddedOn = from.originalAddedOn
+      photoOwnerId = from.photoOwnerId.toString,
+      photoTimestamp = from.photoTimestamp,
+      lastSeen = from.lastSeen,
+      firstSeen = from.firstSeen
     )
   }
 
   override def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] =
     statesCollection
       .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, found => found.map(daoStateToState))
+
+  override def photoStateStream(): ZStream[Any, PhotoStoreIssue, PhotoState] =
+    statesCollection
+      .stream()
       .mapBoth(convertFailures, daoStateToState)
 
   override def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
@@ -459,6 +468,43 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
+  def daoDescriptionToDescription(from: DaoPhotoDescription): PhotoDescription = {
+      PhotoDescription(
+        text = from.text,
+        category = from.category.map(PhotoCategory.apply),
+        keywords = from.keywords.map(keywords => keywords.map(PhotoKeyword.apply))
+    )
+  }
+
+  def descriptionsToDaoDescription(from: PhotoDescription): DaoPhotoDescription = {
+    DaoPhotoDescription(
+      text = from.text,
+      category = from.category.map(_.text),
+      keywords = from.keywords.map(keywords => keywords.map(_.text))
+    )
+  }
+
+  override def photoDescriptionGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoDescription]] =
+    descriptionsCollection
+      .fetch(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _.map(daoDescriptionToDescription))
+
+  override def photoDescriptionContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
+    descriptionsCollection
+      .contains(photoIdToCollectionKey(photoId))
+      .mapError(convertFailures)
+
+  override def photoDescriptionUpsert(photoId: PhotoId, photoDescription: PhotoDescription): IO[PhotoStoreIssue, Unit] =
+    descriptionsCollection
+      .upsertOverwrite(photoIdToCollectionKey(photoId), descriptionsToDaoDescription(photoDescription))
+      .mapBoth(convertFailures, _ => ())
+
+  override def photoDescriptionDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    descriptionsCollection
+      .delete(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _ => ())
+
+  // ===================================================================================================================
 }
 
 object PhotoStoreServiceLive extends PhotoStoreCollections {
@@ -474,6 +520,7 @@ object PhotoStoreServiceLive extends PhotoStoreCollections {
     classificationsCollection <- lmdb.collectionGet[DaoPhotoClassifications](photoClassificationsCollectionName)
     objectsCollection         <- lmdb.collectionGet[DaoPhotoObjects](photoObjectsCollectionName)
     facesCollection           <- lmdb.collectionGet[DaoPhotoFaces](photoFacesCollectionName)
+    descriptionsCollection    <- lmdb.collectionGet[DaoPhotoDescription](photoDescriptionsCollectionName)
   } yield PhotoStoreServiceLive(
     lmdb,
     statesCollection,
@@ -484,6 +531,7 @@ object PhotoStoreServiceLive extends PhotoStoreCollections {
     normalizedCollection,
     classificationsCollection,
     objectsCollection,
-    facesCollection
+    facesCollection,
+    descriptionsCollection
   )
 }

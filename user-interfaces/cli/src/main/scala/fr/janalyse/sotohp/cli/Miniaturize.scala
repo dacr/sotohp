@@ -23,7 +23,7 @@ object Miniaturize extends ZIOAppDefault with CommonsCLI {
   val logic = ZIO.logSpan("miniaturize") {
     for {
       searchRoots <- getSearchRoots
-      originals    = OriginalsStream.photoStream(searchRoots)
+      originals    = OriginalsStream.photoFromOriginalStream(searchRoots)
       _           <- originals.mapZIO(MiniaturizeProcessor.miniaturize).runDrain
       _           <- ZIO.logInfo("Miniaturization done")
     } yield ()

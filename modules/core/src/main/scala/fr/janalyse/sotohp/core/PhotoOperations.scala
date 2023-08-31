@@ -213,18 +213,19 @@ object PhotoOperations {
     )
   }
 
-  private def setupPhotoInitialState(photoSource: PhotoSource): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = {
+  private def setupPhotoInitialState(originalId: OriginalId, photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = {
     for {
       currentDateTime <- Clock.currentDateTime
       state            = PhotoState(
-                           photoId = photoSource.photoId,
-                           photoHash = photoSource.fileHash,
+                           photoId = photo.source.photoId,
+                           originalId = originalId,
+                           photoHash = photo.source.fileHash,
+                           photoOwnerId = photo.source.original.ownerId,
+                           photoTimestamp = photo.timestamp,
                            firstSeen = currentDateTime,
-                           lastSeen = currentDateTime,
-                           lastUpdated = currentDateTime,
-                           originalAddedOn = photoSource.fileLastModified
+                           lastSeen = currentDateTime
                          )
-      _               <- PhotoStoreService.photoStateUpsert(photoSource.photoId, state)
+      _               <- PhotoStoreService.photoStateUpsert(photo.source.photoId, state)
     } yield ()
   }
 
@@ -243,27 +244,28 @@ object PhotoOperations {
   private def makePhotoFromFile(original: Original): ZIO[PhotoStoreService, PhotoStoreIssue | PhotoFileIssue, Photo] = {
     val originalId = buildOriginalId(original)
     for {
-      drewMetadata   <- readDrewMetadata(original.path)
-      photoMetaData   = buildPhotoMetaData(drewMetadata)
-      photoTimestamp <- computePhotoTimestamp(original, photoMetaData)
-      photoId         = buildPhotoId(photoTimestamp)
-      photoSource    <- buildPhotoSource(photoId, original)
-      foundPlace      = extractPlace(drewMetadata)
-      photoCategory   = buildPhotoCategory(original.baseDirectory, original.path)
-      _              <- PhotoStoreService.photoSourceUpsert(originalId, photoSource)
-      _              <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
-      _              <- ZIO.foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
-      _              <- setupPhotoInitialState(photoSource)
-      _              <- ZIO.logInfo(s"New photo found $photoTimestamp - ${photoMetaData.shootDateTime}")
-    } yield {
-      Photo(
-        timestamp = photoTimestamp,
-        source = photoSource,
-        metaData = Some(photoMetaData),
-        place = foundPlace,
-        category = photoCategory
-      )
-    }
+      drewMetadata    <- readDrewMetadata(original.path)
+      photoMetaData    = buildPhotoMetaData(drewMetadata)
+      photoTimestamp  <- computePhotoTimestamp(original, photoMetaData)
+      photoId          = buildPhotoId(photoTimestamp)
+      photoSource     <- buildPhotoSource(photoId, original)
+      foundPlace       = extractPlace(drewMetadata)
+      category         = buildPhotoCategory(original.baseDirectory, original.path)
+      photoDescription = PhotoDescription(category = category)
+      _               <- PhotoStoreService.photoSourceUpsert(originalId, photoSource)
+      _               <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
+      _               <- PhotoStoreService.photoDescriptionUpsert(photoId, photoDescription)
+      _               <- ZIO.foreachDiscard(foundPlace)(place => PhotoStoreService.photoPlaceUpsert(photoId, place))
+      photo            = Photo(
+                           timestamp = photoTimestamp,
+                           source = photoSource,
+                           metaData = Some(photoMetaData),
+                           place = foundPlace,
+                           description = Some(photoDescription)
+                         )
+      _               <- setupPhotoInitialState(originalId, photo)
+      _               <- ZIO.logInfo(s"New photo found $photoTimestamp - ${photoMetaData.shootDateTime}")
+    } yield photo
   }
 
   private def makePhotoFromStore(
@@ -272,28 +274,28 @@ object PhotoOperations {
     import original.*
     val originalId = buildOriginalId(original)
     val logic      = for {
-      photoSource     <- PhotoStoreService
-                           .photoSourceGet(originalId)
-                           .some
-                           .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", originalId.toString)))
-      photoId          = photoSource.photoId
-      photoMetaData   <- PhotoStoreService
-                           .photoMetaDataGet(photoId)
-                           .some
-                           .mapError(someError => someError.getOrElse(NotFoundInStore("no meta data in store", photoId.toString)))
-      photoPlace      <- PhotoStoreService.photoPlaceGet(photoId)
-      miniatures      <- PhotoStoreService.photoMiniaturesGet(photoId)
-      normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
-      photoTimestamp  <- computePhotoTimestamp(original, photoMetaData)
-      photoCategory    = buildPhotoCategory(baseDirectory, path)
-      _               <- updateStateLastSeen(photoId)
+      photoSource      <- PhotoStoreService
+                            .photoSourceGet(originalId)
+                            .some
+                            .mapError(someError => someError.getOrElse(NotFoundInStore("no source in store", originalId.toString)))
+      photoId           = photoSource.photoId
+      photoMetaData    <- PhotoStoreService
+                            .photoMetaDataGet(photoId)
+                            .some
+                            .mapError(someError => someError.getOrElse(NotFoundInStore("no meta data in store", photoId.toString)))
+      photoPlace       <- PhotoStoreService.photoPlaceGet(photoId)
+      miniatures       <- PhotoStoreService.photoMiniaturesGet(photoId)
+      normalizedPhoto  <- PhotoStoreService.photoNormalizedGet(photoId)
+      photoTimestamp   <- computePhotoTimestamp(original, photoMetaData)
+      photoDescription <- PhotoStoreService.photoDescriptionGet(photoId)
+      _                <- updateStateLastSeen(photoId)
     } yield {
       Photo(
         timestamp = photoTimestamp,
         source = photoSource,
         metaData = Some(photoMetaData),
         place = photoPlace,
-        category = photoCategory,
+        description = photoDescription,
         miniatures = miniatures,
         normalized = normalizedPhoto
       )
@@ -316,5 +318,34 @@ object PhotoOperations {
     makeIt.uninterruptible
       @@ annotated("originalPath" -> original.path.toString)
       @@ annotated("ownerId" -> original.ownerId.toString)
+  }
+
+  def makePhotoFromStoredState(state: PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue | NotFoundInStore, Photo] = {
+    val photoId    = state.photoId
+    val originalId = state.originalId
+    for {
+      photoSource     <- PhotoStoreService.photoSourceGet(originalId).someOrFail(NotFoundInStore("Photo source not found", state.photoId.toString()))
+      photoMetaData   <- PhotoStoreService.photoMetaDataGet(photoId)
+      photoPlace      <- PhotoStoreService.photoPlaceGet(photoId)
+      description     <- PhotoStoreService.photoDescriptionGet(photoId)
+      miniatures      <- PhotoStoreService.photoMiniaturesGet(photoId)
+      normalizedPhoto <- PhotoStoreService.photoNormalizedGet(photoId)
+      classifications <- PhotoStoreService.photoClassificationsGet(photoId)
+      objects         <- PhotoStoreService.photoObjectsGet(photoId)
+      faces           <- PhotoStoreService.photoFacesGet(photoId)
+    } yield {
+      Photo(
+        timestamp = state.photoTimestamp,
+        source = photoSource,
+        metaData = photoMetaData,
+        place = photoPlace,
+        description = description,
+        miniatures = miniatures,
+        normalized = normalizedPhoto,
+        foundClassifications = classifications,
+        foundObjects = objects,
+        foundFaces = faces
+      )
+    }
   }
 }

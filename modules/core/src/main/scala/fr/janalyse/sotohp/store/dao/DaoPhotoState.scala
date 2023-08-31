@@ -6,9 +6,10 @@ import java.time.OffsetDateTime
 
 case class DaoPhotoState(
   photoId: String,
+  originalId: String,
   photoHash: String,
-  lastSynchronized: OffsetDateTime,
-  lastUpdated: OffsetDateTime,
-  firstSeen: OffsetDateTime,
-  originalAddedOn: OffsetDateTime
+  photoOwnerId: String,
+  photoTimestamp: OffsetDateTime,
+  lastSeen: OffsetDateTime,
+  firstSeen: OffsetDateTime
 ) derives JsonCodec

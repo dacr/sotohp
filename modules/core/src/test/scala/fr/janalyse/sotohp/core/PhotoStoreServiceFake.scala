@@ -4,6 +4,7 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.store.*
 import zio.*
 import zio.ZIO.*
+import zio.stream.*
 
 class PhotoStoreServiceFake(
   statesCollectionRef: Ref[Map[PhotoId, PhotoState]],
@@ -14,7 +15,8 @@ class PhotoStoreServiceFake(
   normalizedCollectionRef: Ref[Map[PhotoId, NormalizedPhoto]],
   classificationsCollectionRef: Ref[Map[PhotoId, PhotoClassifications]],
   objectsCollectionRef: Ref[Map[PhotoId, PhotoObjects]],
-  facesCollectionRef: Ref[Map[PhotoId, PhotoFaces]]
+  facesCollectionRef: Ref[Map[PhotoId, PhotoFaces]],
+  descriptionsCollectionRef: Ref[Map[PhotoId, PhotoDescription]]
 ) extends PhotoStoreService {
 
   // ===================================================================================================================
@@ -22,6 +24,13 @@ class PhotoStoreServiceFake(
   override def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = for {
     collection <- statesCollectionRef.get
   } yield collection.get(photoId)
+
+  override def photoStateStream(): ZStream[Any, PhotoStoreIssue, PhotoState] = {
+    val wrappedStream = for {
+      collection <- statesCollectionRef.get
+    } yield ZStream.from(collection.values)
+    ZStream.unwrap(wrappedStream)
+  }
 
   override def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] = for {
     collection <- statesCollectionRef.get
@@ -154,6 +163,21 @@ class PhotoStoreServiceFake(
     facesCollectionRef.update(collection => collection.removed(photoId))
 
   // ===================================================================================================================
+  override def photoDescriptionGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoDescription]] = for {
+    collection <- descriptionsCollectionRef.get
+  } yield collection.get(photoId)
+
+  override def photoDescriptionContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] = for {
+    collection <- descriptionsCollectionRef.get
+  } yield collection.contains(photoId)
+
+  override def photoDescriptionUpsert(photoId: PhotoId, photoDescription: PhotoDescription): IO[PhotoStoreIssue, Unit] =
+    descriptionsCollectionRef.update(_.updated(photoId, photoDescription))
+
+  override def photoDescriptionDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
+    descriptionsCollectionRef.update(collection => collection.removed(photoId))
+
+  // ===================================================================================================================
 }
 
 object PhotoStoreServiceFake extends PhotoStoreCollections {
@@ -169,6 +193,7 @@ object PhotoStoreServiceFake extends PhotoStoreCollections {
       classificationsCollection <- Ref.make(Map.empty[PhotoId, PhotoClassifications])
       objectsCollection         <- Ref.make(Map.empty[PhotoId, PhotoObjects])
       facesCollection           <- Ref.make(Map.empty[PhotoId, PhotoFaces])
+      descriptionsCollection    <- Ref.make(Map.empty[PhotoId, PhotoDescription])
     } yield PhotoStoreServiceFake(
       statesCollection,
       sourcesCollection,
@@ -178,7 +203,8 @@ object PhotoStoreServiceFake extends PhotoStoreCollections {
       normalizedCollection,
       classificationsCollection,
       objectsCollection,
-      facesCollection
+      facesCollection,
+      descriptionsCollection
     )
   )
 
