@@ -9,7 +9,5 @@ case class PhotoState(
   photoOwnerId: PhotoOwnerId,
   photoTimestamp: OffsetDateTime,
   firstSeen: OffsetDateTime,
-  lastSeen: OffsetDateTime,
-  lastUpdated: OffsetDateTime,
-  originalAddedOn: OffsetDateTime // typically initialized with file last modified (when first seen)
+  lastSeen: OffsetDateTime
 )

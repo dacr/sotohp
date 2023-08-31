@@ -217,6 +217,7 @@ object SaoPhoto {
   // ------------------------------------------
 
   def fromPhoto(photo: Photo): SaoPhoto = {
+    val category = photo.description.flatMap(_.category).map(_.text)
     SaoPhoto(
       id = photo.source.photoId.id.toString,
       timestamp = photo.timestamp,
@@ -224,12 +225,12 @@ object SaoPhoto {
       fileSize = photo.source.fileSize,
       fileHash = photo.source.fileHash.code,
       fileLastUpdated = photo.source.fileLastModified,
-      category = photo.category.map(_.text),
+      category = category,
       shootDateTime = photo.metaData.flatMap(_.shootDateTime),
       camera = photo.metaData.flatMap(_.cameraName),
       // tags = photo.metaData.map(_.tags).getOrElse(Map.empty),
       // keywords = photo.description.map(_.keywords.toList).getOrElse(Nil),
-      keywords = extractKeywords(photo.category.map(_.text)), // TODO temporary keyword extraction from category
+      keywords = extractKeywords(category), // TODO temporary keyword extraction from category
       classifications = photo.foundClassifications.map(_.classifications.map(_.name).distinct).getOrElse(Nil),
       detectedObjects = photo.foundObjects.map(_.objects.map(_.name).distinct).getOrElse(Nil),
       place = photo.place.map(place => SaoGeoPoint(lat = place.latitude.doubleValue, lon = place.longitude.doubleValue))

@@ -67,6 +67,12 @@ trait PhotoStoreService {
   def photoFacesUpsert(photoId: PhotoId, normalized: PhotoFaces): IO[PhotoStoreIssue, Unit]
   def photoFacesDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
 
+  // photo description collection
+  def photoDescriptionGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoDescription]]
+  def photoDescriptionContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean]
+  def photoDescriptionUpsert(photoId: PhotoId, normalized: PhotoDescription): IO[PhotoStoreIssue, Unit]
+  def photoDescriptionDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+
 }
 
 object PhotoStoreService {
@@ -115,6 +121,11 @@ object PhotoStoreService {
   def photoFacesContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                  = serviceWithZIO(_.photoFacesContains(photoId))
   def photoFacesUpsert(photoId: PhotoId, metaData: PhotoFaces): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoFacesUpsert(photoId, metaData))
   def photoFacesDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                       = serviceWithZIO(_.photoFacesDelete(photoId))
+
+  def photoDescriptionGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoDescription]]            = serviceWithZIO(_.photoDescriptionGet(photoId))
+  def photoDescriptionContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                        = serviceWithZIO(_.photoDescriptionContains(photoId))
+  def photoDescriptionUpsert(photoId: PhotoId, metaData: PhotoDescription): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoDescriptionUpsert(photoId, metaData))
+  def photoDescriptionDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                             = serviceWithZIO(_.photoDescriptionDelete(photoId))
 
   val live: ZLayer[LMDB, LMDBIssues, PhotoStoreService] = ZLayer.fromZIO(
     for {

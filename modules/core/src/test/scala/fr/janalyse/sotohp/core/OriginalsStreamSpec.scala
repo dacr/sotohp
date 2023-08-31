@@ -27,7 +27,7 @@ object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
           photos.size == 5,
           photoFileSources.head.original.baseDirectory == dataset1,
           photoFilePaths.toSet == Set(dataset1Example1, dataset1Example2, dataset1Example3, dataset1Example4, dataset1Example5),
-          photos.forall(_.category.isEmpty)
+          photos.forall(_.description.flatMap(_.category).isEmpty)
         )
       },
       test("collect original photos with tree dataset") {
@@ -37,7 +37,7 @@ object OriginalsStreamSpec extends ZIOSpecDefault with TestDatasets {
           photos              <- originalsStream.runCollect
           photoFileSources     = photos.map(_.source)
           photoFilePaths       = photoFileSources.map(_.original.path)
-          photoCategories      = photos.flatMap(_.category.map(_.text))
+          photoCategories      = photos.flatMap(_.description.flatMap(_.category).map(_.text))
         } yield assertTrue(
           photos.size == 2,
           photoFileSources.head.original.baseDirectory == dataset2,
