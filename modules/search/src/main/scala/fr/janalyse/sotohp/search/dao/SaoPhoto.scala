@@ -84,6 +84,7 @@ object SaoPhoto {
 
   val fixes = List(
     "(?i)(\\d+) ans"                  -> "$1ans",
+    "(?i)Tourisme Le Mans"            -> "tourisme lemans",
     "(?i)weenprovence"                -> "weekend en provence",
     "(?i)montstmichelparbrieuc"       -> "mont saintmichel par brieuc",
     "(?i)westmaloetperenoelplouasne"  -> "weekend saintmalo et père noël plouasne",
