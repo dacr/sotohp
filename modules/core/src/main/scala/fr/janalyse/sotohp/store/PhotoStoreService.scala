@@ -12,6 +12,9 @@ type PhotoStoreIssue = PhotoStoreUserIssue | PhotoStoreSystemIssue
 type LMDBIssues      = StorageUserError | StorageSystemError
 
 trait PhotoStoreService {
+  def photoLazyStream(): ZStream[Any, PhotoStoreIssue, ZPhoto] =
+    photoStateStream().map(thatState => new ZPhoto { override val state = thatState })
+
   // photo states collection
   def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
   def photoStateStream(): ZStream[Any, PhotoStoreIssue, PhotoState]
@@ -76,6 +79,8 @@ trait PhotoStoreService {
 }
 
 object PhotoStoreService {
+  def photoLazyStream(): ZStream[PhotoStoreService, PhotoStoreIssue, ZPhoto] = ZStream.serviceWithStream(_.photoLazyStream())
+
   def photoStateGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoState]]              = serviceWithZIO(_.photoStateGet(photoId))
   def photoStateStream(): ZStream[PhotoStoreService, PhotoStoreIssue, PhotoState]                               = ZStream.serviceWithStream(_.photoStateStream())
   def photoStateContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                    = serviceWithZIO(_.photoStateContains(photoId))

@@ -469,10 +469,10 @@ class PhotoStoreServiceLive private (
 
   // ===================================================================================================================
   def daoDescriptionToDescription(from: DaoPhotoDescription): PhotoDescription = {
-      PhotoDescription(
-        text = from.text,
-        category = from.category.map(PhotoCategory.apply),
-        keywords = from.keywords.map(keywords => keywords.map(PhotoKeyword.apply))
+    PhotoDescription(
+      text = from.text,
+      category = from.category.map(PhotoCategory.apply),
+      keywords = from.keywords.map(keywords => keywords.map(PhotoKeyword.apply))
     )
   }
 

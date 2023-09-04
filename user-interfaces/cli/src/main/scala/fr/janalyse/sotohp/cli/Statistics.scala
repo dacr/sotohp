@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.cli
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.NormalizeProcessor
-import fr.janalyse.sotohp.store.PhotoStoreService
+import fr.janalyse.sotohp.store.{PhotoStoreService, ZPhoto}
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
@@ -29,20 +29,27 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
         Scope.default
       )
 
-  def updateStats(stats: Statistics, photo: Photo): Statistics = {
-    val updatedCount                  = stats.count + 1
-    val updatedGeolocalizedCount      = stats.geolocalizedCount + (if (photo.place.isDefined) 1 else 0)
-    val updatedNormalizedFailureCount = stats.normalizedFailureCount + (if (photo.normalized.isDefined) 0 else 1)
-    val updatedDuplicated             = stats.duplicated + (stats.duplicated.get(photo.source.fileHash.code) match {
-      case None        => photo.source.fileHash.code -> 1
-      case Some(count) => photo.source.fileHash.code -> (count + 1)
-    })
-    stats.copy(
-      count = updatedCount,
-      geolocalizedCount = updatedGeolocalizedCount,
-      normalizedFailureCount = updatedNormalizedFailureCount,
-      duplicated = updatedDuplicated
-    )
+  def updateStats(stats: Statistics, zphoto: ZPhoto) = {
+    for {
+      source     <- zphoto.source.some
+      place      <- zphoto.place
+      normalized <- zphoto.normalized
+      filehash    = source.fileHash.code
+    } yield {
+      val updatedCount                  = stats.count + 1
+      val updatedGeolocalizedCount      = stats.geolocalizedCount + (if (place.isDefined) 1 else 0)
+      val updatedNormalizedFailureCount = stats.normalizedFailureCount + (if (normalized.isDefined) 0 else 1)
+      val updatedDuplicated             = stats.duplicated + (stats.duplicated.get(filehash) match {
+        case None        => filehash -> 1
+        case Some(count) => filehash -> (count + 1)
+      })
+      stats.copy(
+        count = updatedCount,
+        geolocalizedCount = updatedGeolocalizedCount,
+        normalizedFailureCount = updatedNormalizedFailureCount,
+        duplicated = updatedDuplicated
+      )
+    }
   }
 
   def reportStats(stats: Statistics) = {
@@ -57,9 +64,9 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
   }
 
   val logic = ZIO.logSpan("statistics") {
-    val photoStream = PhotoStream.photoStream()
+    val photoStream = PhotoStream.photoLazyStream()
     photoStream
-      .runFold(Statistics())(updateStats)
+      .runFoldZIO(Statistics())(updateStats)
       .flatMap(reportStats)
       .flatMap(_ => ZIO.logInfo("reported"))
   }
