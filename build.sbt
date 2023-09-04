@@ -12,15 +12,17 @@ scmInfo := Some(
 )
 
 val versions = new {
-  val zio       = "2.0.16"
+  val zio        = "2.0.16"
 //  val zionio     = "2.0.1"
-  val zioconfig = "4.0.0-RC16"
-  val ziojson   = "0.6.1"
-//  val ziologging = "2.1.13"
-  val ziolmdb   = "1.4.1"
-//  val tapir      = "1.5.0"
-  val metadata  = "2.18.0"
-  val uuidgen   = "4.2.0"
+  val zioconfig  = "4.0.0-RC16"
+  val ziojson    = "0.6.1"
+  val ziologging = "2.1.14"
+  val ziolmdb    = "1.4.3"
+  val uuidgen    = "4.2.0"
+  val elastic4s  = "8.9.2"
+  val metadata   = "2.18.0"
+  val ulid = "23.8.6"
+  //  val tapir      = "1.5.0"
 }
 
 lazy val deepJavaLearningLibs = Seq(
@@ -69,7 +71,7 @@ lazy val moduleModel =
     .settings(
       sharedSettings,
       libraryDependencies ++= Seq(
-        "org.wvlet.airframe" %% "airframe-ulid" % "23.8.3"
+        "org.wvlet.airframe" %% "airframe-ulid" % versions.ulid
       )
     )
 
@@ -98,9 +100,9 @@ lazy val moduleSearch =
     .settings(
       sharedSettings,
       libraryDependencies ++= Seq(
-        "com.sksamuel.elastic4s" %% "elastic4s-effect-zio"    % "8.9.1",
-        "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % "8.9.1",
-        "com.sksamuel.elastic4s" %% "elastic4s-json-zio"      % "8.9.1"
+        "com.sksamuel.elastic4s" %% "elastic4s-effect-zio"    % versions.elastic4s,
+        "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % versions.elastic4s,
+        "com.sksamuel.elastic4s" %% "elastic4s-json-zio"      % versions.elastic4s
       )
     )
 
@@ -133,8 +135,8 @@ lazy val userInterfacesCLI =
         "dev.zio" %% "zio-config"                % versions.zioconfig,
         "dev.zio" %% "zio-config-typesafe"       % versions.zioconfig,
         "dev.zio" %% "zio-config-magnolia"       % versions.zioconfig,
-        "dev.zio" %% "zio-logging"               % "2.1.14", // Temporary
-        "dev.zio" %% "zio-logging-slf4j2-bridge" % "2.1.14"  // Temporary
+        "dev.zio" %% "zio-logging"               % versions.ziologging, // Temporary
+        "dev.zio" %% "zio-logging-slf4j2-bridge" % versions.ziologging  // Temporary
         // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
       )
     )
