@@ -55,7 +55,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
   def reportStats(stats: Statistics) = {
     val duplicatedCount = stats.duplicated.filter((_, count) => count > 1).size
     for {
-      _ <- Console.printLine(s"${BLUE_B}Photo statistics :${RESET}")
+      _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :${RESET}")
       _ <- Console.printLine(s"${GREEN}- ${stats.count} photos${RESET}")
       _ <- Console.printLine(s"${GREEN}- ${stats.geolocalizedCount} geolocalized photos${RESET}")
       _ <- Console.printLine(s"${RED}- ${stats.normalizedFailureCount} normalization failures${RESET}")
