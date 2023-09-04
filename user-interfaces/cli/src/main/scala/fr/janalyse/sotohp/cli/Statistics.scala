@@ -31,14 +31,14 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
 
   def updateStats(stats: Statistics, zphoto: ZPhoto) = {
     for {
-      source     <- zphoto.source.some
-      place      <- zphoto.place
-      normalized <- zphoto.normalized
-      filehash    = source.fileHash.code
+      source        <- zphoto.source.some
+      place         <- zphoto.place
+      hasNormalized <- zphoto.hasNormalized
+      filehash       = source.fileHash.code
     } yield {
       val updatedCount                  = stats.count + 1
       val updatedGeolocalizedCount      = stats.geolocalizedCount + (if (place.isDefined) 1 else 0)
-      val updatedNormalizedFailureCount = stats.normalizedFailureCount + (if (normalized.isDefined) 0 else 1)
+      val updatedNormalizedFailureCount = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
       val updatedDuplicated             = stats.duplicated + (stats.duplicated.get(filehash) match {
         case None        => filehash -> 1
         case Some(count) => filehash -> (count + 1)
@@ -58,7 +58,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
       _ <- Console.printLine(s"${BLUE_B}Photo statistics :${RESET}")
       _ <- Console.printLine(s"${GREEN}- ${stats.count} photos${RESET}")
       _ <- Console.printLine(s"${GREEN}- ${stats.geolocalizedCount} geolocalized photos${RESET}")
-      _ <- Console.printLine(s"${RED}- ${stats.normalizedFailureCount} photos normalized failure${RESET}")
+      _ <- Console.printLine(s"${RED}- ${stats.normalizedFailureCount} normalization failures${RESET}")
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos${RESET}")
     } yield stats
   }
