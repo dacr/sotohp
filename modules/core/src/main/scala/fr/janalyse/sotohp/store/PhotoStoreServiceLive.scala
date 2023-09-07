@@ -422,7 +422,7 @@ class PhotoStoreServiceLive private (
               width = that.box.width,
               height = that.box.height
             ),
-            features = that.features
+            faceId = ULID.fromString(that.faceId)
           )
         )
       )
@@ -441,7 +441,7 @@ class PhotoStoreServiceLive private (
             width = that.box.width,
             height = that.box.height
           ),
-          features = that.features
+          faceId = that.faceId.toString
         )
       )
     )

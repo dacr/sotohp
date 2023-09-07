@@ -15,24 +15,27 @@ val versions = new {
   val zio        = "2.0.16"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.0-RC16"
-  val ziojson    = "0.6.1"
+  val ziojson    = "0.6.2"
   val ziologging = "2.1.14"
   val ziolmdb    = "1.4.3"
   val uuidgen    = "4.2.0"
   val elastic4s  = "8.9.2"
   val metadata   = "2.18.0"
-  val ulid = "23.8.6"
+  val ulid       = "23.9.0"
   //  val tapir      = "1.5.0"
 }
 
 lazy val deepJavaLearningLibs = Seq(
-  "ai.djl"           % "api"               % "0.23.0",
-  "ai.djl"           % "basicdataset"      % "0.23.0",
-  "ai.djl"           % "model-zoo"         % "0.23.0",
-  "ai.djl.mxnet"     % "mxnet-engine"      % "0.23.0",
-  "ai.djl.mxnet"     % "mxnet-model-zoo"   % "0.23.0",
-  "ai.djl.mxnet"     % "mxnet-native-auto" % "1.8.0",
-  "net.java.dev.jna" % "jna"               % "5.13.0"
+  "ai.djl"             % "api"                  % "0.23.0",
+  "ai.djl"             % "basicdataset"         % "0.23.0",
+  "ai.djl"             % "model-zoo"            % "0.23.0",
+  "ai.djl.huggingface" % "tokenizers"           % "0.23.0",
+  "ai.djl.mxnet"       % "mxnet-engine"         % "0.23.0",
+  "ai.djl.mxnet"       % "mxnet-model-zoo"      % "0.23.0",
+  "ai.djl.pytorch"     % "pytorch-model-zoo"    % "0.23.0",
+  "ai.djl.tensorflow"  % "tensorflow-model-zoo" % "0.23.0",
+  "ai.djl.mxnet"       % "mxnet-native-auto"    % "1.8.0",
+  "net.java.dev.jna"   % "jna"                  % "5.13.0"
 )
 
 //val sharedSettings = Seq(

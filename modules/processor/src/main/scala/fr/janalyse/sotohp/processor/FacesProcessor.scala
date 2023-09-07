@@ -21,11 +21,12 @@ import fr.janalyse.sotohp.processor.MiniaturizeProcessor.sotophConfig
 
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
+import wvlet.airframe.ulid.ULID
 
 case class FacesDetectionIssue(message: String, exception: Throwable)
 
 class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends Processor {
-  def doDetectFaces(path: Path): List[DetectedFace] = {
+  def doDetectFaces(photo: Photo, path: Path): List[DetectedFace] = {
     val loadedImage: Image           = ImageFactory.getInstance().fromFile(path)
     val detection: DetectedObjects   = facesPredictor.predict(loadedImage)
     val detected: List[DetectedFace] =
@@ -45,7 +46,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
               width = ob.getBoundingBox.getBounds.getWidth,
               height = ob.getBoundingBox.getBounds.getHeight
             ),
-            features = None // TODO add extracted features
+            faceId = ULID.ofMillis(photo.timestamp.toInstant.toEpochMilli)
           )
         )
 
@@ -61,7 +62,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                       .from(knownFaces)
                       .orElse(
                         ZIO
-                          .attempt(doDetectFaces(input))
+                          .attempt(doDetectFaces(photo, input))
                           .tap(faces => ZIO.log(s"found ${faces.size} faces"))
                           .mapError(th => FacesDetectionIssue(s"Couldn't analyze photo", th))
                           .map(faces => PhotoFaces(faces = faces, count = faces.size))
@@ -98,21 +99,21 @@ object FacesProcessor {
   val steps           = Array(8, 16, 32)
   lazy val translator = FaceDetectionTranslator(confThresh, nmsThresh, variance, topK, scales, steps)
 
-  lazy val facesCriteria: Criteria[Image, DetectedObjects] =
-    Criteria
-      .builder()
-      .setTypes(classOf[Image], classOf[DetectedObjects])
-      .optModelUrls("https://resources.djl.ai/test-models/pytorch/retinaface.zip")
-      .optModelName("retinaface") // specify model file prefix
-      .optTranslator(translator)
-      // .optProgress(new ProgressBar())
-      .optEngine("PyTorch")       // Use PyTorch engine
-      .build();
-
-  lazy val facesModel: ZooModel[Image, DetectedObjects] = facesCriteria.loadModel()
-
   def allocate(): FacesProcessor = {
-    val facesPredictor = facesModel.newPredictor() // not thread safe !
+    val facesCriteria: Criteria[Image, DetectedObjects] =
+      Criteria
+        .builder()
+        .setTypes(classOf[Image], classOf[DetectedObjects])
+        .optModelUrls("https://resources.djl.ai/test-models/pytorch/retinaface.zip")
+        .optModelName("retinaface") // specify model file prefix
+        .optTranslator(translator)
+        // .optProgress(new ProgressBar())
+        .optEngine("PyTorch")       // Use PyTorch engine
+        .build()
+
+    val facesModel: ZooModel[Image, DetectedObjects] = facesCriteria.loadModel()
+    val facesPredictor                               = facesModel.newPredictor() // not thread safe !
     FacesProcessor(facesPredictor)
   }
 }
+

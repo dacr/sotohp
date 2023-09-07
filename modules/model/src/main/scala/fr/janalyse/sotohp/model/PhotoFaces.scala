@@ -1,9 +1,11 @@
 package fr.janalyse.sotohp.model
 
+import wvlet.airframe.ulid.ULID
+
 case class DetectedFace(
+  faceId: ULID,
   someoneId: Option[SomeoneId],
-  box: BoundingBox,
-  features: Option[List[Float]]
+  box: BoundingBox
 )
 
 case class PhotoFaces(

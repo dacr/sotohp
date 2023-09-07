@@ -13,6 +13,7 @@ case class Statistics(
   count: Int = 0,
   geolocalizedCount: Int = 0,
   normalizedFailureCount: Int = 0,
+  facesCount: Int = 0,
   duplicated: Map[String, Int] = Map.empty
 )
 
@@ -33,12 +34,14 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
     for {
       source        <- zphoto.source.some
       place         <- zphoto.place
+      faces         <- zphoto.foundFaces
       hasNormalized <- zphoto.hasNormalized
       filehash       = source.fileHash.code
     } yield {
       val updatedCount                  = stats.count + 1
       val updatedGeolocalizedCount      = stats.geolocalizedCount + (if (place.isDefined) 1 else 0)
       val updatedNormalizedFailureCount = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
+      val updatedFacesCount             = stats.facesCount + faces.map(_.count).getOrElse(0)
       val updatedDuplicated             = stats.duplicated + (stats.duplicated.get(filehash) match {
         case None        => filehash -> 1
         case Some(count) => filehash -> (count + 1)
@@ -47,7 +50,8 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
         count = updatedCount,
         geolocalizedCount = updatedGeolocalizedCount,
         normalizedFailureCount = updatedNormalizedFailureCount,
-        duplicated = updatedDuplicated
+        duplicated = updatedDuplicated,
+        facesCount = updatedFacesCount
       )
     }
   }
@@ -57,9 +61,10 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
     for {
       _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :${RESET}")
       _ <- Console.printLine(s"${GREEN}- ${stats.count} photos${RESET}")
+      _ <- Console.printLine(s"${GREEN}- ${stats.facesCount} people faces${RESET}")
       _ <- Console.printLine(s"${GREEN}- ${stats.geolocalizedCount} geolocalized photos${RESET}")
-      _ <- Console.printLine(s"${RED}- ${stats.normalizedFailureCount} normalization failures${RESET}")
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos${RESET}")
+      _ <- Console.printLine(s"${RED}- ${stats.normalizedFailureCount} normalization failures${RESET}")
     } yield stats
   }
 

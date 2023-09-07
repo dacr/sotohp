@@ -5,7 +5,7 @@ import zio.json.JsonCodec
 case class DaoDetectedFace(
   someoneId: Option[String],
   box: DaoBoundingBox,
-  features: Option[List[Float]]
+  faceId: String
 ) derives JsonCodec
 
 case class DaoPhotoFaces(
