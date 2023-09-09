@@ -29,9 +29,10 @@ class Viewer extends Application {
     val logic =
       PhotoStream
         .photoLazyStream()
+        .filterZIO(_.foundFaces.map(faces => faces.exists(_.count == 0))) // Only photo with people faces :)
         .mapZIO(_.photoNormalizedPath.either)
         .runCollect
-        .map(_.map(_.toOption).flatten) // TODO BAD VERY BAD OF COURSE - for temporary quick & dirty implementation
+        .map(_.map(_.toOption).flatten)                                   // TODO BAD VERY BAD OF COURSE - for temporary quick & dirty implementation
         .provide(
           LMDB.liveWithDatabaseName("photos"),
           PhotoStoreService.live,
@@ -47,13 +48,21 @@ class Viewer extends Application {
 
   private var position: Int = 0 // TODO BAD VERY BAD OF COURSE - for temporary quick & dirty implementation
 
-  def nextImage(): Image = {
+  def firstImage(): Image = {
+    position = 0
+    loadImage(imageFilenames(position))
+  }
+  def prevImage(): Image  = {
+    position = position - 1
+    if (position < 0) position = imageFilenames.size - 1
+    loadImage(imageFilenames(position))
+  }
+  def nextImage(): Image  = {
     position = (position + 1) % imageFilenames.size
     loadImage(imageFilenames(position))
   }
-  def prevImage(): Image = {
-    position = position - 1
-    if (position < 0) position = imageFilenames.size - 1
+  def lastImage(): Image  = {
+    position = imageFilenames.size - 1
     loadImage(imageFilenames(position))
   }
 
@@ -61,10 +70,11 @@ class Viewer extends Application {
     val imageView = ImageView()
     imageView.setImage(loadImage(imageFilenames.head))
     imageView.setPreserveRatio(true)
-    imageView.fitWidthProperty().bind(stage.widthProperty())
 
-    val actionNext = () => imageView.setImage(nextImage())
-    val actionPrev = () => imageView.setImage(prevImage())
+    val actionFirst = () => imageView.setImage(firstImage())
+    val actionNext  = () => imageView.setImage(nextImage())
+    val actionPrev  = () => imageView.setImage(prevImage())
+    val actionLast  = () => imageView.setImage(lastImage())
 
     val buttonNext = Button("next")
     buttonNext.setOnAction(event => actionNext())
@@ -77,14 +87,21 @@ class Viewer extends Application {
     val vbox  = VBox(imageView, hbox)
     val scene = Scene(vbox, 900, 600)
 
+    // imageView.fitWidthProperty().bind(stage.widthProperty())
+    // imageView.fitHeightProperty().bind(stage.heightProperty())
+    imageView.fitHeightProperty().bind(stage.heightProperty())
+
     val keyHandler: EventHandler[KeyEvent] = keyEvent => {
       keyEvent.getCode match {
         case KeyCode.PAGE_UP   => actionPrev()
         case KeyCode.PAGE_DOWN => actionNext()
+        case KeyCode.HOME      => actionFirst()
+        case KeyCode.END       => actionLast()
         case _                 =>
       }
     }
-    scene.setOnKeyReleased(keyHandler)
+    // scene.setOnKeyReleased(keyHandler)
+    scene.setOnKeyPressed(keyHandler)
 
     stage.setTitle("Photo viewer")
     stage.setScene(scene)
