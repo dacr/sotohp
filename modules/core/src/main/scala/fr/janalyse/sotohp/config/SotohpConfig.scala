@@ -17,4 +17,9 @@ object SotohpConfig {
     deriveConfig[SotohpConfig]
       .mapKey(toKebabCase)
       .nested("sotohp")
+
+  val zioConfig =
+    ZIO
+      .config(SotohpConfig.config)
+      .mapError(th => SotohpConfigIssue(s"Couldn't get configuration", th))
 }

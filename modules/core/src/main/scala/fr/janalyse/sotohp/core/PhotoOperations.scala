@@ -9,6 +9,7 @@ import com.drew.metadata.png.PngDirectory
 import com.drew.metadata.bmp.BmpHeaderDirectory
 import fr.janalyse.sotohp.model.DecimalDegrees.*
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.config.*
 import zio.*
 import zio.ZIOAspect.*
 
@@ -19,6 +20,7 @@ import com.fasterxml.uuid.Generators
 import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 import wvlet.airframe.ulid.ULID
 
+
 import scala.util.Try
 
 case class NotFoundInStore(message: String, id: String)
@@ -28,6 +30,32 @@ case class PhotoFileIssue(message: String, filePath: Path, throwable: Throwable)
 object PhotoOperations {
 
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
+
+  def makePhotoInternalDataPath(photoSource: PhotoSource, config: SotohpConfig): Path = {
+    val dataDir = config.internalData.baseDirectory
+    val ownerId = photoSource.original.ownerId
+    val photoId = photoSource.photoId
+    Path.of(dataDir, "artifacts", ownerId.toString, photoId.toString)
+  }
+
+  def internalDataRelativize(output: Path, config: SotohpConfig): Path = {
+    val dataDirPath = Path.of(config.internalData.baseDirectory)
+    dataDirPath.relativize(output)
+  }
+
+  def makeNormalizedFilePath(photoSource: PhotoSource, config: SotohpConfig): Path = {
+    val basePath = makePhotoInternalDataPath(photoSource, config)
+    val format = config.miniaturizer.format
+    val target = s"normalized.$format"
+    basePath.resolve(target)
+  }
+
+  def makeMiniatureFilePath(photoSource: PhotoSource, size: Int, config: SotohpConfig): Path = {
+    val basePath = makePhotoInternalDataPath(photoSource, config)
+    val format = config.miniaturizer.format
+    val target = s"miniature-$size.$format"
+    basePath.resolve(target)
+  }
 
   def readDrewMetadata(filePath: Path): IO[PhotoFileIssue, Metadata] = {
     ZIO

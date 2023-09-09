@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.processor
 
 import fr.janalyse.sotohp.config.*
+import fr.janalyse.sotohp.core.PhotoOperations
 import zio.*
 import zio.ZIOAspect.*
 import fr.janalyse.sotohp.model.*
@@ -13,13 +14,6 @@ import net.coobird.thumbnailator.Thumbnails
 case class NormalizeIssue(message: String, exception: Throwable)
 
 object NormalizeProcessor extends Processor {
-
-  def makeNormalizedFilePath(photo: Photo, config: SotohpConfig): Path = {
-    val basePath = makePhotoInternalDataPath(photo, config)
-    val format   = config.miniaturizer.format
-    val target   = s"normalized.$format"
-    basePath.resolve(target)
-  }
 
   private def resizePhoto(input: Path, output: Path, config: SotohpConfig) = {
     import config.normalizer.referenceSize
@@ -80,7 +74,7 @@ object NormalizeProcessor extends Processor {
                            .attempt(photo.source.original.path.toAbsolutePath)
                            .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
       output          <- ZIO
-                           .attempt(makeNormalizedFilePath(photo, config))
+                           .attempt(PhotoOperations.makeNormalizedFilePath(photo.source, config))
                            .mapError(th => NormalizeIssue(s"Couldn't build destination path target", th))
       _               <- makeOutputDirectories(output)
       _               <- resizePhoto(input, output, config)

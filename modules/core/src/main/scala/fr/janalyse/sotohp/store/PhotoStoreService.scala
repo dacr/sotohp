@@ -8,7 +8,8 @@ import zio.lmdb.*
 
 case class PhotoStoreUserIssue(message: String)
 case class PhotoStoreSystemIssue(message: String)
-type PhotoStoreIssue = PhotoStoreUserIssue | PhotoStoreSystemIssue
+case class PhotoStoreNotFoundIssue(message: String)
+type PhotoStoreIssue = PhotoStoreUserIssue | PhotoStoreSystemIssue | PhotoStoreNotFoundIssue
 type LMDBIssues      = StorageUserError | StorageSystemError
 
 trait PhotoStoreService {

@@ -17,13 +17,6 @@ case class MiniaturizeIssue(message: String, exception: Throwable)
 
 object MiniaturizeProcessor extends Processor {
 
-  def makeMiniatureFilePath(photo: Photo, size: Int, config: SotohpConfig): Path = {
-    val basePath = makePhotoInternalDataPath(photo, config)
-    val format   = config.miniaturizer.format
-    val target   = s"miniature-$size.$format"
-    basePath.resolve(target)
-  }
-
   private def miniaturizePhoto(referenceSize: Int, input: Path, output: Path, config: SotohpConfig) = {
     ZIO
       .attemptBlockingIO(
@@ -48,7 +41,7 @@ object MiniaturizeProcessor extends Processor {
     for {
       input     <- getBestInputPhotoFile(photo)
       output    <- ZIO
-                     .attempt(makeMiniatureFilePath(photo, size, config))
+                     .attempt(PhotoOperations.makeMiniatureFilePath(photo.source, size, config))
                      .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file", th))
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())

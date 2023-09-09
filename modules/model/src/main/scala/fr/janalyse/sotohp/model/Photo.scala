@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.model
 
 import java.time.OffsetDateTime
+import java.io.FileInputStream
 
 case class Photo(
   timestamp: OffsetDateTime,        // Reference timestamp of the photo, either the shoot date time or the last modified date if the first is unknown

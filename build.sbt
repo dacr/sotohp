@@ -22,41 +22,37 @@ val versions = new {
   val elastic4s  = "8.9.2"
   val metadata   = "2.18.0"
   val ulid       = "23.9.0"
+  val javafx     = "20.0.2"
+  val djl        = "0.23.0"
   //  val tapir      = "1.5.0"
 }
 
 lazy val deepJavaLearningLibs = Seq(
-  "ai.djl"             % "api"                  % "0.23.0",
-  "ai.djl"             % "basicdataset"         % "0.23.0",
-  "ai.djl"             % "model-zoo"            % "0.23.0",
-  "ai.djl.huggingface" % "tokenizers"           % "0.23.0",
-  "ai.djl.mxnet"       % "mxnet-engine"         % "0.23.0",
-  "ai.djl.mxnet"       % "mxnet-model-zoo"      % "0.23.0",
-  "ai.djl.pytorch"     % "pytorch-model-zoo"    % "0.23.0",
-  "ai.djl.tensorflow"  % "tensorflow-model-zoo" % "0.23.0",
+  "ai.djl"             % "api"                  % versions.djl,
+  "ai.djl"             % "basicdataset"         % versions.djl,
+  "ai.djl"             % "model-zoo"            % versions.djl,
+  "ai.djl.huggingface" % "tokenizers"           % versions.djl,
+  "ai.djl.mxnet"       % "mxnet-engine"         % versions.djl,
+  "ai.djl.mxnet"       % "mxnet-model-zoo"      % versions.djl,
+  "ai.djl.pytorch"     % "pytorch-model-zoo"    % versions.djl,
+  "ai.djl.tensorflow"  % "tensorflow-model-zoo" % versions.djl,
   "ai.djl.mxnet"       % "mxnet-native-auto"    % "1.8.0",
   "net.java.dev.jna"   % "jna"                  % "5.13.0"
 )
 
-//val sharedSettings = Seq(
-//  scalaVersion := "3.3.0",
-//  Test / fork  := true,
-//  testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
-//  scalacOptions ++= Seq("-deprecation"), // "-Xfatal-warnings",
-//  excludeDependencies += "org.scala-lang.modules" % "scala-collection-compat_2.13",
-//  libraryDependencies ++= Seq(
-//    "dev.zio" %% "zio"            % versions.zio,
-//    "dev.zio" %% "zio-test"       % versions.zio % Test,
-//    "dev.zio" %% "zio-test-sbt"   % versions.zio % Test,
-//    "dev.zio" %% "zio-test-junit" % versions.zio % Test
-//  ),
-//  Test / javaOptions                             := Seq( // -- Required for LMDB with recent JVM
-//    "--add-opens",
-//    "java.base/java.nio=ALL-UNNAMED",
-//    "--add-opens",
-//    "java.base/sun.nio.ch=ALL-UNNAMED"
-//  )
-//)
+lazy val lmdbJavaOptions = Seq(
+  "--add-opens",
+  "java.base/java.nio=ALL-UNNAMED",
+  "--add-opens",
+  "java.base/sun.nio.ch=ALL-UNNAMED"
+)
+
+lazy val osName = System.getProperty("os.name") match {
+  case n if n.startsWith("Linux")   => "linux"
+  case n if n.startsWith("Mac")     => "mac"
+  case n if n.startsWith("Windows") => "win"
+  case _                            => throw new Exception("Unknown platform!")
+}
 
 val sharedSettings = Seq(
   scalaVersion := "3.3.0",
@@ -116,7 +112,7 @@ lazy val moduleProcessor =
     .settings(
       sharedSettings,
       fork := true,
-      javaOptions ++= Seq("--add-opens", "java.base/java.nio=ALL-UNNAMED", "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"),
+      javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
         "org.apache.commons" % "commons-imaging" % "1.0-alpha3" // https://commons.apache.org/proper/commons-imaging/
@@ -132,7 +128,7 @@ lazy val userInterfacesCLI =
     .settings(
       sharedSettings,
       fork := true,
-      javaOptions ++= Seq("--add-opens", "java.base/java.nio=ALL-UNNAMED", "--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED"),
+      javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         "dev.zio" %% "zio"                       % versions.zio,
         "dev.zio" %% "zio-config"                % versions.zioconfig,
@@ -141,6 +137,23 @@ lazy val userInterfacesCLI =
         "dev.zio" %% "zio-logging"               % versions.ziologging, // Temporary
         "dev.zio" %% "zio-logging-slf4j2-bridge" % versions.ziologging  // Temporary
         // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
+      )
+    )
+
+lazy val userInterfacesGUI =
+  project
+    .in(file("user-interfaces/gui"))
+    .settings(sharedSettings)
+    .dependsOn(moduleCore)
+    .settings(
+      sharedSettings,
+      fork := true,
+      javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/opt/javafx-sdk-20.0.2/lib/", "--add-modules", "javafx.controls"),
+      libraryDependencies ++= Seq(
+        // "org.openjfx" % "javafx"          % versions.javafx classifier "linux",
+        // "org.openjfx" % "javafx-graphics" % versions.javafx, // classifier "linux",
+        "org.openjfx" % "javafx-graphics" % versions.javafx classifier osName,
+        "org.openjfx" % "javafx-controls" % versions.javafx classifier osName
       )
     )
 
