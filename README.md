@@ -7,7 +7,7 @@ photos. Once again this project has first started as just [a "small" script][pho
 
 - The photos referential is always your photos directories as you've organized them,
 - Your photos directories are left unchanged, only read operations are done,
-- A local LMDB database is used to store/cache, serialization is JSON based,
+- A local [LMDB database][lmdb] is used to store/cache/query, serialization is JSON based,
 - Background jobs are run to update, to enrich, to analyze, to process your photos
 - Dedicated Filesystem targets for pre-processed photos
 - Photos are identified using an [ULID][ulid] identifier computed from the shoot timestamp
@@ -30,3 +30,4 @@ Visualisation is very fast :) The current graphical user interface :
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
 [ulid]: https://github.com/ulid/spec
 [djl]: https://github.com/deepjavalibrary/djl
+[lmdb]: https://github.com/dacr/zio-lmdb
