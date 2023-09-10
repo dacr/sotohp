@@ -86,7 +86,8 @@ class Viewer extends Application {
     photo.foundFaces.foreach(foundFaces => foundFaces.faces.foreach(face => canvas.addRect(face.box.x, face.box.y, face.box.width, face.box.height)))
   }
 
-  def showImage(canvas: AutoScalingImageCanvas, photo: PhotoToView): Unit = {
+  def showImage(canvas: AutoScalingImageCanvas, label: Label, photo: PhotoToView): Unit = {
+    label.setText(photo.description.flatMap(_.category.map(_.text)).getOrElse("no category"))
     val filepath = photo.normalizedPath.getOrElse(photo.source.original.path)
     val image    = Image(java.io.FileInputStream(filepath.toFile))
     canvas.drawImage(image)
@@ -148,48 +149,59 @@ class Viewer extends Application {
   private var position: Int      = 0     // TODO BAD VERY BAD OF COURSE - for temporary quick & dirty implementation
   private var showFaces: Boolean = false // TODO BAD VERY BAD OF COURSE - for temporary quick & dirty implementation
 
-  def firstImage(canvas: AutoScalingImageCanvas): Unit = {
+  def firstImage(canvas: AutoScalingImageCanvas, label: Label): Unit = {
     position = 0
-    showImage(canvas, photos(position))
+    showImage(canvas, label, photos(position))
   }
 
-  def prevImage(canvas: AutoScalingImageCanvas): Unit = {
+  def prevImage(canvas: AutoScalingImageCanvas, label: Label): Unit = {
     position = position - 1
     if (position < 0) position = photos.size - 1
-    showImage(canvas, photos(position))
+    showImage(canvas, label, photos(position))
   }
 
-  def nextImage(canvas: AutoScalingImageCanvas): Unit = {
+  def nextImage(canvas: AutoScalingImageCanvas, label: Label): Unit = {
     position = (position + 1) % photos.size
-    showImage(canvas, photos(position))
+    showImage(canvas, label, photos(position))
   }
 
-  def lastImage(canvas: AutoScalingImageCanvas): Unit = {
+  def lastImage(canvas: AutoScalingImageCanvas, label: Label): Unit = {
     position = photos.size - 1
-    showImage(canvas, photos(position))
+    showImage(canvas, label, photos(position))
   }
 
-  def reloadImage(canvas: AutoScalingImageCanvas): Unit = {
-    showImage(canvas, photos(position))
+  def reloadImage(canvas: AutoScalingImageCanvas, label: Label): Unit = {
+    showImage(canvas, label, photos(position))
   }
 
   override def start(stage: Stage): Unit = {
     val imageView = AutoScalingImageCanvas(1920 * 2, 1080 * 2)
-    firstImage(imageView)
 
-    val actionFirst = () => firstImage(imageView)
-    val actionNext  = () => nextImage(imageView)
-    val actionPrev  = () => prevImage(imageView)
-    val actionLast  = () => lastImage(imageView)
-    val actionFaces = () => { showFaces = !showFaces; reloadImage(imageView) }
+    val photoLabel = Label("something")
+    firstImage(imageView, photoLabel)
 
-    val buttonNext = Button("next")
-    buttonNext.setOnAction(event => actionNext())
+    val actionFirst = () => firstImage(imageView, photoLabel)
+    val actionNext  = () => nextImage(imageView, photoLabel)
+    val actionPrev  = () => prevImage(imageView, photoLabel)
+    val actionLast  = () => lastImage(imageView, photoLabel)
+    val actionFaces = () => { showFaces = !showFaces; reloadImage(imageView, photoLabel) }
+
+    val buttonFirst = Button("first")
+    buttonFirst.setOnAction(event => actionFirst())
 
     val buttonPrev = Button("previous")
     buttonPrev.setOnAction(event => actionPrev())
 
-    val hbox = HBox(buttonPrev, buttonNext)
+    val buttonNext = Button("next")
+    buttonNext.setOnAction(event => actionNext())
+
+    val buttonLast = Button("last")
+    buttonLast.setOnAction(event => actionLast())
+
+    val buttonFaces = Button("faces")
+    buttonFaces.setOnAction(event => actionFaces())
+
+    val hbox = HBox(buttonFirst, buttonPrev, buttonNext, buttonLast, buttonFaces, photoLabel)
 
     val vbox  = VBox(imageView, hbox)
     val scene = Scene(vbox, 900, 600)
