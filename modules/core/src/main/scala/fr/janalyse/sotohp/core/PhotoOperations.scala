@@ -20,7 +20,6 @@ import com.fasterxml.uuid.Generators
 import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 import wvlet.airframe.ulid.ULID
 
-
 import scala.util.Try
 
 case class NotFoundInStore(message: String, id: String)
@@ -31,30 +30,42 @@ object PhotoOperations {
 
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
+//  def internalDataRelativize(output: Path, config: SotohpConfig): Path = {
+//    val dataDirPath = Path.of(config.internalData.baseDirectory)
+//    dataDirPath.relativize(output)
+//  }
+
   def makePhotoInternalDataPath(photoSource: PhotoSource, config: SotohpConfig): Path = {
     val dataDir = config.internalData.baseDirectory
     val ownerId = photoSource.original.ownerId
     val photoId = photoSource.photoId
     Path.of(dataDir, "artifacts", ownerId.toString, photoId.toString)
   }
-
-  def internalDataRelativize(output: Path, config: SotohpConfig): Path = {
-    val dataDirPath = Path.of(config.internalData.baseDirectory)
-    dataDirPath.relativize(output)
+  
+  def makePhotoInternalDataPath(photoSource: PhotoSource): IO[SotohpConfigIssue, Path] = {
+    SotohpConfig.zioConfig.map(config => makePhotoInternalDataPath(photoSource, config))
   }
 
   def makeNormalizedFilePath(photoSource: PhotoSource, config: SotohpConfig): Path = {
     val basePath = makePhotoInternalDataPath(photoSource, config)
-    val format = config.miniaturizer.format
-    val target = s"normalized.$format"
+    val format   = config.miniaturizer.format
+    val target   = s"normalized.$format"
     basePath.resolve(target)
+  }
+
+  def makeNormalizedFilePath(photoSource: PhotoSource): IO[SotohpConfigIssue, Path] = {
+    SotohpConfig.zioConfig.map(config => makeNormalizedFilePath(photoSource, config))
   }
 
   def makeMiniatureFilePath(photoSource: PhotoSource, size: Int, config: SotohpConfig): Path = {
     val basePath = makePhotoInternalDataPath(photoSource, config)
-    val format = config.miniaturizer.format
-    val target = s"miniature-$size.$format"
+    val format   = config.miniaturizer.format
+    val target   = s"miniature-$size.$format"
     basePath.resolve(target)
+  }
+
+  def makeMiniatureFilePath(photoSource: PhotoSource, size: Int): IO[SotohpConfigIssue, Path] = {
+    SotohpConfig.zioConfig.map(config => makeMiniatureFilePath(photoSource, size, config))
   }
 
   def readDrewMetadata(filePath: Path): IO[PhotoFileIssue, Metadata] = {
