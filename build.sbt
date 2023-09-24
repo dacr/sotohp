@@ -12,16 +12,16 @@ scmInfo := Some(
 )
 
 val versions = new {
-  val zio        = "2.0.16"
+  val zio        = "2.0.17"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.0-RC16"
   val ziojson    = "0.6.2"
   val ziologging = "2.1.14"
   val ziolmdb    = "1.4.3"
-  val uuidgen    = "4.2.0"
+  val uuidgen    = "4.3.0"
   val elastic4s  = "8.9.2"
   val metadata   = "2.18.0"
-  val ulid       = "23.9.0"
+  val ulid       = "23.9.2"
   val javafx     = "20.0.2"
   val djl        = "0.23.0"
   //  val tapir      = "1.5.0"
@@ -55,7 +55,7 @@ lazy val osName = System.getProperty("os.name") match {
 }
 
 val sharedSettings = Seq(
-  scalaVersion := "3.3.0",
+  scalaVersion := "3.3.1",
   scalacOptions ++= Seq("-deprecation"), // "-Xfatal-warnings"
   libraryDependencies ++= Seq(
     "dev.zio" %% "zio-test"     % versions.zio % Test,

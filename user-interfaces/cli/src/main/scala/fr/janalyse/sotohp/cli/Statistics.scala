@@ -7,6 +7,8 @@ import fr.janalyse.sotohp.store.{PhotoStoreService, ZPhoto}
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
+
+import java.time.{OffsetDateTime, Instant}
 import scala.io.AnsiColor.*
 
 case class Statistics(
@@ -14,7 +16,9 @@ case class Statistics(
   geolocalizedCount: Int = 0,
   normalizedFailureCount: Int = 0,
   facesCount: Int = 0,
-  duplicated: Map[String, Int] = Map.empty
+  duplicated: Map[String, Int] = Map.empty,
+  missingCount: Int = 0,
+  modifiedCount: Int = 0
 )
 
 object Statistics extends ZIOAppDefault with CommonsCLI {
@@ -32,16 +36,23 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
 
   def updateStats(stats: Statistics, zphoto: ZPhoto) = {
     for {
-      source        <- zphoto.source.some
-      place         <- zphoto.place
-      faces         <- zphoto.foundFaces
-      hasNormalized <- zphoto.hasNormalized
-      filehash       = source.fileHash.code
+      source           <- zphoto.source.some
+      place            <- zphoto.place
+      faces            <- zphoto.foundFaces
+      hasNormalized    <- zphoto.hasNormalized
+      filehash          = source.fileHash.code
+      originalFound    <- ZIO.attempt(source.original.path.toFile.exists())
+      originalModified <- ZIO
+                            .attempt(source.fileLastModified.toInstant.toEpochMilli != source.original.path.toFile.lastModified())
+                            .when(originalFound)
+                            .someOrElse(true)
     } yield {
       val updatedCount                  = stats.count + 1
       val updatedGeolocalizedCount      = stats.geolocalizedCount + (if (place.isDefined) 1 else 0)
       val updatedNormalizedFailureCount = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
       val updatedFacesCount             = stats.facesCount + faces.map(_.count).getOrElse(0)
+      val updatedMissingCount           = stats.missingCount + (if (originalFound) 0 else 1)
+      val updatedModifiedCount          = stats.modifiedCount + (if (originalModified) 1 else 0)
       val updatedDuplicated             = stats.duplicated + (stats.duplicated.get(filehash) match {
         case None        => filehash -> 1
         case Some(count) => filehash -> (count + 1)
@@ -51,7 +62,9 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
         geolocalizedCount = updatedGeolocalizedCount,
         normalizedFailureCount = updatedNormalizedFailureCount,
         duplicated = updatedDuplicated,
-        facesCount = updatedFacesCount
+        facesCount = updatedFacesCount,
+        missingCount = updatedMissingCount,
+        modifiedCount = updatedModifiedCount
       )
     }
   }
@@ -59,12 +72,14 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
   def reportStats(stats: Statistics) = {
     val duplicatedCount = stats.duplicated.filter((_, count) => count > 1).size
     for {
-      _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :${RESET}")
-      _ <- Console.printLine(s"${GREEN}- ${stats.count} photos${RESET}")
-      _ <- Console.printLine(s"${GREEN}- ${stats.facesCount} people faces${RESET}")
-      _ <- Console.printLine(s"${GREEN}- ${stats.geolocalizedCount} geolocalized photos${RESET}")
-      _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos${RESET}")
-      _ <- Console.printLine(s"${RED}- ${stats.normalizedFailureCount} normalization failures${RESET}")
+      _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :$RESET")
+      _ <- Console.printLine(s"${GREEN}- ${stats.count} photos$RESET")
+      _ <- Console.printLine(s"${GREEN}- ${stats.facesCount} people faces$RESET")
+      _ <- Console.printLine(s"${GREEN}- ${stats.geolocalizedCount} geolocalized photos$RESET")
+      _ <- Console.printLine(s"${RED}- ${stats.normalizedFailureCount} normalization failures$RESET")
+      _ <- Console.printLine(s"${RED}- ${stats.missingCount} missing originals !!$RESET")
+      _ <- Console.printLine(s"${YELLOW}- ${stats.modifiedCount} modified originals$RESET")
+      _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET")
     } yield stats
   }
 
