@@ -16,7 +16,7 @@ photos. Once again this project has first started as just [a "small" script][pho
 - [DeepJavaLibrary][djl] is intensively used for 
   - photos classifications,
   - people faces detection,
-  - object detection,...
+  - objects detection,...
 
 ## Current status
 - no release available yet
@@ -24,7 +24,7 @@ photos. Once again this project has first started as just [a "small" script][pho
   - searching and statistics purposes
   - visualization
 
-Visualisation is very fast :) The current graphical user interface :  
+The visualisation with the graphical user interface is very fast :)  
 ![](gui.png)
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
