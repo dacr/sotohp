@@ -12,16 +12,16 @@ scmInfo := Some(
 )
 
 val versions = new {
-  val zio        = "2.0.17"
+  val zio        = "2.0.18"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.0-RC16"
   val ziojson    = "0.6.2"
   val ziologging = "2.1.14"
-  val ziolmdb    = "1.4.3"
+  val ziolmdb    = "1.5.0"
   val uuidgen    = "4.3.0"
   val elastic4s  = "8.9.2"
   val metadata   = "2.18.0"
-  val ulid       = "23.9.2"
+  val ulid       = "23.9.3"
   val javafx     = "20.0.2"
   val djl        = "0.23.0"
   //  val tapir      = "1.5.0"
