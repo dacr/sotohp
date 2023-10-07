@@ -23,11 +23,11 @@ ThisBuild / pomExtra in Global := {
   </developers>
 }
 
-releaseTagComment        := s"Releasing ${(ThisBuild / version).value}"
-releaseCommitMessage     := s"Setting version to ${(ThisBuild / version).value}"
-releaseNextCommitMessage := s"[ci skip] Setting version to ${(ThisBuild / version).value}"
+ThisBuild / releaseTagComment        := s"Releasing ${(ThisBuild / version).value}"
+ThisBuild / releaseCommitMessage     := s"Setting version to ${(ThisBuild / version).value}"
+ThisBuild / releaseNextCommitMessage := s"[ci skip] Setting version to ${(ThisBuild / version).value}"
 
-releaseProcess := {
+ThisBuild / releaseProcess := {
   import ReleaseTransformations._
   Seq[ReleaseStep](
     checkSnapshotDependencies,
