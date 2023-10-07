@@ -1,5 +1,5 @@
 ThisBuild / organization := "fr.janalyse"
-ThisBuild / name         := "sotohp"
+//ThisBuild / name         := "sotohp"
 ThisBuild / homepage     := Some(new URL("https://github.com/dacr/sotohp"))
 
 ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
