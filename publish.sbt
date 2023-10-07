@@ -3,10 +3,12 @@ publishMavenStyle    := true
 
 ThisBuild / releaseCrossBuild             := true
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
-ThisBuild / Test / publishArtifact        := false
 ThisBuild / publishTo                     := Some(if (isSnapshot.value) Opts.resolver.sonatypeSnapshots else Opts.resolver.sonatypeStaging)
-//ThisBuild / Compile / publishArtifact     := false
-ThisBuild / packageDoc / publishArtifact  := false
+
+ThisBuild / Test / publishArtifact                 := false
+ThisBuild / Compile / packageBin / publishArtifact := true
+ThisBuild / Compile / packageDoc / publishArtifact := false
+ThisBuild / Compile / packageSrc / publishArtifact := false
 
 Global / PgpKeys.useGpg := true                // workaround with pgp and sbt 1.2.x
 pgpSecretRing           := pgpPublicRing.value // workaround with pgp and sbt 1.2.x
