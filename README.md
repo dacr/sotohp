@@ -1,4 +1,4 @@
-# SOTOHP
+# SOTOHP [![][sotohpImg]][sotohpLnk]
 
 A software to easily and quicly manage a huge amount of photos. Why ? Just because those past 23 years, I've taken more than 90000
 photos. Once again this project has first started as just [a "small" script][photosc].
@@ -31,3 +31,7 @@ The visualisation with the graphical user interface is very fast :)
 [ulid]: https://github.com/ulid/spec
 [djl]: https://github.com/deepjavalibrary/djl
 [lmdb]: https://github.com/dacr/zio-lmdb
+
+[sotohp]:    https://github.com/dacr/sotohp
+[sotohpImg]: https://img.shields.io/maven-central/v/fr.janalyse/sotohp_3.svg
+[sotohpLnk]: https://mvnrepository.com/artifact/fr.janalyse/sotohp

@@ -19,11 +19,11 @@ val versions = new {
   val ziologging = "2.1.14"
   val ziolmdb    = "1.5.0"
   val uuidgen    = "4.3.0"
-  val elastic4s  = "8.9.2"
+  val elastic4s  = "8.9.4"
   val metadata   = "2.18.0"
   val ulid       = "23.9.3"
   val javafx     = "20.0.2"
-  val djl        = "0.23.0"
+  val djl        = "0.24.0"
   //  val tapir      = "1.5.0"
 }
 
