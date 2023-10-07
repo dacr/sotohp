@@ -1,15 +1,18 @@
-organization := "fr.janalyse"
-name         := "sotohp"
-homepage     := Some(new URL("https://github.com/dacr/sotohp"))
+ThisBuild / organization := "fr.janalyse"
+ThisBuild / name         := "sotohp"
+ThisBuild / homepage     := Some(new URL("https://github.com/dacr/sotohp"))
 
-licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
+ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
 
-scmInfo := Some(
+ThisBuild / scmInfo := Some(
   ScmInfo(
     url(s"https://github.com/dacr/sotohp.git"),
     s"git@github.com:dacr/sotohp.git"
   )
 )
+
+ThisBuild / scalaVersion       := "3.3.1"
+ThisBuild / crossScalaVersions := Seq("3.3.1")
 
 val versions = new {
   val zio        = "2.0.18"
@@ -55,7 +58,6 @@ lazy val osName = System.getProperty("os.name") match {
 }
 
 val sharedSettings = Seq(
-  scalaVersion := "3.3.1",
   scalacOptions ++= Seq("-deprecation"), // "-Xfatal-warnings"
   libraryDependencies ++= Seq(
     "dev.zio" %% "zio-test"     % versions.zio % Test,
@@ -69,6 +71,7 @@ lazy val moduleModel =
     .in(file("modules/model"))
     .settings(
       sharedSettings,
+      name := "sotohp-model",
       libraryDependencies ++= Seq(
         "org.wvlet.airframe" %% "airframe-ulid" % versions.ulid
       )
@@ -80,6 +83,7 @@ lazy val moduleCore =
     .dependsOn(moduleModel)
     .settings(
       sharedSettings,
+      name := "sotohp-core",
       libraryDependencies ++= Seq(
         "dev.zio"           %% "zio-streams"         % versions.zio,
         "dev.zio"           %% "zio-json"            % versions.ziojson,
@@ -98,6 +102,7 @@ lazy val moduleSearch =
     .dependsOn(moduleCore)
     .settings(
       sharedSettings,
+      name := "sotohp-search",
       libraryDependencies ++= Seq(
         "com.sksamuel.elastic4s" %% "elastic4s-effect-zio"    % versions.elastic4s,
         "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % versions.elastic4s,
@@ -111,6 +116,7 @@ lazy val moduleProcessor =
     .dependsOn(moduleCore)
     .settings(
       sharedSettings,
+      name := "sotohp-processor",
       fork := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
@@ -127,6 +133,7 @@ lazy val userInterfacesCLI =
     .dependsOn(moduleCore, moduleProcessor, moduleSearch)
     .settings(
       sharedSettings,
+      name := "sotohp-cli",
       fork := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
@@ -147,6 +154,7 @@ lazy val userInterfacesGUI =
     .dependsOn(moduleCore)
     .settings(
       sharedSettings,
+      name := "sotohp-gui",
       fork := true,
       javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/opt/javafx-sdk-20.0.2/lib/", "--add-modules", "javafx.controls"),
       libraryDependencies ++= Seq(
