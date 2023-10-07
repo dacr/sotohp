@@ -1,5 +1,5 @@
 ThisBuild / organization := "fr.janalyse"
-//ThisBuild / name         := "sotohp"
+ThisBuild / name         := "sotohp"
 ThisBuild / homepage     := Some(new URL("https://github.com/dacr/sotohp"))
 
 ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
@@ -27,7 +27,7 @@ val versions = new {
   val elastic4s  = "8.9.4"
   val metadata   = "2.18.0"
   val ulid       = "23.9.3"
-  val javafx     = "20.0.2"
+  val javafx     = "21"
   val djl        = "0.24.0"
   //  val tapir      = "1.5.0"
 }
@@ -158,7 +158,7 @@ lazy val userInterfacesGUI =
       sharedSettings,
       name := "sotohp-gui",
       fork := true,
-      javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/opt/javafx-sdk-20.0.2/lib/", "--add-modules", "javafx.controls"),
+      javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/opt/javafx-sdk-21/lib/", "--add-modules", "javafx.controls"),
       libraryDependencies ++= Seq(
         // "org.openjfx" % "javafx"          % versions.javafx classifier "linux",
         // "org.openjfx" % "javafx-graphics" % versions.javafx, // classifier "linux",
