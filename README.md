@@ -33,5 +33,5 @@ The visualisation with the graphical user interface is very fast :)
 [lmdb]: https://github.com/dacr/zio-lmdb
 
 [sotohp]:    https://github.com/dacr/sotohp
-[sotohpImg]: https://img.shields.io/maven-central/v/fr.janalyse/sotohp_3.svg
-[sotohpLnk]: https://mvnrepository.com/artifact/fr.janalyse/sotohp
+[sotohpImg]: https://img.shields.io/maven-central/v/fr.janalyse/sotohp-model_3.svg
+[sotohpLnk]: https://mvnrepository.com/artifact/fr.janalyse/sotohp-model
