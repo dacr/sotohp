@@ -1,5 +1,5 @@
-pomIncludeRepository := { _ => false }
-publishMavenStyle    := true
+ThisBuild / pomIncludeRepository := { _ => false }
+ThisBuild / publishMavenStyle    := true
 
 ThisBuild / releaseCrossBuild             := true
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
@@ -8,10 +8,10 @@ ThisBuild / publishTo                     := Some(if (isSnapshot.value) Opts.res
 ThisBuild / Test / publishArtifact                 := false
 ThisBuild / Compile / packageBin / publishArtifact := true
 ThisBuild / Compile / packageDoc / publishArtifact := false
-ThisBuild / Compile / packageSrc / publishArtifact := false
+ThisBuild / Compile / packageSrc / publishArtifact := true
 
-Global / PgpKeys.useGpg := true                // workaround with pgp and sbt 1.2.x
-pgpSecretRing           := pgpPublicRing.value // workaround with pgp and sbt 1.2.x
+Global / PgpKeys.useGpg   := true                // workaround with pgp and sbt 1.2.x
+ThisBuild / pgpSecretRing := pgpPublicRing.value // workaround with pgp and sbt 1.2.x
 
 ThisBuild / pomExtra in Global := {
   <developers>
