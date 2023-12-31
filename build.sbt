@@ -17,18 +17,18 @@ ThisBuild / crossScalaVersions := Seq("3.3.1")
 publishArtifact := false
 
 val versions = new {
-  val zio        = "2.0.18"
+  val zio        = "2.0.20"
 //  val zionio     = "2.0.1"
-  val zioconfig  = "4.0.0-RC16"
+  val zioconfig  = "4.0.0"
   val ziojson    = "0.6.2"
-  val ziologging = "2.1.14"
+  val ziologging = "2.1.16"
   val ziolmdb    = "1.5.0"
   val uuidgen    = "4.3.0"
-  val elastic4s  = "8.9.4"
-  val metadata   = "2.18.0"
-  val ulid       = "23.9.3"
+  val elastic4s  = "8.11.5"
+  val metadata   = "2.19.0"
+  val ulid       = "23.12.1"
   val javafx     = "21"
-  val djl        = "0.24.0"
+  val djl        = "0.25.0"
   //  val tapir      = "1.5.0"
 }
 
@@ -42,7 +42,7 @@ lazy val deepJavaLearningLibs = Seq(
   "ai.djl.pytorch"     % "pytorch-model-zoo"    % versions.djl,
   "ai.djl.tensorflow"  % "tensorflow-model-zoo" % versions.djl,
   "ai.djl.mxnet"       % "mxnet-native-auto"    % "1.8.0",
-  "net.java.dev.jna"   % "jna"                  % "5.13.0"
+  "net.java.dev.jna"   % "jna"                  % "5.14.0"
 )
 
 lazy val lmdbJavaOptions = Seq(
@@ -158,7 +158,7 @@ lazy val userInterfacesGUI =
       sharedSettings,
       name := "sotohp-gui",
       fork := true,
-      javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/opt/javafx-sdk-21/lib/", "--add-modules", "javafx.controls"),
+      javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
       libraryDependencies ++= Seq(
         // "org.openjfx" % "javafx"          % versions.javafx classifier "linux",
         // "org.openjfx" % "javafx-graphics" % versions.javafx, // classifier "linux",
