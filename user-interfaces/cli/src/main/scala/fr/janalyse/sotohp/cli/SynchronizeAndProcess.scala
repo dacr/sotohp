@@ -28,6 +28,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
     for {
       _                        <- ZIO.logInfo("start photos synchronization and processing")
       searchRoots              <- getSearchRoots
+      _                        <- ZIO.logInfo(s"Defined search Roots ${searchRoots.map(_.baseDirectory).mkString(",")}")
       classificationProcessor   = ClassificationProcessor.allocate()
       objectsDetectionProcessor = ObjectsDetectionProcessor.allocate()
       facesProcessor            = FacesProcessor.allocate()

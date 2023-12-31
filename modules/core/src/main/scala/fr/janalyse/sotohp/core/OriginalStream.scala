@@ -5,12 +5,9 @@ import zio.ZIO.*
 import zio.stream.*
 
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{Files, Path}
-
+import java.nio.file.{FileVisitOption, Files, Path}
 import fr.janalyse.sotohp.model.*
-
 import PhotoOperations.*
-
 import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
 case class StreamIOIssue(message: String, exception: Throwable)
@@ -30,7 +27,7 @@ object OriginalsStream {
 
     val result = for {
       foundRelativeFilesJavaStream <- ZIO
-                                        .attempt(Files.find(baseDirectory, 10, searchPredicate(includeMask, ignoreMask)))
+                                        .attempt(Files.find(baseDirectory, 10, searchPredicate(includeMask, ignoreMask), FileVisitOption.FOLLOW_LINKS))
                                         .mapError(err => StreamIOIssue("Couldn't create file stream", err))
       foundFileStream               = ZStream
                                         .fromJavaStream(foundRelativeFilesJavaStream)
