@@ -158,7 +158,9 @@ lazy val userInterfacesGUI =
       sharedSettings,
       name := "sotohp-gui",
       fork := true,
-      javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
+      // TODO workaround as openjfx is not yet well supported under NIX => use a dedicated flake
+      //javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
+      javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
       libraryDependencies ++= Seq(
         // "org.openjfx" % "javafx"          % versions.javafx classifier "linux",
         // "org.openjfx" % "javafx-graphics" % versions.javafx, // classifier "linux",
