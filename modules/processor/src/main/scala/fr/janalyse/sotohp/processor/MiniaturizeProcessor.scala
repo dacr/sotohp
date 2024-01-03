@@ -10,7 +10,6 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 import fr.janalyse.sotohp.config.*
-import net.coobird.thumbnailator.Thumbnails
 import org.apache.commons.imaging.Imaging
 
 case class MiniaturizeIssue(message: String, exception: Throwable)
@@ -19,21 +18,21 @@ object MiniaturizeProcessor extends Processor {
 
   private def miniaturizePhoto(referenceSize: Int, input: Path, output: Path, config: SotohpConfig) = {
     ZIO
-      .attemptBlockingIO(
-        Thumbnails
-          .of(input.toFile)
-          .useExifOrientation(true)
-          .size(referenceSize, referenceSize)
-          .keepAspectRatio(true)
-          .outputQuality(config.miniaturizer.quality)
-          .allowOverwrite(false)
-          .toFile(output.toFile)
+      .attemptBlocking(
+//        Thumbnails
+//          .of(input.toFile)
+//          .useExifOrientation(true)
+//          .size(referenceSize, referenceSize)
+//          .keepAspectRatio(true)
+//          .outputQuality(config.miniaturizer.quality)
+//          .allowOverwrite(false)
+//          .toFile(output.toFile)
+        BasicImaging.resizeImage(input, output, referenceSize, None, Some(config.normalizer.quality))
       )
       .tap(_ => ZIO.logInfo(s"Miniaturize $referenceSize"))
       .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", th))
-      .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
-      .ignore // Photo file may have internal issues
+      .ignoreLogged // Photo file may have internal issues
   }
 
   private def buildMiniature(photo: Photo, size: Int, config: SotohpConfig): IO[MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, MiniatureSource] = {

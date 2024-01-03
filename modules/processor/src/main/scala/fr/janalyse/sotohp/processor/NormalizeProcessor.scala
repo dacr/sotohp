@@ -9,30 +9,29 @@ import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
 import java.nio.file.Path
 import org.apache.commons.imaging.Imaging
-import net.coobird.thumbnailator.Thumbnails
 
 case class NormalizeIssue(message: String, exception: Throwable)
 
 object NormalizeProcessor extends Processor {
 
-  private def resizePhoto(input: Path, output: Path, config: SotohpConfig) = {
+  private def resizePhoto(input: Path, output: Path, orientation: Option[PhotoOrientation], config: SotohpConfig) = {
     import config.normalizer.referenceSize
     ZIO
-      .attemptBlockingIO(
-        Thumbnails
-          .of(input.toFile)
-          .useExifOrientation(true)
-          .size(referenceSize, referenceSize)
-          .keepAspectRatio(true)
-          .outputQuality(config.normalizer.quality)
-          .allowOverwrite(false)
-          .toFile(output.toFile)
+      .attemptBlocking(
+//        Thumbnails
+//          .of(input.toFile)
+//          .useExifOrientation(true)
+//          .size(referenceSize, referenceSize)
+//          .keepAspectRatio(true)
+//          .outputQuality(config.normalizer.quality)
+//          .allowOverwrite(false)
+//          .toFile(output.toFile)
+        BasicImaging.resizeImage(input, output, referenceSize, orientation.map(_.rotationDegrees), Some(config.normalizer.quality))
       )
       .tap(_ => ZIO.logInfo(s"Normalize"))
       .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size $referenceSize", th))
-      .tapError(err => ZIO.logWarning(err.toString))
       .uninterruptible
-      .ignore // Photo file may have internal issues
+      .ignoreLogged // Photo file may have internal issues
   }
 
   private def upsertNormalizedPhotoIfNeeded(photo: Photo, output: Path, config: SotohpConfig) = {
@@ -77,7 +76,7 @@ object NormalizeProcessor extends Processor {
                            .attempt(PhotoOperations.makeNormalizedFilePath(photo.source, config))
                            .mapError(th => NormalizeIssue(s"Couldn't build destination path target", th))
       _               <- makeOutputDirectories(output)
-      _               <- resizePhoto(input, output, config)
+      _               <- resizePhoto(input, output, photo.metaData.flatMap(_.orientation), config)
                            .when(!output.toFile.exists())
       normalizedPhoto <- upsertNormalizedPhotoIfNeeded(photo, output, config)
                            .logError("Couldn't upsert normalized photo in datastore")

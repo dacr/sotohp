@@ -20,37 +20,84 @@ import java.time.OffsetDateTime
 import fr.janalyse.sotohp.model.*
 
 class AutoScalingImageCanvas(width: Double, height: Double) extends Region {
-  var imageWidth  = width
-  var imageHeight = height
-  var imageX      = 0d
-  var imageY      = 0d
-  val canvas      = Canvas(width, height)
+  private var image: Option[Image] = None
+  private var imageWidth           = width
+  private var imageHeight          = height
+  private var imageX               = 0d
+  private var imageY               = 0d
+  private var centerX              = 0d
+  private var centerY              = 0d
+  private var rotationDegrees      = 0
+
+  private val canvas = Canvas(width, height)
   getChildren.add(canvas)
 
-  def getGraphicsContext2D() = canvas.getGraphicsContext2D
-
-  def clear() = {
-    val gc = getGraphicsContext2D()
-    gc.setFill(Color.BLACK)
-    gc.clearRect(0, 0, width, height)
+  def restore() = {
+    val gc = canvas.getGraphicsContext2D
+    gc.setFill(Color.WHITE)
+    gc.clearRect(imageX, imageY, imageWidth, imageHeight)
+    gc.clearRect(imageX, imageY, imageHeight, imageWidth)
+    gc.restore()
   }
 
-  def drawImage(image: Image): Unit = {
-    clear()
-    val gc = getGraphicsContext2D()
-    imageWidth = image.getWidth
-    imageHeight = image.getHeight
-    imageX = canvas.getWidth() / 2 - imageWidth / 2
-    imageY = canvas.getHeight() / 2 - imageHeight / 2
+  def drawImage(image: Image, rotationDegrees: Int): Unit = {
+    restore()
+    this.rotationDegrees = rotationDegrees
+    this.image = Some(image)
+    this.imageWidth = this.image.map(_.getWidth).getOrElse(width)
+    this.imageHeight = this.image.map(_.getHeight).getOrElse(height)
+    this.imageX = canvas.getWidth() / 2 - imageWidth / 2
+    this.imageY = canvas.getHeight() / 2 - imageHeight / 2
+    this.centerX = imageX + imageWidth / 2
+    this.centerY = imageY + imageHeight / 2
+    val gc = canvas.getGraphicsContext2D
+    gc.translate(centerX, centerY)
+    gc.rotate(rotationDegrees)
+    gc.translate(-centerX, -centerY)
     gc.drawImage(image, imageX, imageY, imageWidth, imageHeight)
+    gc.translate(centerX, centerY)
+    gc.rotate(-rotationDegrees)
+    gc.translate(-centerX, -centerY)
     layoutChildren()
   }
 
   def addRect(x: Double, y: Double, w: Double, h: Double): Unit = {
-    val gc = getGraphicsContext2D()
+    val gc = canvas.getGraphicsContext2D
     gc.setLineWidth(2d)
     gc.setStroke(Color.BLUE)
     gc.strokeRect(imageX + x * imageWidth, imageY + y * imageHeight, w * imageWidth, h * imageHeight)
+  }
+
+  def rotateLeft(): Unit = {
+    if (image.isDefined) {
+      restore()
+      rotationDegrees = (rotationDegrees + 270) % 360
+      val gc = canvas.getGraphicsContext2D
+      gc.translate(centerX, centerY)
+      gc.rotate(rotationDegrees)
+      gc.translate(-centerX, -centerY)
+      gc.drawImage(image.get, imageX, imageY, imageWidth, imageHeight)
+      gc.translate(centerX, centerY)
+      gc.rotate(-rotationDegrees)
+      gc.translate(-centerX, -centerY)
+      layoutChildren()
+    }
+  }
+
+  def rotateRight(): Unit = {
+    if (image.isDefined) {
+      restore()
+      rotationDegrees = (rotationDegrees + 90) % 360
+      val gc = canvas.getGraphicsContext2D
+      gc.translate(centerX, centerY)
+      gc.rotate(rotationDegrees)
+      gc.translate(-centerX, -centerY)
+      gc.drawImage(image.get, imageX, imageY, imageWidth, imageHeight)
+      gc.translate(centerX, centerY)
+      gc.rotate(-rotationDegrees)
+      gc.translate(-centerX, -centerY)
+      layoutChildren()
+    }
   }
 
   override def layoutChildren(): Unit = {
@@ -58,7 +105,11 @@ class AutoScalingImageCanvas(width: Double, height: Double) extends Region {
     val y     = getInsets.getTop
     val w     = getWidth - getInsets.getRight - x
     val h     = getHeight - getInsets.getBottom - y
-    val ratio = Math.min(w / imageWidth, h / imageHeight)
+    val ratio =
+      if (rotationDegrees == 90 || rotationDegrees == 270)
+        Math.min(w / imageHeight, h / imageWidth)
+      else
+        Math.min(w / imageWidth, h / imageHeight)
     canvas.setScaleX(ratio)
     canvas.setScaleY(ratio)
     positionInArea(canvas, x, y, w, h, -1, HPos.CENTER, VPos.CENTER)
@@ -67,6 +118,7 @@ class AutoScalingImageCanvas(width: Double, height: Double) extends Region {
 
 case class PhotoToView(
   shootDateTime: Option[OffsetDateTime],
+  orientation: Option[PhotoOrientation],
   source: PhotoSource,
   place: Option[PhotoPlace] = None,
   miniatures: Option[Miniatures] = None,
@@ -90,8 +142,10 @@ class Viewer extends Application {
     label.setText(photo.description.flatMap(_.category.map(_.text)).getOrElse("no category"))
     val filepath = photo.normalizedPath.getOrElse(photo.source.original.path)
     val image    = Image(java.io.FileInputStream(filepath.toFile))
-    canvas.drawImage(image)
+    //canvas.drawImage(image, photo.orientation.map(_.rotationDegrees).getOrElse(0))
+    canvas.drawImage(image, 0) // normalized photo are already rotated
     if (showFaces) drawFaces(canvas, photo)
+    println(photo.orientation)
   }
 
   lazy val photos = {
@@ -106,6 +160,7 @@ class Viewer extends Application {
       source          <- zphoto.source.some
       place           <- zphoto.place
       shootDateTime   <- zphoto.metaData.map(_.flatMap(_.shootDateTime))
+      orientation     <- zphoto.metaData.map(_.flatMap(_.orientation))
       miniatures      <- zphoto.miniatures
       normalized      <- zphoto.normalized
       normalizedPath  <- PhotoOperations.makeNormalizedFilePath(source).when(normalized.isDefined)
@@ -115,6 +170,7 @@ class Viewer extends Application {
       faces           <- zphoto.foundFaces
       photoToView      = PhotoToView(
                            shootDateTime = shootDateTime,
+                           orientation = orientation,
                            source = source,
                            place = place,
                            miniatures = miniatures,
@@ -131,7 +187,9 @@ class Viewer extends Application {
       PhotoStream
         .photoLazyStream()
         .mapZIO(toPhotoToView)
-        // .filterZIO(_.foundFaces.map(faces => faces.exists(_.count == 0))) // Only photo with people faces :)
+//        .filter(_.normalizedPath.exists(p => p.toFile.exists())) // TODO temporary hack
+//         .filter(_.foundFaces.exists(faces => faces.count > 0)) // Only photo with people faces :)
+//        .take(100)
         .runCollect
         .provide(
           LMDB.liveWithDatabaseName("photos"),
@@ -180,11 +238,13 @@ class Viewer extends Application {
     val photoLabel = Label("something")
     firstImage(imageView, photoLabel)
 
-    val actionFirst = () => firstImage(imageView, photoLabel)
-    val actionNext  = () => nextImage(imageView, photoLabel)
-    val actionPrev  = () => prevImage(imageView, photoLabel)
-    val actionLast  = () => lastImage(imageView, photoLabel)
-    val actionFaces = () => { showFaces = !showFaces; reloadImage(imageView, photoLabel) }
+    val actionFirst       = () => firstImage(imageView, photoLabel)
+    val actionNext        = () => nextImage(imageView, photoLabel)
+    val actionPrev        = () => prevImage(imageView, photoLabel)
+    val actionLast        = () => lastImage(imageView, photoLabel)
+    val actionFaces       = () => { showFaces = !showFaces; reloadImage(imageView, photoLabel) }
+    val actionRotateLeft  = () => { imageView.rotateLeft() }
+    val actionRotateRight = () => { imageView.rotateRight() }
 
     val buttonFirst = Button("first")
     buttonFirst.setOnAction(event => actionFirst())
@@ -208,12 +268,14 @@ class Viewer extends Application {
 
     val keyHandler: EventHandler[KeyEvent] = keyEvent => {
       keyEvent.getCode match {
-        case KeyCode.PAGE_UP   => actionPrev()
-        case KeyCode.PAGE_DOWN => actionNext()
-        case KeyCode.HOME      => actionFirst()
-        case KeyCode.END       => actionLast()
-        case KeyCode.INSERT    => actionFaces()
-        case _                 =>
+        case KeyCode.PAGE_UP       => actionPrev()
+        case KeyCode.PAGE_DOWN     => actionNext()
+        case KeyCode.OPEN_BRACKET  => actionRotateLeft()
+        case KeyCode.CLOSE_BRACKET => actionRotateRight()
+        case KeyCode.HOME          => actionFirst()
+        case KeyCode.END           => actionLast()
+        case KeyCode.INSERT        => actionFaces()
+        case _                     =>
       }
     }
     scene.setOnKeyPressed(keyHandler)

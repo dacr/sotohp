@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.OriginalsStream
+import fr.janalyse.sotohp.model.Photo
 import fr.janalyse.sotohp.processor.{ClassificationProcessor, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.store.PhotoStoreService
@@ -24,6 +25,12 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
         Slf4jBridge.initialize
       )
 
+  def normalizeAndThenMiniaturize(photo: Photo) =
+    for {
+      p1 <- NormalizeProcessor.normalize(photo) // always before miniaturize phase
+      p2 <- MiniaturizeProcessor.miniaturize(p1)
+    } yield p2
+
   val logic = ZIO.logSpan("synchronizeAndProcess") {
     for {
       _                        <- ZIO.logInfo("start photos synchronization and processing")
@@ -34,8 +41,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
       facesProcessor            = FacesProcessor.allocate()
       processingStream          = OriginalsStream
                                     .photoFromOriginalStream(searchRoots)
-                                    .mapZIOParUnordered(4)(NormalizeProcessor.normalize) // First ! as normalized photos will accelerate next steps
-                                    .mapZIOParUnordered(4)(MiniaturizeProcessor.miniaturize)
+                                    .mapZIOPar(4)(normalizeAndThenMiniaturize)
                                     .mapZIO(classificationProcessor.analyze)
                                     .mapZIO(objectsDetectionProcessor.analyze)
                                     .mapZIO(facesProcessor.analyze)

@@ -17,7 +17,7 @@ ThisBuild / crossScalaVersions := Seq("3.3.1")
 publishArtifact := false
 
 val versions = new {
-  val zio        = "2.0.20"
+  val zio        = "2.0.21"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.0"
   val ziojson    = "0.6.2"
@@ -122,7 +122,7 @@ lazy val moduleProcessor =
       fork := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
-        "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
+        // "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
         "org.apache.commons" % "commons-imaging" % "1.0-alpha3" // https://commons.apache.org/proper/commons-imaging/
       ),
       libraryDependencies ++= deepJavaLearningLibs
@@ -159,7 +159,7 @@ lazy val userInterfacesGUI =
       name := "sotohp-gui",
       fork := true,
       // TODO workaround as openjfx is not yet well supported under NIX => use a dedicated flake
-      //javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
+      // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
       javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
       libraryDependencies ++= Seq(
         // "org.openjfx" % "javafx"          % versions.javafx classifier "linux",
