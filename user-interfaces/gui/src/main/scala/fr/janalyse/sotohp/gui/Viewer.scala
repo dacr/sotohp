@@ -116,36 +116,22 @@ class AutoScalingImageCanvas(width: Double, height: Double) extends Region {
   }
 }
 
-case class PhotoToView(
-  shootDateTime: Option[OffsetDateTime],
-  orientation: Option[PhotoOrientation],
-  source: PhotoSource,
-  place: Option[PhotoPlace] = None,
-  miniatures: Option[Miniatures] = None,
-  normalized: Option[NormalizedPhoto] = None,
-  normalizedPath: Option[Path] = None,
-  description: Option[PhotoDescription] = None,
-  foundClassifications: Option[PhotoClassifications] = None,
-  foundObjects: Option[PhotoObjects] = None,
-  foundFaces: Option[PhotoFaces] = None
-)
 
 class Viewer extends Application {
 
   override def init(): Unit = super.init()
 
-  def drawFaces(canvas: AutoScalingImageCanvas, photo: PhotoToView): Unit = {
+  def drawFaces(canvas: AutoScalingImageCanvas, photo: PhotoToShow): Unit = {
     photo.foundFaces.foreach(foundFaces => foundFaces.faces.foreach(face => canvas.addRect(face.box.x, face.box.y, face.box.width, face.box.height)))
   }
 
-  def showImage(canvas: AutoScalingImageCanvas, label: Label, photo: PhotoToView): Unit = {
+  def showImage(canvas: AutoScalingImageCanvas, label: Label, photo: PhotoToShow): Unit = {
     label.setText(photo.description.flatMap(_.category.map(_.text)).getOrElse("no category"))
     val filepath = photo.normalizedPath.getOrElse(photo.source.original.path)
     val image    = Image(java.io.FileInputStream(filepath.toFile))
     //canvas.drawImage(image, photo.orientation.map(_.rotationDegrees).getOrElse(0))
     canvas.drawImage(image, 0) // normalized photo are already rotated
     if (showFaces) drawFaces(canvas, photo)
-    println(photo.orientation)
   }
 
   lazy val photos = {
@@ -153,40 +139,13 @@ class Viewer extends Application {
     import zio.config.typesafe.*
     import zio.lmdb.LMDB
     import fr.janalyse.sotohp.store.PhotoStoreService
-    import fr.janalyse.sotohp.store.ZPhoto
+    import fr.janalyse.sotohp.store.LazyPhoto
     import fr.janalyse.sotohp.core.PhotoStream
-
-    def toPhotoToView(zphoto: ZPhoto): ZIO[PhotoStoreService, Any, PhotoToView] = for {
-      source          <- zphoto.source.some
-      place           <- zphoto.place
-      shootDateTime   <- zphoto.metaData.map(_.flatMap(_.shootDateTime))
-      orientation     <- zphoto.metaData.map(_.flatMap(_.orientation))
-      miniatures      <- zphoto.miniatures
-      normalized      <- zphoto.normalized
-      normalizedPath  <- PhotoOperations.makeNormalizedFilePath(source).when(normalized.isDefined)
-      description     <- zphoto.description
-      classifications <- zphoto.foundClassifications
-      objects         <- zphoto.foundObjects
-      faces           <- zphoto.foundFaces
-      photoToView      = PhotoToView(
-                           shootDateTime = shootDateTime,
-                           orientation = orientation,
-                           source = source,
-                           place = place,
-                           miniatures = miniatures,
-                           normalized = normalized,
-                           normalizedPath = normalizedPath,
-                           description = description,
-                           foundClassifications = classifications,
-                           foundObjects = objects,
-                           foundFaces = faces
-                         )
-    } yield photoToView
 
     val logic =
       PhotoStream
         .photoLazyStream()
-        .mapZIO(toPhotoToView)
+        .mapZIO(PhotoToShow.fromLazyPhoto)
 //        .filter(_.normalizedPath.exists(p => p.toFile.exists())) // TODO temporary hack
 //         .filter(_.foundFaces.exists(faces => faces.count > 0)) // Only photo with people faces :)
 //        .take(100)

@@ -42,6 +42,14 @@ class PhotoStoreServiceFake(
   override def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
     statesCollectionRef.update(collection => collection.removed(photoId))
 
+  def photoStateFirst(): IO[PhotoStoreIssue, Option[PhotoState]] = ???
+
+  def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]= ???
+
+  def photoStatePrevious(before: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]= ???
+
+  def photoStateLast(): IO[PhotoStoreIssue, Option[PhotoState]]= ???
+  
   // ===================================================================================================================
   override def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]] = for {
     collection <- sourcesCollectionRef.get

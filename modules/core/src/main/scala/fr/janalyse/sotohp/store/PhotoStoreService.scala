@@ -13,8 +13,14 @@ type PhotoStoreIssue = PhotoStoreUserIssue | PhotoStoreSystemIssue | PhotoStoreN
 type LMDBIssues      = StorageUserError | StorageSystemError
 
 trait PhotoStoreService {
-  def photoLazyStream(): ZStream[Any, PhotoStoreIssue, ZPhoto] =
-    photoStateStream().map(thatState => new ZPhoto { override val state = thatState })
+  // Lazy Photo content stream
+  def photoLazyStream(): ZStream[Any, PhotoStoreIssue, LazyPhoto] = photoStateStream().map(LazyPhoto.apply)
+
+  // Navigate through photos
+  def photoFirst(): IO[PhotoStoreIssue, Option[LazyPhoto]]                   = photoStateFirst().map(foundThatState => foundThatState.map(LazyPhoto.apply))
+  def photoNext(after: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]]      = photoStateNext(after).map(foundThatState => foundThatState.map(LazyPhoto.apply))
+  def photoPrevious(before: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]] = photoStatePrevious(before).map(foundThatState => foundThatState.map(LazyPhoto.apply))
+  def photoLast(): IO[PhotoStoreIssue, Option[LazyPhoto]]                    = photoStateLast().map(foundThatState => foundThatState.map(LazyPhoto.apply))
 
   // photo states collection
   def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
@@ -22,6 +28,10 @@ trait PhotoStoreService {
   def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean]
   def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit]
   def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+  def photoStateFirst(): IO[PhotoStoreIssue, Option[PhotoState]]
+  def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
+  def photoStatePrevious(before: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
+  def photoStateLast(): IO[PhotoStoreIssue, Option[PhotoState]]
 
   // photo sources collection
   def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]]
@@ -80,7 +90,12 @@ trait PhotoStoreService {
 }
 
 object PhotoStoreService {
-  def photoLazyStream(): ZStream[PhotoStoreService, PhotoStoreIssue, ZPhoto] = ZStream.serviceWithStream(_.photoLazyStream())
+  def photoLazyStream(): ZStream[PhotoStoreService, PhotoStoreIssue, LazyPhoto] = ZStream.serviceWithStream(_.photoLazyStream())
+
+  def photoFirst(): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]]                   = serviceWithZIO(_.photoFirst())
+  def photoNext(after: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]]      = serviceWithZIO(_.photoNext(after))
+  def photoPrevious(before: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]] = serviceWithZIO(_.photoPrevious(before))
+  def photoLast(): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]]                    = serviceWithZIO(_.photoLast())
 
   def photoStateGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoState]]              = serviceWithZIO(_.photoStateGet(photoId))
   def photoStateStream(): ZStream[PhotoStoreService, PhotoStoreIssue, PhotoState]                               = ZStream.serviceWithStream(_.photoStateStream())

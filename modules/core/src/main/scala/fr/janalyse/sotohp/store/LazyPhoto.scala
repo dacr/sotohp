@@ -9,8 +9,7 @@ import zio.*
 import java.nio.file.Path
 import java.time.OffsetDateTime
 
-trait ZPhoto {
-  val state: PhotoState
+case class LazyPhoto(state: PhotoState) {
 
   def source: ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoSource]] =
     PhotoStoreService.photoSourceGet(state.originalId)

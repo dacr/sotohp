@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.cli
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.NormalizeProcessor
-import fr.janalyse.sotohp.store.{PhotoStoreService, ZPhoto}
+import fr.janalyse.sotohp.store.{PhotoStoreService, LazyPhoto}
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
@@ -34,7 +34,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
         Scope.default
       )
 
-  def updateStats(stats: Statistics, zphoto: ZPhoto) = {
+  def updateStats(stats: Statistics, zphoto: LazyPhoto) = {
     for {
       source           <- zphoto.source.some
       place            <- zphoto.place

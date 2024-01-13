@@ -110,6 +110,26 @@ class PhotoStoreServiceLive private (
       .delete(photoIdToCollectionKey(photoId))
       .mapBoth(convertFailures, _ => ())
 
+  def photoStateFirst(): IO[PhotoStoreIssue, Option[PhotoState]] =
+    statesCollection
+      .head()
+      .mapBoth(convertFailures, result => result.map((key, daoState) => daoStateToState(daoState)))
+
+  def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] =
+    statesCollection
+      .next(photoIdToCollectionKey(after))
+      .mapBoth(convertFailures, result => result.map((key, daoState) => daoStateToState(daoState)))
+
+  def photoStatePrevious(before: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] =
+    statesCollection
+      .previous(photoIdToCollectionKey(before))
+      .mapBoth(convertFailures, result => result.map((key, daoState) => daoStateToState(daoState)))
+
+  def photoStateLast(): IO[PhotoStoreIssue, Option[PhotoState]] =
+    statesCollection
+      .last()
+      .mapBoth(convertFailures, result => result.map((key, daoState) => daoStateToState(daoState)))
+
   // ===================================================================================================================
   def daoSourceToSource(from: Option[DaoPhotoSource]): Option[PhotoSource] = {
     from.map(daoSource =>

@@ -26,7 +26,7 @@ val versions = new {
   val uuidgen    = "4.3.0"
   val elastic4s  = "8.11.5"
   val metadata   = "2.19.0"
-  val ulid       = "23.12.1"
+  val ulid       = "24.1.0"
   val javafx     = "21"
   val djl        = "0.25.0"
   //  val tapir      = "1.5.0"
@@ -162,10 +162,9 @@ lazy val userInterfacesGUI =
       // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
       javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
       libraryDependencies ++= Seq(
-        // "org.openjfx" % "javafx"          % versions.javafx classifier "linux",
-        // "org.openjfx" % "javafx-graphics" % versions.javafx, // classifier "linux",
-        "org.openjfx" % "javafx-graphics" % versions.javafx classifier osName,
-        "org.openjfx" % "javafx-controls" % versions.javafx classifier osName
+        // "org.openjfx"  % "javafx-graphics" % versions.javafx classifier osName,
+        // "org.openjfx"  % "javafx-controls" % versions.javafx classifier osName,
+        "org.scalafx" %% "scalafx" % "21.0.0-R32"
       )
     )
 
