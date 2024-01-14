@@ -117,7 +117,7 @@ class AutoScalingImageCanvas(width: Double, height: Double) extends Region {
 }
 
 
-class Viewer extends Application {
+class OldViewerApp extends Application {
 
   override def init(): Unit = super.init()
 
@@ -251,8 +251,8 @@ class Viewer extends Application {
   }
 }
 
-object Viewer {
+object OldViewerApp {
   def main(args: Array[String]): Unit = {
-    new Viewer().go()
+    new OldViewerApp().go()
   }
 }
