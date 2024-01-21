@@ -33,14 +33,16 @@ object PhotoViewerApp extends ZIOAppDefault {
     lazy val rotateLeft  = Button("↺") // ANTICLOCKWISE OPEN CIRCLE ARROW
     lazy val rotateRight = Button("↻") // CLOCKWISE OPEN CIRCLE ARROW
     lazy val display     = PhotoDisplay()
+    lazy val displaySFX  = jfxRegion2sfx(display)
+    lazy val buttons     = HBox(first, previous, next, last, faces, rotateLeft, rotateRight, info)
 
     override def start(): Unit = {
       stage = new JFXApp3.PrimaryStage {
         title = "SOTOHP Viewer"
         scene = new Scene {
           content = VBox(
-            jfxRegion2sfx(display),
-            HBox(first, previous, next, last, faces, rotateLeft, rotateRight, info)
+            displaySFX,
+            buttons
           )
           onKeyPressed = key =>
             key.getCode match {
@@ -53,8 +55,13 @@ object PhotoViewerApp extends ZIOAppDefault {
               case KeyCode.INSERT        => faces.fire()
               case _                     =>
             }
+          rotateLeft.onAction = event => display.rotateLeft()
+          rotateRight.onAction = event => display.rotateRight()
+          faces.onAction = event => display.toggleFaces()
         }
       }
+      displaySFX.maxWidth <== stage.width
+      displaySFX.maxHeight <== (stage.height - buttons.height * 2) // TODO
     }
 
     def show(photo: PhotoToShow): Unit = {
@@ -62,7 +69,7 @@ object PhotoViewerApp extends ZIOAppDefault {
       val filepath = photo.normalizedPath.getOrElse(photo.source.original.path)
       val image    = Image(java.io.FileInputStream(filepath.toFile))
       // display.drawImage(image, photo.orientation.map(_.rotationDegrees).getOrElse(0))
-      display.drawImage(image, 0) // normalized photo are already rotated
+      display.drawImage(photo, image, 0) // normalized photo are already rotated
     }
   }
 

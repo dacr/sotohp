@@ -10,91 +10,111 @@ import javafx.geometry.{HPos, VPos}
 import javafx.scene.layout.Region
 
 class PhotoDisplay extends Region {
-  private var imageOption: Option[Image]   = None
-  private var canvasOption: Option[Canvas] = None
+  private var currentPhoto: Option[PhotoToShow] = None
+  private var currentImage: Option[Image]       = None
+  private var imageX                            = 0d
 
-  private var imageX          = 0d
   private var imageY          = 0d
   private var centerX         = 0d
   private var centerY         = 0d
   private var rotationDegrees = 0
+  private var showFaces       = false
 
-  setBackground(Background.fill(Color.BLACK))
+  private var currentCanvas: Option[Canvas] = {
+    val canvas = new Canvas(2 * 1920, 2 * 1080)
+    getChildren.add(canvas)
+    setBackground(Background.fill(Color.BLACK))
+    Some(canvas)
+  }
 
-  def restore(): Unit = canvasOption.foreach { canvas =>
+  def clear(): Unit = currentCanvas.foreach { canvas =>
     val gc = canvas.getGraphicsContext2D
-    gc.setFill(Color.WHITE)
+    gc.save()
+    gc.translate(centerX, centerY)
+    gc.rotate(rotationDegrees)
+    gc.translate(-centerX, -centerY)
+    gc.setFill(Color.BLACK)
     gc.clearRect(imageX, imageY, canvas.getWidth, canvas.getHeight)
     gc.restore()
   }
 
-  def drawImage(image: Image, rotationDegrees: Int = 0): Unit = {
-    restore()
+  def drawImage(photo: PhotoToShow, image: Image, rotationDegrees: Int = 0): Unit = {
+    clear()
     this.rotationDegrees = rotationDegrees
-    this.imageOption = Some(image)
-    val canvas = new Canvas(image.getWidth, image.getHeight)
-    canvasOption.foreach(canvas => getChildren.remove(canvas))
-    getChildren.add(canvas)
-    this.canvasOption = Some(canvas)
-
-    this.imageX = canvas.getWidth() / 2 - image.getWidth / 2
-    this.imageY = canvas.getHeight() / 2 - image.getHeight / 2
-    this.centerX = imageX + image.getWidth / 2
-    this.centerY = imageY + image.getHeight / 2
-    val gc = canvas.getGraphicsContext2D
-    gc.translate(centerX, centerY)
-    gc.rotate(rotationDegrees)
-    gc.translate(-centerX, -centerY)
-    gc.drawImage(image, imageX, imageY, image.getWidth, image.getHeight)
-    gc.translate(centerX, centerY)
-    gc.rotate(-rotationDegrees)
-    gc.translate(-centerX, -centerY)
-    layoutChildren()
-  }
-
-  def addRect(x: Double, y: Double, w: Double, h: Double): Unit = canvasOption.foreach { canvas =>
-    imageOption.foreach { image =>
-      val gc = canvas.getGraphicsContext2D
-      gc.setLineWidth(2d)
-      gc.setStroke(Color.BLUE)
-      gc.strokeRect(imageX + x * image.getWidth, imageY + y * image.getHeight, w * image.getWidth, h * image.getHeight)
+    this.currentImage = Some(image)
+    this.currentPhoto = Some(photo)
+    // this.currentCanvas.foreach(canvas => getChildren.remove(canvas))
+    // val canvas = new Canvas(2 * 1920, 2 * 1080)
+    // getChildren.add(canvas)
+    // this.currentCanvas = Some(canvas)
+    currentCanvas.foreach { canvas =>
+      this.imageX = canvas.getWidth() / 2 - image.getWidth / 2
+      this.imageY = canvas.getHeight() / 2 - image.getHeight / 2
+      this.centerX = imageX + image.getWidth / 2
+      this.centerY = imageY + image.getHeight / 2
+      displayPhoto()
     }
   }
 
-  def rotateLeft(): Unit = canvasOption.foreach { canvas =>
-    imageOption.foreach { image =>
-      restore()
+  def displayPhoto(): Unit = {
+    currentPhoto.foreach { photo =>
+      currentImage.foreach { image =>
+        currentCanvas.foreach { canvas =>
+          val gc = canvas.getGraphicsContext2D
+          gc.save()
+          gc.translate(centerX, centerY)
+          gc.rotate(rotationDegrees)
+          gc.translate(-centerX, -centerY)
+          gc.drawImage(image, imageX, imageY, image.getWidth, image.getHeight)
+          if (showFaces) {
+            photo.foundFaces.foreach { photoFaces =>
+              photoFaces.faces.foreach { face =>
+                import face.box.x, face.box.y, face.box.{width => w}, face.box.{height => h}
+                gc.setLineWidth(2d)
+                gc.setStroke(Color.BLUE)
+                gc.strokeRect(
+                  imageX + x * image.getWidth,
+                  imageY + y * image.getHeight,
+                  w * image.getWidth,
+                  h * image.getHeight
+                )
+              }
+            }
+          }
+//          gc.translate(centerX, centerY)
+//          gc.rotate(-rotationDegrees)
+//          gc.translate(-centerX, -centerY)
+        gc.restore()
+        layoutChildren()
+        }
+      }
+    }
+  }
+
+  def toggleFaces(): Unit = {
+    showFaces = !showFaces
+    clear()
+    displayPhoto()
+  }
+
+  def rotateLeft(): Unit = currentCanvas.foreach { canvas =>
+    currentImage.foreach { image =>
+      clear()
       rotationDegrees = (rotationDegrees + 270) % 360
-      val gc = canvas.getGraphicsContext2D
-      gc.translate(centerX, centerY)
-      gc.rotate(rotationDegrees)
-      gc.translate(-centerX, -centerY)
-      gc.drawImage(image, imageX, imageY, image.getWidth, image.getHeight)
-      gc.translate(centerX, centerY)
-      gc.rotate(-rotationDegrees)
-      gc.translate(-centerX, -centerY)
-      layoutChildren()
+      displayPhoto()
     }
   }
 
-  def rotateRight(): Unit = canvasOption.foreach { canvas =>
-    imageOption.foreach { image =>
-      restore()
+  def rotateRight(): Unit = currentCanvas.foreach { canvas =>
+    currentImage.foreach { image =>
+      clear()
       rotationDegrees = (rotationDegrees + 90) % 360
-      val gc = canvas.getGraphicsContext2D
-      gc.translate(centerX, centerY)
-      gc.rotate(rotationDegrees)
-      gc.translate(-centerX, -centerY)
-      gc.drawImage(image, imageX, imageY, image.getWidth, image.getHeight)
-      gc.translate(centerX, centerY)
-      gc.rotate(-rotationDegrees)
-      gc.translate(-centerX, -centerY)
-      layoutChildren()
+      displayPhoto()
     }
   }
 
-  override def layoutChildren(): Unit = canvasOption.foreach { canvas =>
-    imageOption.foreach { image =>
+  override def layoutChildren(): Unit = currentCanvas.foreach { canvas =>
+    currentImage.foreach { image =>
       val x     = getInsets.getLeft
       val y     = getInsets.getTop
       val w     = getWidth - getInsets.getRight - x
