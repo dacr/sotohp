@@ -41,7 +41,7 @@ object PhotoOperations {
     val photoId = photoSource.photoId
     Path.of(dataDir, "artifacts", ownerId.toString, photoId.toString)
   }
-  
+
   def makePhotoInternalDataPath(photoSource: PhotoSource): IO[SotohpConfigIssue, Path] = {
     SotohpConfig.zioConfig.map(config => makePhotoInternalDataPath(photoSource, config))
   }
@@ -262,7 +262,8 @@ object PhotoOperations {
                            photoOwnerId = photo.source.original.ownerId,
                            photoTimestamp = photo.timestamp,
                            firstSeen = currentDateTime,
-                           lastSeen = currentDateTime
+                           lastSeen = currentDateTime,
+                           lastSynchronized = None
                          )
       _               <- PhotoStoreService.photoStateUpsert(photo.source.photoId, state)
     } yield ()
@@ -327,6 +328,7 @@ object PhotoOperations {
       normalizedPhoto  <- PhotoStoreService.photoNormalizedGet(photoId)
       photoTimestamp   <- computePhotoTimestamp(original, photoMetaData)
       photoDescription <- PhotoStoreService.photoDescriptionGet(photoId)
+      photoState       <- PhotoStoreService.photoStateGet(photoId)
       _                <- updateStateLastSeen(photoId)
     } yield {
       Photo(
@@ -336,7 +338,8 @@ object PhotoOperations {
         place = photoPlace,
         description = photoDescription,
         miniatures = miniatures,
-        normalized = normalizedPhoto
+        normalized = normalizedPhoto,
+        lastSynchronized = photoState.flatMap(_.lastSynchronized)
       )
     }
 
@@ -383,7 +386,8 @@ object PhotoOperations {
         normalized = normalizedPhoto,
         foundClassifications = classifications,
         foundObjects = objects,
-        foundFaces = faces
+        foundFaces = faces,
+        lastSynchronized = state.lastSynchronized
       )
     }
   }

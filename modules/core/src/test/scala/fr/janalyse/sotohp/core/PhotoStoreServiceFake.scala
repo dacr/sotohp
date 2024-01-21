@@ -36,6 +36,17 @@ class PhotoStoreServiceFake(
     collection <- statesCollectionRef.get
   } yield collection.contains(photoId)
 
+  def photoStateUpdate(photoId: PhotoId, photoStateUpdater: PhotoState => PhotoState): IO[PhotoStoreIssue, Option[PhotoState]] = {
+    statesCollectionRef
+      .updateAndGet { states =>
+        states.get(photoId) match {
+          case None        => states
+          case Some(state) => states.updated(photoId, photoStateUpdater(state))
+        }
+      }
+      .map(_.get(photoId))
+  }
+
   override def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit] =
     statesCollectionRef.update(_.updated(photoId, photoState))
 
@@ -44,12 +55,12 @@ class PhotoStoreServiceFake(
 
   def photoStateFirst(): IO[PhotoStoreIssue, Option[PhotoState]] = ???
 
-  def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]= ???
+  def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = ???
 
-  def photoStatePrevious(before: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]= ???
+  def photoStatePrevious(before: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = ???
 
-  def photoStateLast(): IO[PhotoStoreIssue, Option[PhotoState]]= ???
-  
+  def photoStateLast(): IO[PhotoStoreIssue, Option[PhotoState]] = ???
+
   // ===================================================================================================================
   override def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]] = for {
     collection <- sourcesCollectionRef.get

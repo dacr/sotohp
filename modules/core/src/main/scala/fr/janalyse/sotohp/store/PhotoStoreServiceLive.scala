@@ -69,7 +69,8 @@ class PhotoStoreServiceLive private (
       photoOwnerId = PhotoOwnerId(ULID.fromString(from.photoOwnerId)),
       photoTimestamp = from.photoTimestamp,
       lastSeen = from.lastSeen,
-      firstSeen = from.firstSeen
+      firstSeen = from.firstSeen,
+      lastSynchronized = from.lastSynchronized
     )
   }
 
@@ -81,7 +82,8 @@ class PhotoStoreServiceLive private (
       photoOwnerId = from.photoOwnerId.toString,
       photoTimestamp = from.photoTimestamp,
       lastSeen = from.lastSeen,
-      firstSeen = from.firstSeen
+      firstSeen = from.firstSeen,
+      lastSynchronized = from.lastSynchronized
     )
   }
 
@@ -104,6 +106,12 @@ class PhotoStoreServiceLive private (
     statesCollection
       .upsertOverwrite(photoIdToCollectionKey(photoId), stateToDaoState(photoState))
       .mapBoth(convertFailures, _ => ())
+
+  override def photoStateUpdate(photoId: PhotoId, photoStateUpdater: PhotoState => PhotoState): IO[PhotoStoreIssue, Option[PhotoState]] = {
+    statesCollection
+      .update(photoIdToCollectionKey(photoId), daoState => stateToDaoState(photoStateUpdater(daoStateToState(daoState))))
+      .mapBoth(convertFailures, _.map(daoStateToState))
+  }
 
   override def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
     statesCollection

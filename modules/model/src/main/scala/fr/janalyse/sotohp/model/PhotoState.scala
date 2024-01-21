@@ -9,5 +9,6 @@ case class PhotoState(
   photoOwnerId: PhotoOwnerId,
   photoTimestamp: OffsetDateTime,
   firstSeen: OffsetDateTime,
-  lastSeen: OffsetDateTime
+  lastSeen: OffsetDateTime,
+  lastSynchronized: Option[OffsetDateTime]
 )

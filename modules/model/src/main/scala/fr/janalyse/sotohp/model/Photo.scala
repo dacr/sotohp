@@ -16,5 +16,7 @@ case class Photo(
 
   foundClassifications: Option[PhotoClassifications] = None,
   foundObjects: Option[PhotoObjects] = None,
-  foundFaces: Option[PhotoFaces] = None
+  foundFaces: Option[PhotoFaces] = None,
+  
+  lastSynchronized: Option[OffsetDateTime] = None // when is has been last synchronized on the search engine
 )

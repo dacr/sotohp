@@ -27,6 +27,7 @@ trait PhotoStoreService {
   def photoStateStream(): ZStream[Any, PhotoStoreIssue, PhotoState]
   def photoStateContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean]
   def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit]
+  def photoStateUpdate(photoId: PhotoId, photoStateUpdater: PhotoState => PhotoState): IO[PhotoStoreIssue, Option[PhotoState]]
   def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
   def photoStateFirst(): IO[PhotoStoreIssue, Option[PhotoState]]
   def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
@@ -97,11 +98,12 @@ object PhotoStoreService {
   def photoPrevious(before: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]] = serviceWithZIO(_.photoPrevious(before))
   def photoLast(): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]]                    = serviceWithZIO(_.photoLast())
 
-  def photoStateGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoState]]              = serviceWithZIO(_.photoStateGet(photoId))
-  def photoStateStream(): ZStream[PhotoStoreService, PhotoStoreIssue, PhotoState]                               = ZStream.serviceWithStream(_.photoStateStream())
-  def photoStateContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                    = serviceWithZIO(_.photoStateContains(photoId))
-  def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoStateUpsert(photoId, photoState))
-  def photoStateDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                         = serviceWithZIO(_.photoStateDelete(photoId))
+  def photoStateGet(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoState]]                                                 = serviceWithZIO(_.photoStateGet(photoId))
+  def photoStateStream(): ZStream[PhotoStoreService, PhotoStoreIssue, PhotoState]                                                                  = ZStream.serviceWithStream(_.photoStateStream())
+  def photoStateContains(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                                                       = serviceWithZIO(_.photoStateContains(photoId))
+  def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                                    = serviceWithZIO(_.photoStateUpsert(photoId, photoState))
+  def photoStateUpdate(photoId: PhotoId, photoStateUpdater: PhotoState => PhotoState): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoState]] = serviceWithZIO(_.photoStateUpdate(photoId, photoStateUpdater))
+  def photoStateDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                                                            = serviceWithZIO(_.photoStateDelete(photoId))
 
   def photoSourceGet(originalId: OriginalId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[PhotoSource]]               = serviceWithZIO(_.photoSourceGet(originalId))
   def photoSourceContains(OriginalId: OriginalId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                      = serviceWithZIO(_.photoSourceContains(OriginalId))

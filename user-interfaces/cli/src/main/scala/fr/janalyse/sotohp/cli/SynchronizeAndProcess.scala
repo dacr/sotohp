@@ -45,11 +45,21 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                     .mapZIO(classificationProcessor.analyze)
                                     .mapZIO(objectsDetectionProcessor.analyze)
                                     .mapZIO(facesProcessor.analyze)
+                                    .filter(_.lastSynchronized.isEmpty)
                                     .grouped(500)
                                     .mapZIO(photos => SearchService.publish(photos))
+                                    .mapZIO(photos =>
+                                      ZIO.foreach(photos)(photo =>
+                                        Clock.currentDateTime.flatMap(timestamp =>
+                                          PhotoStoreService
+                                            .photoStateUpdate(photo.source.photoId, s => s.copy(lastSynchronized = Some(timestamp)))
+                                            .as(photo)
+                                        )
+                                      )
+                                    )
                                     .map(_.size)
       count                    <- processingStream.runSum
-      _                        <- ZIO.logInfo(s"found $count photos")
+      _                        <- ZIO.logInfo(s"$count photos synchronized")
     } yield ()
   }
 }
