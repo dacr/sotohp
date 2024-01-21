@@ -98,19 +98,15 @@ class PhotoDisplay extends Region {
   }
 
   def rotateLeft(): Unit = currentCanvas.foreach { canvas =>
-    currentImage.foreach { image =>
-      clear()
-      rotationDegrees = (rotationDegrees + 270) % 360
-      displayPhoto()
-    }
+    clear()
+    rotationDegrees = (rotationDegrees + 270) % 360
+    displayPhoto()
   }
 
   def rotateRight(): Unit = currentCanvas.foreach { canvas =>
-    currentImage.foreach { image =>
-      clear()
-      rotationDegrees = (rotationDegrees + 90) % 360
-      displayPhoto()
-    }
+    clear()
+    rotationDegrees = (rotationDegrees + 90) % 360
+    displayPhoto()
   }
 
   override def layoutChildren(): Unit = currentCanvas.foreach { canvas =>
