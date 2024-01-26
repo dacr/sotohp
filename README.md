@@ -21,10 +21,11 @@ photos. Once again this project has first started as just [a "small" script][pho
 ## Current status
 - no release available yet
 - code is stable and usable for
-  - searching and statistics purposes
   - visualization
+  - publishing photo records to elasticsearch / opensearch
+  - searching and statistics purposes
 
-The visualisation with the graphical user interface is very fast :)  
+The visualisation with the graphical user interface is very fast :) It starts in 2 seconds even with my 92000 photo database.  
 ![](gui.png)
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
