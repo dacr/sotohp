@@ -14,6 +14,7 @@ import scalafx.scene.layout.{HBox, Region, VBox}
 import scalafx.application.Platform
 import scalafx.scene.image.Image
 import scalafx.Includes.jfxRegion2sfx
+
 enum UserAction {
   case First
   case Previous
@@ -24,7 +25,7 @@ enum UserAction {
 object PhotoViewerApp extends ZIOAppDefault {
 
   class FxApp extends JFXApp3 {
-    lazy val info        = Label("")
+    lazy val info        = Label("no photo found")
     lazy val first       = Button("⇤") // LEFTWARDS ARROW TO BAR
     lazy val previous    = Button("⇠") // LEFTWARDS DASHED ARROW
     lazy val next        = Button("⇢") // RIGHTWARDS DASHED ARROW
@@ -66,10 +67,7 @@ object PhotoViewerApp extends ZIOAppDefault {
 
     def show(photo: PhotoToShow): Unit = {
       info.text = photo.source.original.path.toString
-      val filepath = photo.normalizedPath.getOrElse(photo.source.original.path)
-      val image    = Image(java.io.FileInputStream(filepath.toFile))
-      // display.drawImage(image, photo.orientation.map(_.rotationDegrees).getOrElse(0))
-      display.drawImage(photo, image, 0) // normalized photo are already rotated
+      display.drawImage(photo) // normalized photo are already rotated
     }
   }
 

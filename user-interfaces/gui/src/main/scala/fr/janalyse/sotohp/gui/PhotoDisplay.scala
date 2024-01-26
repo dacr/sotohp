@@ -12,8 +12,8 @@ import javafx.scene.layout.Region
 class PhotoDisplay extends Region {
   private var currentPhoto: Option[PhotoToShow] = None
   private var currentImage: Option[Image]       = None
-  private var imageX                            = 0d
-
+  
+  private var imageX          = 0d
   private var imageY          = 0d
   private var centerX         = 0d
   private var centerY         = 0d
@@ -38,15 +38,14 @@ class PhotoDisplay extends Region {
     gc.restore()
   }
 
-  def drawImage(photo: PhotoToShow, image: Image, rotationDegrees: Int = 0): Unit = {
+  def drawImage(photo: PhotoToShow): Unit = {
     clear()
-    this.rotationDegrees = rotationDegrees
+    val filepath = photo.normalizedPath.getOrElse(photo.source.original.path)
+    val image    = Image(java.io.FileInputStream(filepath.toFile))
+    // this.rotationDegrees =  photo.orientation.map(_.rotationDegrees).getOrElse(0)
+    this.rotationDegrees = 0
     this.currentImage = Some(image)
     this.currentPhoto = Some(photo)
-    // this.currentCanvas.foreach(canvas => getChildren.remove(canvas))
-    // val canvas = new Canvas(2 * 1920, 2 * 1080)
-    // getChildren.add(canvas)
-    // this.currentCanvas = Some(canvas)
     currentCanvas.foreach { canvas =>
       this.imageX = canvas.getWidth() / 2 - image.getWidth / 2
       this.imageY = canvas.getHeight() / 2 - image.getHeight / 2
@@ -81,9 +80,6 @@ class PhotoDisplay extends Region {
               }
             }
           }
-//          gc.translate(centerX, centerY)
-//          gc.rotate(-rotationDegrees)
-//          gc.translate(-centerX, -centerY)
         gc.restore()
         layoutChildren()
         }
