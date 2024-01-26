@@ -28,7 +28,7 @@ val versions = new {
   val metadata   = "2.19.0"
   val ulid       = "24.1.1"
   val javafx     = "21"
-  val djl        = "0.25.0"
+  val djl        = "0.26.0"
   //  val tapir      = "1.5.0"
 }
 

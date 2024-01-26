@@ -30,12 +30,14 @@ object PhotoViewerApp extends ZIOAppDefault {
     lazy val previous    = Button("⇠") // LEFTWARDS DASHED ARROW
     lazy val next        = Button("⇢") // RIGHTWARDS DASHED ARROW
     lazy val last        = Button("⇥") // RIGHTWARDS ARROW TO BAR
+    lazy val zoom        = Button("⚲")
+    lazy val zoomReset   = Button("▭")
     lazy val faces       = Button("☺") // WHITE SMILING FACE
     lazy val rotateLeft  = Button("↺") // ANTICLOCKWISE OPEN CIRCLE ARROW
     lazy val rotateRight = Button("↻") // CLOCKWISE OPEN CIRCLE ARROW
     lazy val display     = PhotoDisplay()
     lazy val displaySFX  = jfxRegion2sfx(display)
-    lazy val buttons     = HBox(first, previous, next, last, faces, rotateLeft, rotateRight, info)
+    lazy val buttons     = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight, info)
 
     override def start(): Unit = {
       stage = new JFXApp3.PrimaryStage {
@@ -47,18 +49,23 @@ object PhotoViewerApp extends ZIOAppDefault {
           )
           onKeyPressed = key =>
             key.getCode match {
-              case KeyCode.PAGE_UP       => previous.fire()
-              case KeyCode.PAGE_DOWN     => next.fire()
-              case KeyCode.OPEN_BRACKET  => rotateLeft.fire()
-              case KeyCode.CLOSE_BRACKET => rotateRight.fire()
-              case KeyCode.HOME          => first.fire()
-              case KeyCode.END           => last.fire()
-              case KeyCode.INSERT        => faces.fire()
-              case _                     =>
+              case KeyCode.PAGE_UP                => previous.fire()
+              case KeyCode.PAGE_DOWN              => next.fire()
+              case KeyCode.OPEN_BRACKET           => rotateLeft.fire()
+              case KeyCode.CLOSE_BRACKET          => rotateRight.fire()
+              case KeyCode.HOME                   => first.fire()
+              case KeyCode.END                    => last.fire()
+              case KeyCode.INSERT                 => faces.fire()
+              case KeyCode.Z if key.isControlDown => display.zoomOut()
+              case KeyCode.Z                      => display.zoomIn()
+              case KeyCode.X                      => zoomReset.fire()
+              case _                              =>
             }
           rotateLeft.onAction = event => display.rotateLeft()
           rotateRight.onAction = event => display.rotateRight()
           faces.onAction = event => display.toggleFaces()
+          zoom.onAction = event => display.zoomIn()
+          zoomReset.onAction = event => display.zoomReset()
         }
       }
       displaySFX.maxWidth <== stage.width

@@ -12,13 +12,16 @@ import javafx.scene.layout.Region
 class PhotoDisplay extends Region {
   private var currentPhoto: Option[PhotoToShow] = None
   private var currentImage: Option[Image]       = None
-  
-  private var imageX          = 0d
-  private var imageY          = 0d
-  private var centerX         = 0d
-  private var centerY         = 0d
+
+  private var imageX  = 0d
+  private var imageY  = 0d
+  private var centerX = 0d
+  private var centerY = 0d
+
   private var rotationDegrees = 0
   private var showFaces       = false
+  private var zoomLevel       = 1d
+  private val zoomStep        = 0.5d
 
   private var currentCanvas: Option[Canvas] = {
     val canvas = new Canvas(2 * 1920, 2 * 1080)
@@ -80,8 +83,8 @@ class PhotoDisplay extends Region {
               }
             }
           }
-        gc.restore()
-        layoutChildren()
+          gc.restore()
+          layoutChildren()
         }
       }
     }
@@ -89,6 +92,24 @@ class PhotoDisplay extends Region {
 
   def toggleFaces(): Unit = {
     showFaces = !showFaces
+    clear()
+    displayPhoto()
+  }
+
+  def zoomIn(): Unit = {
+    if (zoomLevel < 10d) zoomLevel = zoomLevel + zoomStep
+    clear()
+    displayPhoto()
+  }
+
+  def zoomOut(): Unit = {
+    if (zoomLevel > 1d) zoomLevel = zoomLevel - zoomStep
+    clear()
+    displayPhoto()
+  }
+
+  def zoomReset(): Unit = {
+    zoomLevel = 1d
     clear()
     displayPhoto()
   }
@@ -111,11 +132,12 @@ class PhotoDisplay extends Region {
       val y     = getInsets.getTop
       val w     = getWidth - getInsets.getRight - x
       val h     = getHeight - getInsets.getBottom - y
-      val ratio =
+      val ratio = zoomLevel * (
         if (rotationDegrees == 90 || rotationDegrees == 270)
           min(w / image.getHeight, h / image.getWidth)
         else
           min(w / image.getWidth, h / image.getHeight)
+      )
       canvas.setScaleX(ratio)
       canvas.setScaleY(ratio)
       positionInArea(canvas, x, y, w, h, -1, HPos.CENTER, VPos.CENTER)
