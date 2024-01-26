@@ -26,7 +26,11 @@ photos. Once again this project has first started as just [a "small" script][pho
   - searching and statistics purposes
 
 The visualisation with the graphical user interface is very fast :) It starts in 2 seconds even with my 92000 photo database.  
-![](gui.png)
+![](gui-viewer.png)
+
+Published information to elasticsearch or opensearch make it easy to build very interesting dashboards such as :
+![](gui-dashboard.png)
+
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
 [ulid]: https://github.com/ulid/spec
