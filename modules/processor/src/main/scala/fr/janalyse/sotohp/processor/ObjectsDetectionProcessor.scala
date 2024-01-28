@@ -93,7 +93,7 @@ object ObjectsDetectionProcessor {
     Criteria.builder
       .optApplication(Application.CV.OBJECT_DETECTION)
       .setTypes(classOf[Image], classOf[DetectedObjects])
-      .optFilter("backbone", "mobilenet1.0")
+      .optFilters(Map("backbone" -> "mobilenet1.0").asJava)
       // .optProgress(new ProgressBar)
       .build
 

@@ -33,16 +33,25 @@ val versions = new {
 }
 
 lazy val deepJavaLearningLibs = Seq(
-  "ai.djl"             % "api"                  % versions.djl,
-  "ai.djl"             % "basicdataset"         % versions.djl,
-  "ai.djl"             % "model-zoo"            % versions.djl,
-  "ai.djl.huggingface" % "tokenizers"           % versions.djl,
-  "ai.djl.mxnet"       % "mxnet-engine"         % versions.djl,
-  "ai.djl.mxnet"       % "mxnet-model-zoo"      % versions.djl,
-  "ai.djl.pytorch"     % "pytorch-model-zoo"    % versions.djl,
-  "ai.djl.tensorflow"  % "tensorflow-model-zoo" % versions.djl,
-  "ai.djl.mxnet"       % "mxnet-native-auto"    % "1.8.0",
-  "net.java.dev.jna"   % "jna"                  % "5.14.0"
+  "ai.djl"              % "api"                    % versions.djl,
+  "ai.djl"              % "basicdataset"           % versions.djl,
+  "ai.djl"              % "model-zoo"              % versions.djl,
+  "ai.djl.huggingface"  % "tokenizers"             % versions.djl,
+  "ai.djl.mxnet"        % "mxnet-engine"           % versions.djl,
+  "ai.djl.mxnet"        % "mxnet-model-zoo"        % versions.djl,
+  // "ai.djl.mxnet"        % "mxnet-native-auto"        % "1.8.0", // no longer needed
+  "ai.djl.pytorch"      % "pytorch-engine"         % versions.djl,
+  "ai.djl.pytorch"      % "pytorch-model-zoo"      % versions.djl,
+  // "ai.djl.pytorch"      % "pytorch-native-auto"      % "1.9.1", // no longer needed
+  "ai.djl.tensorflow"   % "tensorflow-engine"      % versions.djl,
+  "ai.djl.tensorflow"   % "tensorflow-model-zoo"   % versions.djl,
+  // "ai.djl.tensorflow"   % "tensorflow-native-auto"   % "2.4.1", // no longer needed
+  "ai.djl.paddlepaddle" % "paddlepaddle-engine"    % versions.djl,
+  "ai.djl.paddlepaddle" % "paddlepaddle-model-zoo" % versions.djl,
+  // "ai.djl.paddlepaddle" % "paddlepaddle-native-auto" % "2.0.2", // no longer needed
+  "ai.djl.onnxruntime"  % "onnxruntime-engine"     % versions.djl,
+  // "ai.djl.onnxruntime"  % "onnxruntime-native-auto"  % "1.3.0", // no longer needed
+  "net.java.dev.jna"    % "jna"                    % "5.14.0"
 )
 
 lazy val lmdbJavaOptions = Seq(

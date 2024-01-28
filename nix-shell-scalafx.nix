@@ -1,6 +1,6 @@
 with import <nixpkgs> {};
 stdenv.mkDerivation {
-  name = "env";
+  name = "scala-fx-env-shell";
   buildInputs = [
     gtk3 pkg-config
   ];
