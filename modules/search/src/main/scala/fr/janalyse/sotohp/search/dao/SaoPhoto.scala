@@ -27,6 +27,8 @@ case class SaoPhoto(
   keywords: List[String],
   classifications: List[String],
   detectedObjects: List[String],
+  detectedObjectsCount: Int,
+  detectedFacesCount: Int,
   place: Option[SaoGeoPoint]
 ) derives JsonCodec
 
@@ -234,6 +236,8 @@ object SaoPhoto {
       keywords = extractKeywords(category), // TODO temporary keyword extraction from category
       classifications = photo.foundClassifications.map(_.classifications.map(_.name).distinct).getOrElse(Nil),
       detectedObjects = photo.foundObjects.map(_.objects.map(_.name).distinct).getOrElse(Nil),
+      detectedObjectsCount = photo.foundObjects.map(_.objects.size).getOrElse(0),
+      detectedFacesCount = photo.foundFaces.map(_.faces.size).getOrElse(0),
       place = photo.place.map(place => SaoGeoPoint(lat = place.latitude.doubleValue, lon = place.longitude.doubleValue))
     )
   }
