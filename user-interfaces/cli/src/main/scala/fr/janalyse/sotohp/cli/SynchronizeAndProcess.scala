@@ -31,6 +31,16 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
       p2 <- MiniaturizeProcessor.miniaturize(p1)
     } yield p2
 
+  def updatePhotoStates(photos: Chunk[Photo]) = {
+    ZIO.foreach(photos)(photo =>
+      Clock.currentDateTime.flatMap(timestamp =>
+        PhotoStoreService
+          .photoStateUpdate(photo.source.photoId, s => s.copy(lastSynchronized = Some(timestamp)))
+          .as(photo)
+      )
+    )
+  }
+  
   val logic = ZIO.logSpan("synchronizeAndProcess") {
     for {
       _                        <- ZIO.logInfo("start photos synchronization and processing")
@@ -47,16 +57,8 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                     .mapZIO(facesProcessor.analyze)
                                     .filter(_.lastSynchronized.isEmpty)
                                     .grouped(500)
-                                    .mapZIO(photos => SearchService.publish(photos))
-                                    .mapZIO(photos =>
-                                      ZIO.foreach(photos)(photo =>
-                                        Clock.currentDateTime.flatMap(timestamp =>
-                                          PhotoStoreService
-                                            .photoStateUpdate(photo.source.photoId, s => s.copy(lastSynchronized = Some(timestamp)))
-                                            .as(photo)
-                                        )
-                                      )
-                                    )
+                                    .mapZIO(SearchService.publish)
+                                    .mapZIO(updatePhotoStates)
                                     .map(_.size)
       count                    <- processingStream.runSum
       _                        <- ZIO.logInfo(s"$count photos synchronized")
