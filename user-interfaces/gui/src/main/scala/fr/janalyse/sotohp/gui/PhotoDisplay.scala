@@ -121,10 +121,10 @@ class PhotoDisplay extends Region {
   }
 
   def zoomOut(): Unit = {
-    if (zoomLevel > zoomLevelDefault) {
+    if (isZoomed()) {
       clear()
       zoomLevel = zoomLevel - zoomStep
-      if (isZoomed()) setup()
+      if (!isZoomed()) setup()
       displayPhoto()
     }
   }
