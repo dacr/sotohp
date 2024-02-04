@@ -92,7 +92,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
       _ <- Console.printLine(s"${YELLOW}- $modifiedCount modified originals$RESET").when(modifiedCount > 0)
       _ <- Console.printLine(s"${RED}- $missingCount missing originals !!$RESET").when(missingCount > 0)
       _ <- Console.printLine(s"${RED}- $invalidShootingDateCount invalid shooting date year (< $shootingDateMinimumValidYear)$RESET").when(invalidShootingDateCount > 0)
-      _ <- Console.printLine(s"${RED}- $normalizedFailureCount normalization failures (original file issue)$RESET").when(normalizedFailureCount > 0)
+      _ <- Console.printLine(s"${RED}- $normalizedFailureCount not loadable photos (probably not supported format or corrupted)$RESET").when(normalizedFailureCount > 0)
     } yield stats
   }
 
