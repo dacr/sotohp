@@ -18,7 +18,8 @@ case class Statistics(
   facesCount: Int = 0,
   duplicated: Map[String, Int] = Map.empty,
   missingCount: Int = 0,
-  modifiedCount: Int = 0
+  modifiedCount: Int = 0,
+  missingShootingDate: Int = 0
 )
 
 object Statistics extends ZIOAppDefault with CommonsCLI {
@@ -37,9 +38,11 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
   def updateStats(stats: Statistics, zphoto: LazyPhoto) = {
     for {
       source           <- zphoto.source.some
+      meta             <- zphoto.metaData
       place            <- zphoto.place
       faces            <- zphoto.foundFaces
       hasNormalized    <- zphoto.hasNormalized
+      shootingDate      = meta.flatMap(_.shootDateTime)
       filehash          = source.fileHash.code
       originalFound    <- ZIO.attempt(source.original.path.toFile.exists())
       originalModified <- ZIO
@@ -57,6 +60,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
         case None        => filehash -> 1
         case Some(count) => filehash -> (count + 1)
       })
+      val updatedMissingShootingDate    = stats.missingShootingDate + (if (shootingDate.isEmpty) 1 else 0)
       stats.copy(
         count = updatedCount,
         geolocalizedCount = updatedGeolocalizedCount,
@@ -64,7 +68,8 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
         duplicated = updatedDuplicated,
         facesCount = updatedFacesCount,
         missingCount = updatedMissingCount,
-        modifiedCount = updatedModifiedCount
+        modifiedCount = updatedModifiedCount,
+        missingShootingDate = updatedMissingShootingDate
       )
     }
   }
@@ -80,6 +85,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
       _ <- Console.printLine(s"${RED}- ${stats.missingCount} missing originals !!$RESET")
       _ <- Console.printLine(s"${YELLOW}- ${stats.modifiedCount} modified originals$RESET")
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET")
+      _ <- Console.printLine(s"${YELLOW}- ${stats.missingShootingDate} photos without shooting date$RESET")
     } yield stats
   }
 
