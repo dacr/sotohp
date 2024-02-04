@@ -18,17 +18,21 @@ class PhotoDisplay extends Region {
   private var centerX = 0d
   private var centerY = 0d
 
-  private var rotationDegrees = 0
-  private var showFaces       = false
-  private var zoomLevel       = 1d
-  private val zoomStep        = 0.5d
+  private var rotationDegrees  = 0
+  private var showFaces        = false
+  private val zoomLevelDefault = 1d
+  private val zoomLevelMax     = 10d
+  private var zoomLevel        = zoomLevelDefault
+  private val zoomStep         = 0.5d
 
   private var currentCanvas: Option[Canvas] = {
-    val canvas = new Canvas(2 * 1920, 2 * 1080)
+    val canvas = new Canvas(3 * 1920, 3 * 1080)
     getChildren.add(canvas)
     setBackground(Background.fill(Color.BLACK))
     Some(canvas)
   }
+
+  def isZoomed() = zoomLevel > zoomLevelDefault
 
   def clear(): Unit = currentCanvas.foreach { canvas =>
     val gc = canvas.getGraphicsContext2D
@@ -41,21 +45,31 @@ class PhotoDisplay extends Region {
     gc.restore()
   }
 
-  def drawImage(photo: PhotoToShow): Unit = {
-    clear()
-    val filepath = photo.normalizedPath.getOrElse(photo.source.original.path)
-    val image    = Image(java.io.FileInputStream(filepath.toFile))
-    // this.rotationDegrees =  photo.orientation.map(_.rotationDegrees).getOrElse(0)
-    this.rotationDegrees = 0
-    this.currentImage = Some(image)
-    this.currentPhoto = Some(photo)
-    currentCanvas.foreach { canvas =>
-      this.imageX = canvas.getWidth() / 2 - image.getWidth / 2
-      this.imageY = canvas.getHeight() / 2 - image.getHeight / 2
-      this.centerX = imageX + image.getWidth / 2
-      this.centerY = imageY + image.getHeight / 2
-      displayPhoto()
+  private def setup(): Unit = {
+    currentPhoto.foreach { photo =>
+      clear()
+      val (filepath, rotationDegrees) = {
+        if (isZoomed()) photo.source.original.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
+        else photo.normalizedPath.map(_ -> 0).getOrElse(
+          photo.source.original.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
+        )
+      }
+      val image    = Image(java.io.FileInputStream(filepath.toFile))
+      this.rotationDegrees = rotationDegrees
+      this.currentImage = Some(image)
+      currentCanvas.foreach { canvas =>
+        this.imageX = canvas.getWidth() / 2 - image.getWidth / 2
+        this.imageY = canvas.getHeight() / 2 - image.getHeight / 2
+        this.centerX = imageX + image.getWidth / 2
+        this.centerY = imageY + image.getHeight / 2
+        displayPhoto()
+      }
     }
+  }
+
+  def drawImage(photo: PhotoToShow): Unit = {
+    this.currentPhoto = Some(photo)
+    setup()
   }
 
   def displayPhoto(): Unit = {
@@ -97,21 +111,29 @@ class PhotoDisplay extends Region {
   }
 
   def zoomIn(): Unit = {
-    if (zoomLevel < 10d) zoomLevel = zoomLevel + zoomStep
-    clear()
-    displayPhoto()
+    if (zoomLevel < zoomLevelMax) {
+      clear()
+      val wasZoomed = isZoomed()
+      zoomLevel = zoomLevel + zoomStep
+      if (!wasZoomed) setup()
+      else displayPhoto()
+    }
   }
 
   def zoomOut(): Unit = {
-    if (zoomLevel > 1d) zoomLevel = zoomLevel - zoomStep
-    clear()
-    displayPhoto()
+    if (zoomLevel > zoomLevelDefault) {
+      clear()
+      zoomLevel = zoomLevel - zoomStep
+      if (isZoomed()) setup()
+      displayPhoto()
+    }
   }
 
   def zoomReset(): Unit = {
-    zoomLevel = 1d
-    clear()
-    displayPhoto()
+    if (isZoomed()) {
+      zoomLevel = zoomLevelDefault
+      setup()
+    }
   }
 
   def rotateLeft(): Unit = currentCanvas.foreach { canvas =>

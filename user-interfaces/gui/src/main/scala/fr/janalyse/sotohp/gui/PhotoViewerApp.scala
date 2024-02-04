@@ -73,7 +73,7 @@ object PhotoViewerApp extends ZIOAppDefault {
     }
 
     def show(photo: PhotoToShow): Unit = {
-      info.text = photo.source.original.path.toString
+      info.text = photo.shootDateTime.map(_.toString).getOrElse("Unknown shooting date")
       display.drawImage(photo) // normalized photo are already rotated
     }
   }
