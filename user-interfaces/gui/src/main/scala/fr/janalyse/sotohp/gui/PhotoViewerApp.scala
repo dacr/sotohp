@@ -25,6 +25,7 @@ enum UserAction {
 object PhotoViewerApp extends ZIOAppDefault {
 
   class FxApp extends JFXApp3 {
+    lazy val hasGPS      = Label("⌖")
     lazy val info        = Label("no photo found")
     lazy val first       = Button("⇤") // LEFTWARDS ARROW TO BAR
     lazy val previous    = Button("⇠") // LEFTWARDS DASHED ARROW
@@ -37,7 +38,9 @@ object PhotoViewerApp extends ZIOAppDefault {
     lazy val rotateRight = Button("↻") // CLOCKWISE OPEN CIRCLE ARROW
     lazy val display     = PhotoDisplay()
     lazy val displaySFX  = jfxRegion2sfx(display)
-    lazy val buttons     = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight, info)
+    lazy val buttons     = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight)
+    lazy val infos       = HBox(hasGPS, info)
+    lazy val controls    = VBox(buttons, infos)
 
     override def start(): Unit = {
       stage = new JFXApp3.PrimaryStage {
@@ -45,7 +48,7 @@ object PhotoViewerApp extends ZIOAppDefault {
         scene = new Scene {
           content = VBox(
             displaySFX,
-            buttons
+            controls
           )
           onKeyPressed = key =>
             key.getCode match {
@@ -69,7 +72,7 @@ object PhotoViewerApp extends ZIOAppDefault {
         }
       }
       displaySFX.maxWidth <== stage.width
-      displaySFX.maxHeight <== (stage.height - buttons.height * 2) // TODO
+      displaySFX.maxHeight <== (stage.height - buttons.height * 2.5) // TODO
     }
 
     def show(photo: PhotoToShow): Unit = {
