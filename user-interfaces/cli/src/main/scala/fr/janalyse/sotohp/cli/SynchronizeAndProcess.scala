@@ -73,16 +73,16 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                       val result  = for {
                                         source <- photo.source.some
                                         path   <- PhotoOperations.makePhotoInternalDataPath(source)
-                                        _      <- PhotoStoreService.photoFacesDelete(photoId)
-                                        _      <- PhotoStoreService.photoObjectsDelete(photoId)
                                         _      <- PhotoStoreService.photoClassificationsDelete(photoId)
-                                        _      <- PhotoStoreService.photoPlaceDelete(photoId)
                                         _      <- PhotoStoreService.photoDescriptionDelete(photoId)
-                                        _      <- PhotoStoreService.photoStateDelete(photoId)
+                                        _      <- PhotoStoreService.photoFacesDelete(photoId)
                                         _      <- PhotoStoreService.photoMetaDataDelete(photoId)
                                         _      <- PhotoStoreService.photoMiniaturesDelete(photoId)
                                         _      <- PhotoStoreService.photoNormalizedDelete(photoId)
+                                        _      <- PhotoStoreService.photoObjectsDelete(photoId)
+                                        _      <- PhotoStoreService.photoPlaceDelete(photoId)
                                         _      <- PhotoStoreService.photoSourceDelete(photo.state.originalId)
+                                        _      <- PhotoStoreService.photoStateDelete(photoId)
                                         _      <- ZIO.attempt {
                                                     Files
                                                       .walk(path)
@@ -94,7 +94,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                       } yield ()
                                       result.as(counter + 1)
                                     }
-      _                        <- ZIO.logInfo(s"${deletedPhotosCount} photos removed")
+      _                        <- ZIO.logInfo(s"${deletedPhotosCount} photos database entries removed")
     } yield ()
   }
 }
