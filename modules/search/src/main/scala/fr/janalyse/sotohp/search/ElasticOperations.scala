@@ -99,6 +99,29 @@ case class ElasticOperations(config: SearchServiceConfig) {
     }
   }
 
+  // ------------------------------------------------------
+
+  def delete[T](indexPrefix: String, document: T)(timestampExtractor: T => OffsetDateTime, idExtractor: T => String): Task[Unit] = {
+    val indexName = indexNameFromTimestamp(indexPrefix, timestampExtractor(document))
+    val id        = idExtractor(document)
+    for {
+      response <- client.execute(deleteById(indexName, id))
+      _        <- ZIO.cond(response.isSuccess, (), response.error.asException)
+    } yield ()
+  }
+
+  // ------------------------------------------------------
+
+  def delete(indexPrefix: String, id: String, timestamp: OffsetDateTime): Task[Unit] = {
+    val indexName = indexNameFromTimestamp(indexPrefix, timestamp)
+    for {
+      response <- client.execute(deleteById(indexName, id))
+      _        <- ZIO.cond(response.isSuccess, (), response.error.asException)
+    } yield ()
+  }
+
+  // ------------------------------------------------------
+
   def fetchAll[T](indexName: String)(implicit decoder: JsonDecoder[T]) = {
     // TODO something is going wrong here, sometimes not all results are returned without error being returned
     // TODO deep pagination issue see https://www.elastic.co/guide/en/elasticsearch/reference/current/scroll-api.html

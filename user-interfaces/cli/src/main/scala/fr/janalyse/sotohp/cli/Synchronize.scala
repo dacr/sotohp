@@ -1,10 +1,14 @@
 package fr.janalyse.sotohp.cli
 
-import fr.janalyse.sotohp.core.OriginalsStream
+import fr.janalyse.sotohp.core.{OriginalsStream, PhotoOperations, PhotoStream}
+import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
 import zio.lmdb.LMDB
 import zio.config.typesafe.*
+
+import java.nio.file.Files
+import java.util.Comparator
 
 object Synchronize extends ZIOAppDefault with CommonsCLI {
 
@@ -21,13 +25,11 @@ object Synchronize extends ZIOAppDefault with CommonsCLI {
 
   val logic = ZIO.logSpan("synchronize") {
     for {
-      _           <- ZIO.logInfo("photos synchronization")
-      searchRoots <- getSearchRoots
-      originals    = OriginalsStream.photoFromOriginalStream(searchRoots)
-      count       <- originals.runCount
-      _           <- ZIO.logInfo(s"Synchronization done - found $count photos")
-      // photoFiles         <- originals.map(_.source.photoPath.toString).runCollect
-      // _                  <- ZIO.foreach(photoFiles.sorted)(f => Console.printLine(f))
+      _             <- ZIO.logInfo("photos synchronization")
+      searchRoots   <- getSearchRoots
+      originals      = OriginalsStream.photoFromOriginalStream(searchRoots)
+      count         <- originals.runCount
+      _             <- ZIO.logInfo(s"Synchronization done - found $count photos")
     } yield ()
   }
 

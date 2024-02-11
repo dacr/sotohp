@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.cli
 
-import fr.janalyse.sotohp.core.OriginalsStream
+import fr.janalyse.sotohp.core.{OriginalsStream, PhotoOperations, PhotoStream}
 import fr.janalyse.sotohp.model.Photo
 import fr.janalyse.sotohp.processor.{ClassificationProcessor, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.search.SearchService
@@ -9,6 +9,9 @@ import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
 import zio.logging.slf4j.bridge.Slf4jBridge
+
+import java.nio.file.Files
+import java.util.Comparator
 
 object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
 
@@ -40,7 +43,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
       )
     )
   }
-  
+
   val logic = ZIO.logSpan("synchronizeAndProcess") {
     for {
       _                        <- ZIO.logInfo("start photos synchronization and processing")
@@ -62,6 +65,36 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                     .map(_.size)
       count                    <- processingStream.runSum
       _                        <- ZIO.logInfo(s"$count photos synchronized")
+      indexedPhotos             = PhotoStream.photoLazyStream()
+      deletedPhotosCount       <- indexedPhotos // TODO to redesign & refactor / requires an overall transaction / to move elsewhere
+                                    .filterZIO(photo => photo.photoOriginalPath.map(path => !path.toFile.exists()))
+                                    .runFoldZIO(0) { case (counter, photo) =>
+                                      val photoId = photo.state.photoId
+                                      val result  = for {
+                                        source <- photo.source.some
+                                        path   <- PhotoOperations.makePhotoInternalDataPath(source)
+                                        _      <- PhotoStoreService.photoFacesDelete(photoId)
+                                        _      <- PhotoStoreService.photoObjectsDelete(photoId)
+                                        _      <- PhotoStoreService.photoClassificationsDelete(photoId)
+                                        _      <- PhotoStoreService.photoPlaceDelete(photoId)
+                                        _      <- PhotoStoreService.photoDescriptionDelete(photoId)
+                                        _      <- PhotoStoreService.photoStateDelete(photoId)
+                                        _      <- PhotoStoreService.photoMetaDataDelete(photoId)
+                                        _      <- PhotoStoreService.photoMiniaturesDelete(photoId)
+                                        _      <- PhotoStoreService.photoNormalizedDelete(photoId)
+                                        _      <- PhotoStoreService.photoSourceDelete(photo.state.originalId)
+                                        _      <- ZIO.attempt {
+                                                    Files
+                                                      .walk(path)
+                                                      .sorted(Comparator.reverseOrder())
+                                                      .map(_.toFile)
+                                                      .forEach(_.delete())
+                                                  }
+                                        _      <- SearchService.unpublish(photoId, photo.state.photoTimestamp)
+                                      } yield ()
+                                      result.as(counter + 1)
+                                    }
+      _                        <- ZIO.logInfo(s"${deletedPhotosCount} photos removed")
     } yield ()
   }
 }
