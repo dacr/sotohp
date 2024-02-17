@@ -73,16 +73,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                       val result  = for {
                                         source <- photo.source.some
                                         path   <- PhotoOperations.makePhotoInternalDataPath(source)
-                                        _      <- PhotoStoreService.photoClassificationsDelete(photoId)
-                                        _      <- PhotoStoreService.photoDescriptionDelete(photoId)
-                                        _      <- PhotoStoreService.photoFacesDelete(photoId)
-                                        _      <- PhotoStoreService.photoMetaDataDelete(photoId)
-                                        _      <- PhotoStoreService.photoMiniaturesDelete(photoId)
-                                        _      <- PhotoStoreService.photoNormalizedDelete(photoId)
-                                        _      <- PhotoStoreService.photoObjectsDelete(photoId)
-                                        _      <- PhotoStoreService.photoPlaceDelete(photoId)
-                                        _      <- PhotoStoreService.photoSourceDelete(photo.state.originalId)
-                                        _      <- PhotoStoreService.photoStateDelete(photoId)
+                                        _      <- PhotoStoreService.photoDelete(photoId)
                                         _      <- ZIO.attempt {
                                                     Files
                                                       .walk(path)

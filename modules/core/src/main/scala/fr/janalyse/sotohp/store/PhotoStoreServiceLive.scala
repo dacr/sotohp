@@ -61,6 +61,29 @@ class PhotoStoreServiceLive private (
   private def originalIdToCollectionKey(originalId: OriginalId): String = originalId.id.toString
 
   // ===================================================================================================================
+  override def photoDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] = {
+    // TODO to redesign & refactor / requires an overall transaction / to move elsewhere
+    for {
+      state <- photoStateGet(photoId).some.orElseFail[PhotoStoreIssue](PhotoStoreNotFoundIssue(s"$photoId not found"))
+      _     <- photoClassificationsDelete(photoId)
+      _     <- photoDescriptionDelete(photoId)
+      _     <- photoFacesDelete(photoId)
+      _     <- photoMetaDataDelete(photoId)
+      _     <- photoMiniaturesDelete(photoId)
+      _     <- photoNormalizedDelete(photoId)
+      _     <- photoObjectsDelete(photoId)
+      _     <- photoPlaceDelete(photoId)
+      _     <- photoSourceDelete(state.originalId)
+      _     <- photoStateDelete(photoId)
+    } yield ()
+  }
+
+  def photoFirst(): IO[PhotoStoreIssue, Option[LazyPhoto]]                   = photoStateFirst().map(foundThatState => foundThatState.map(LazyPhoto.apply))
+  def photoNext(after: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]]      = photoStateNext(after).map(foundThatState => foundThatState.map(LazyPhoto.apply))
+  def photoPrevious(before: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]] = photoStatePrevious(before).map(foundThatState => foundThatState.map(LazyPhoto.apply))
+  def photoLast(): IO[PhotoStoreIssue, Option[LazyPhoto]]                    = photoStateLast().map(foundThatState => foundThatState.map(LazyPhoto.apply))
+
+  // ===================================================================================================================
   def daoStateToState(from: DaoPhotoState): PhotoState = {
     PhotoState(
       photoId = PhotoId(ULID(from.photoId)),

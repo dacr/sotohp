@@ -16,11 +16,14 @@ trait PhotoStoreService {
   // Lazy Photo content stream
   def photoLazyStream(): ZStream[Any, PhotoStoreIssue, LazyPhoto] = photoStateStream().map(LazyPhoto.apply)
 
+  // Global operations
+  def photoDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
+
   // Navigate through photos
-  def photoFirst(): IO[PhotoStoreIssue, Option[LazyPhoto]]                   = photoStateFirst().map(foundThatState => foundThatState.map(LazyPhoto.apply))
-  def photoNext(after: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]]      = photoStateNext(after).map(foundThatState => foundThatState.map(LazyPhoto.apply))
-  def photoPrevious(before: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]] = photoStatePrevious(before).map(foundThatState => foundThatState.map(LazyPhoto.apply))
-  def photoLast(): IO[PhotoStoreIssue, Option[LazyPhoto]]                    = photoStateLast().map(foundThatState => foundThatState.map(LazyPhoto.apply))
+  def photoFirst(): IO[PhotoStoreIssue, Option[LazyPhoto]]
+  def photoNext(after: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]]
+  def photoPrevious(before: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]]
+  def photoLast(): IO[PhotoStoreIssue, Option[LazyPhoto]]
 
   // photo states collection
   def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]]
@@ -93,6 +96,8 @@ trait PhotoStoreService {
 object PhotoStoreService {
   def photoLazyStream(): ZStream[PhotoStoreService, PhotoStoreIssue, LazyPhoto] = ZStream.serviceWithStream(_.photoLazyStream())
 
+  def photoDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoDelete(photoId))
+  
   def photoFirst(): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]]                   = serviceWithZIO(_.photoFirst())
   def photoNext(after: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]]      = serviceWithZIO(_.photoNext(after))
   def photoPrevious(before: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[LazyPhoto]] = serviceWithZIO(_.photoPrevious(before))

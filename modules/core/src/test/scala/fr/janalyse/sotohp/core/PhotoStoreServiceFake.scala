@@ -21,6 +21,24 @@ class PhotoStoreServiceFake(
 
   // ===================================================================================================================
 
+  override def photoDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] = {
+    for {
+      state <- photoStateGet(photoId).some.orElseFail[PhotoStoreIssue](PhotoStoreNotFoundIssue(s"$photoId not found"))
+      _ <- photoClassificationsDelete(photoId)
+      _ <- photoDescriptionDelete(photoId)
+      _ <- photoFacesDelete(photoId)
+      _ <- photoMetaDataDelete(photoId)
+      _ <- photoMiniaturesDelete(photoId)
+      _ <- photoNormalizedDelete(photoId)
+      _ <- photoObjectsDelete(photoId)
+      _ <- photoPlaceDelete(photoId)
+      _ <- photoSourceDelete(state.originalId)
+      _ <- photoStateDelete(photoId)
+    } yield ()
+  }
+
+  // ===================================================================================================================
+
   override def photoStateGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = for {
     collection <- statesCollectionRef.get
   } yield collection.get(photoId)
@@ -50,16 +68,15 @@ class PhotoStoreServiceFake(
   override def photoStateUpsert(photoId: PhotoId, photoState: PhotoState): IO[PhotoStoreIssue, Unit] =
     statesCollectionRef.update(_.updated(photoId, photoState))
 
-  override def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
-    statesCollectionRef.update(collection => collection.removed(photoId))
+  override def photoStateDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] = statesCollectionRef.update(collection => collection.removed(photoId))
 
-  def photoStateFirst(): IO[PhotoStoreIssue, Option[PhotoState]] = ???
+  override def photoStateFirst(): IO[PhotoStoreIssue, Option[PhotoState]] = ???
 
-  def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = ???
+  override def photoStateNext(after: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = ???
 
-  def photoStatePrevious(before: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = ???
+  override def photoStatePrevious(before: PhotoId): IO[PhotoStoreIssue, Option[PhotoState]] = ???
 
-  def photoStateLast(): IO[PhotoStoreIssue, Option[PhotoState]] = ???
+  override def photoStateLast(): IO[PhotoStoreIssue, Option[PhotoState]] = ???
 
   // ===================================================================================================================
   override def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]] = for {
