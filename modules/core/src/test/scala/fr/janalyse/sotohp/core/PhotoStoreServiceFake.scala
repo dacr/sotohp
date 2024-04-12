@@ -214,6 +214,14 @@ class PhotoStoreServiceFake(
     descriptionsCollectionRef.update(collection => collection.removed(photoId))
 
   // ===================================================================================================================
+
+  override def photoFirst(): IO[PhotoStoreIssue, Option[LazyPhoto]] = ???
+
+  override def photoNext(after: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]] = ???
+
+  override def photoPrevious(before: PhotoId): IO[PhotoStoreIssue, Option[LazyPhoto]] = ???
+
+  override def photoLast(): IO[PhotoStoreIssue, Option[LazyPhoto]] = ???
 }
 
 object PhotoStoreServiceFake extends PhotoStoreCollections {
