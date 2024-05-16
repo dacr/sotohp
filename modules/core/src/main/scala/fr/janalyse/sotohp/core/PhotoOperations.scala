@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.core
 
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.Metadata
-import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, GpsDirectory}
+import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, ExifSubIFDDirectory, GpsDirectory}
 import com.drew.metadata.gif.GifImageDirectory
 import com.drew.metadata.jpeg.JpegDirectory
 import com.drew.metadata.png.PngDirectory
@@ -20,6 +20,7 @@ import com.fasterxml.uuid.Generators
 import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 import wvlet.airframe.ulid.ULID
 
+import java.time.format.DateTimeFormatter
 import scala.util.Try
 
 case class NotFoundInStore(message: String, id: String)
@@ -134,12 +135,22 @@ object PhotoOperations {
     metadataTagsToGenericTags(metaDataTags)
   }
 
+  val exifDateTimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss [XXX][XX][X]")
+
+  def parseExifDateTimeFormat(spec: String, timeZoneOffsetSpec: String): OffsetDateTime = {
+    OffsetDateTime.parse(s"$spec $timeZoneOffsetSpec", exifDateTimeFormat)
+  }
+
   def extractShootDateTime(metadata: Metadata): Option[OffsetDateTime] = {
-    val tagName = ExifDirectoryBase.TAG_DATETIME
     for {
-      exif          <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
-      if exif.containsTag(tagName)
-      shootDateTime <- Option(exif.getDate(tagName))
+      exif              <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+      if exif.containsTag(ExifDirectoryBase.TAG_DATETIME)
+      exifSubIFD         = Option(metadata.getFirstDirectoryOfType(classOf[ExifSubIFDDirectory]))
+      shootDateTimeRaw  <- Option(exif.getString(ExifDirectoryBase.TAG_DATETIME))
+      shootZoneOffsetRaw = exifSubIFD
+                             .flatMap(dir => Option(dir.getString(ExifDirectoryBase.TAG_TIME_ZONE_ORIGINAL)))
+                             .getOrElse("+00:00")
+      shootDateTime      = parseExifDateTimeFormat(shootDateTimeRaw, shootZoneOffsetRaw)
     } yield shootDateTime.toInstant.atOffset(ZoneOffset.UTC)
   }
 

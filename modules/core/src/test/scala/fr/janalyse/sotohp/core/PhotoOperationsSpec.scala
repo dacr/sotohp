@@ -7,6 +7,7 @@ import zio.ZIO.*
 import zio.test.*
 
 import java.nio.file.{Files, Path, Paths}
+import java.time.{Instant, OffsetDateTime}
 import scala.jdk.CollectionConverters.*
 
 object PhotoOperationsSpec extends ZIOSpecDefault with TestDatasets {
@@ -29,6 +30,11 @@ object PhotoOperationsSpec extends ZIOSpecDefault with TestDatasets {
           metadata <- readDrewMetadata(dataset1Example1)
         } yield assertTrue(
           metadata.getDirectories.asScala.size > 0
+        )
+      ),
+      test("exif date time can be parsed")(
+        assertTrue(
+          parseExifDateTimeFormat("2024:05:11 19:43:29", "+09:00").toInstant == Instant.parse("2024-05-11T10:43:29Z")
         )
       ),
       test("shootDateTime can be extracted")(
