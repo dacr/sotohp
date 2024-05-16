@@ -25,22 +25,23 @@ enum UserAction {
 object PhotoViewerApp extends ZIOAppDefault {
 
   class FxApp extends JFXApp3 {
-    lazy val hasGPS      = Label("⌖")
-    lazy val info        = Label("no photo found")
-    lazy val first       = Button("⇤") // LEFTWARDS ARROW TO BAR
-    lazy val previous    = Button("⇠") // LEFTWARDS DASHED ARROW
-    lazy val next        = Button("⇢") // RIGHTWARDS DASHED ARROW
-    lazy val last        = Button("⇥") // RIGHTWARDS ARROW TO BAR
-    lazy val zoom        = Button("⚲")
-    lazy val zoomReset   = Button("▭")
-    lazy val faces       = Button("☺") // WHITE SMILING FACE
-    lazy val rotateLeft  = Button("↺") // ANTICLOCKWISE OPEN CIRCLE ARROW
-    lazy val rotateRight = Button("↻") // CLOCKWISE OPEN CIRCLE ARROW
-    lazy val display     = PhotoDisplay()
-    lazy val displaySFX  = jfxRegion2sfx(display)
-    lazy val buttons     = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight)
-    lazy val infos       = HBox(hasGPS, info)
-    lazy val controls    = VBox(buttons, infos)
+    lazy val infoHasGPS   = Label("⊞")
+    lazy val infoDateTime = Label("DateTime")
+    lazy val infoCategory = Label("Category")
+    lazy val first        = Button("⇤") // LEFTWARDS ARROW TO BAR
+    lazy val previous     = Button("⇠") // LEFTWARDS DASHED ARROW
+    lazy val next         = Button("⇢") // RIGHTWARDS DASHED ARROW
+    lazy val last         = Button("⇥") // RIGHTWARDS ARROW TO BAR
+    lazy val zoom         = Button("⚲")
+    lazy val zoomReset    = Button("▭")
+    lazy val faces        = Button("☺") // WHITE SMILING FACE
+    lazy val rotateLeft   = Button("↺") // ANTICLOCKWISE OPEN CIRCLE ARROW
+    lazy val rotateRight  = Button("↻") // CLOCKWISE OPEN CIRCLE ARROW
+    lazy val display      = PhotoDisplay()
+    lazy val displaySFX   = jfxRegion2sfx(display)
+    lazy val buttons      = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight)
+    lazy val infos        = HBox(10d, infoHasGPS, infoDateTime, infoCategory)
+    lazy val controls     = VBox(buttons, infos)
 
     override def start(): Unit = {
       stage = new JFXApp3.PrimaryStage {
@@ -76,7 +77,9 @@ object PhotoViewerApp extends ZIOAppDefault {
     }
 
     def show(photo: PhotoToShow): Unit = {
-      info.text = photo.shootDateTime.map(_.toString).getOrElse("Unknown shooting date")
+      infoDateTime.text = photo.shootDateTime.map(_.toString).getOrElse("Unknown shooting date")
+      infoHasGPS.text = photo.place.map(_ => "⊠").getOrElse("⊟")
+      infoCategory.text = photo.description.flatMap(_.category).map(_.text).getOrElse("No category")
       display.drawImage(photo) // normalized photo are already rotated
     }
   }
