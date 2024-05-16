@@ -1,6 +1,6 @@
 ThisBuild / organization := "fr.janalyse"
 ThisBuild / name         := "sotohp"
-ThisBuild / homepage     := Some(new URL("https://github.com/dacr/sotohp"))
+ThisBuild / homepage     := Some(url("https://github.com/dacr/sotohp"))
 
 ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
 
@@ -17,18 +17,18 @@ ThisBuild / crossScalaVersions := Seq("3.4.1")
 publishArtifact := false
 
 val versions = new {
-  val zio        = "2.0.22"
+  val zio        = "2.1.1"
 //  val zionio     = "2.0.1"
-  val zioconfig  = "4.0.1"
+  val zioconfig  = "4.0.2"
   val ziojson    = "0.6.2"
-  val ziologging = "2.2.2"
+  val ziologging = "2.2.4"
   val ziolmdb    = "1.8.0"
   val uuidgen    = "5.0.0"
   val elastic4s  = "8.11.5"
   val metadata   = "2.19.0"
-  val ulid       = "24.4.0"
+  val ulid       = "24.5.0"
   val javafx     = "21"
-  val djl        = "0.27.0"
+  val djl        = "0.28.0"
   //  val tapir      = "1.5.0"
 }
 
@@ -127,7 +127,7 @@ lazy val moduleProcessor =
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         // "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
-        "org.apache.commons" % "commons-imaging" % "1.0.0-alpha4" // https://commons.apache.org/proper/commons-imaging/
+        "org.apache.commons" % "commons-imaging" % "1.0.0-alpha5" // https://commons.apache.org/proper/commons-imaging/
       ),
       libraryDependencies ++= deepJavaLearningLibs
     )
