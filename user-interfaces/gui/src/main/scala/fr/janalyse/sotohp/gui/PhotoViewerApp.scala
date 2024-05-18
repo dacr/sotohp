@@ -1,5 +1,6 @@
 package fr.janalyse.sotohp.gui
 
+import fr.janalyse.sotohp.model.PhotoPlace
 import fr.janalyse.sotohp.store.{PhotoStoreService, PhotoStoreSystemIssue}
 import javafx.scene.input.KeyCode
 import zio.*
@@ -9,6 +10,7 @@ import zio.config.typesafe.TypesafeConfigProvider
 import scalafx.application.*
 import scalafx.scene.Scene
 import scalafx.scene.control.Label
+import scalafx.scene.control.Hyperlink
 import scalafx.scene.control.Button
 import scalafx.scene.layout.{HBox, Region, VBox}
 import scalafx.application.Platform
@@ -24,10 +26,21 @@ enum UserAction {
 
 object PhotoViewerApp extends ZIOAppDefault {
 
+  def buildGoogleMapsHyperLink(place: PhotoPlace): String = {
+    val lat = place.latitude
+    val lon = place.longitude
+    s"https://www.google.com/maps/search/?api=1&query=$lat,$lon"
+  }
+
   class FxApp extends JFXApp3 {
-    lazy val infoHasGPS   = Label("⊞")
-    lazy val infoDateTime = Label("DateTime")
-    lazy val infoCategory = Label("Category")
+    private val hasNoGPSText        = "?"
+    private val hasGPSText          = "⌘"
+    private val noCategoryText      = "No category"
+    private val noShootDateTimeText = "No shoot timestamp"
+
+    lazy val infoHasGPS   = Label(hasNoGPSText)
+    lazy val infoDateTime = Label(noShootDateTimeText)
+    lazy val infoCategory = Label(noCategoryText)
     lazy val first        = Button("⇤") // LEFTWARDS ARROW TO BAR
     lazy val previous     = Button("⇠") // LEFTWARDS DASHED ARROW
     lazy val next         = Button("⇢") // RIGHTWARDS DASHED ARROW
@@ -40,10 +53,10 @@ object PhotoViewerApp extends ZIOAppDefault {
     lazy val display      = PhotoDisplay()
     lazy val displaySFX   = jfxRegion2sfx(display)
     lazy val buttons      = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight)
-    lazy val infos        = HBox(10d, infoHasGPS, infoDateTime, infoCategory)
+    lazy val infos        = HBox(5d, infoHasGPS, infoDateTime, infoCategory)
     lazy val controls     = VBox(buttons, infos)
 
-    override def start(): Unit = {
+    override def start(): Unit         = {
       stage = new JFXApp3.PrimaryStage {
         title = "SOTOHP Viewer"
         scene = new Scene {
@@ -75,11 +88,20 @@ object PhotoViewerApp extends ZIOAppDefault {
       displaySFX.maxWidth <== stage.width
       displaySFX.maxHeight <== (stage.height - buttons.height * 2.5) // TODO
     }
-
     def show(photo: PhotoToShow): Unit = {
-      infoDateTime.text = photo.shootDateTime.map(_.toString).getOrElse("Unknown shooting date")
-      infoHasGPS.text = photo.place.map(_ => "⊠").getOrElse("⊟")
-      infoCategory.text = photo.description.flatMap(_.category).map(_.text).getOrElse("No category")
+      infoDateTime.text = photo.shootDateTime.map(_.toString).getOrElse(noShootDateTimeText)
+      infoHasGPS.text = photo.place.map(_ => hasGPSText).getOrElse(hasNoGPSText)
+      infoHasGPS.style = 
+        photo
+          .place
+          .map(_ => "-fx-text-fill: green")
+          .getOrElse("-fx-text-fill: red")
+      infoHasGPS.onMouseClicked = event => {
+        photo.place.foreach(place =>
+          hostServices.showDocument(buildGoogleMapsHyperLink(place))
+        )
+      }
+      infoCategory.text = photo.description.flatMap(_.category).map(_.text).getOrElse(noCategoryText)
       display.drawImage(photo) // normalized photo are already rotated
     }
   }
