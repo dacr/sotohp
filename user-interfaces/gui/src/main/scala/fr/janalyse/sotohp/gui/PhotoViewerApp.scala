@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.gui
 
 import fr.janalyse.sotohp.model.PhotoPlace
 import fr.janalyse.sotohp.store.{PhotoStoreService, PhotoStoreSystemIssue}
-import javafx.scene.input.KeyCode
+import javafx.scene.input.{KeyCode, TransferMode}
 import zio.*
 import zio.lmdb.LMDB
 import zio.stream.ZStream
@@ -16,6 +16,7 @@ import scalafx.scene.layout.{HBox, Region, VBox}
 import scalafx.application.Platform
 import scalafx.scene.image.Image
 import scalafx.Includes.jfxRegion2sfx
+import scalafx.scene.input.{Clipboard, ClipboardContent, DataFormat}
 
 enum UserAction {
   case First
@@ -91,17 +92,24 @@ object PhotoViewerApp extends ZIOAppDefault {
     def show(photo: PhotoToShow): Unit = {
       infoDateTime.text = photo.shootDateTime.map(_.toString).getOrElse(noShootDateTimeText)
       infoHasGPS.text = photo.place.map(_ => hasGPSText).getOrElse(hasNoGPSText)
-      infoHasGPS.style = 
-        photo
-          .place
-          .map(_ => "-fx-text-fill: green")
-          .getOrElse("-fx-text-fill: red")
+      infoHasGPS.style = photo.place
+        .map(_ => "-fx-text-fill: green")
+        .getOrElse("-fx-text-fill: red")
       infoHasGPS.onMouseClicked = event => {
-        photo.place.foreach(place =>
-          hostServices.showDocument(buildGoogleMapsHyperLink(place))
-        )
+        photo.place.foreach(place => hostServices.showDocument(buildGoogleMapsHyperLink(place)))
       }
       infoCategory.text = photo.description.flatMap(_.category).map(_.text).getOrElse(noCategoryText)
+      infoCategory.onMouseClicked = event => {
+        val clipboard = Clipboard.systemClipboard
+        clipboard.content = ClipboardContent(DataFormat.PlainText -> infoCategory.text.get())
+      }
+      display.onDragDetected = event => {
+        if (event.isPrimaryButtonDown) {
+          val dragBoard = display.startDragAndDrop(TransferMode.COPY)
+          val content = ClipboardContent(DataFormat.Files -> java.util.List.of(photo.source.original.path.toFile))
+          dragBoard.setContent(content)
+        }
+      }
       display.drawImage(photo) // normalized photo are already rotated
     }
   }
