@@ -43,8 +43,8 @@ lazy val deepJavaLearningLibs = Seq(
   "ai.djl.pytorch"      % "pytorch-model-zoo"      % versions.djl,
   "ai.djl.tensorflow"   % "tensorflow-engine"      % versions.djl,
   "ai.djl.tensorflow"   % "tensorflow-model-zoo"   % versions.djl,
-  "ai.djl.paddlepaddle" % "paddlepaddle-engine"    % versions.djl,
-  "ai.djl.paddlepaddle" % "paddlepaddle-model-zoo" % versions.djl,
+  //"ai.djl.paddlepaddle" % "paddlepaddle-engine"    % versions.djl,
+  //"ai.djl.paddlepaddle" % "paddlepaddle-model-zoo" % versions.djl,
   "ai.djl.onnxruntime"  % "onnxruntime-engine"     % versions.djl,
   "net.java.dev.jna"    % "jna"                    % "5.14.0"
 )
