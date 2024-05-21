@@ -37,6 +37,7 @@ class SearchServiceLive(elasticOperations: ElasticOperations, config: SearchServ
   def publish(photos: Chunk[Photo]): IO[SearchServiceIssue, Chunk[Photo]] = {
     elasticOperations
       .upsert(config.indexPrefix, photos.map(p => SaoPhoto.fromPhoto(p)))(_.timestamp, _.id)
+      .when(config.enabled)
       .logError("couldń't upsert some or all photos from the given chunk of photos")
       .mapError(errs => SearchServiceIssue(s"Couldn't upsert", errs))
       .map(_ => photos)
@@ -45,6 +46,8 @@ class SearchServiceLive(elasticOperations: ElasticOperations, config: SearchServ
   override def unpublish(photoId: PhotoId, photoTimestamp: OffsetDateTime): IO[SearchServiceIssue, Unit] = {
     elasticOperations
       .delete(config.indexPrefix, photoId.id.toString, photoTimestamp)
+      .when(config.enabled)
+      .map(_ => ())
       .logError(s"Couldn't unpublish $photoId $photoTimestamp")
       .mapError(err => SearchServiceIssue(s"Couldn't unpublish $photoId $photoTimestamp", err :: Nil))
   }
