@@ -1,6 +1,9 @@
 all:
 
 sync:
+	sbt "; project userInterfacesCLI ; runMain fr.janalyse.sotohp.cli.Synchronize"
+
+process:
 	sbt "; project userInterfacesCLI ; runMain fr.janalyse.sotohp.cli.SynchronizeAndProcess"
 
 stats:
