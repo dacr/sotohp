@@ -34,7 +34,7 @@ object PhotoViewerApp extends ZIOAppDefault {
   }
 
   class FxApp extends JFXApp3 {
-    private val hasNoGPSText        = "?"
+    private val hasNoGPSText        = "⌘"
     private val hasGPSText          = "⌘"
     private val noCategoryText      = "No category"
     private val noShootDateTimeText = "No shoot timestamp"
