@@ -2,13 +2,11 @@ package fr.janalyse.sotohp.processor
 
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
-import java.io.FileOutputStream
 import java.nio.file.Path
-import javax.imageio.stream.{FileCacheImageOutputStream, ImageOutputStream}
 import javax.imageio.{IIOImage, ImageIO, ImageWriteParam}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
-import scala.math.{min,floor,max}
+import scala.math.*
 
 case object BasicImaging {
 
@@ -26,17 +24,17 @@ case object BasicImaging {
     targetWidth: Int,
     targetHeight: Int
   ): BufferedImage = {
-    val ratio = min(1d * targetWidth / originalImage.getWidth, 1d *  targetHeight / originalImage.getHeight)
-    val newWidth = floor(originalImage.getWidth * ratio).toInt
+    val ratio     = min(1d * targetWidth / originalImage.getWidth, 1d * targetHeight / originalImage.getHeight)
+    val newWidth  = floor(originalImage.getWidth * ratio).toInt
     val newHeight = floor(originalImage.getHeight * ratio).toInt
-    val resizedImage = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB)
-    val graphics2D   = resizedImage.createGraphics
+    val newImage  = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB)
+    val graphics  = newImage.createGraphics
     try {
-      graphics2D.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-      graphics2D.drawImage(originalImage, 0, 0, newWidth, newHeight, null)
-      resizedImage
+      graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+      graphics.drawImage(originalImage, 0, 0, newWidth, newHeight, null)
+      newImage
     } finally {
-      graphics2D.dispose()
+      graphics.dispose()
     }
   }
 
@@ -44,7 +42,6 @@ case object BasicImaging {
     originalImage: BufferedImage,
     angleDegree: Double
   ): BufferedImage = {
-    import scala.math.*
     val angle     = toRadians(angleDegree)
     val sin       = abs(Math.sin(angle))
     val cos       = abs(Math.cos(angle))
@@ -52,21 +49,56 @@ case object BasicImaging {
     val height    = originalImage.getHeight.toDouble
     val newWidth  = floor(width * cos + height * sin)
     val newHeight = floor(height * cos + width * sin)
-
-    val rotatedImage = new BufferedImage(newWidth.toInt, newHeight.toInt, BufferedImage.TYPE_INT_RGB)
-    val graphics2D   = rotatedImage.createGraphics
-
+    val newImage  = BufferedImage(newWidth.toInt, newHeight.toInt, BufferedImage.TYPE_INT_RGB)
+    val graphics  = newImage.createGraphics
     try {
-      graphics2D.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-      graphics2D.translate((newWidth - width) / 2d, (newHeight - height) / 2d)
-      graphics2D.rotate(angle, width / 2d, height / 2d)
-      graphics2D.drawImage(originalImage, 0, 0, null)
-      // graphics2D.setColor(Color.RED)
-      // graphics2D.drawRect(0, 0, newWidth - 1, newHeight - 1)
-      rotatedImage
+      graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+      graphics.translate((newWidth - width) / 2d, (newHeight - height) / 2d)
+      graphics.rotate(angle, width / 2d, height / 2d)
+      graphics.drawImage(originalImage, 0, 0, null)
+      // graphics.setColor(Color.RED)
+      // graphics.drawRect(0, 0, newWidth - 1, newHeight - 1)
+      newImage
     } finally {
-      graphics2D.dispose()
+      graphics.dispose()
     }
+  }
+
+  def mirror(originalImage: BufferedImage, horizontally: Boolean = true, vertically: Boolean = false): BufferedImage = {
+    val width    = originalImage.getWidth
+    val height   = originalImage.getHeight
+    val newImage = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    val graphics = newImage.createGraphics
+    try {
+      graphics.drawImage(
+        originalImage,
+        if (horizontally) width else 0,
+        if (vertically) height else 0,
+        if (horizontally) -width else width,
+        if (vertically) -height else height,
+        null
+      )
+      newImage
+    } finally {
+      graphics.dispose()
+    }
+  }
+
+  def display(image: BufferedImage, title: String = "Image display"): javax.swing.JFrame = {
+    import javax.swing.{ImageIcon, JFrame, JLabel}
+    import javax.swing.WindowConstants
+    import java.awt.FlowLayout
+    
+    val icon  = ImageIcon(image)
+    val frame = JFrame()
+    frame.setLayout(FlowLayout())
+    frame.setSize(image.getWidth + 50, image.getHeight + 50)
+    val label = JLabel()
+    label.setIcon(icon)
+    frame.add(label)
+    frame.setVisible(true)
+    frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE)
+    frame
   }
 
   def reshapeImage(
@@ -77,7 +109,7 @@ case object BasicImaging {
     compressionLevel: Option[Double] = None
   ): Unit = {
     val originalImage = ImageIO.read(input.toFile)
-    if (originalImage == null) throw new Exception(s"Unsupported image format : $input") // TODO enhance error support
+    if (originalImage == null) throw Exception(s"Unsupported image format : $input") // TODO enhance error support
     val ratio        = targetMaxSize.toDouble / math.max(originalImage.getWidth, originalImage.getHeight)
     val targetWidth  = (originalImage.getWidth() * ratio).toInt
     val targetHeight = (originalImage.getHeight() * ratio).toInt
@@ -101,7 +133,7 @@ case object BasicImaging {
         }
         Using(ImageIO.createImageOutputStream(output.toFile)) { outputStream =>
           writer.setOutput(outputStream)
-          val outputImage = new IIOImage(finalImage, null, null)
+          val outputImage = IIOImage(finalImage, null, null)
           writer.write(null, outputImage, params)
           writer.dispose()
         }
