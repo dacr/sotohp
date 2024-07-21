@@ -27,7 +27,7 @@ object MiniaturizeProcessor extends Processor {
 //          .outputQuality(config.miniaturizer.quality)
 //          .allowOverwrite(false)
 //          .toFile(output.toFile)
-        BasicImaging.resizeImage(input, output, referenceSize, None, Some(config.normalizer.quality))
+        BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.normalizer.quality))
       )
       .tap(_ => ZIO.logInfo(s"Miniaturize $referenceSize"))
       .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", th))

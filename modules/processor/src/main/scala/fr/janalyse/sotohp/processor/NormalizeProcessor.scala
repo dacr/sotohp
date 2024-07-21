@@ -26,7 +26,7 @@ object NormalizeProcessor extends Processor {
 //          .outputQuality(config.normalizer.quality)
 //          .allowOverwrite(false)
 //          .toFile(output.toFile)
-        BasicImaging.resizeImage(input, output, referenceSize, orientation.map(_.rotationDegrees), Some(config.normalizer.quality))
+        BasicImaging.reshapeImage(input, output, referenceSize, orientation.map(_.rotationDegrees), Some(config.normalizer.quality))
       )
       .tap(_ => ZIO.logInfo(s"Normalize"))
       .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size $referenceSize", th))
