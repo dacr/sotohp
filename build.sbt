@@ -17,7 +17,7 @@ ThisBuild / crossScalaVersions := Seq("3.4.2")
 publishArtifact := false
 
 val versions = new {
-  val zio        = "2.1.5"
+  val zio        = "2.1.6"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.2"
   val ziojson    = "0.7.1"
@@ -26,9 +26,9 @@ val versions = new {
   val uuidgen    = "5.1.0"
   val elastic4s  = "8.11.5"
   val metadata   = "2.19.0"
-  val ulid       = "24.7.0"
+  val ulid       = "24.7.1"
   val javafx     = "21"
-  val djl        = "0.28.0"
+  val djl        = "0.29.0"
   //  val tapir      = "1.5.0"
 }
 
@@ -43,8 +43,6 @@ lazy val deepJavaLearningLibs = Seq(
   "ai.djl.pytorch"      % "pytorch-model-zoo"      % versions.djl,
   "ai.djl.tensorflow"   % "tensorflow-engine"      % versions.djl,
   "ai.djl.tensorflow"   % "tensorflow-model-zoo"   % versions.djl,
-  //"ai.djl.paddlepaddle" % "paddlepaddle-engine"    % versions.djl,
-  //"ai.djl.paddlepaddle" % "paddlepaddle-model-zoo" % versions.djl,
   "ai.djl.onnxruntime"  % "onnxruntime-engine"     % versions.djl,
   "net.java.dev.jna"    % "jna"                    % "5.14.0"
 )
