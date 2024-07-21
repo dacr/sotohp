@@ -86,6 +86,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                       result.as(counter + 1)
                                     }
       _                        <- ZIO.logInfo(s"${deletedPhotosCount} photos database entries removed")
+      _                        <- Statistics.logic
     } yield ()
   }
 }
