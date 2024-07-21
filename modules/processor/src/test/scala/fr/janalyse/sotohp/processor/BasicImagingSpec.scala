@@ -167,6 +167,23 @@ object BasicImagingSpec extends ZIOSpecDefault {
             loadedImage.getRGB(imageSampleWidth - 1, imageSampleHeight - 1) == Color.BLACK.getRGB
           )
         }
-      )
+      ),
+      test("should be able to reshape an image file") {
+        import java.nio.file.*
+        import java.nio.*
+        for {
+          original    <- ZIO.attempt(imageSample())
+          tmpPath      = Path.of(scala.util.Properties.tmpDir)
+          inputPath   <- ZIO.attempt(Files.createTempFile(tmpPath, "tempoImageInput", ".png"))
+          outputPath  <- ZIO.attempt(Files.createTempFile(tmpPath, "tempoImageOutput", ".png"))
+          _           <- ZIO.attempt(BasicImaging.save(inputPath, original))
+          _           <- ZIO.attempt(BasicImaging.reshapeImage(inputPath, outputPath, imageSampleWidth / 2))
+          loadedImage <- ZIO.attempt(BasicImaging.load(outputPath))
+        } yield assertTrue(
+          loadedImage.getWidth == imageSampleWidth / 2,
+          loadedImage.getHeight == imageSampleHeight / 2,
+          loadedImage.getRGB(10, 10) == Color.GREEN.getRGB,
+        )
+      }
     )
 }
