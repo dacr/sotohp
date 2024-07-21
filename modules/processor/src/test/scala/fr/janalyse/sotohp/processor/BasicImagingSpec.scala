@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.processor
 
 import zio.*
 import zio.test.*
-import fr.janalyse.sotohp.processor.BasicImaging.{display, fileTypeFromName, mirror, resize, rotate}
+import fr.janalyse.sotohp.processor.BasicImaging
 
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -33,18 +33,18 @@ object BasicImagingSpec extends ZIOSpecDefault {
       suite("Image types feature")(
         test("should return correct type for a given filename") {
           assertTrue(
-            fileTypeFromName("test.scala").contains("scala"),
-            fileTypeFromName("test.scala.backup").contains("backup"),
-            fileTypeFromName("test.c").contains("c"),
-            fileTypeFromName("test.JPG").contains("jpg"),
-            fileTypeFromName(".truc").contains("truc")
+            BasicImaging.fileTypeFromName("test.scala").contains("scala"),
+            BasicImaging.fileTypeFromName("test.scala.backup").contains("backup"),
+            BasicImaging.fileTypeFromName("test.c").contains("c"),
+            BasicImaging.fileTypeFromName("test.JPG").contains("jpg"),
+            BasicImaging.fileTypeFromName(".truc").contains("truc")
           )
         },
         test("should not return any type when file has no extension") {
           assertTrue(
-            fileTypeFromName("test").isEmpty,
-            fileTypeFromName("test.").isEmpty,
-            fileTypeFromName("a.").isEmpty
+            BasicImaging.fileTypeFromName("test").isEmpty,
+            BasicImaging.fileTypeFromName("test.").isEmpty,
+            BasicImaging.fileTypeFromName("a.").isEmpty
           )
         }
       ),
@@ -52,7 +52,7 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should resize the image to a lower size") {
           for {
             original <- ZIO.attempt(imageSample())
-            resized  <- ZIO.attempt(resize(original, imageSampleWidth / 2, imageSampleHeight / 2))
+            resized  <- ZIO.attempt(BasicImaging.resize(original, imageSampleWidth / 2, imageSampleHeight / 2))
           } yield assertTrue(
             resized.getWidth == imageSampleWidth / 2,
             resized.getHeight == imageSampleHeight / 2,
@@ -62,7 +62,7 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should resize the image to a greater size") {
           for {
             original <- ZIO.attempt(imageSample())
-            resized  <- ZIO.attempt(resize(original, imageSampleWidth * 2, imageSampleHeight * 2))
+            resized  <- ZIO.attempt(BasicImaging.resize(original, imageSampleWidth * 2, imageSampleHeight * 2))
           } yield assertTrue(
             resized.getWidth == imageSampleWidth * 2,
             resized.getHeight == imageSampleHeight * 2,
@@ -72,8 +72,8 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should keep the image ratio when resized to a greater size") {
           for {
             original <- ZIO.attempt(imageSample())
-            resized1 <- ZIO.attempt(resize(original, imageSampleWidth * 2, imageSampleHeight * 4))
-            resized2 <- ZIO.attempt(resize(original, imageSampleWidth * 4, imageSampleHeight * 2))
+            resized1 <- ZIO.attempt(BasicImaging.resize(original, imageSampleWidth * 2, imageSampleHeight * 4))
+            resized2 <- ZIO.attempt(BasicImaging.resize(original, imageSampleWidth * 4, imageSampleHeight * 2))
           } yield assertTrue(
             resized1.getWidth == imageSampleWidth * 2,
             resized1.getHeight == imageSampleHeight * 2,
@@ -86,8 +86,8 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should keep the image ratio when resized to a lower size") {
           for {
             original <- ZIO.attempt(imageSample())
-            resized1 <- ZIO.attempt(resize(original, imageSampleWidth / 2, imageSampleHeight / 4))
-            resized2 <- ZIO.attempt(resize(original, imageSampleWidth / 4, imageSampleHeight / 2))
+            resized1 <- ZIO.attempt(BasicImaging.resize(original, imageSampleWidth / 2, imageSampleHeight / 4))
+            resized2 <- ZIO.attempt(BasicImaging.resize(original, imageSampleWidth / 4, imageSampleHeight / 2))
           } yield assertTrue(
             resized1.getWidth == imageSampleWidth / 4,
             resized1.getHeight == imageSampleHeight / 4,
@@ -102,7 +102,7 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should rotate the image to the right") {
           for {
             original <- ZIO.attempt(imageSample())
-            rotated  <- ZIO.attempt(rotate(original, 90))
+            rotated  <- ZIO.attempt(BasicImaging.rotate(original, 90))
           } yield assertTrue(
             rotated.getWidth == imageSampleHeight,
             rotated.getHeight == imageSampleWidth,
@@ -114,7 +114,7 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should rotate the image to the left") {
           for {
             original <- ZIO.attempt(imageSample())
-            rotated  <- ZIO.attempt(rotate(original, -90))
+            rotated  <- ZIO.attempt(BasicImaging.rotate(original, -90))
           } yield assertTrue(
             rotated.getWidth == imageSampleHeight,
             rotated.getHeight == imageSampleWidth,
@@ -129,7 +129,7 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should mirror the image horizontally") {
           for {
             original <- ZIO.attempt(imageSample())
-            mirrored <- ZIO.attempt(mirror(original))
+            mirrored <- ZIO.attempt(BasicImaging.mirror(original))
           } yield assertTrue(
             mirrored.getRGB(imageSampleWidth - 10, 10) == Color.GREEN.getRGB,
             mirrored.getRGB(0, 0) == Color.BLACK.getRGB,
@@ -140,12 +140,31 @@ object BasicImagingSpec extends ZIOSpecDefault {
         test("should mirror the image vertically") {
           for {
             original <- ZIO.attempt(imageSample())
-            mirrored <- ZIO.attempt(mirror(original, horizontally = false, vertically = true))
+            mirrored <- ZIO.attempt(BasicImaging.mirror(original, horizontally = false, vertically = true))
           } yield assertTrue(
             mirrored.getRGB(10, imageSampleHeight - 10) == Color.GREEN.getRGB,
             mirrored.getRGB(0, 0) == Color.BLACK.getRGB,
             mirrored.getRGB(10, 10) == Color.LIGHT_GRAY.getRGB,
             mirrored.getRGB(imageSampleWidth - 1, imageSampleHeight - 1) == Color.BLACK.getRGB
+          )
+        }
+      ),
+      suite("Image input/output feature")(
+        test("should be able to save and load images") {
+          import java.nio.file.*
+          import java.nio.*
+          for {
+            original    <- ZIO.attempt(imageSample())
+            tmpPath      = Path.of(scala.util.Properties.tmpDir)
+            imagePath   <- ZIO.attempt(Files.createTempFile(tmpPath, "tempoImage", ".png"))
+            _           <- ZIO.attempt(BasicImaging.save(imagePath, original))
+            loadedImage <- ZIO.attempt(BasicImaging.load(imagePath))
+          } yield assertTrue(
+            loadedImage.getWidth == imageSampleWidth,
+            loadedImage.getHeight == imageSampleHeight,
+            loadedImage.getRGB(0, 0) == Color.BLACK.getRGB,
+            loadedImage.getRGB(10, 10) == Color.GREEN.getRGB,
+            loadedImage.getRGB(imageSampleWidth - 1, imageSampleHeight - 1) == Color.BLACK.getRGB
           )
         }
       )

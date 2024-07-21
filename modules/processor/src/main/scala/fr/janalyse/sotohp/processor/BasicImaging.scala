@@ -88,7 +88,7 @@ case object BasicImaging {
     import javax.swing.{ImageIcon, JFrame, JLabel}
     import javax.swing.WindowConstants
     import java.awt.FlowLayout
-    
+
     val icon  = ImageIcon(image)
     val frame = JFrame()
     frame.setLayout(FlowLayout())
@@ -101,24 +101,13 @@ case object BasicImaging {
     frame
   }
 
-  def reshapeImage(
-    input: Path,
-    output: Path,
-    targetMaxSize: Int,
-    rotateDegrees: Option[Double] = None,
-    compressionLevel: Option[Double] = None
-  ): Unit = {
-    val originalImage = ImageIO.read(input.toFile)
-    if (originalImage == null) throw Exception(s"Unsupported image format : $input") // TODO enhance error support
-    val ratio        = targetMaxSize.toDouble / math.max(originalImage.getWidth, originalImage.getHeight)
-    val targetWidth  = (originalImage.getWidth() * ratio).toInt
-    val targetHeight = (originalImage.getHeight() * ratio).toInt
-    val resizedImage = resize(originalImage, targetWidth, targetHeight)
-    val finalImage   =
-      if (rotateDegrees.exists(_ != 0d))
-        rotate(resizedImage, rotateDegrees.get)
-      else resizedImage
+  def load(input: Path): BufferedImage = {
+    val image = ImageIO.read(input.toFile)
+    if (image == null) throw RuntimeException(s"Unsupported input image format : $input") // TODO enhance error support
+    image
+  }
 
+  def save(output: Path, image: BufferedImage, compressionLevel: Option[Double] = None): Unit = {
     val foundImageType   = fileTypeFromName(output)
     val foundImageWriter =
       foundImageType
@@ -133,12 +122,32 @@ case object BasicImaging {
         }
         Using(ImageIO.createImageOutputStream(output.toFile)) { outputStream =>
           writer.setOutput(outputStream)
-          val outputImage = IIOImage(finalImage, null, null)
+          val outputImage = IIOImage(image, null, null)
           writer.write(null, outputImage, params)
           writer.dispose()
         }
-      case None         =>
+
+      case None => throw RuntimeException(s"Unsupported output image format : $output")  // TODO enhance error support
     }
+  }
+
+  def reshapeImage(
+    input: Path,
+    output: Path,
+    targetMaxSize: Int,
+    rotateDegrees: Option[Double] = None,
+    compressionLevel: Option[Double] = None
+  ): Unit = {
+    val originalImage = load(input)
+    val ratio        = targetMaxSize.toDouble / math.max(originalImage.getWidth, originalImage.getHeight)
+    val targetWidth  = (originalImage.getWidth() * ratio).toInt
+    val targetHeight = (originalImage.getHeight() * ratio).toInt
+    val resizedImage = resize(originalImage, targetWidth, targetHeight)
+    val finalImage   =
+      if (rotateDegrees.exists(_ != 0d))
+        rotate(resizedImage, rotateDegrees.get)
+      else resizedImage
+    save(output, finalImage, compressionLevel)
   }
 
 }
