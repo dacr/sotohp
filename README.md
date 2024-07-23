@@ -1,6 +1,6 @@
 # SOTOHP [![][sotohpImg]][sotohpLnk]
 
-A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 23 years, I've taken more than 90000
+A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 23 years, I've taken more than 103000
 photos. Once again this project has first started as just [a "small" script][photosc].
 
 ## Principles
@@ -25,7 +25,7 @@ photos. Once again this project has first started as just [a "small" script][pho
   - publishing photo records to elasticsearch / opensearch
   - searching and statistics purposes
 
-The visualisation with the graphical user interface is very fast :) It starts in 2 seconds even with my 92000 photo database.  
+The visualisation with the graphical user interface is very fast :) It starts in 2 seconds even with my 103000 photo database.  
 ![](gui-viewer.png)
 
 Published information to elasticsearch or opensearch make it easy to build very interesting dashboards such as :
