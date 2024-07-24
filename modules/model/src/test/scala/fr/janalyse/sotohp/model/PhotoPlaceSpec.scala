@@ -4,7 +4,7 @@ import zio.*
 import zio.ZIO.*
 import zio.test.*
 import fr.janalyse.sotohp.model.DegreeMinuteSeconds.*
-import fr.janalyse.sotohp.model.DecimalDegrees.*
+import fr.janalyse.sotohp.model.DecimalDegrees.{LatitudeDecimalDegrees, *}
 
 import scala.util.{Success, Try}
 
@@ -19,7 +19,7 @@ object PhotoPlaceSpec extends ZIOSpecDefault {
     TestDataSet("from wikipedia decimal places 5 case", "0° 00′ 0.036″ N", 9.999999999999999e-6),
     TestDataSet("alternative representation 1", "3°58'24\" S", -3.9733333333333336d),
     TestDataSet("alternative representation 2", "03°58'24\" S", -3.9733333333333336d),
-    //TestDataSet("alternative representation 3", "-3°58'24\" S", -3.9733333333333336d), // TODO Check the meaning of negative values in DMS part
+    // TestDataSet("alternative representation 3", "-3°58'24\" S", -3.9733333333333336d), // TODO Check the meaning of negative values in DMS part
     TestDataSet("alternative representation 4", "3° 58'  24\"  S", -3.9733333333333336d),
     TestDataSet("alternative representation 5", "3° 58'  24''  S", -3.9733333333333336d),
     TestDataSet("alternative representation 6", "3° 58'  24″  S", -3.9733333333333336d),
@@ -34,28 +34,55 @@ object PhotoPlaceSpec extends ZIOSpecDefault {
   )
 
   override def spec =
-    suite("Degrees minutes seconds")(
-      suite("for latitude")(
-        for {
-          TestDataSet(testName, givenDMSSpec, expectedDegrees) <- latitudeTestDataset
-        } yield test(testName)(
+    suite("PhotoPlace Test Suite")(
+      suite("DegreesMinutesSeconds features")(
+        suite("should support various encoding for latitude")(
           for {
-            dms <- from(LatitudeDegreeMinuteSeconds.fromSpec(givenDMSSpec))
-          } yield assertTrue(
-            dms.toDecimalDegrees == LatitudeDecimalDegrees(expectedDegrees)
+            TestDataSet(testName, givenDMSSpec, expectedDegrees) <- latitudeTestDataset
+          } yield test(testName)(
+            for {
+              dms <- from(LatitudeDegreeMinuteSeconds.fromSpec(givenDMSSpec))
+            } yield assertTrue(
+              dms.toDecimalDegrees == LatitudeDecimalDegrees(expectedDegrees)
+            )
+          )
+        ),
+        suite("should support various encoding for latitude")(
+          for {
+            TestDataSet(testName, givenDMSSpec, expectedDegrees) <- longitudeTestDataSet
+          } yield test(testName)(
+            for {
+              dms <- from(LongitudeDegreeMinuteSeconds.fromSpec(givenDMSSpec))
+            } yield assertTrue(
+              dms.toDecimalDegrees == LongitudeDecimalDegrees(expectedDegrees)
+            )
           )
         )
       ),
-      suite("for longitude")(
-        for {
-          TestDataSet(testName, givenDMSSpec, expectedDegrees) <- longitudeTestDataSet
-        } yield test(testName)(
-          for {
-            dms <- from(LongitudeDegreeMinuteSeconds.fromSpec(givenDMSSpec))
-          } yield assertTrue(
-            dms.toDecimalDegrees == LongitudeDecimalDegrees(expectedDegrees)
+      suite("Distance features")(
+        test("should return zero when the same place is given") {
+          val from = PhotoPlace.fromDecimalDegrees(LatitudeDecimalDegrees(0d), LongitudeDecimalDegrees(0d))
+          val to   = from
+          assertTrue(
+            from.distanceTo(to) == 0
           )
-        )
+        },
+        test("should return the right distance between two places") {
+          ZIO.fromTry(
+            for {
+              paris <- PhotoPlace.fromLocationSpecs("48° 51' 52.9776'' N", "2° 20' 56.4504'' E")
+              brest <- PhotoPlace.fromLocationSpecs("48° 23' 23.9964'' N", "4° 29' 24.0000'' W")
+              dist1  = paris.distanceTo(brest)
+              dist2  = brest.distanceTo(paris)
+            } yield {
+              assertTrue(
+                dist1 == dist2,
+                dist1 < 506_000,
+                dist1 > 504_000
+              )
+            }
+          )
+        }
       )
     )
 }

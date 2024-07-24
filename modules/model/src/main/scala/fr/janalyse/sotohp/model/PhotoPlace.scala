@@ -29,12 +29,14 @@ object DecimalDegrees {
   }
 
   extension (dd: LatitudeDecimalDegrees) {
-    @targetName("doubleValue_latitude")
     def doubleValue: Double = dd
+    def toRadians: Double   = dd.toRadians
   }
   extension (dd: LongitudeDecimalDegrees) {
     @targetName("doubleValue_longitude")
     def doubleValue: Double = dd
+    @targetName("doubleValue_toRadians")
+    def toRadians: Double   = dd.toRadians
   }
 
 }
@@ -106,15 +108,15 @@ case class PhotoPlace(
   latitude: LatitudeDecimalDegrees,
   longitude: LongitudeDecimalDegrees,
   altitude: Option[AltitudeMeanSeaLevel],
-  deducted: Boolean 
+  deducted: Boolean
 )
 
 object PhotoPlace {
   def apply(
     latitudeDMS: LatitudeDegreeMinuteSeconds,
     longitudeDMS: LongitudeDegreeMinuteSeconds,
-    altitudeMeanSeaLevel: Option[AltitudeMeanSeaLevel],
-    deducted: Boolean
+    altitudeMeanSeaLevel: Option[AltitudeMeanSeaLevel] = None,
+    deducted: Boolean = false
   ): PhotoPlace = {
     PhotoPlace(
       latitudeDMS.toDecimalDegrees,
@@ -123,4 +125,54 @@ object PhotoPlace {
       deducted
     )
   }
+
+  def fromDecimalDegrees(
+    latitudeDMS: LatitudeDecimalDegrees,
+    longitudeDMS: LongitudeDecimalDegrees,
+    altitudeMeanSeaLevel: Option[AltitudeMeanSeaLevel] = None,
+    deducted: Boolean = false
+  ): PhotoPlace = {
+    PhotoPlace(
+      latitudeDMS,
+      longitudeDMS,
+      altitudeMeanSeaLevel,
+      deducted
+    )
+  }
+
+  def fromLocationSpecs(
+    latitudeSpec: String,
+    longitudeSpec: String,
+    altitudeMeanSeaLevel: Option[AltitudeMeanSeaLevel] = None,
+    deducted: Boolean = false
+  ): Try[PhotoPlace] = {
+    for {
+      latitudeDMS  <- LatitudeDegreeMinuteSeconds.fromSpec(latitudeSpec)
+      longitudeDMS <- LongitudeDegreeMinuteSeconds.fromSpec(longitudeSpec)
+    } yield PhotoPlace(
+      latitudeDMS,
+      longitudeDMS,
+      altitudeMeanSeaLevel,
+      deducted
+    )
+  }
+
+  extension (from: PhotoPlace) {
+    def distanceTo(to: PhotoPlace): Double = {
+      val earthRadius    = 6371000d
+      val deltaLatitude  = to.latitude.toRadians - from.latitude.toRadians
+      val deltaLongitude = to.longitude.toRadians - from.longitude.toRadians
+
+      val a =
+        Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
+          Math.sin(deltaLongitude / 2) * Math.sin(deltaLongitude / 2) *
+          Math.cos(from.latitude.toRadians) *
+          Math.cos(to.latitude.toRadians)
+
+      val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      earthRadius * c
+    }
+  }
+
 }
