@@ -114,11 +114,11 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
     for {
       _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :$RESET")
       _ <- Console.printLine(s"${GREEN}- $count photos$RESET")
+      _ <- Console.printLine(s"${GREEN}- $eventCount events")
       _ <- Console.printLine(s"${GREEN}- $digitalShootingMonths months of digital photography ($digitalShootingYears years)$RESET")
       _ <- Console.printLine(s"${GREEN}  - ${oldestDigitalShootingDate.get} -> ${newestDigitalShootingDate.get}$RESET").when(oldestDigitalShootingDate.isDefined && newestDigitalShootingDate.isDefined)
       _ <- Console.printLine(s"${GREEN}- $facesCount people faces$RESET")
       _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount} without GPS infos)$RESET")
-      _ <- Console.printLine(s"${GREEN}- $eventCount events")
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET").when(duplicatedCount > 0)
       _ <- Console.printLine(s"${YELLOW}- $missingShootingDate photos without shooting date$RESET").when(missingShootingDate > 0)
       _ <- Console.printLine(s"${YELLOW}- $modifiedCount modified originals$RESET").when(modifiedCount > 0)
