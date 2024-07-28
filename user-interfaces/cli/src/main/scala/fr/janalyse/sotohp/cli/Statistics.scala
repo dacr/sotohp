@@ -17,12 +17,12 @@ case class Statistics(
   geoLocalizedCount: Int = 0,
   normalizedFailureCount: Int = 0,
   facesCount: Int = 0,
-  duplicated: Map[String, Int] = Map.empty,
+  duplicated: Map[String, Int] = Map.empty, // TODO potentially high memory usage
   missingCount: Int = 0,
   modifiedCount: Int = 0,
   missingShootingDate: Int = 0,
   invalidShootingDateCount: Int = 0,
-  eventsCount: Map[Option[PhotoEvent], Int] = Map.empty,
+  eventsCount: Map[Option[PhotoEvent], Int] = Map.empty,  // TODO potentially high memory usage
   oldestDigitalShootingDate: Option[OffsetDateTime] = None,
   newestDigitalShootingDate: Option[OffsetDateTime] = None
 )
