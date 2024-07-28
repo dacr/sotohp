@@ -61,7 +61,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
                             .someOrElse(false)
     } yield {
       val updatedCount                     = stats.count + 1
-      val updatedGeolocalizedCount         = stats.geoLocalizedCount + (if (place.exists(!_.deducted)) 1 else 0)
+      val updatedGeolocalizedCount         = stats.geoLocalizedCount + (if (place.isDefined) 1 else 0)
       val updatedDeductedGeoLocalizedCount = stats.deductedGeoLocalizedCount + (if (place.exists(_.deducted)) 1 else 0)
       val updatedNormalizedFailureCount    = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
       val updatedFacesCount                = stats.facesCount + faces.map(_.count).getOrElse(0)
@@ -121,7 +121,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
       _ <- Console.printLine(s"${GREEN}- $digitalShootingMonths months of digital photography ($digitalShootingYears years)$RESET")
       _ <- Console.printLine(s"${GREEN}  - ${oldestDigitalShootingDate.get} -> ${newestDigitalShootingDate.get}$RESET").when(oldestDigitalShootingDate.isDefined && newestDigitalShootingDate.isDefined)
       _ <- Console.printLine(s"${GREEN}- $facesCount people faces$RESET")
-      _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount} without GPS infos)$RESET")
+      _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount - deductedGeoLocalizedCount} without GPS infos)$RESET")
       _ <- Console.printLine(s"${YELLOW}  - ${deductedGeoLocalizedCount} deducted GPS info from time/space nearby photos$RESET")
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET").when(duplicatedCount > 0)
       _ <- Console.printLine(s"${YELLOW}- $missingShootingDate photos without shooting date$RESET").when(missingShootingDate > 0)

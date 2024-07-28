@@ -43,25 +43,37 @@ object PlacesFix extends ZIOAppDefault with CommonsCLI {
     } yield QuickFixPhoto(state = foundState, event = foundEvent, place = foundPlace)
   }
 
-  def quickFixByTimeWindow(state: QuickFixState, photos: Chunk[QuickFixPhoto]): ZIO[PhotoStoreService, IOException, QuickFixState] = {
+  def fixPlaceInStorage(photoId: PhotoId, photoPlace: PhotoPlace): ZIO[PhotoStoreService, PhotoStoreIssue, PhotoId] = {
+    for {
+      _ <- PhotoStoreService.photoPlaceUpsert(photoId, photoPlace)
+      _ <- PhotoStoreService.photoStateUpdate(photoId, s => s.copy(lastSynchronized = None))
+    } yield photoId
+  }
+
+  def quickFixByTimeWindow(state: QuickFixState, photos: Chunk[QuickFixPhoto]): ZIO[PhotoStoreService, PhotoStoreIssue, QuickFixState] = {
     val fixable = for {
       index                    <- photos.indices
       current                   = photos(index)
       if current.place.isEmpty
       if !state.fixed.contains(current.state.photoId)
-      foundNearestBeforeWithGPS = photos.take(index).findLast(_.place.isDefined)
-      foundNearestAfterWithGPS  = photos.drop(index).find(_.place.isDefined)
+      foundNearestBeforeWithGPS = photos.take(index).findLast(_.place.exists(!_.deducted))
+      foundNearestAfterWithGPS  = photos.drop(index).find(_.place.exists(!_.deducted))
       if foundNearestBeforeWithGPS.isDefined && foundNearestAfterWithGPS.isDefined
-      distance                  = foundNearestBeforeWithGPS.get.place.get.distanceTo(foundNearestAfterWithGPS.get.place.get)
-      elapsed                   = foundNearestAfterWithGPS.get.state.photoTimestamp.toEpochSecond - foundNearestBeforeWithGPS.get.state.photoTimestamp.toEpochSecond
-      if distance < 200 // 100 meters
-      if elapsed < 4 * 3600
-    } yield {
-      println(s"${distance}m ${elapsed}s")
-      current.state.photoId
-    }
+      nearestPlaceBefore        = foundNearestBeforeWithGPS.get.place.get
+      nearestPlaceAfter         = foundNearestAfterWithGPS.get.place.get
+      distance                  = nearestPlaceBefore.distanceTo(nearestPlaceAfter)
+      nearestTimestampBefore    = foundNearestBeforeWithGPS.get.state.photoTimestamp.toEpochSecond
+      nearestTimestampAfter     = foundNearestAfterWithGPS.get.state.photoTimestamp.toEpochSecond
+      elapsed                   = nearestTimestampAfter - nearestTimestampBefore
+      if distance < 400 // 400 meters
+      if elapsed < 5 * 3600
+      toFixPhotoId              = current.state.photoId
+      deductedPlace             = nearestPlaceBefore.copy(deducted = true)
+    } yield toFixPhotoId -> deductedPlace
 
-    ZIO.succeed(state.copy(state.fixed ++ fixable))
+    for {
+      newFixed <- ZIO.foreach(fixable)(fixPlaceInStorage)
+    } yield state.copy(state.fixed ++ newFixed)
   }
 
   val logic = ZIO.logSpan("PlacesFix") {
@@ -72,11 +84,11 @@ object PlacesFix extends ZIOAppDefault with CommonsCLI {
                       .mapZIO(convert)
                       .sliding(300, 50)
                       .runFoldZIO(initialState)((state, photos) => quickFixByTimeWindow(state, photos))
-      events     <- photoStream
-                      .mapZIO(convert)
-                      .filter(_.event.isDefined)
-                      .map(_.event.get)
-                      .runFold(Set.empty[PhotoEvent])((set, event) => set + event)
+      // events     <- photoStream
+      //                .mapZIO(convert)
+      //                .filter(_.event.isDefined)
+      //                .map(_.event.get)
+      //                .runFold(Set.empty[PhotoEvent])((set, event) => set + event)
       //      step2State <- photoStream
       //                      .mapZIO(convert)
       //                      .filter(_.event.isDefined)
