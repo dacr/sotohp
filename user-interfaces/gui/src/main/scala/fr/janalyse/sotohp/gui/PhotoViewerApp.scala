@@ -36,12 +36,12 @@ object PhotoViewerApp extends ZIOAppDefault {
   class FxApp extends JFXApp3 {
     private val hasNoGPSText        = "⌘"
     private val hasGPSText          = "⌘"
-    private val noCategoryText      = "No category"
+    private val noEventText         = "No event specified"
     private val noShootDateTimeText = "No shoot timestamp"
 
     lazy val infoHasGPS   = Label(hasNoGPSText)
     lazy val infoDateTime = Label(noShootDateTimeText)
-    lazy val infoCategory = Label(noCategoryText)
+    lazy val infoEvent    = Label(noEventText)
     lazy val first        = Button("⇤") // LEFTWARDS ARROW TO BAR
     lazy val previous     = Button("⇠") // LEFTWARDS DASHED ARROW
     lazy val next         = Button("⇢") // RIGHTWARDS DASHED ARROW
@@ -54,7 +54,7 @@ object PhotoViewerApp extends ZIOAppDefault {
     lazy val display      = PhotoDisplay()
     lazy val displaySFX   = jfxRegion2sfx(display)
     lazy val buttons      = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight)
-    lazy val infos        = HBox(5d, infoHasGPS, infoDateTime, infoCategory)
+    lazy val infos        = HBox(5d, infoHasGPS, infoDateTime, infoEvent)
     lazy val controls     = VBox(buttons, infos)
 
     override def start(): Unit         = {
@@ -98,15 +98,15 @@ object PhotoViewerApp extends ZIOAppDefault {
       infoHasGPS.onMouseClicked = event => {
         photo.place.foreach(place => hostServices.showDocument(buildGoogleMapsHyperLink(place)))
       }
-      infoCategory.text = photo.description.flatMap(_.category).map(_.text).getOrElse(noCategoryText)
-      infoCategory.onMouseClicked = event => {
+      infoEvent.text = photo.description.flatMap(_.event).map(_.text).getOrElse(noEventText)
+      infoEvent.onMouseClicked = event => {
         val clipboard = Clipboard.systemClipboard
-        clipboard.content = ClipboardContent(DataFormat.PlainText -> infoCategory.text.get())
+        clipboard.content = ClipboardContent(DataFormat.PlainText -> infoEvent.text.get())
       }
       display.onDragDetected = event => {
         if (event.isPrimaryButtonDown) {
           val dragBoard = display.startDragAndDrop(TransferMode.COPY)
-          val content = ClipboardContent(DataFormat.Files -> java.util.List.of(photo.source.original.path.toFile))
+          val content   = ClipboardContent(DataFormat.Files -> java.util.List.of(photo.source.original.path.toFile))
           dragBoard.setContent(content)
         }
       }

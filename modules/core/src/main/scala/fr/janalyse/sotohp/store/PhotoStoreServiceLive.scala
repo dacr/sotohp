@@ -522,7 +522,7 @@ class PhotoStoreServiceLive private (
   def daoDescriptionToDescription(from: DaoPhotoDescription): PhotoDescription = {
     PhotoDescription(
       text = from.text,
-      category = from.category.map(PhotoCategory.apply),
+      event = from.event.map(PhotoEvent.apply),
       keywords = from.keywords.map(keywords => keywords.map(PhotoKeyword.apply))
     )
   }
@@ -530,7 +530,7 @@ class PhotoStoreServiceLive private (
   def descriptionsToDaoDescription(from: PhotoDescription): DaoPhotoDescription = {
     DaoPhotoDescription(
       text = from.text,
-      category = from.category.map(_.text),
+      event = from.event.map(_.text),
       keywords = from.keywords.map(keywords => keywords.map(_.text))
     )
   }

@@ -58,7 +58,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                     .mapZIO(classificationProcessor.analyze)
                                     .mapZIO(objectsDetectionProcessor.analyze)
                                     .mapZIO(facesProcessor.analyze)
-                                    .filter(_.lastSynchronized.isEmpty)
+                                    .filter(_.lastSynchronized.isEmpty) // TODO it only synchronizes new photos, changes are not synchronized
                                     .grouped(500)
                                     .mapZIO(SearchService.publish)
                                     .mapZIO(updatePhotoStates)

@@ -15,8 +15,8 @@ object PhotoOperationsSpec extends ZIOSpecDefault with TestDatasets {
 
   val testLogic =
     suite("Photo operations")(
-      test("photo category exists") {
-        val check = (basedir: String, path: String, expected: Option[String]) => buildPhotoCategory(Path.of(basedir), Path.of(path)) == expected.map(PhotoCategory.apply)
+      test("photo event exists") {
+        val check = (basedir: String, path: String, expected: Option[String]) => buildPhotoEvent(Path.of(basedir), Path.of(path)) == expected.map(PhotoEvent.apply)
         assertTrue(
           check("tmp", "tmp/toto.jpeg", None),
           check("tmp/", "tmp/toto.jpeg", None),

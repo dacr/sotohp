@@ -90,12 +90,12 @@ object PhotoOperations {
     PhotoId(ulid)
   }
 
-  def buildPhotoCategory(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath): Option[PhotoCategory] = {
-    val category = Option(photoPath.getParent).map { photoParentDir =>
+  def buildPhotoEvent(baseDirectory: BaseDirectoryPath, photoPath: PhotoPath): Option[PhotoEvent] = {
+    val event = Option(photoPath.getParent).map { photoParentDir =>
       val text = baseDirectory.relativize(photoParentDir).toString
-      PhotoCategory(text)
+      PhotoEvent(text)
     }
-    category.filter(_.text.size > 0)
+    event.filter(_.text.size > 0)
   }
 
   def getOriginalFileLastModified(original: Original): IO[PhotoFileIssue, OffsetDateTime] = {
@@ -301,8 +301,8 @@ object PhotoOperations {
       photoId          = buildPhotoId(photoTimestamp)
       photoSource     <- buildPhotoSource(photoId, original)
       foundPlace       = extractPlace(drewMetadata)
-      category         = buildPhotoCategory(original.baseDirectory, original.path)
-      photoDescription = PhotoDescription(category = category)
+      event            = buildPhotoEvent(original.baseDirectory, original.path)
+      photoDescription = PhotoDescription(event = event)
       _               <- PhotoStoreService.photoSourceUpsert(originalId, photoSource)
       _               <- PhotoStoreService.photoMetaDataUpsert(photoId, photoMetaData) // TODO LMDB add a transaction feature to avoid leaving partial data...
       _               <- PhotoStoreService.photoDescriptionUpsert(photoId, photoDescription)

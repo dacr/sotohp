@@ -20,7 +20,7 @@ case class SaoPhoto(
   fileSize: Long,
   fileHash: String,
   fileLastUpdated: OffsetDateTime,
-  category: Option[String],
+  event: Option[String],
   shootDateTime: Option[OffsetDateTime],
   camera: Option[String],
   // tags: Map[String, String],
@@ -34,7 +34,7 @@ case class SaoPhoto(
 
 object SaoPhoto {
   // ------------------------------------------
-  // TODO temporary keyword extraction from category
+  // TODO temporary keyword extraction from event
   def camelTokenize(that: String): Array[String] = that.split("(?=[A-Z][^A-Z])|(?:(?<=[^A-Z])(?=[A-Z]+))")
 
   def camelToKebabCase(that: String): String = camelTokenize(that).map(_.toLowerCase).mkString("-")
@@ -201,9 +201,9 @@ object SaoPhoto {
 
   def extractKeywords(input: Option[String]): List[String] =
     input match {
-      case None           => Nil
-      case Some(category) =>
-        applyFixes(fixes, category)
+      case None        => Nil
+      case Some(event) =>
+        applyFixes(fixes, event)
           .split("[- /,]+")
           .toList
           .filter(_.size > 0)
@@ -220,7 +220,7 @@ object SaoPhoto {
   // ------------------------------------------
 
   def fromPhoto(photo: Photo): SaoPhoto = {
-    val category = photo.description.flatMap(_.category).map(_.text)
+    val event = photo.description.flatMap(_.event).map(_.text)
     SaoPhoto(
       id = photo.source.photoId.id.toString,
       timestamp = photo.timestamp,
@@ -228,12 +228,12 @@ object SaoPhoto {
       fileSize = photo.source.fileSize,
       fileHash = photo.source.fileHash.code,
       fileLastUpdated = photo.source.fileLastModified,
-      category = category,
+      event = event,
       shootDateTime = photo.metaData.flatMap(_.shootDateTime),
       camera = photo.metaData.flatMap(_.cameraName),
       // tags = photo.metaData.map(_.tags).getOrElse(Map.empty),
       // keywords = photo.description.map(_.keywords.toList).getOrElse(Nil),
-      keywords = extractKeywords(category), // TODO temporary keyword extraction from category
+      keywords = extractKeywords(event), // TODO temporary keyword extraction from event
       classifications = photo.foundClassifications.map(_.classifications.map(_.name).distinct).getOrElse(Nil),
       detectedObjects = photo.foundObjects.map(_.objects.map(_.name).distinct).getOrElse(Nil),
       detectedObjectsCount = photo.foundObjects.map(_.objects.size).getOrElse(0),

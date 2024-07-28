@@ -21,7 +21,7 @@ case class PhotoSimpleQuery(
   timeRange: Option[TimeRange]
 )
 
-case class CategorySimpleQuery(
+case class EventSimpleQuery(
   ownerId: Option[PhotoOwnerId],
   keywords: Option[List[String]]
 )
@@ -30,5 +30,5 @@ case class CategorySimpleQuery(
 trait PhotoService {
   def photoGet(id: PhotoId): IO[PhotoServiceIssue, Photo]
   def photoFind(query: PhotoSimpleQuery): Stream[PhotoServiceIssue, Photo]
-  def categoryFind(query: CategorySimpleQuery): Stream[PhotoServiceIssue, PhotoCategory]
+  def eventFind(query: EventSimpleQuery): Stream[PhotoServiceIssue, PhotoEvent]
 }
