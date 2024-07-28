@@ -15,14 +15,15 @@ import scala.io.AnsiColor.*
 case class Statistics(
   count: Int = 0,
   geoLocalizedCount: Int = 0,
+  deductedGeoLocalizedCount: Int = 0,
   normalizedFailureCount: Int = 0,
   facesCount: Int = 0,
-  duplicated: Map[String, Int] = Map.empty, // TODO potentially high memory usage
+  duplicated: Map[String, Int] = Map.empty,              // TODO potentially high memory usage
   missingCount: Int = 0,
   modifiedCount: Int = 0,
   missingShootingDate: Int = 0,
   invalidShootingDateCount: Int = 0,
-  eventsCount: Map[Option[PhotoEvent], Int] = Map.empty,  // TODO potentially high memory usage
+  eventsCount: Map[Option[PhotoEvent], Int] = Map.empty, // TODO potentially high memory usage
   oldestDigitalShootingDate: Option[OffsetDateTime] = None,
   newestDigitalShootingDate: Option[OffsetDateTime] = None
 )
@@ -59,29 +60,30 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
                             .when(originalFound)
                             .someOrElse(false)
     } yield {
-      val updatedCount                    = stats.count + 1
-      val updatedGeolocalizedCount        = stats.geoLocalizedCount + (if (place.isDefined) 1 else 0)
-      val updatedNormalizedFailureCount   = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
-      val updatedFacesCount               = stats.facesCount + faces.map(_.count).getOrElse(0)
-      val updatedMissingCount             = stats.missingCount + (if (originalFound) 0 else 1)
-      val updatedModifiedCount            = stats.modifiedCount + (if (originalModified) 1 else 0)
-      val updatedDuplicated               = stats.duplicated + (stats.duplicated.get(filehash) match {
+      val updatedCount                     = stats.count + 1
+      val updatedGeolocalizedCount         = stats.geoLocalizedCount + (if (place.exists(!_.deducted)) 1 else 0)
+      val updatedDeductedGeoLocalizedCount = stats.deductedGeoLocalizedCount + (if (place.exists(_.deducted)) 1 else 0)
+      val updatedNormalizedFailureCount    = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
+      val updatedFacesCount                = stats.facesCount + faces.map(_.count).getOrElse(0)
+      val updatedMissingCount              = stats.missingCount + (if (originalFound) 0 else 1)
+      val updatedModifiedCount             = stats.modifiedCount + (if (originalModified) 1 else 0)
+      val updatedDuplicated                = stats.duplicated + (stats.duplicated.get(filehash) match {
         case None        => filehash -> 1
         case Some(count) => filehash -> (count + 1)
       })
-      val updatedMissingShootingDateCount = stats.missingShootingDate + (if (shootingDate.isEmpty) 1 else 0)
-      val updatedInvalidShootingDateCount = stats.invalidShootingDateCount + (if (shootingDate.exists(_.getYear < shootingDateMinimumValidYear)) 1 else 0)
-      val updatedEventsCount              = stats.eventsCount + (stats.eventsCount.get(description.event) match {
+      val updatedMissingShootingDateCount  = stats.missingShootingDate + (if (shootingDate.isEmpty) 1 else 0)
+      val updatedInvalidShootingDateCount  = stats.invalidShootingDateCount + (if (shootingDate.exists(_.getYear < shootingDateMinimumValidYear)) 1 else 0)
+      val updatedEventsCount               = stats.eventsCount + (stats.eventsCount.get(description.event) match {
         case None        => description.event -> 1
         case Some(count) => description.event -> (count + 1)
       })
-      val updatedOldestValidTimestamp     = (stats.oldestDigitalShootingDate, shootingDate) match {
+      val updatedOldestValidTimestamp      = (stats.oldestDigitalShootingDate, shootingDate) match {
         case (_, Some(date)) if date.getYear < digitalShootingDateMinimumValidYear => stats.oldestDigitalShootingDate
         case (None, Some(date))                                                    => Some(date)
         case (Some(currentOldest), Some(date)) if date.isBefore(currentOldest)     => Some(date)
         case _                                                                     => stats.oldestDigitalShootingDate
       }
-      val updatedNewestValidTimestamp     = (stats.newestDigitalShootingDate, shootingDate) match {
+      val updatedNewestValidTimestamp      = (stats.newestDigitalShootingDate, shootingDate) match {
         case (None, Some(date))                                               => Some(date)
         case (Some(currentNewest), Some(date)) if date.isAfter(currentNewest) => Some(date)
         case _                                                                => stats.newestDigitalShootingDate
@@ -89,6 +91,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
       stats.copy(
         count = updatedCount,
         geoLocalizedCount = updatedGeolocalizedCount,
+        deductedGeoLocalizedCount = updatedDeductedGeoLocalizedCount,
         normalizedFailureCount = updatedNormalizedFailureCount,
         duplicated = updatedDuplicated,
         facesCount = updatedFacesCount,
@@ -119,6 +122,7 @@ object Statistics extends ZIOAppDefault with CommonsCLI {
       _ <- Console.printLine(s"${GREEN}  - ${oldestDigitalShootingDate.get} -> ${newestDigitalShootingDate.get}$RESET").when(oldestDigitalShootingDate.isDefined && newestDigitalShootingDate.isDefined)
       _ <- Console.printLine(s"${GREEN}- $facesCount people faces$RESET")
       _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount} without GPS infos)$RESET")
+      _ <- Console.printLine(s"${YELLOW}  - ${deductedGeoLocalizedCount} deducted GPS info from time/space nearby photos$RESET")
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET").when(duplicatedCount > 0)
       _ <- Console.printLine(s"${YELLOW}- $missingShootingDate photos without shooting date$RESET").when(missingShootingDate > 0)
       _ <- Console.printLine(s"${YELLOW}- $modifiedCount modified originals$RESET").when(modifiedCount > 0)
