@@ -130,6 +130,18 @@ lazy val moduleProcessor =
       libraryDependencies ++= deepJavaLearningLibs
     )
 
+lazy val modulePhotoService =
+  project
+    .in(file("modules/service"))
+    .dependsOn(moduleCore, moduleSearch, moduleProcessor)
+    .settings(
+      sharedSettings,
+      name := "sotohp-service",
+      javaOptions ++= lmdbJavaOptions,
+      libraryDependencies ++= Seq(
+      )
+    )
+
 lazy val userInterfacesCLI =
   project
     .in(file("user-interfaces/cli"))
