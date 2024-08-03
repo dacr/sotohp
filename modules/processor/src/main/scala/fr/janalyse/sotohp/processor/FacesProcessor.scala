@@ -26,6 +26,12 @@ import wvlet.airframe.ulid.ULID
 case class FacesDetectionIssue(message: String, exception: Throwable)
 
 class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends Processor {
+
+  def makeFaceId(photo: Photo): FaceId = {
+    // Note : up 2^80 possible values for the same millis
+    FaceId(ULID.ofMillis(photo.timestamp.toInstant.toEpochMilli))
+  }
+
   def doDetectFaces(photo: Photo, path: Path): List[DetectedFace] = {
     val loadedImage: Image           = ImageFactory.getInstance().fromFile(path)
     val detection: DetectedObjects   = facesPredictor.predict(loadedImage)
@@ -46,7 +52,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
               width = ob.getBoundingBox.getBounds.getWidth,
               height = ob.getBoundingBox.getBounds.getHeight
             ),
-            faceId = ULID.ofMillis(photo.timestamp.toInstant.toEpochMilli)
+            faceId = makeFaceId(photo)
           )
         )
 
@@ -116,4 +122,3 @@ object FacesProcessor {
     FacesProcessor(facesPredictor)
   }
 }
-

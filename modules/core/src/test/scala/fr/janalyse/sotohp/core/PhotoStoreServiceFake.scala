@@ -16,6 +16,7 @@ class PhotoStoreServiceFake(
   classificationsCollectionRef: Ref[Map[PhotoId, PhotoClassifications]],
   objectsCollectionRef: Ref[Map[PhotoId, PhotoObjects]],
   facesCollectionRef: Ref[Map[PhotoId, PhotoFaces]],
+  faceFeaturesCollectionRef: Ref[Map[FaceId, FaceFeatures]],
   descriptionsCollectionRef: Ref[Map[PhotoId, PhotoDescription]]
 ) extends PhotoStoreService {
 
@@ -24,16 +25,17 @@ class PhotoStoreServiceFake(
   override def photoDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] = {
     for {
       state <- photoStateGet(photoId).some.orElseFail[PhotoStoreIssue](PhotoStoreNotFoundIssue(s"$photoId not found"))
-      _ <- photoClassificationsDelete(photoId)
-      _ <- photoDescriptionDelete(photoId)
-      _ <- photoFacesDelete(photoId)
-      _ <- photoMetaDataDelete(photoId)
-      _ <- photoMiniaturesDelete(photoId)
-      _ <- photoNormalizedDelete(photoId)
-      _ <- photoObjectsDelete(photoId)
-      _ <- photoPlaceDelete(photoId)
-      _ <- photoSourceDelete(state.originalId)
-      _ <- photoStateDelete(photoId)
+      _     <- photoClassificationsDelete(photoId)
+      _     <- photoDescriptionDelete(photoId)
+      // TODO add photo face features deletion
+      _     <- photoFacesDelete(photoId)
+      _     <- photoMetaDataDelete(photoId)
+      _     <- photoMiniaturesDelete(photoId)
+      _     <- photoNormalizedDelete(photoId)
+      _     <- photoObjectsDelete(photoId)
+      _     <- photoPlaceDelete(photoId)
+      _     <- photoSourceDelete(state.originalId)
+      _     <- photoStateDelete(photoId)
     } yield ()
   }
 
@@ -199,6 +201,21 @@ class PhotoStoreServiceFake(
     facesCollectionRef.update(collection => collection.removed(photoId))
 
   // ===================================================================================================================
+  override def photoFaceFeaturesGet(faceId: FaceId): IO[PhotoStoreIssue, Option[FaceFeatures]] = for {
+    collection <- faceFeaturesCollectionRef.get
+  } yield collection.get(faceId)
+
+  override def photoFaceFeaturesContains(faceId: FaceId): IO[PhotoStoreIssue, Boolean] = for {
+    collection <- faceFeaturesCollectionRef.get
+  } yield collection.contains(faceId)
+
+  override def photoFaceFeaturesUpsert(faceId: FaceId, faceFeatures: FaceFeatures): IO[PhotoStoreIssue, Unit] =
+    faceFeaturesCollectionRef.update(_.updated(faceId, faceFeatures))
+
+  override def photoFaceFeaturesDelete(faceId: FaceId): IO[PhotoStoreIssue, Unit] =
+    faceFeaturesCollectionRef.update(collection => collection.removed(faceId))
+
+  // ===================================================================================================================
   override def photoDescriptionGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoDescription]] = for {
     collection <- descriptionsCollectionRef.get
   } yield collection.get(photoId)
@@ -237,6 +254,7 @@ object PhotoStoreServiceFake extends PhotoStoreCollections {
       classificationsCollection <- Ref.make(Map.empty[PhotoId, PhotoClassifications])
       objectsCollection         <- Ref.make(Map.empty[PhotoId, PhotoObjects])
       facesCollection           <- Ref.make(Map.empty[PhotoId, PhotoFaces])
+      faceFeaturesCollection    <- Ref.make(Map.empty[FaceId, FaceFeatures])
       descriptionsCollection    <- Ref.make(Map.empty[PhotoId, PhotoDescription])
     } yield PhotoStoreServiceFake(
       statesCollection,
@@ -248,6 +266,7 @@ object PhotoStoreServiceFake extends PhotoStoreCollections {
       classificationsCollection,
       objectsCollection,
       facesCollection,
+      faceFeaturesCollection,
       descriptionsCollection
     )
   )

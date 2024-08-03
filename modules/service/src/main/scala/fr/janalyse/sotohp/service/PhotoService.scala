@@ -7,7 +7,7 @@ import java.time.OffsetDateTime
 case class PhotoServiceUserIssue(message: String)
 case class PhotoServiceSystemIssue(message: String)
 
-type PhotoServiceIssue = PhotoServiceUserIssue | PhotoServiceSystemIssue
+type PhotoServiceIssue       = PhotoServiceUserIssue | PhotoServiceSystemIssue
 type PhotoServiceStreamIssue = PhotoServiceSystemIssue
 
 case class TimeRange(
@@ -18,7 +18,8 @@ case class TimeRange(
 case class PhotoQuery(
   ownerId: Option[PhotoOwnerId],
   keywords: PhotoKeywords,
-  timeRange: Option[TimeRange]
+  timeRange: Option[TimeRange],
+  event: Option[PhotoEvent]
 )
 
 case class EventQuery(
@@ -33,6 +34,7 @@ case class PhotoEventInfo(
 )
 
 trait PhotoService {
+  def photoUpload(filename: String, data: Chunk[Byte], ownerId: Option[PhotoOwnerId], event: Option[PhotoEvent]): IO[PhotoServiceIssue, PhotoId]
   def photoGet(id: PhotoId): IO[PhotoServiceIssue, Photo]
   def photoFind(query: PhotoQuery): IO[PhotoServiceStreamIssue, Stream[PhotoServiceIssue, Photo]]
   def eventFind(query: EventQuery): IO[PhotoServiceStreamIssue, Stream[PhotoServiceIssue, PhotoEventInfo]]

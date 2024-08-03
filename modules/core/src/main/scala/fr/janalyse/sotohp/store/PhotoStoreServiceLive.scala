@@ -22,6 +22,7 @@ trait PhotoStoreCollections {
   val photoClassificationsCollectionName = "photo-classifications"
   val photoObjectsCollectionName         = "photo-objects"
   val photoFacesCollectionName           = "photo-faces"
+  val photoFaceFeaturesCollectionName    = "photo-face-features"
   val photoDescriptionsCollectionName    = "photo-descriptions"
 
   val allCollections = List(
@@ -34,6 +35,7 @@ trait PhotoStoreCollections {
     photoClassificationsCollectionName,
     photoObjectsCollectionName,
     photoFacesCollectionName,
+    photoFaceFeaturesCollectionName,
     photoDescriptionsCollectionName
   )
 }
@@ -49,6 +51,7 @@ class PhotoStoreServiceLive private (
   classificationsCollection: LMDBCollection[DaoPhotoClassifications],
   objectsCollection: LMDBCollection[DaoPhotoObjects],
   facesCollection: LMDBCollection[DaoPhotoFaces],
+  faceFeaturesCollection: LMDBCollection[DaoFaceFeatures],
   descriptionsCollection: LMDBCollection[DaoPhotoDescription]
 ) extends PhotoStoreService {
 
@@ -58,6 +61,7 @@ class PhotoStoreServiceLive private (
   }
 
   private def photoIdToCollectionKey(photoId: PhotoId): String          = photoId.id.toString
+  private def faceIdToCollectionKey(faceId: FaceId): String             = faceId.id.toString
   private def originalIdToCollectionKey(originalId: OriginalId): String = originalId.id.toString
 
   // ===================================================================================================================
@@ -67,6 +71,7 @@ class PhotoStoreServiceLive private (
       state <- photoStateGet(photoId).some.orElseFail[PhotoStoreIssue](PhotoStoreNotFoundIssue(s"$photoId not found"))
       _     <- photoClassificationsDelete(photoId)
       _     <- photoDescriptionDelete(photoId)
+      // TODO add photo face features deletion
       _     <- photoFacesDelete(photoId)
       _     <- photoMetaDataDelete(photoId)
       _     <- photoMiniaturesDelete(photoId)
@@ -473,7 +478,7 @@ class PhotoStoreServiceLive private (
               width = that.box.width,
               height = that.box.height
             ),
-            faceId = ULID.fromString(that.faceId)
+            faceId = FaceId(ULID.fromString(that.faceId))
           )
         )
       )
@@ -516,6 +521,58 @@ class PhotoStoreServiceLive private (
   override def photoFacesDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit] =
     facesCollection
       .delete(photoIdToCollectionKey(photoId))
+      .mapBoth(convertFailures, _ => ())
+
+  // ===================================================================================================================
+
+  def daoFaceFeaturesToFaces(from: Option[DaoFaceFeatures]): Option[FaceFeatures] = {
+    from.map(daoFaceFeatures =>
+      FaceFeatures(
+        photoId = PhotoId(ULID.fromString(daoFaceFeatures.photoId)),
+        someoneId = daoFaceFeatures.someoneId.map(id => SomeoneId(ULID.fromString(id))),
+        box = BoundingBox(
+          x = daoFaceFeatures.box.x,
+          y = daoFaceFeatures.box.y,
+          width = daoFaceFeatures.box.width,
+          height = daoFaceFeatures.box.height
+        ),
+        features = daoFaceFeatures.features
+      )
+    )
+  }
+
+  def faceFeaturesToDaoFaces(from: FaceFeatures): DaoFaceFeatures = {
+    DaoFaceFeatures(
+      photoId = from.photoId.id.toString(),
+      someoneId = from.someoneId.map(_.toString),
+      box = DaoBoundingBox(
+        x = from.box.x,
+        y = from.box.y,
+        width = from.box.width,
+        height = from.box.height
+      ),
+      features = from.features
+    )
+  }
+
+  def photoFaceFeaturesGet(faceId: FaceId): IO[PhotoStoreIssue, Option[FaceFeatures]] =
+    faceFeaturesCollection
+      .fetch(faceIdToCollectionKey(faceId))
+      .mapBoth(convertFailures, daoFaceFeaturesToFaces)
+
+  def photoFaceFeaturesContains(faceId: FaceId): IO[PhotoStoreIssue, Boolean] =
+    faceFeaturesCollection
+      .contains(faceIdToCollectionKey(faceId))
+      .mapError(convertFailures)
+
+  def photoFaceFeaturesUpsert(faceId: FaceId, faceFeatures: FaceFeatures): IO[PhotoStoreIssue, Unit] =
+    faceFeaturesCollection
+      .upsertOverwrite(faceIdToCollectionKey(faceId), faceFeaturesToDaoFaces(faceFeatures))
+      .mapBoth(convertFailures, _ => ())
+
+  def photoFaceFeaturesDelete(faceId: FaceId): IO[PhotoStoreIssue, Unit] =
+    faceFeaturesCollection
+      .delete(faceIdToCollectionKey(faceId))
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
@@ -571,6 +628,7 @@ object PhotoStoreServiceLive extends PhotoStoreCollections {
     classificationsCollection <- lmdb.collectionGet[DaoPhotoClassifications](photoClassificationsCollectionName)
     objectsCollection         <- lmdb.collectionGet[DaoPhotoObjects](photoObjectsCollectionName)
     facesCollection           <- lmdb.collectionGet[DaoPhotoFaces](photoFacesCollectionName)
+    faceFeaturesCollection    <- lmdb.collectionGet[DaoFaceFeatures](photoFaceFeaturesCollectionName)
     descriptionsCollection    <- lmdb.collectionGet[DaoPhotoDescription](photoDescriptionsCollectionName)
   } yield PhotoStoreServiceLive(
     lmdb,
@@ -583,6 +641,7 @@ object PhotoStoreServiceLive extends PhotoStoreCollections {
     classificationsCollection,
     objectsCollection,
     facesCollection,
+    faceFeaturesCollection,
     descriptionsCollection
   )
 }

@@ -11,7 +11,10 @@ object PhotoStream {
   type PhotoLazyStream   = ZStream[PhotoStoreService, PhotoStreamIssues, LazyPhoto]
 
   def photoStream(photoOwnerId: PhotoOwnerId): PhotoStream = {
-    ???
+    PhotoStoreService
+      .photoStateStream()
+      .filter(_.photoOwnerId == photoOwnerId) // TODO refactor required - performance issue
+      .mapZIO(state => PhotoOperations.makePhotoFromStoredState(state))
   }
 
   def photoStream(): PhotoStream = {
@@ -21,7 +24,9 @@ object PhotoStream {
   }
 
   def photoLazyStream(photoOwnerId: PhotoOwnerId): PhotoLazyStream = {
-    ???
+    PhotoStoreService
+      .photoLazyStream()
+      .filter(_.state.photoOwnerId == photoOwnerId) // TODO refactor required - performance issue
   }
 
   def photoLazyStream(): PhotoLazyStream = {
