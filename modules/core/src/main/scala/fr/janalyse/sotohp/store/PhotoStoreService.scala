@@ -86,6 +86,7 @@ trait PhotoStoreService {
   def photoFacesDelete(photoId: PhotoId): IO[PhotoStoreIssue, Unit]
 
   // photo face features collection
+  def photoFaceFeaturesStream(): Stream[PhotoStoreIssue, (FaceId, FaceFeatures)]
   def photoFaceFeaturesGet(faceId: FaceId): IO[PhotoStoreIssue, Option[FaceFeatures]]
   def photoFaceFeaturesContains(faceId: FaceId): IO[PhotoStoreIssue, Boolean]
   def photoFaceFeaturesUpsert(faceId: FaceId, faceFeatures: FaceFeatures): IO[PhotoStoreIssue, Unit]
@@ -156,6 +157,7 @@ object PhotoStoreService {
   def photoFacesUpsert(photoId: PhotoId, metaData: PhotoFaces): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoFacesUpsert(photoId, metaData))
   def photoFacesDelete(photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue, Unit]                       = serviceWithZIO(_.photoFacesDelete(photoId))
 
+  def photoFaceFeaturesStream(): ZStream[PhotoStoreService, PhotoStoreIssue, (FaceId, FaceFeatures)]                      = ZStream.serviceWithStream(_.photoFaceFeaturesStream())
   def photoFaceFeaturesGet(faceId: FaceId): ZIO[PhotoStoreService, PhotoStoreIssue, Option[FaceFeatures]]                = serviceWithZIO(_.photoFaceFeaturesGet(faceId))
   def photoFaceFeaturesContains(faceId: FaceId): ZIO[PhotoStoreService, PhotoStoreIssue, Boolean]                        = serviceWithZIO(_.photoFaceFeaturesContains(faceId))
   def photoFaceFeaturesUpsert(faceId: FaceId, faceFeatures: FaceFeatures): ZIO[PhotoStoreService, PhotoStoreIssue, Unit] = serviceWithZIO(_.photoFaceFeaturesUpsert(faceId, faceFeatures))

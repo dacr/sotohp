@@ -201,6 +201,13 @@ class PhotoStoreServiceFake(
     facesCollectionRef.update(collection => collection.removed(photoId))
 
   // ===================================================================================================================
+  override def photoFaceFeaturesStream(): Stream[PhotoStoreIssue, (FaceId, FaceFeatures)] = {
+    val wrappedStream = for {
+      collection <- faceFeaturesCollectionRef.get
+    } yield ZStream.from(collection.toList)
+    ZStream.unwrap(wrappedStream)
+  }
+
   override def photoFaceFeaturesGet(faceId: FaceId): IO[PhotoStoreIssue, Option[FaceFeatures]] = for {
     collection <- faceFeaturesCollectionRef.get
   } yield collection.get(faceId)

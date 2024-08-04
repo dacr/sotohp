@@ -167,19 +167,17 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, result => result.map((key, daoState) => daoStateToState(daoState)))
 
   // ===================================================================================================================
-  def daoSourceToSource(from: Option[DaoPhotoSource]): Option[PhotoSource] = {
-    from.map(daoSource =>
-      PhotoSource(
-        photoId = PhotoId(ULID(daoSource.photoId)),
-        original = Original(
-          ownerId = PhotoOwnerId(ULID(daoSource.originalOwnerId)),
-          baseDirectory = Path.of(daoSource.originalBaseDirectory),
-          path = Path.of(daoSource.originalPath)
-        ),
-        fileSize = daoSource.fileSize,
-        fileHash = PhotoHash(daoSource.fileHash),
-        fileLastModified = daoSource.fileLastModified
-      )
+  def daoSourceToSource(daoSource: DaoPhotoSource): PhotoSource = {
+    PhotoSource(
+      photoId = PhotoId(ULID(daoSource.photoId)),
+      original = Original(
+        ownerId = PhotoOwnerId(ULID(daoSource.originalOwnerId)),
+        baseDirectory = Path.of(daoSource.originalBaseDirectory),
+        path = Path.of(daoSource.originalPath)
+      ),
+      fileSize = daoSource.fileSize,
+      fileHash = PhotoHash(daoSource.fileHash),
+      fileLastModified = daoSource.fileLastModified
     )
   }
 
@@ -198,7 +196,7 @@ class PhotoStoreServiceLive private (
   override def photoSourceGet(originalId: OriginalId): IO[PhotoStoreIssue, Option[PhotoSource]] =
     sourcesCollection
       .fetch(originalIdToCollectionKey(originalId))
-      .mapBoth(convertFailures, daoSourceToSource)
+      .mapBoth(convertFailures, _.map(daoSourceToSource))
 
   override def photoSourceContains(originalId: OriginalId): IO[PhotoStoreIssue, Boolean] =
     sourcesCollection
@@ -216,15 +214,13 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
-  def daoMetaDataToMetaData(from: Option[DaoPhotoMetaData]): Option[PhotoMetaData] = {
-    from.map(daoMetaData =>
-      PhotoMetaData(
-        dimension = daoMetaData.dimension.map(daoDim => Dimension2D(width = daoDim.width, height = daoDim.height)),
-        shootDateTime = daoMetaData.shootDateTime,
-        orientation = PhotoOrientation.values.find(orientation => daoMetaData.orientation.isDefined && orientation.code == daoMetaData.orientation.get), // TODO can be enhanced
-        cameraName = daoMetaData.cameraName,
-        tags = daoMetaData.tags
-      )
+  def daoMetaDataToMetaData(daoMetaData: DaoPhotoMetaData): PhotoMetaData = {
+    PhotoMetaData(
+      dimension = daoMetaData.dimension.map(daoDim => Dimension2D(width = daoDim.width, height = daoDim.height)),
+      shootDateTime = daoMetaData.shootDateTime,
+      orientation = PhotoOrientation.values.find(orientation => daoMetaData.orientation.isDefined && orientation.code == daoMetaData.orientation.get), // TODO can be enhanced
+      cameraName = daoMetaData.cameraName,
+      tags = daoMetaData.tags
     )
   }
 
@@ -241,7 +237,7 @@ class PhotoStoreServiceLive private (
   override def photoMetaDataGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoMetaData]] =
     metaDataCollection
       .fetch(photoIdToCollectionKey(photoId))
-      .mapBoth(convertFailures, daoMetaDataToMetaData)
+      .mapBoth(convertFailures, _.map(daoMetaDataToMetaData))
 
   override def photoMetaDataContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
     metaDataCollection
@@ -259,14 +255,12 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
-  def daoPlaceToPlace(from: Option[DaoPhotoPlace]): Option[PhotoPlace] = {
-    from.map(daoPlace =>
-      PhotoPlace(
-        latitude = LatitudeDecimalDegrees(daoPlace.latitude),
-        longitude = LongitudeDecimalDegrees(daoPlace.longitude),
-        altitude = daoPlace.altitude,
-        deducted = daoPlace.deducted
-      )
+  def daoPlaceToPlace(daoPlace: DaoPhotoPlace): PhotoPlace = {
+    PhotoPlace(
+      latitude = LatitudeDecimalDegrees(daoPlace.latitude),
+      longitude = LongitudeDecimalDegrees(daoPlace.longitude),
+      altitude = daoPlace.altitude,
+      deducted = daoPlace.deducted
     )
   }
 
@@ -281,7 +275,7 @@ class PhotoStoreServiceLive private (
   override def photoPlaceGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoPlace]] =
     placesCollection
       .fetch(photoIdToCollectionKey(photoId))
-      .mapBoth(convertFailures, daoPlaceToPlace)
+      .mapBoth(convertFailures, _.map(daoPlaceToPlace))
 
   override def photoPlaceContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
     placesCollection
@@ -299,11 +293,9 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
-  def daoMiniaturesToMiniatures(from: Option[DaoMiniatures]): Option[Miniatures] = {
-    from.map(daoMiniatures =>
-      Miniatures(
-        sources = daoMiniatures.sources.map(s => MiniatureSource(size = s.size, dimension = Dimension2D(width = s.dimension.width, height = s.dimension.height)))
-      )
+  def daoMiniaturesToMiniatures(daoMiniatures: DaoMiniatures): Miniatures = {
+    Miniatures(
+      sources = daoMiniatures.sources.map(s => MiniatureSource(size = s.size, dimension = Dimension2D(width = s.dimension.width, height = s.dimension.height)))
     )
   }
 
@@ -315,7 +307,7 @@ class PhotoStoreServiceLive private (
   override def photoMiniaturesGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[Miniatures]] =
     miniaturesCollection
       .fetch(photoIdToCollectionKey(photoId))
-      .mapBoth(convertFailures, daoMiniaturesToMiniatures)
+      .mapBoth(convertFailures, _.map(daoMiniaturesToMiniatures))
 
   override def photoMiniaturesContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
     miniaturesCollection
@@ -333,14 +325,12 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================  // ===================================================================================================================
-  def daoNormalizedToNormalized(from: Option[DaoNormalizedPhoto]): Option[NormalizedPhoto] = {
-    from.map(daoNormalized =>
-      NormalizedPhoto(
-        size = daoNormalized.size,
-        dimension = Dimension2D(
-          width = daoNormalized.dimension.width,
-          height = daoNormalized.dimension.height
-        )
+  def daoNormalizedToNormalized(daoNormalized: DaoNormalizedPhoto): NormalizedPhoto = {
+    NormalizedPhoto(
+      size = daoNormalized.size,
+      dimension = Dimension2D(
+        width = daoNormalized.dimension.width,
+        height = daoNormalized.dimension.height
       )
     )
   }
@@ -357,7 +347,7 @@ class PhotoStoreServiceLive private (
   override def photoNormalizedGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[NormalizedPhoto]] =
     normalizedCollection
       .fetch(photoIdToCollectionKey(photoId))
-      .mapBoth(convertFailures, daoNormalizedToNormalized)
+      .mapBoth(convertFailures, _.map(daoNormalizedToNormalized))
 
   override def photoNormalizedContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
     normalizedCollection
@@ -375,11 +365,9 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
-  def daoClassificationsToClassifications(from: Option[DaoPhotoClassifications]): Option[PhotoClassifications] = {
-    from.map(daoClassifications =>
-      PhotoClassifications(
-        classifications = daoClassifications.classifications.map(that => DetectedClassification(that.name))
-      )
+  def daoClassificationsToClassifications(daoClassifications: DaoPhotoClassifications): PhotoClassifications = {
+    PhotoClassifications(
+      classifications = daoClassifications.classifications.map(that => DetectedClassification(that.name))
     )
   }
 
@@ -392,7 +380,7 @@ class PhotoStoreServiceLive private (
   override def photoClassificationsGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoClassifications]] =
     classificationsCollection
       .fetch(photoIdToCollectionKey(photoId))
-      .mapBoth(convertFailures, daoClassificationsToClassifications)
+      .mapBoth(convertFailures, _.map(daoClassificationsToClassifications))
 
   override def photoClassificationsContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
     classificationsCollection
@@ -410,18 +398,16 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
-  def daoObjectsToObjects(from: Option[DaoPhotoObjects]): Option[PhotoObjects] = {
-    from.map(daoObjects =>
-      PhotoObjects(
-        objects = daoObjects.objects.map(that =>
-          DetectedObject(
-            name = that.name,
-            box = BoundingBox(
-              x = that.box.x,
-              y = that.box.y,
-              width = that.box.width,
-              height = that.box.height
-            )
+  def daoObjectsToObjects(daoObjects: DaoPhotoObjects): PhotoObjects = {
+    PhotoObjects(
+      objects = daoObjects.objects.map(that =>
+        DetectedObject(
+          name = that.name,
+          box = BoundingBox(
+            x = that.box.x,
+            y = that.box.y,
+            width = that.box.width,
+            height = that.box.height
           )
         )
       )
@@ -447,7 +433,7 @@ class PhotoStoreServiceLive private (
   override def photoObjectsGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoObjects]] =
     objectsCollection
       .fetch(photoIdToCollectionKey(photoId))
-      .mapBoth(convertFailures, daoObjectsToObjects)
+      .mapBoth(convertFailures, _.map(daoObjectsToObjects))
 
   override def photoObjectsContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
     objectsCollection
@@ -465,21 +451,19 @@ class PhotoStoreServiceLive private (
       .mapBoth(convertFailures, _ => ())
 
   // ===================================================================================================================
-  def daoFacesToFaces(from: Option[DaoPhotoFaces]): Option[PhotoFaces] = {
-    from.map(daoFaces =>
-      PhotoFaces(
-        count = daoFaces.count,
-        faces = daoFaces.faces.map(that =>
-          DetectedFace(
-            someoneId = that.someoneId.map(id => SomeoneId(ULID.fromString(id))),
-            box = BoundingBox(
-              x = that.box.x,
-              y = that.box.y,
-              width = that.box.width,
-              height = that.box.height
-            ),
-            faceId = FaceId(ULID.fromString(that.faceId))
-          )
+  def daoFacesToFaces(daoFaces: DaoPhotoFaces): PhotoFaces = {
+    PhotoFaces(
+      count = daoFaces.count,
+      faces = daoFaces.faces.map(that =>
+        DetectedFace(
+          someoneId = that.someoneId.map(id => SomeoneId(ULID.fromString(id))),
+          box = BoundingBox(
+            x = that.box.x,
+            y = that.box.y,
+            width = that.box.width,
+            height = that.box.height
+          ),
+          faceId = FaceId(ULID.fromString(that.faceId))
         )
       )
     )
@@ -506,7 +490,7 @@ class PhotoStoreServiceLive private (
   override def photoFacesGet(photoId: PhotoId): IO[PhotoStoreIssue, Option[PhotoFaces]] =
     facesCollection
       .fetch(photoIdToCollectionKey(photoId))
-      .mapBoth(convertFailures, daoFacesToFaces)
+      .mapBoth(convertFailures, _.map(daoFacesToFaces))
 
   override def photoFacesContains(photoId: PhotoId): IO[PhotoStoreIssue, Boolean] =
     facesCollection
@@ -525,23 +509,21 @@ class PhotoStoreServiceLive private (
 
   // ===================================================================================================================
 
-  def daoFaceFeaturesToFaces(from: Option[DaoFaceFeatures]): Option[FaceFeatures] = {
-    from.map(daoFaceFeatures =>
-      FaceFeatures(
-        photoId = PhotoId(ULID.fromString(daoFaceFeatures.photoId)),
-        someoneId = daoFaceFeatures.someoneId.map(id => SomeoneId(ULID.fromString(id))),
-        box = BoundingBox(
-          x = daoFaceFeatures.box.x,
-          y = daoFaceFeatures.box.y,
-          width = daoFaceFeatures.box.width,
-          height = daoFaceFeatures.box.height
-        ),
-        features = daoFaceFeatures.features
-      )
+  def daoFaceFeaturesToFaceFeatures(daoFaceFeatures: DaoFaceFeatures): FaceFeatures = {
+    FaceFeatures(
+      photoId = PhotoId(ULID.fromString(daoFaceFeatures.photoId)),
+      someoneId = daoFaceFeatures.someoneId.map(id => SomeoneId(ULID.fromString(id))),
+      box = BoundingBox(
+        x = daoFaceFeatures.box.x,
+        y = daoFaceFeatures.box.y,
+        width = daoFaceFeatures.box.width,
+        height = daoFaceFeatures.box.height
+      ),
+      features = daoFaceFeatures.features
     )
   }
 
-  def faceFeaturesToDaoFaces(from: FaceFeatures): DaoFaceFeatures = {
+  def faceFeaturesToDaoFaceFeatures(from: FaceFeatures): DaoFaceFeatures = {
     DaoFaceFeatures(
       photoId = from.photoId.id.toString(),
       someoneId = from.someoneId.map(_.toString),
@@ -555,10 +537,15 @@ class PhotoStoreServiceLive private (
     )
   }
 
+  override def photoFaceFeaturesStream(): ZStream[Any, PhotoStoreIssue, (FaceId, FaceFeatures)] =
+    faceFeaturesCollection
+      .streamWithKeys()
+      .mapBoth(convertFailures, (key, value) => (FaceId(ULID.fromString(key)), daoFaceFeaturesToFaceFeatures(value)))
+
   def photoFaceFeaturesGet(faceId: FaceId): IO[PhotoStoreIssue, Option[FaceFeatures]] =
     faceFeaturesCollection
       .fetch(faceIdToCollectionKey(faceId))
-      .mapBoth(convertFailures, daoFaceFeaturesToFaces)
+      .mapBoth(convertFailures, _.map(daoFaceFeaturesToFaceFeatures))
 
   def photoFaceFeaturesContains(faceId: FaceId): IO[PhotoStoreIssue, Boolean] =
     faceFeaturesCollection
@@ -567,7 +554,7 @@ class PhotoStoreServiceLive private (
 
   def photoFaceFeaturesUpsert(faceId: FaceId, faceFeatures: FaceFeatures): IO[PhotoStoreIssue, Unit] =
     faceFeaturesCollection
-      .upsertOverwrite(faceIdToCollectionKey(faceId), faceFeaturesToDaoFaces(faceFeatures))
+      .upsertOverwrite(faceIdToCollectionKey(faceId), faceFeaturesToDaoFaceFeatures(faceFeatures))
       .mapBoth(convertFailures, _ => ())
 
   def photoFaceFeaturesDelete(faceId: FaceId): IO[PhotoStoreIssue, Unit] =
