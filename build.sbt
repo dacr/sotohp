@@ -153,14 +153,14 @@ lazy val userInterfacesCLI =
       fork := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
-        "dev.zio"            %% "zio"                       % versions.zio,
-        "dev.zio"            %% "zio-config"                % versions.zioconfig,
-        "dev.zio"            %% "zio-config-typesafe"       % versions.zioconfig,
-        "dev.zio"            %% "zio-config-magnolia"       % versions.zioconfig,
-        "dev.zio"            %% "zio-logging"               % versions.ziologging, // Temporary
-        "dev.zio"            %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
+        "dev.zio"             %% "zio"                       % versions.zio,
+        "dev.zio"             %% "zio-config"                % versions.zioconfig,
+        "dev.zio"             %% "zio-config-typesafe"       % versions.zioconfig,
+        "dev.zio"             %% "zio-config-magnolia"       % versions.zioconfig,
+        "dev.zio"             %% "zio-logging"               % versions.ziologging, // Temporary
+        "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
         // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
-        "com.github.haifengl" % "smile-core"                % "3.1.1"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
+        "com.github.haifengl" %% "smile-scala"               % "3.1.1"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
       )
     )
 
