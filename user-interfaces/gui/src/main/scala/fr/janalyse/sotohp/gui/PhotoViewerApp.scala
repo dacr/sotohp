@@ -98,7 +98,13 @@ object PhotoViewerApp extends ZIOAppDefault {
       infoHasGPS.onMouseClicked = event => {
         photo.place.foreach(place => hostServices.showDocument(buildGoogleMapsHyperLink(place)))
       }
-      infoEvent.text = photo.description.flatMap(_.event).map(_.text).getOrElse(noEventText)
+      infoEvent.text = 
+        photo
+          .description
+          .flatMap(_.event)
+          .map(_.text)
+          .getOrElse(noEventText)
+          .appendedAll(s" (${photo.source.photoId.id})") // TODO temporary added for debug purposes
       infoEvent.onMouseClicked = event => {
         val clipboard = Clipboard.systemClipboard
         clipboard.content = ClipboardContent(DataFormat.PlainText -> infoEvent.text.get())

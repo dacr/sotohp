@@ -52,12 +52,14 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
       classificationProcessor   = ClassificationProcessor.allocate()
       objectsDetectionProcessor = ObjectsDetectionProcessor.allocate()
       facesProcessor            = FacesProcessor.allocate()
+      facesFeaturesProcessor    = FaceFeaturesProcessor.allocate()
       processingStream          = OriginalsStream
                                     .photoFromOriginalStream(searchRoots)
                                     .mapZIOPar(4)(normalizeAndThenMiniaturize)
                                     .mapZIO(classificationProcessor.analyze)
                                     .mapZIO(objectsDetectionProcessor.analyze)
                                     .mapZIO(facesProcessor.analyze)
+                                    .tapZIO(faceFeaturesProcessor.extractPhotoFaceFeatures)
                                     .filter(_.lastSynchronized.isEmpty) // TODO it only synchronizes new photos, changes are not synchronized
                                     .grouped(500)
                                     .mapZIO(SearchService.publish)

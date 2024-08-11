@@ -30,22 +30,29 @@ case class FaceFeaturesIssue(message: String, exception: Throwable)
 class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends Processor {
 
   def extractFaceFeatures(face: DetectedFace, image: BufferedImage, photoId: PhotoId): ZIO[PhotoStoreService, PhotoStoreIssue | FaceFeaturesIssue | ProcessorIssue, Unit] = {
-    val x = (face.box.x * image.getWidth).toInt
-    val y = (face.box.y * image.getHeight).toInt
-    val w = (face.box.width * image.getWidth).toInt
-    val h = (face.box.height * image.getHeight).toInt
+    val x  = (face.box.x * image.getWidth).toInt
+    val y  = (face.box.y * image.getHeight).toInt
+    val w  = (face.box.width * image.getWidth).toInt
+    val h  = (face.box.height * image.getHeight).toInt
+    val nx = if (x < 0) 0 else x
+    val ny = if (y < 0) 0 else y
+    val nw = if (nx + w < image.getWidth()) w else image.getWidth - nx
+    val nh = if (ny + h < image.getHeight()) h else image.getHeight - ny
 
     for {
-      faceImage   <- ZIO.attempt(image.getSubimage(x, y, w, h)).mapError(err => FaceFeaturesIssue("Couldn't extract face from image", err))
-      djlImage    <- ZIO.attempt(ImageFactory.getInstance().fromImage(faceImage)).mapError(err => FaceFeaturesIssue("Couldn't load Image", err))
-      features    <- ZIO.attempt(predictor.predict(djlImage)).mapError(err => FaceFeaturesIssue("Couldn't predict face features", err))
-      faceFeatures = FaceFeatures(
-                       photoId = photoId,
-                       someoneId = None,
-                       box = face.box,
-                       features = features
-                     )
-      _           <- PhotoStoreService.photoFaceFeaturesUpsert(face.faceId, faceFeatures)
+      faceImage       <- ZIO
+                           .attempt(image.getSubimage(nx, ny, nw, nh))
+                           .mapError(err => FaceFeaturesIssue(s"Couldn't extract face from image [$nx, $ny, $nw, $nh]", err))
+      faceImageResized = BasicImaging.resize(faceImage, 160, 160)
+      djlImage        <- ZIO.attempt(ImageFactory.getInstance().fromImage(faceImageResized)).mapError(err => FaceFeaturesIssue("Couldn't load Image", err))
+      features        <- ZIO.attempt(predictor.predict(djlImage)).mapError(err => FaceFeaturesIssue("Couldn't predict face features", err))
+      faceFeatures     = FaceFeatures(
+                           photoId = photoId,
+                           someoneId = None,
+                           box = face.box,
+                           features = features
+                         )
+      _               <- PhotoStoreService.photoFaceFeaturesUpsert(face.faceId, faceFeatures)
     } yield ()
   }
 
@@ -60,7 +67,7 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
       selectedFaces = photo.foundFaces
                         .map(_.faces)
                         .getOrElse(Nil)
-                        .filter(face => face.box.width >= minRatio && face.box.height >= minRatio)
+                        .filter(face => face.box.width >= minRatio || face.box.height >= minRatio)
       _            <- ZIO.logInfo(s"Processing ${event} ${photo.source.photoId}")
       _            <- ZIO.foreachDiscard(selectedFaces)(face => extractFaceFeatures(face, image, photo.source.photoId))
     } yield selectedFaces.size
