@@ -161,7 +161,9 @@ lazy val userInterfacesCLI =
         "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
         // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
         "com.github.haifengl" %% "smile-scala"               % "3.1.1"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
-      )
+      ),
+      // dependency conflict between smile and elastic4s with jackson-databind
+      dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
     )
 
 lazy val userInterfacesGUI =
