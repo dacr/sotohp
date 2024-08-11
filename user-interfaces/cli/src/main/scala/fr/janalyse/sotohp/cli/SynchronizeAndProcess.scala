@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.core.{OriginalsStream, PhotoOperations, PhotoStream}
 import fr.janalyse.sotohp.model.Photo
-import fr.janalyse.sotohp.processor.{ClassificationProcessor, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
+import fr.janalyse.sotohp.processor.{ClassificationProcessor, FaceFeaturesProcessor, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
@@ -59,7 +59,7 @@ object SynchronizeAndProcess extends ZIOAppDefault with CommonsCLI {
                                     .mapZIO(classificationProcessor.analyze)
                                     .mapZIO(objectsDetectionProcessor.analyze)
                                     .mapZIO(facesProcessor.analyze)
-                                    .tapZIO(faceFeaturesProcessor.extractPhotoFaceFeatures)
+                                    .mapZIO(p => facesFeaturesProcessor.extractPhotoFaceFeatures(p).as(p))
                                     .filter(_.lastSynchronized.isEmpty) // TODO it only synchronizes new photos, changes are not synchronized
                                     .grouped(500)
                                     .mapZIO(SearchService.publish)
