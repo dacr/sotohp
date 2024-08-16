@@ -16,36 +16,37 @@ case class MiniaturizeIssue(message: String, exception: Throwable)
 
 object MiniaturizeProcessor extends Processor {
 
-  private def miniaturizePhoto(referenceSize: Int, input: Path, output: Path, config: SotohpConfig) = {
-    ZIO
-      .attemptBlocking(
-//        Thumbnails
-//          .of(input.toFile)
-//          .useExifOrientation(true)
-//          .size(referenceSize, referenceSize)
-//          .keepAspectRatio(true)
-//          .outputQuality(config.miniaturizer.quality)
-//          .allowOverwrite(false)
-//          .toFile(output.toFile)
-        BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.normalizer.quality))
-      )
-      .tap(_ => ZIO.logInfo(s"Miniaturize $referenceSize"))
-      .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", th))
-      .uninterruptible
-      .ignoreLogged // Photo file may have internal issues
+  private def miniaturizePhoto(referenceSize: Int, input: Path, output: Path) = {
+    for {
+      config <- SotohpConfig.zioConfig
+      _      <- ZIO
+                  .attemptBlocking(
+                    //        Thumbnails
+                    //          .of(input.toFile)
+                    //          .useExifOrientation(true)
+                    //          .size(referenceSize, referenceSize)
+                    //          .keepAspectRatio(true)
+                    //          .outputQuality(config.miniaturizer.quality)
+                    //          .allowOverwrite(false)
+                    //          .toFile(output.toFile)
+                    BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.normalizer.quality))
+                  )
+                  .tap(_ => ZIO.logInfo(s"Miniaturize $referenceSize"))
+                  .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", th))
+                  .uninterruptible
+                  .ignoreLogged // Photo file may have internal issues
+    } yield ()
   }
 
-  private def buildMiniature(photo: Photo, size: Int, config: SotohpConfig): IO[MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, MiniatureSource] = {
+  private def buildMiniature(photo: Photo, size: Int): IO[MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, MiniatureSource] = {
     val alreadyKnownMiniatures = photo.miniatures
     for {
       input     <- getBestInputPhotoFile(photo)
-      output    <- ZIO
-                     .attempt(PhotoOperations.makeMiniatureFilePath(photo.source, size, config))
-                     .mapError(th => MiniaturizeIssue(s"Invalid miniature destination file", th))
+      output    <- PhotoOperations.getMiniaturePhotoFilePath(photo.source, size)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
                      .mapError(th => MiniaturizeIssue(s"Couldn't target path", th))
-      _         <- miniaturizePhoto(size, input, output, config)
+      _         <- miniaturizePhoto(size, input, output)
                      .when(!output.toFile.exists())
       dimension <- ZIO
                      .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension)) // faster
@@ -79,8 +80,8 @@ object MiniaturizeProcessor extends Processor {
     */
   def miniaturize(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, Photo] = {
     val logic = for {
-      config            <- sotophConfig
-      miniaturesSources <- ZIO.foreach(config.miniaturizer.referenceSizes)(size => buildMiniature(photo, size, config))
+      referencesSizes   <- SotohpConfig.zioConfig.map(_.miniaturizer.referenceSizes)
+      miniaturesSources <- ZIO.foreach(referencesSizes)(size => buildMiniature(photo, size))
       miniatures        <- upsertMiniaturesRecordIfNeeded(photo, miniaturesSources)
     } yield photo.copy(miniatures = Some(miniatures))
 

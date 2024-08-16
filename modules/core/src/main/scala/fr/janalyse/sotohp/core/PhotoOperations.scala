@@ -31,42 +31,47 @@ object PhotoOperations {
 
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
-//  def internalDataRelativize(output: Path, config: SotohpConfig): Path = {
-//    val dataDirPath = Path.of(config.internalData.baseDirectory)
-//    dataDirPath.relativize(output)
-//  }
-
-  def makePhotoInternalDataPath(photoSource: PhotoSource, config: SotohpConfig): Path = {
-    val dataDir = config.internalData.baseDirectory
-    val ownerId = photoSource.original.ownerId
-    val photoId = photoSource.photoId
-    Path.of(dataDir, "artifacts", ownerId.toString, photoId.toString)
+  def getPhotoArtifactsCachePath(photoSource: PhotoSource): IO[SotohpConfigIssue, Path] = {
+    for {
+      dataDir <- SotohpConfig.zioConfig.map(_.internalData.baseDirectory)
+      owner    = photoSource.original.ownerId.toString
+      photo    = photoSource.photoId.toString
+      path     = Path.of(dataDir, owner, "photos-cache", photo)
+    } yield path
   }
 
-  def makePhotoInternalDataPath(photoSource: PhotoSource): IO[SotohpConfigIssue, Path] = {
-    SotohpConfig.zioConfig.map(config => makePhotoInternalDataPath(photoSource, config))
+  def getFaceCacheFilePath(photoSource: PhotoSource, faceId: FaceId): IO[SotohpConfigIssue, Path] = {
+    for {
+      config <- SotohpConfig.zioConfig
+      dataDir = config.internalData.baseDirectory
+      format  = config.miniaturizer.format
+      owner   = photoSource.original.ownerId.toString
+      photo   = photoSource.photoId.toString
+      face    = faceId.toString
+      path    = Path.of(dataDir, owner, "faces-cache", s"$photo-$face.$format")
+    } yield path
+  }
+  
+  def getPhotoOriginalFilePath(photoSource: PhotoSource):IO[SotohpConfigIssue, Path] = {
+    ZIO.succeed(photoSource.original.path.toAbsolutePath)
   }
 
-  def makeNormalizedFilePath(photoSource: PhotoSource, config: SotohpConfig): Path = {
-    val basePath = makePhotoInternalDataPath(photoSource, config)
-    val format   = config.miniaturizer.format
-    val target   = s"normalized.$format"
-    basePath.resolve(target)
+  def getNormalizedPhotoFilePath(photoSource: PhotoSource): IO[SotohpConfigIssue, Path] = {
+    for {
+      format   <- SotohpConfig.zioConfig.map(_.miniaturizer.format)
+      basePath <- getPhotoArtifactsCachePath(photoSource)
+      target    = s"normalized.$format"
+      path      = basePath.resolve(target)
+    } yield path
   }
 
-  def makeNormalizedFilePath(photoSource: PhotoSource): IO[SotohpConfigIssue, Path] = {
-    SotohpConfig.zioConfig.map(config => makeNormalizedFilePath(photoSource, config))
-  }
-
-  def makeMiniatureFilePath(photoSource: PhotoSource, size: Int, config: SotohpConfig): Path = {
-    val basePath = makePhotoInternalDataPath(photoSource, config)
-    val format   = config.miniaturizer.format
-    val target   = s"miniature-$size.$format"
-    basePath.resolve(target)
-  }
-
-  def makeMiniatureFilePath(photoSource: PhotoSource, size: Int): IO[SotohpConfigIssue, Path] = {
-    SotohpConfig.zioConfig.map(config => makeMiniatureFilePath(photoSource, size, config))
+  def getMiniaturePhotoFilePath(photoSource: PhotoSource, size: Int): IO[SotohpConfigIssue, Path] = {
+    for {
+      format   <- SotohpConfig.zioConfig.map(_.miniaturizer.format)
+      basePath <- getPhotoArtifactsCachePath(photoSource)
+      target    = s"miniature-$size.$format"
+      path      = basePath.resolve(target)
+    } yield path
   }
 
   def readDrewMetadata(filePath: Path): IO[PhotoFileIssue, Metadata] = {
@@ -75,7 +80,7 @@ object PhotoOperations {
       .mapError(exception => PhotoFileIssue(s"Couldn't read image meta data in file", filePath, exception))
   }
 
-  def buildOriginalId(original: Original): OriginalId = {
+  private def buildOriginalId(original: Original): OriginalId = {
     // Using photo relative file path and owner id for photo identifier generation
     // as the same photo can be used within several directories or people
     import original.*
@@ -224,7 +229,7 @@ object PhotoOperations {
     result.flatten
   }
 
-  def buildPhotoSource(photoId: PhotoId, original: Original): ZIO[PhotoStoreService, PhotoFileIssue, PhotoSource] = {
+  private def buildPhotoSource(photoId: PhotoId, original: Original): ZIO[PhotoStoreService, PhotoFileIssue, PhotoSource] = {
     for {
       fileSize         <- ZIO
                             .attemptBlockingIO(original.path.toFile.length())
@@ -248,7 +253,7 @@ object PhotoOperations {
     )
   }
 
-  def buildPhotoMetaData(metadata: Metadata): PhotoMetaData = {
+  private def buildPhotoMetaData(metadata: Metadata): PhotoMetaData = {
     val shootDateTime = extractShootDateTime(metadata)
     val cameraName    = extractCameraName(metadata)
     val genericTags   = extractGenericTags(metadata)
