@@ -84,13 +84,11 @@ object FaceFeaturesClustering extends ZIOAppDefault with CommonsCLI {
     val destPath = Path.of(s"clusters-$algo", s"cluster-$clusterIndex")
     if (!destPath.toFile.exists()) destPath.toFile.mkdirs()
     for {
-      config <- ZIO.config(SotohpConfig.config)
-
       originalId     <- PhotoStoreService.photoStateGet(faceFeatures.photoId).some.map(_.originalId)
       photoSource    <- PhotoStoreService.photoSourceGet(originalId).some
-      normalizedPath <- ZIO.attempt(PhotoOperations.makeNormalizedFilePath(photoSource, config)) // faster because lighter
+      normalizedPath <- PhotoOperations.getNormalizedPhotoFilePath(photoSource) // faster because lighter
       // imagePath       = photoSource.original.path // May require post rotation
-      imagePath       = normalizedPath                                                           // This one is already rotated
+      imagePath       = normalizedPath // This one is already rotated
       image          <- ZIO.attempt(BasicImaging.load(imagePath))
       x               = (faceFeatures.box.x * image.getWidth).toInt
       y               = (faceFeatures.box.y * image.getHeight).toInt

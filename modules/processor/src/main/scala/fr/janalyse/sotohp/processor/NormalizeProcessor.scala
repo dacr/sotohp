@@ -14,28 +14,32 @@ case class NormalizeIssue(message: String, exception: Throwable)
 
 object NormalizeProcessor extends Processor {
 
-  private def resizePhoto(input: Path, output: Path, orientation: Option[PhotoOrientation], config: SotohpConfig) = {
-    import config.normalizer.referenceSize
-    ZIO
-      .attemptBlocking(
-//        Thumbnails
-//          .of(input.toFile)
-//          .useExifOrientation(true)
-//          .size(referenceSize, referenceSize)
-//          .keepAspectRatio(true)
-//          .outputQuality(config.normalizer.quality)
-//          .allowOverwrite(false)
-//          .toFile(output.toFile)
-        BasicImaging.reshapeImage(input, output, referenceSize, orientation.map(_.rotationDegrees), Some(config.normalizer.quality))
-      )
-      .tap(_ => ZIO.logInfo(s"Normalize"))
-      .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size $referenceSize", th))
-      .uninterruptible
-      .ignoreLogged // Photo file may have internal issues
+  private def resizePhoto(input: Path, output: Path, orientation: Option[PhotoOrientation]) = {
+    for {
+      config       <- SotohpConfig.zioConfig
+      referenceSize = config.normalizer.referenceSize
+      _            <- ZIO
+                        .attemptBlocking(
+                          //        Thumbnails
+                          //          .of(input.toFile)
+                          //          .useExifOrientation(true)
+                          //          .size(referenceSize, referenceSize)
+                          //          .keepAspectRatio(true)
+                          //          .outputQuality(config.normalizer.quality)
+                          //          .allowOverwrite(false)
+                          //          .toFile(output.toFile)
+                          BasicImaging.reshapeImage(input, output, referenceSize, orientation.map(_.rotationDegrees), Some(config.normalizer.quality))
+                        )
+                        .tap(_ => ZIO.logInfo(s"Normalize"))
+                        .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size $referenceSize", th))
+                        .uninterruptible
+                        .ignoreLogged // Photo file may have internal issues
+    } yield ()
   }
 
-  private def upsertNormalizedPhotoIfNeeded(photo: Photo, output: Path, config: SotohpConfig) = {
+  private def upsertNormalizedPhotoIfNeeded(photo: Photo, output: Path) = {
     for {
+      config           <- SotohpConfig.zioConfig
       dimension        <- ZIO
                             .from(photo.normalized.map(_.dimension))          // faster
                             .orElse(
@@ -68,17 +72,15 @@ object NormalizeProcessor extends Processor {
     */
   def normalize(photo: Photo): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue | SotohpConfigIssue, Photo] = {
     val logic = for {
-      config          <- sotophConfig
       input           <- ZIO
                            .attempt(photo.source.original.path.toAbsolutePath)
                            .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
-      output          <- ZIO
-                           .attempt(PhotoOperations.makeNormalizedFilePath(photo.source, config))
-                           .mapError(th => NormalizeIssue(s"Couldn't build destination path target", th))
+      output          <- PhotoOperations
+                           .getNormalizedPhotoFilePath(photo.source)
       _               <- makeOutputDirectories(output)
-      _               <- resizePhoto(input, output, photo.metaData.flatMap(_.orientation), config)
+      _               <- resizePhoto(input, output, photo.metaData.flatMap(_.orientation))
                            .when(!output.toFile.exists())
-      normalizedPhoto <- upsertNormalizedPhotoIfNeeded(photo, output, config)
+      normalizedPhoto <- upsertNormalizedPhotoIfNeeded(photo, output)
                            .logError("Couldn't upsert normalized photo in datastore")
     } yield photo.copy(normalized = Some(normalizedPhoto))
 

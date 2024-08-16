@@ -6,9 +6,9 @@ import zio.stream.*
 import zio.ZIO.*
 import zio.lmdb.*
 
-case class PhotoStoreUserIssue(message: String)
-case class PhotoStoreSystemIssue(message: String)
-case class PhotoStoreNotFoundIssue(message: String)
+case class PhotoStoreUserIssue(message: String) extends Exception(message)
+case class PhotoStoreSystemIssue(message: String) extends Exception(message)
+case class PhotoStoreNotFoundIssue(message: String) extends Exception(message)
 type PhotoStoreIssue = PhotoStoreUserIssue | PhotoStoreSystemIssue | PhotoStoreNotFoundIssue
 type LMDBIssues      = StorageUserError | StorageSystemError
 

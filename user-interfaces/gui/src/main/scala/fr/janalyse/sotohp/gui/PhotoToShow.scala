@@ -30,7 +30,7 @@ object PhotoToShow {
     orientation     <- zphoto.metaData.map(_.flatMap(_.orientation))
     miniatures      <- zphoto.miniatures
     normalized      <- zphoto.normalized
-    normalizedPath  <- PhotoOperations.makeNormalizedFilePath(source).when(normalized.isDefined)
+    normalizedPath  <- PhotoOperations.getNormalizedPhotoFilePath(source).when(normalized.isDefined)
     description     <- zphoto.description
     classifications <- zphoto.foundClassifications
     objects         <- zphoto.foundObjects

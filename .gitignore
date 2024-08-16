@@ -19,3 +19,5 @@ project/metals.sbt
 
 tmp-*.gif
 tmp-*.png
+
+clusters-*

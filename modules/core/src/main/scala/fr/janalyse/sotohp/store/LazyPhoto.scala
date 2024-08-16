@@ -72,15 +72,13 @@ case class LazyPhoto(state: PhotoState) {
   def photoNormalizedPath: ZIO[PhotoStoreService, SotohpConfigIssue | PhotoStoreNotFoundIssue, Path] = for {
     photoSource <- source.some.mapError(err => PhotoStoreNotFoundIssue("source not found"))
     _           <- normalized.some.mapError(err => PhotoStoreNotFoundIssue("normalized photo not found"))
-    config      <- SotohpConfig.zioConfig
-    path         = PhotoOperations.makeNormalizedFilePath(photoSource, config)
+    path        <- PhotoOperations.getNormalizedPhotoFilePath(photoSource)
   } yield path
 
   def photoMiniaturePath(size: Int): ZIO[PhotoStoreService, SotohpConfigIssue | PhotoStoreNotFoundIssue, Path] = for {
     photoSource     <- source.some.mapError(err => PhotoStoreNotFoundIssue("source not found"))
     photoMiniatures <- miniatures.some.mapError(err => PhotoStoreNotFoundIssue("miniatures not found"))
     _               <- ZIO.cond(photoMiniatures.sources.exists(_.size == size), (), PhotoStoreNotFoundIssue(s"miniature $size not found"))
-    config          <- SotohpConfig.zioConfig
-    path             = PhotoOperations.makeMiniatureFilePath(photoSource, size, config)
+    path            <- PhotoOperations.getMiniaturePhotoFilePath(photoSource, size)
   } yield path
 }
