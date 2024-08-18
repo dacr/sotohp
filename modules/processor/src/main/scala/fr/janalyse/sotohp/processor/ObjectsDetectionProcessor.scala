@@ -1,28 +1,20 @@
 package fr.janalyse.sotohp.processor
 
+import ai.djl.Application
+import ai.djl.inference.Predictor
+import ai.djl.modality.Classifications
+import ai.djl.modality.cv.{Image, ImageFactory}
+import ai.djl.modality.cv.output.DetectedObjects
+import ai.djl.repository.zoo.{Criteria, ModelZoo}
+import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.store.*
 import zio.*
 import zio.ZIOAspect.*
-import fr.janalyse.sotohp.store.*
-import fr.janalyse.sotohp.model.*
-import ai.djl.Application
-import ai.djl.engine.Engine
-import ai.djl.inference.Predictor
-import ai.djl.modality.cv.Image
-import ai.djl.modality.cv.ImageFactory
-import ai.djl.modality.Classifications
-import ai.djl.modality.cv.output.DetectedObjects
-import ai.djl.repository.zoo.Criteria
-import ai.djl.repository.zoo.ModelZoo
-import ai.djl.repository.zoo.ZooModel
-import ai.djl.training.util.ProgressBar
-import ai.djl.modality.Classifications.Classification
-import fr.janalyse.sotohp.config.{SotohpConfig, SotohpConfigIssue}
-import fr.janalyse.sotohp.processor.MiniaturizeProcessor.sotophConfig
 
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
 
-case class ObjectsDetectionIssue(message: String, exception: Throwable)
+case class ObjectsDetectionIssue(message: String, exception: Throwable) extends Exception(message, exception)
 
 class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, DetectedObjects]) extends Processor {
   def doDetectObjects(path: Path): List[DetectedObject] = {
@@ -62,7 +54,6 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
                           ZIO
                             .attempt(doDetectObjects(input))
                             .tap(objs => ZIO.log(s"found objects : ${objs.mkString(",")}"))
-                            .mapError(th => ObjectsDetectionIssue(s"Couldn't analyze photo", th))
                             .map(detectedObjects => PhotoObjects(objects = detectedObjects))
                         )
       _            <- PhotoStoreService
@@ -77,7 +68,7 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def analyze(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | ObjectsDetectionIssue | SotohpConfigIssue, Photo] = {
+  def analyze(photo: Photo): RIO[PhotoStoreService, Photo] = {
     // TODO : quick, dirty & unfinished first implementation
     detectObjects(photo)
       .logError("Objects detection issue")

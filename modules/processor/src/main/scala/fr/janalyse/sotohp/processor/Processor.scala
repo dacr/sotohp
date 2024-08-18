@@ -12,11 +12,6 @@ case class ProcessorIssue(message: String, exception: Throwable) extends Excepti
 
 trait Processor {
 
-  val sotophConfig =
-    ZIO
-      .config(SotohpConfig.config)
-      .mapError(th => SotohpConfigIssue(s"Couldn't get configuration", th))
-
   def getBestInputPhotoFile(photo: Photo): IO[ProcessorIssue | SotohpConfigIssue, Path] = for {
     normalizedInput <- PhotoOperations.getNormalizedPhotoFilePath(photo.source) // faster because lighter
     input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)

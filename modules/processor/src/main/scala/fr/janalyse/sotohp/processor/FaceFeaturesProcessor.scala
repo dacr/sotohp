@@ -1,38 +1,24 @@
 package fr.janalyse.sotohp.processor
 
+import ai.djl.inference.Predictor
+import ai.djl.modality.cv.{Image, ImageFactory}
+import ai.djl.repository.zoo.{Criteria, ZooModel}
+import fr.janalyse.sotohp.config.*
+import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.store.PhotoStoreService
 import zio.*
 import zio.ZIOAspect.*
-import zio.config.*
-import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.core.*
-import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
-import fr.janalyse.sotohp.config.*
-import ai.djl.ModelException
-import ai.djl.inference.Predictor
-import ai.djl.modality.cv.Image
-import ai.djl.modality.cv.ImageFactory
-import ai.djl.modality.cv.transform.Normalize
-import ai.djl.modality.cv.transform.ToTensor
-import ai.djl.ndarray.NDArray
-import ai.djl.ndarray.NDList
-import ai.djl.repository.zoo.Criteria
-import ai.djl.repository.zoo.ZooModel
-import ai.djl.training.util.ProgressBar
-import ai.djl.translate.Pipeline
-import ai.djl.translate.TranslateException
-import ai.djl.translate.Translator
-import ai.djl.translate.TranslatorContext
 
-import java.awt.image.{BufferedImage, DataBufferByte}
+import java.awt.image.BufferedImage
 
 case class FaceFeaturesIssue(message: String, exception: Throwable) extends Exception(message, exception)
 
 class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends Processor {
 
-  def extractFaceImage(
+  private def extractFaceImage(
     face: DetectedFace,
-    lazyImage: ZIO[Any, FaceFeaturesIssue, BufferedImage]
-  ): ZIO[Any, FaceFeaturesIssue, BufferedImage] = {
+    lazyImage: ZIO[Any, Any, BufferedImage]
+  ): ZIO[Any, Any, BufferedImage] = {
     for {
       image      <- lazyImage
       x           = (face.box.x * image.getWidth).toInt
@@ -49,11 +35,11 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
     } yield faceImage
   }
 
-  def extractFaceFeatures(
+  private def extractFaceFeatures(
     face: DetectedFace,
-    lazyImage: ZIO[Any, FaceFeaturesIssue, BufferedImage],
+    lazyImage: ZIO[Any, Any, BufferedImage],
     photoId: PhotoId
-  ): ZIO[PhotoStoreService, FaceFeaturesIssue, Unit] = {
+  ) = {
 
     val faceFeatureExtract = for {
       faceImage        <- extractFaceImage(face, lazyImage)
@@ -74,36 +60,35 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
                           )
       _                <- PhotoStoreService
                             .photoFaceFeaturesUpsert(face.faceId, faceFeatures)
-                            .mapError(err => FaceFeaturesIssue(s"Couldn't upsert face features for face ${face.faceId}", err))
+                            .mapError(err => FaceFeaturesIssue("Couldn't upsert face features for face", err))
     } yield ()
 
     for {
       foundFaceFeatures <- PhotoStoreService
                              .photoFaceFeaturesGet(face.faceId)
-                             .mapError(err => FaceFeaturesIssue(s"Couldn't get face features for face ${face.faceId}", err))
       _                 <- faceFeatureExtract
                              .when(foundFaceFeatures.isEmpty)
     } yield ()
   }
 
-  def extractPhotoFaceFeatures(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | FaceFeaturesIssue | ProcessorIssue | SotohpConfigIssue, Int] = {
+  def extractPhotoFaceFeatures(photo: Photo): RIO[PhotoStoreService, Int] = {
     val logic = for {
-      config       <- sotophConfig
+      config       <- SotohpConfig.zioConfig
       minRatio      = 80d / 1600d // TODO use config parameter
-      lazyImage    <- loadBestInputPhoto(photo)
-                        .mapError(err => FaceFeaturesIssue(s"Couldn't load image ${photo.source.photoId} for face features extraction purposes", err))
-                        .memoize
+      lazyImage    <- loadBestInputPhoto(photo).memoize
       event         = photo.description.flatMap(_.event).map(_.text).getOrElse("no-event-given")
       selectedFaces = photo.foundFaces
                         .map(_.faces)
                         .getOrElse(Nil)
                         .filter(face => face.box.width >= minRatio || face.box.height >= minRatio)
-      // _            <- ZIO.logInfo(s"Processing ${event} ${photo.source.photoId}")
-      _            <- ZIO.foreachDiscard(selectedFaces)(face => extractFaceFeatures(face, lazyImage, photo.source.photoId))
+      _            <- ZIO.foreachDiscard(selectedFaces) { face =>
+                        extractFaceFeatures(face, lazyImage, photo.source.photoId)
+                          @@ annotated("faceId" -> face.faceId.toString())
+                      }
     } yield selectedFaces.size
 
     logic
-      .logError(s"Face features issue")
+      .logError("Face features issue")
       .option
       .someOrElse(0)
       @@ annotated("photoId" -> photo.source.photoId.toString())

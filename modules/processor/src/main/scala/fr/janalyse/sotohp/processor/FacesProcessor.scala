@@ -17,7 +17,6 @@ import ai.djl.repository.zoo.ZooModel
 import ai.djl.training.util.ProgressBar
 import ai.djl.modality.Classifications.Classification
 import fr.janalyse.sotohp.config.{SotohpConfig, SotohpConfigIssue}
-import fr.janalyse.sotohp.processor.MiniaturizeProcessor.sotophConfig
 
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
@@ -27,12 +26,12 @@ case class FacesDetectionIssue(message: String, exception: Throwable)
 
 class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends Processor {
 
-  def makeFaceId(photo: Photo): FaceId = {
+  private def makeFaceId(photo: Photo): FaceId = {
     // Note : up 2^80 possible values for the same millis
     FaceId(ULID.ofMillis(photo.timestamp.toInstant.toEpochMilli))
   }
 
-  def doDetectFaces(photo: Photo, path: Path): List[DetectedFace] = {
+  private def doDetectFaces(photo: Photo, path: Path): List[DetectedFace] = {
     val loadedImage: Image           = ImageFactory.getInstance().fromFile(path)
     val detection: DetectedObjects   = facesPredictor.predict(loadedImage)
     val detected: List[DetectedFace] =
@@ -59,7 +58,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     detected
   }
 
-  def detectFaces(photo: Photo) = {
+  private def detectFaces(photo: Photo) = {
     for {
       input      <- getBestInputPhotoFile(photo)
       knownFaces <- PhotoStoreService.photoFacesGet(photo.source.photoId)
@@ -69,8 +68,8 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                       .orElse(
                         ZIO
                           .attempt(doDetectFaces(photo, input))
+                          .mapError(th => FacesDetectionIssue("Couldn't analyze photo", th))
                           .tap(faces => ZIO.log(s"found ${faces.size} faces"))
-                          .mapError(th => FacesDetectionIssue(s"Couldn't analyze photo", th))
                           .map(faces => PhotoFaces(faces = faces, count = faces.size))
                       )
       _          <- PhotoStoreService
@@ -85,7 +84,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def analyze(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | FacesDetectionIssue | SotohpConfigIssue, Photo] = {
+  def analyze(photo: Photo): RIO[PhotoStoreService, Photo] = {
     // TODO : quick, dirty & unfinished first implementation
     detectFaces(photo)
       .logError("Faces detection issue")

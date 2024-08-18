@@ -1,18 +1,16 @@
 package fr.janalyse.sotohp.processor
 
+import fr.janalyse.sotohp.config.*
+import fr.janalyse.sotohp.core.*
+import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.store.PhotoStoreService
+import org.apache.commons.imaging.Imaging
 import zio.*
 import zio.ZIOAspect.*
-import zio.config.*
 
-import java.io.File
 import java.nio.file.Path
-import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.core.*
-import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
-import fr.janalyse.sotohp.config.*
-import org.apache.commons.imaging.Imaging
 
-case class MiniaturizeIssue(message: String, exception: Throwable)
+case class MiniaturizeIssue(message: String, exception: Throwable) extends Exception(message, exception)
 
 object MiniaturizeProcessor extends Processor {
 
@@ -20,7 +18,7 @@ object MiniaturizeProcessor extends Processor {
     for {
       config <- SotohpConfig.zioConfig
       _      <- ZIO
-                  .attemptBlocking(
+                  .attempt(
                     //        Thumbnails
                     //          .of(input.toFile)
                     //          .useExifOrientation(true)
@@ -31,23 +29,24 @@ object MiniaturizeProcessor extends Processor {
                     //          .toFile(output.toFile)
                     BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.normalizer.quality))
                   )
-                  .tap(_ => ZIO.logInfo(s"Miniaturize $referenceSize"))
-                  .mapError(th => MiniaturizeIssue(s"Couldn't generate miniature photo $input with reference size $referenceSize", th))
+                  .mapError(th => MiniaturizeIssue("Couldn't generate miniature photo", th))
+                  .tap(_ => ZIO.logInfo("Miniaturize"))
                   .uninterruptible
                   .ignoreLogged // Photo file may have internal issues
     } yield ()
   }
 
-  private def buildMiniature(photo: Photo, size: Int): IO[MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, MiniatureSource] = {
+  private def buildMiniature(photo: Photo, size: Int) = {
     val alreadyKnownMiniatures = photo.miniatures
     for {
       input     <- getBestInputPhotoFile(photo)
       output    <- PhotoOperations.getMiniaturePhotoFilePath(photo.source, size)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
-                     .mapError(th => MiniaturizeIssue(s"Couldn't target path", th))
+                     .mapError(th => MiniaturizeIssue("Couldn't target path", th))
       _         <- miniaturizePhoto(size, input, output)
                      .when(!output.toFile.exists())
+                     @@ annotated("inputFile" -> input.toString)
       dimension <- ZIO
                      .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension)) // faster
                      .orElse(
@@ -55,9 +54,9 @@ object MiniaturizeProcessor extends Processor {
                          .attempt(Imaging.getImageSize(output.toFile))                                           // slower
                          .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
                      )
-                     .mapError(th => MiniaturizeIssue(s"Couldn't get normalized photo size", th))
+                     .mapError(th => MiniaturizeIssue("Couldn't get normalized photo size", th))
     } yield MiniatureSource(size = size, dimension = dimension)
-  } @@ annotated("size" -> size.toString)
+  }
 
   private def upsertMiniaturesRecordIfNeeded(photo: Photo, miniaturesSources: List[MiniatureSource]) = {
     val alreadyKnownMiniatures = photo.miniatures
@@ -78,10 +77,13 @@ object MiniaturizeProcessor extends Processor {
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def miniaturize(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | MiniaturizeIssue | ProcessorIssue | SotohpConfigIssue, Photo] = {
+  def miniaturize(photo: Photo): RIO[PhotoStoreService, Photo] = {
     val logic = for {
       referencesSizes   <- SotohpConfig.zioConfig.map(_.miniaturizer.referenceSizes)
-      miniaturesSources <- ZIO.foreach(referencesSizes)(size => buildMiniature(photo, size))
+      miniaturesSources <- ZIO.foreach(referencesSizes) { referenceSize =>
+                             buildMiniature(photo, referenceSize)
+                               @@ annotated("referenceSize" -> referenceSize.toString)
+                           }
       miniatures        <- upsertMiniaturesRecordIfNeeded(photo, miniaturesSources)
     } yield photo.copy(miniatures = Some(miniatures))
 

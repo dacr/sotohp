@@ -1,34 +1,26 @@
 package fr.janalyse.sotohp.processor
 
+import ai.djl.Application
+import ai.djl.inference.Predictor
+import ai.djl.modality.Classifications
+import ai.djl.modality.Classifications.Classification
+import ai.djl.modality.cv.{Image, ImageFactory}
+import ai.djl.repository.zoo.{Criteria, ModelZoo}
+import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.store.*
 import zio.*
 import zio.ZIOAspect.*
-import fr.janalyse.sotohp.store.*
-import fr.janalyse.sotohp.model.*
-import ai.djl.Application
-import ai.djl.engine.Engine
-import ai.djl.inference.Predictor
-import ai.djl.modality.cv.Image
-import ai.djl.modality.cv.ImageFactory
-import ai.djl.modality.Classifications
-import ai.djl.modality.cv.output.DetectedObjects
-import ai.djl.repository.zoo.Criteria
-import ai.djl.repository.zoo.ModelZoo
-import ai.djl.repository.zoo.ZooModel
-import ai.djl.training.util.ProgressBar
-import ai.djl.modality.Classifications.Classification
-import fr.janalyse.sotohp.config.{SotohpConfig, SotohpConfigIssue}
-import fr.janalyse.sotohp.processor.MiniaturizeProcessor.sotophConfig
 
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
 
-case class ClassificationIssue(message: String, exception: Throwable)
+case class ClassificationIssue(message: String, exception: Throwable) extends Exception(message, exception)
 
 class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Classifications]) extends Processor {
-  def cleanupClassName(input: String): String =
+  private def cleanupClassName(input: String): String =
     input.replaceAll("""^n\d+ """, "")
 
-  def doClassifyImage(path: Path): List[String] = {
+  private def doClassifyImage(path: Path): List[String] = {
     val img = ImageFactory.getInstance().fromFile(path)
 
     val found: Classifications = imageClassificationPredictor.predict(img)
@@ -44,7 +36,7 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
       .distinct
   }
 
-  def classify(photo: Photo) = {
+  private def classify(photo: Photo) = {
     for {
       input        <- getBestInputPhotoFile(photo)
       knownClasses <- PhotoStoreService.photoClassificationsGet(photo.source.photoId)
@@ -54,7 +46,6 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
                           ZIO
                             .attempt(doClassifyImage(input))
                             .tap(cls => ZIO.log(s"found classes : ${cls.mkString(",")}"))
-                            .mapError(th => ClassificationIssue(s"Couldn't analyze photo", th))
                             .map(found => PhotoClassifications(found.map(DetectedClassification.apply)))
                         )
       _            <- PhotoStoreService
@@ -69,10 +60,10 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def analyze(photo: Photo): ZIO[PhotoStoreService, PhotoStoreIssue | ClassificationIssue | SotohpConfigIssue, Photo] = {
+  def analyze(photo: Photo): RIO[PhotoStoreService, Photo] = {
     // TODO : quick, dirty & unfinished first implementation
     classify(photo)
-      .logError(s"classification issue")
+      .logError("Classification issue")
       .option
       .someOrElse(photo)
       @@ annotated("photoId" -> photo.source.photoId.toString())

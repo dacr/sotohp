@@ -2,13 +2,13 @@ package fr.janalyse.sotohp.processor
 
 import fr.janalyse.sotohp.config.*
 import fr.janalyse.sotohp.core.PhotoOperations
+import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.store.PhotoStoreService
+import org.apache.commons.imaging.Imaging
 import zio.*
 import zio.ZIOAspect.*
-import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 
 import java.nio.file.Path
-import org.apache.commons.imaging.Imaging
 
 case class NormalizeIssue(message: String, exception: Throwable)
 
@@ -70,7 +70,7 @@ object NormalizeProcessor extends Processor {
     * @return
     *   photo with updated normalized field if some changes have occurred
     */
-  def normalize(photo: Photo): ZIO[PhotoStoreService, NormalizeIssue | PhotoStoreIssue | SotohpConfigIssue, Photo] = {
+  def normalize(photo: Photo): RIO[PhotoStoreService, Photo] = {
     val logic = for {
       input           <- ZIO
                            .attempt(photo.source.original.path.toAbsolutePath)
