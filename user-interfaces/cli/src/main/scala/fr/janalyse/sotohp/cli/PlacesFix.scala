@@ -65,7 +65,7 @@ object PlacesFix extends ZIOAppDefault with CommonsCLI {
       nearestTimestampBefore    = foundNearestBeforeWithGPS.get.state.photoTimestamp.toEpochSecond
       nearestTimestampAfter     = foundNearestAfterWithGPS.get.state.photoTimestamp.toEpochSecond
       elapsed                   = nearestTimestampAfter - nearestTimestampBefore
-      if distance < 400 // 400 meters
+      if distance < 500 // 600 meters
       if elapsed < 5 * 3600
       toFixPhotoId              = current.state.photoId
       deductedPlace             = nearestPlaceBefore.copy(deducted = true)
