@@ -29,7 +29,9 @@ case class SaoPhoto(
   detectedObjects: List[String],
   detectedObjectsCount: Int,
   detectedFacesCount: Int,
-  place: Option[SaoGeoPoint]
+  place: Option[SaoGeoPoint],
+  placeAltitude: Option[Double],
+  placeDeducted: Option[Boolean]
 ) derives JsonCodec
 
 object SaoPhoto {
@@ -238,7 +240,9 @@ object SaoPhoto {
       detectedObjects = photo.foundObjects.map(_.objects.map(_.name).distinct).getOrElse(Nil),
       detectedObjectsCount = photo.foundObjects.map(_.objects.size).getOrElse(0),
       detectedFacesCount = photo.foundFaces.map(_.faces.size).getOrElse(0),
-      place = photo.place.map(place => SaoGeoPoint(lat = place.latitude.doubleValue, lon = place.longitude.doubleValue))
+      place = photo.place.map(place => SaoGeoPoint(lat = place.latitude.doubleValue, lon = place.longitude.doubleValue)),
+      placeAltitude = photo.place.flatMap(_.altitude),
+      placeDeducted = photo.place.map(_.deducted)
     )
   }
 }
