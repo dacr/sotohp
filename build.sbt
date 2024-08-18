@@ -17,10 +17,10 @@ ThisBuild / crossScalaVersions := Seq("3.4.2")
 publishArtifact := false
 
 val versions = new {
-  val zio        = "2.1.6"
+  val zio        = "2.1.7"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.2"
-  val ziojson    = "0.7.1"
+  val ziojson    = "0.7.2"
   val ziologging = "2.3.0"
   val ziolmdb    = "1.8.1"
   val uuidgen    = "5.1.0"
