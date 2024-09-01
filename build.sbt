@@ -11,13 +11,13 @@ ThisBuild / scmInfo := Some(
   )
 )
 
-ThisBuild / scalaVersion       := "3.4.2"
-ThisBuild / crossScalaVersions := Seq("3.4.2")
+ThisBuild / scalaVersion       := "3.5.0"
+ThisBuild / crossScalaVersions := Seq("3.5.0")
 
 publishArtifact := false
 
 val versions = new {
-  val zio        = "2.1.7"
+  val zio        = "2.1.9"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.2"
   val ziojson    = "0.7.2"
