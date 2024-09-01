@@ -76,7 +76,7 @@ object PhotoOperations {
 
   def readDrewMetadata(filePath: Path): IO[PhotoFileIssue, Metadata] = {
     ZIO
-      .attemptBlockingIO(ImageMetadataReader.readMetadata(filePath.toFile))
+      .attemptBlocking(ImageMetadataReader.readMetadata(filePath.toFile))
       .mapError(exception => PhotoFileIssue(s"Couldn't read image meta data in file", filePath, exception))
   }
 
@@ -105,7 +105,7 @@ object PhotoOperations {
 
   def getOriginalFileLastModified(original: Original): IO[PhotoFileIssue, OffsetDateTime] = {
     ZIO
-      .attemptBlockingIO(original.path.toFile.lastModified())
+      .attemptBlocking(original.path.toFile.lastModified())
       .mapAttempt(Instant.ofEpochMilli)
       .mapAttempt(_.atZone(ZoneId.systemDefault()).toOffsetDateTime)
       .mapError(exception => PhotoFileIssue(s"Unable to get file last modified", original.path, exception))
@@ -232,7 +232,7 @@ object PhotoOperations {
   private def buildPhotoSource(photoId: PhotoId, original: Original): ZIO[PhotoStoreService, PhotoFileIssue, PhotoSource] = {
     for {
       fileSize         <- ZIO
-                            .attemptBlockingIO(original.path.toFile.length())
+                            .attemptBlocking(original.path.toFile.length())
                             .mapError(exception => PhotoFileIssue(s"Unable to read file size", original.path, exception))
       fileLastModified <- getOriginalFileLastModified(original)
       fileHash         <- PhotoStoreService
@@ -241,7 +241,7 @@ object PhotoOperations {
                             .some
                             .orElse(
                               ZIO
-                                .attemptBlockingIO(HashOperations.fileDigest(original.path))
+                                .attemptBlocking(HashOperations.fileDigest(original.path))
                                 .mapError(exception => PhotoFileIssue(s"Unable to compute file hash", original.path, exception))
                             )
     } yield PhotoSource(
