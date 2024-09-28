@@ -11,8 +11,7 @@ ThisBuild / scmInfo := Some(
   )
 )
 
-ThisBuild / scalaVersion       := "3.5.0"
-ThisBuild / crossScalaVersions := Seq("3.5.0")
+ThisBuild / scalaVersion       := "3.5.1"
 
 publishArtifact := false
 
@@ -20,15 +19,15 @@ val versions = new {
   val zio        = "2.1.9"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.2"
-  val ziojson    = "0.7.2"
-  val ziologging = "2.3.0"
-  val ziolmdb    = "1.8.1"
+  val ziojson    = "0.7.3"
+  val ziologging = "2.3.1"
+  val ziolmdb    = "1.8.2"
   val uuidgen    = "5.1.0"
   val elastic4s  = "8.11.5"
   val metadata   = "2.19.0"
-  val ulid       = "24.7.1"
+  val ulid       = "24.9.2"
   val javafx     = "21"
-  val djl        = "0.29.0"
+  val djl        = "0.30.0"
   //  val tapir      = "1.5.0"
 }
 
@@ -44,7 +43,7 @@ lazy val deepJavaLearningLibs = Seq(
   "ai.djl.tensorflow"  % "tensorflow-engine"    % versions.djl,
   "ai.djl.tensorflow"  % "tensorflow-model-zoo" % versions.djl,
   "ai.djl.onnxruntime" % "onnxruntime-engine"   % versions.djl,
-  "net.java.dev.jna"   % "jna"                  % "5.14.0"
+  "net.java.dev.jna"   % "jna"                  % "5.15.0"
 )
 
 lazy val lmdbJavaOptions = Seq(

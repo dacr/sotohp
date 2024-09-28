@@ -3,7 +3,7 @@ ThisBuild / publishMavenStyle    := true
 
 ThisBuild / releaseCrossBuild             := true
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
-ThisBuild / publishTo                     := Some(if (isSnapshot.value) Opts.resolver.sonatypeSnapshots else Opts.resolver.sonatypeStaging)
+ThisBuild / publishTo                     := Some(if (isSnapshot.value) Opts.resolver.sonatypeOssSnapshots.head else Opts.resolver.sonatypeStaging)
 
 ThisBuild / Test / publishArtifact                 := false
 ThisBuild / Compile / packageBin / publishArtifact := true
