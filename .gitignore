@@ -20,4 +20,7 @@ project/metals.sbt
 tmp-*.gif
 tmp-*.png
 
-clusters-*
+**/TemporaryHack*.scala
+hs_err*
+originals-*
+cluster*/
