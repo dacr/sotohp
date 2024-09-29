@@ -12,7 +12,7 @@ ThisBuild / scmInfo      := Some(
 
 ThisBuild / scalaVersion       := "3.5.1"
 
-//publishArtifact := false
+publishArtifact := false
 
 val versions = new {
   val zio        = "2.1.9"
