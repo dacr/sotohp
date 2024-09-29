@@ -30,14 +30,16 @@ import ReleaseTransformations.*
 ThisBuild / releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies,
   inquireVersions,
-  //runClean,
+  runClean,
   runTest,
   setReleaseVersion,
   commitReleaseVersion,
   tagRelease,
-  publishArtifacts,
+  releaseStepCommandAndRemaining("publishSigned"),
+  releaseStepCommandAndRemaining("sonatypeBundleRelease"),
+  //publishArtifacts,
   setNextVersion,
   commitNextVersion,
-  releaseStepCommand("sonatypeReleaseAll"),
+  //releaseStepCommand("sonatypeReleaseAll"),
   pushChanges
 )

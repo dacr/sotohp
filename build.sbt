@@ -1,10 +1,9 @@
 ThisBuild / organization := "fr.janalyse"
 ThisBuild / name         := "sotohp"
+ThisBuild / description  := "photos management made simple"
 ThisBuild / homepage     := Some(url("https://github.com/dacr/sotohp"))
-
-ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
-
-ThisBuild / scmInfo := Some(
+ThisBuild / licenses     += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
+ThisBuild / scmInfo      := Some(
   ScmInfo(
     url(s"https://github.com/dacr/sotohp.git"),
     s"git@github.com:dacr/sotohp.git"
