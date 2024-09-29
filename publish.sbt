@@ -1,7 +1,7 @@
 ThisBuild / pomIncludeRepository := { _ => false }
 ThisBuild / versionScheme := Some("early-semver")
 ThisBuild / releaseCrossBuild := true
-ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
+// ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 ThisBuild / publishMavenStyle    := true
 ThisBuild / Test / publishArtifact := false
 ThisBuild / publishTo := Some(if (isSnapshot.value) Opts.resolver.sonatypeOssSnapshots.head else Opts.resolver.sonatypeStaging)

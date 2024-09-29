@@ -60,7 +60,7 @@ lazy val osName = System.getProperty("os.name") match {
 }
 
 val sharedSettings = Seq(
-  releasePublishArtifactsAction := PgpKeys.publishSigned.value,
+  releasePublishArtifactsAction := PgpKeys.publishSigned.value, // MUST BE SET HERE TO TRIGGER THIS REQUIREMENT
   scalacOptions ++= Seq("-deprecation"), // "-Xfatal-warnings"
   libraryDependencies ++= Seq(
     "dev.zio" %% "zio-test"     % versions.zio % Test,
