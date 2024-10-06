@@ -1,18 +1,12 @@
-ThisBuild / organization := "fr.janalyse"
 ThisBuild / name         := "sotohp"
-ThisBuild / description  := "photos management made simple"
-ThisBuild / homepage     := Some(url("https://github.com/dacr/sotohp"))
-ThisBuild / licenses     += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
-ThisBuild / scmInfo      := Some(
-  ScmInfo(
-    url(s"https://github.com/dacr/sotohp.git"),
-    s"git@github.com:dacr/sotohp.git"
-  )
-)
+ThisBuild / organization := "fr.janalyse"
+ThisBuild / description  := "Photos management made simple"
 
-ThisBuild / scalaVersion       := "3.5.1"
+ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
 
-publishArtifact := false
+ThisBuild / scalaVersion := "3.5.1"
+
+publishArtifact := false // no artifact for "root" project
 
 val versions = new {
   val zio        = "2.1.9"
@@ -148,8 +142,8 @@ lazy val userInterfacesCLI =
     .dependsOn(moduleCore, moduleProcessor, moduleSearch)
     .settings(
       sharedSettings,
-      name := "sotohp-cli",
-      fork := true,
+      name                                                     := "sotohp-cli",
+      fork                                                     := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         "dev.zio"             %% "zio"                       % versions.zio,
@@ -210,3 +204,14 @@ lazy val userInterfacesGUI =
 //        "ch.qos.logback"               % "logback-classic"         % versions.logback
 //      )
 //    )
+
+ThisBuild / homepage   := Some(url("https://github.com/dacr/sotohp"))
+ThisBuild / scmInfo    := Some(ScmInfo(url(s"https://github.com/dacr/sotohp.git"), s"git@github.com:dacr/sotohp.git"))
+ThisBuild / developers := List(
+  Developer(
+    id = "dacr",
+    name = "David Crosson",
+    email = "crosson.david@gmail.com",
+    url = url("https://github.com/dacr")
+  )
+)
