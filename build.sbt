@@ -4,21 +4,21 @@ ThisBuild / description  := "Photos management made simple"
 
 ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
 
-ThisBuild / scalaVersion := "3.5.1"
+ThisBuild / scalaVersion := "3.5.2"
 
 publishArtifact := false // no artifact for "root" project
 
 val versions = new {
-  val zio        = "2.1.9"
+  val zio        = "2.1.11"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.2"
   val ziojson    = "0.7.3"
-  val ziologging = "2.3.1"
+  val ziologging = "2.3.2"
   val ziolmdb    = "1.8.2"
   val uuidgen    = "5.1.0"
   val elastic4s  = "8.11.5"
   val metadata   = "2.19.0"
-  val ulid       = "24.9.3"
+  val ulid       = "24.10.0"
   val javafx     = "21"
   val djl        = "0.30.0"
   //  val tapir      = "1.5.0"
@@ -175,7 +175,7 @@ lazy val userInterfacesGUI =
       libraryDependencies ++= Seq(
         // "org.openjfx"  % "javafx-graphics" % versions.javafx classifier osName,
         // "org.openjfx"  % "javafx-controls" % versions.javafx classifier osName,
-        "org.scalafx" %% "scalafx" % "21.0.0-R32"
+        "org.scalafx" %% "scalafx" % "22.0.0-R33"
       )
     )
 

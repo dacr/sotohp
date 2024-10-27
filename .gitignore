@@ -1,3 +1,8 @@
+# temporary files
+tmp-*.gif
+tmp-*.png
+**/TemporaryHack*.scala
+hs_err*
 *~
 .~*
 nohup.out
@@ -6,21 +11,21 @@ nohup.out
 *.tmp
 null
 
+# direnv
+.envrc/
+.env/
+
+# IDE or build tool related
 .bsp/
 .metals/
 .bloop/
 .vscode/
 .idea/
-
 target/
 project/target/
 project/project/
 project/metals.sbt
 
-tmp-*.gif
-tmp-*.png
-
-**/TemporaryHack*.scala
-hs_err*
+# sotohp related data
 originals-*
 cluster*/
