@@ -9,18 +9,18 @@ ThisBuild / scalaVersion := "3.5.2"
 publishArtifact := false // no artifact for "root" project
 
 val versions = new {
-  val zio        = "2.1.11"
+  val zio        = "2.1.12"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.2"
   val ziojson    = "0.7.3"
-  val ziologging = "2.3.2"
+  val ziologging = "2.4.0"
   val ziolmdb    = "1.8.2"
   val uuidgen    = "5.1.0"
   val elastic4s  = "8.11.5"
   val metadata   = "2.19.0"
-  val ulid       = "24.10.0"
+  val ulid       = "24.11.0"
   val javafx     = "21"
-  val djl        = "0.30.0"
+  val djl        = "0.31.0"
   //  val tapir      = "1.5.0"
 }
 
