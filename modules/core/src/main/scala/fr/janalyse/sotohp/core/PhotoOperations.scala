@@ -21,7 +21,7 @@ import fr.janalyse.sotohp.store.{PhotoStoreIssue, PhotoStoreService}
 import wvlet.airframe.ulid.ULID
 
 import java.time.format.DateTimeFormatter
-import scala.util.Try
+import scala.util.{Try, Success, Failure}
 
 case class NotFoundInStore(message: String, id: String)
 
@@ -147,16 +147,27 @@ object PhotoOperations {
   }
 
   def extractShootDateTime(metadata: Metadata): Option[OffsetDateTime] = {
-    for {
-      exif              <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
-      if exif.containsTag(ExifDirectoryBase.TAG_DATETIME)
-      exifSubIFD         = Option(metadata.getFirstDirectoryOfType(classOf[ExifSubIFDDirectory]))
-      shootDateTimeRaw  <- Option(exif.getString(ExifDirectoryBase.TAG_DATETIME))
-      shootZoneOffsetRaw = exifSubIFD
-                             .flatMap(dir => Option(dir.getString(ExifDirectoryBase.TAG_TIME_ZONE_ORIGINAL)))
-                             .getOrElse("+00:00")
-      shootDateTime      = parseExifDateTimeFormat(shootDateTimeRaw, shootZoneOffsetRaw)
-    } yield shootDateTime.toInstant.atOffset(ZoneOffset.UTC)
+    val result = Try {
+      for {
+        exif <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+        if exif.containsTag(ExifDirectoryBase.TAG_DATETIME)
+        exifSubIFD = Option(metadata.getFirstDirectoryOfType(classOf[ExifSubIFDDirectory]))
+        shootDateTimeRaw <- Option(exif.getString(ExifDirectoryBase.TAG_DATETIME))
+        shootZoneOffsetRaw = exifSubIFD
+          .flatMap(dir => Option(dir.getString(ExifDirectoryBase.TAG_TIME_ZONE_ORIGINAL)))
+          .getOrElse("+00:00")
+        shootDateTime = parseExifDateTimeFormat(shootDateTimeRaw, shootZoneOffsetRaw)
+      } yield shootDateTime.toInstant.atOffset(ZoneOffset.UTC)
+    }
+    result match { // TODO
+      case Success(found) => 
+        found
+      case Failure(err)        => 
+        org.slf4j.LoggerFactory
+          .getLogger(classOf[PhotoOperations.type])
+          .error("Couldn't process exif date time format", err)
+        None
+    }
   }
 
   def extractCameraName(metadata: Metadata): Option[String] = {
