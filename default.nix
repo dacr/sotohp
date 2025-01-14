@@ -5,11 +5,11 @@
    name = "sotohp-env-shell";
    buildInputs =
      let
-       jdk21fx = pkgs.jdk21.override {
+       jdk23fx = pkgs.jdk23.override {
          enableJavaFX = true;
        };
-       sbt21fx = pkgs.sbt.override {
-         jre = jdk21fx;
+       sbt23fx = pkgs.sbt.override {
+         jre = jdk23fx;
        };
      in with pkgs; [
          gtk3 pkg-config
@@ -21,7 +21,7 @@
          xorg.libXi xorg.libXmu freeglut
          xorg.libXext xorg.libX11 xorg.libXv xorg.libXrandr zlib
          ncurses5 stdenv.cc binutils
-         jdk21fx sbt21fx
+         jdk23fx sbt23fx
   ];
   ## TODO workaround as openjfx is not yet well supported under NIX
   shellHook = ''

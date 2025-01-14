@@ -29,3 +29,6 @@ project/metals.sbt
 # sotohp related data
 originals-*
 cluster*/
+
+# Security purposes
+.envrc
