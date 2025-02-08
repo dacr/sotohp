@@ -4,12 +4,12 @@ ThisBuild / description  := "Photos management made simple"
 
 ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
 
-ThisBuild / scalaVersion := "3.6.2"
+ThisBuild / scalaVersion := "3.6.3"
 
 publishArtifact := false // no artifact for "root" project
 
 val versions = new {
-  val zio        = "2.1.14"
+  val zio        = "2.1.15"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.3"
   val ziojson    = "0.7.4"
@@ -18,9 +18,9 @@ val versions = new {
   val uuidgen    = "5.1.0"
   val elastic4s  = "8.11.5"
   val metadata   = "2.19.0"
-  val ulid       = "24.12.2"
+  val ulid       = "2025.1.2"
   val javafx     = "21"
-  val djl        = "0.31.1"
+  val djl        = "0.32.0"
   //  val tapir      = "1.5.0"
 }
 
@@ -153,7 +153,7 @@ lazy val userInterfacesCLI =
         "dev.zio"             %% "zio-logging"               % versions.ziologging, // Temporary
         "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
         // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
-        "com.github.haifengl" %% "smile-scala"               % "4.1.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
+        "com.github.haifengl" %% "smile-scala"               % "4.2.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
       ),
       // dependency conflict between smile and elastic4s with jackson-databind
       dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
