@@ -4,21 +4,21 @@ ThisBuild / description  := "Photos management made simple"
 
 ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
 
-ThisBuild / scalaVersion := "3.6.3"
+ThisBuild / scalaVersion := "3.6.4"
 
 publishArtifact := false // no artifact for "root" project
 
 val versions = new {
-  val zio        = "2.1.15"
+  val zio        = "2.1.16"
 //  val zionio     = "2.0.1"
-  val zioconfig  = "4.0.3"
-  val ziojson    = "0.7.4"
-  val ziologging = "2.4.0"
-  val ziolmdb    = "1.8.3"
+  val zioconfig  = "4.0.4"
+  val ziojson    = "0.7.39"
+  val ziologging = "2.5.0"
+  val ziolmdb    = "1.8.4"
   val uuidgen    = "5.1.0"
-  val elastic4s  = "8.11.5"
+  val elastic4s  = "8.17.1"
   val metadata   = "2.19.0"
-  val ulid       = "2025.1.2"
+  val ulid       = "2025.1.8"
   val javafx     = "21"
   val djl        = "0.32.0"
   //  val tapir      = "1.5.0"
@@ -36,7 +36,7 @@ lazy val deepJavaLearningLibs = Seq(
   "ai.djl.tensorflow"  % "tensorflow-engine"    % versions.djl,
   "ai.djl.tensorflow"  % "tensorflow-model-zoo" % versions.djl,
   "ai.djl.onnxruntime" % "onnxruntime-engine"   % versions.djl,
-  "net.java.dev.jna"   % "jna"                  % "5.16.0"
+  "net.java.dev.jna"   % "jna"                  % "5.17.0"
 )
 
 lazy val lmdbJavaOptions = Seq(
@@ -101,10 +101,10 @@ lazy val moduleSearch =
       sharedSettings,
       name := "sotohp-search",
       libraryDependencies ++= Seq(
-        "com.sksamuel.elastic4s" %% "elastic4s-effect-zio"    % versions.elastic4s,
-        "com.sksamuel.elastic4s" %% "elastic4s-client-esjava" % versions.elastic4s,
-        "com.sksamuel.elastic4s" %% "elastic4s-json-zio"      % versions.elastic4s
-      )
+        "nl.gn0s1s" %% "elastic4s-effect-zio"    % versions.elastic4s,
+        "nl.gn0s1s" %% "elastic4s-client-esjava" % versions.elastic4s,
+        "nl.gn0s1s" %% "elastic4s-json-zio"      % versions.elastic4s
+      ),
     )
 
 lazy val moduleProcessor =
@@ -156,7 +156,7 @@ lazy val userInterfacesCLI =
         "com.github.haifengl" %% "smile-scala"               % "4.2.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
       ),
       // dependency conflict between smile and elastic4s with jackson-databind
-      dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
+      //dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
     )
 
 lazy val userInterfacesGUI =
