@@ -65,8 +65,8 @@ object FaceFeaturesClustering extends ZIOAppDefault with CommonsCLI {
       // clusters = smile.clustering.dbscan(data, 20, 0.2) // NOTE : bad results probably because of too many dimensions in data
       // clusters = smile.clustering.mec(data, new EuclideanDistance(), k, 0.001) // NOTE : number of clusters must be given as a hint - start with larger value
 
-      clusters = smile.clustering.clarans(data, new EuclideanDistance(), k, 50) // NOTE : number of clusters must be given as a hint - start with larger value
-      // clusters = smile.clustering.clarans(data, SimilarityDistancep(), k, 50) // NOTE : number of clusters must be given as a hint - start with larger value
+      clusters = smile.clustering.clarans(data, new EuclideanDistance(), k)
+      // clusters = smile.clustering.clarans(data, SimilarityDistance(), k)
 
       // clusters = smile.clustering.dac(data, k = 500, alpha = 0.9)
       // clusters = smile.clustering.dac(data, k = k, alpha = alpha)
@@ -74,7 +74,7 @@ object FaceFeaturesClustering extends ZIOAppDefault with CommonsCLI {
       algo     = clusters.getClass.getName.split("[.]").last
       _       <- Console.printLine(clusters.toString)
       _       <- ZIO.logInfo(s"Face features clustering done - processed ${faces.size} faces using $algo")
-      _       <- ZIO.foreachDiscard(faces.zip(clusters.y))({ case ((faceId, faceFeatures), clusterIndex) =>
+      _       <- ZIO.foreachDiscard(faces.zip(clusters.group()))({ case ((faceId, faceFeatures), clusterIndex) =>
                    extractFaceToCluster(faceId, faceFeatures, clusterIndex, s"$algo-$k").ignoreLogged
                  })
     } yield ()

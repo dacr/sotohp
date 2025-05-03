@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.store.dao
 
 import zio.json.JsonCodec
+import zio.lmdb.json.LMDBCodecJson
 
 import java.time.OffsetDateTime
 
@@ -13,4 +14,4 @@ case class DaoPhotoState(
   lastSeen: OffsetDateTime,
   firstSeen: OffsetDateTime,
   lastSynchronized: Option[OffsetDateTime]
-) derives JsonCodec
+) derives LMDBCodecJson

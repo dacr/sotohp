@@ -9,16 +9,16 @@ ThisBuild / scalaVersion := "3.6.4"
 publishArtifact := false // no artifact for "root" project
 
 val versions = new {
-  val zio        = "2.1.16"
+  val zio        = "2.1.17"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.4"
-  val ziojson    = "0.7.39"
+  val ziojson    = "0.7.42"
   val ziologging = "2.5.0"
-  val ziolmdb    = "1.8.4"
+  val ziolmdb    = "2.0.1"
   val uuidgen    = "5.1.0"
-  val elastic4s  = "8.17.1"
+  val elastic4s  = "8.18.0"
   val metadata   = "2.19.0"
-  val ulid       = "2025.1.8"
+  val ulid       = "2025.1.10"
   val javafx     = "21"
   val djl        = "0.32.0"
   //  val tapir      = "1.5.0"
@@ -118,7 +118,7 @@ lazy val moduleProcessor =
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         // "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
-        "org.apache.commons" % "commons-imaging" % "1.0.0-alpha5" // https://commons.apache.org/proper/commons-imaging/
+        "org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
       ),
       libraryDependencies ++= deepJavaLearningLibs
     )
@@ -153,7 +153,7 @@ lazy val userInterfacesCLI =
         "dev.zio"             %% "zio-logging"               % versions.ziologging, // Temporary
         "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
         // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
-        "com.github.haifengl" %% "smile-scala"               % "4.2.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
+        "com.github.haifengl" %% "smile-scala"               % "4.3.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
       ),
       // dependency conflict between smile and elastic4s with jackson-databind
       //dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
