@@ -48,19 +48,19 @@ case class ElasticOperations(config: SearchServiceConfig) {
         basicProvider
       }
 
-      import org.apache.http.ssl.SSLContexts
-      import org.apache.http.conn.ssl.TrustSelfSignedStrategy
-      val sslContext = config.elasticUrlTrust match {
-        case true  => SSLContexts.custom().loadTrustMaterial(TrustSelfSignedStrategy()).build()
-        case false => SSLContexts.createDefault()
-      }
-
       val httpClientConfigCallback: HttpClientConfigCallback =
         (httpClientBuilder: HttpAsyncClientBuilder) =>
-          httpClientBuilder
-            .setDefaultCredentialsProvider(provider)
-            .setSSLContext(sslContext)
-      // .setSSLHostnameVerifier(org.apache.http.conn.ssl.NoopHostnameVerifier.INSTANCE)
+          if (config.elasticUrlTrustSelfSigned) {
+            import org.apache.http.ssl.SSLContexts
+            import org.apache.http.conn.ssl.TrustSelfSignedStrategy
+            val sslContext = SSLContexts.custom().loadTrustMaterial(TrustSelfSignedStrategy()).build()
+            httpClientBuilder
+              .setDefaultCredentialsProvider(provider)
+              .setSSLContext(sslContext)
+              .setSSLHostnameVerifier((hostname, session) => true)
+          } else {
+            httpClientBuilder
+          }
 
       ElasticClient(JavaClient(elasticProperties, commonRequestConfigBuilder, httpClientConfigCallback))
     }

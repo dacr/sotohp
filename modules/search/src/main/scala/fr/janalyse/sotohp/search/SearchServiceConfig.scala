@@ -6,8 +6,8 @@ import zio.config.magnolia.*
 
 case class SearchServiceConfig(
   enabled: Boolean,
-  elasticUrl: String,       // WARNING : ELASTIC_URL DEFAULT PORT IS 9200 !! (and not 80 or 443) SO BE EXPLICIT
-  elasticUrlTrust: Boolean, // shall we trust self-signed ssl certificates
+  elasticUrl: String,                 // WARNING : ELASTIC_URL DEFAULT PORT IS 9200 !! (and not 80 or 443) SO BE EXPLICIT
+  elasticUrlTrustSelfSigned: Boolean, // shall we trust self-signed ssl certificates
   elasticUsername: Option[String],
   elasticPassword: Option[String],
   indexPrefix: String
