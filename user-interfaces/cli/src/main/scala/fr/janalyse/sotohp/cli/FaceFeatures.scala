@@ -33,7 +33,7 @@ object FaceFeatures extends ZIOAppDefault with CommonsCLI {
       _     <- ZIO.logInfo("Face features processing")
       count <- photoStream
                  .mapZIO(photo => faceFeaturesProcessor.extractPhotoFaceFeatures(photo))
-                 .runSum()
+                 .runSum
       _     <- ZIO.logInfo(s"Face features processing done - processed $count faces")
     } yield ()
   }

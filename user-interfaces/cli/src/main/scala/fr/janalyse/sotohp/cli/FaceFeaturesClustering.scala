@@ -56,7 +56,7 @@ object FaceFeaturesClustering extends ZIOAppDefault with CommonsCLI {
       _     <- ZIO.logInfo("Face features clustering")
       faces <- PhotoStoreService
                  .photoFaceFeaturesStream()
-                 .runCollect()
+                 .runCollect
       k      = 300
       // alpha    = 0.8
       data   = faces.map((faceId, faceFeatures) => faceFeatures.features.map(_.toDouble)).toArray
