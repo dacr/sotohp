@@ -47,7 +47,7 @@ object MediaBuilder {
 
 
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
-  private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|dib|tiff|ico|heif|heic)$""".r
+  private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|tif|tiff|ico|heif|heic)$""".r
 
   def computeMediaKind(original: Original): Either[CoreIssue, MediaKind] = {
     val ext = original.mediaPath.extension

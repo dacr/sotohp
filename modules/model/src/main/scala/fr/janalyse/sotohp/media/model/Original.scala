@@ -33,6 +33,7 @@ object BaseDirectoryPath {
   def apply(path: Path): BaseDirectoryPath = path
 }
 extension (baseDirPath: BaseDirectoryPath) {
+  @targetName("path_BaseDirectoryPath")
   def path: Path = baseDirPath
 }
 
