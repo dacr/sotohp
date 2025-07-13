@@ -214,14 +214,35 @@ object MediaOperations {
     result.flatten
   }
 
-  def mediaFileToOriginal(
+  private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
+  private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|dib|tiff|ico|heif|heic)$""".r
+
+  def computeMediaKind(original: Original): Either[MediaIssue, MediaKind] = {
+    val ext = original.mediaPath.extension
+    ext match {
+      case VideoExtensionsRE(_) => Right(MediaKind.Video)
+      case PhotoExtensionsRE(_) => Right(MediaKind.Photo)
+      case _ => Left(MediaFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
+    }
+  }
+
+  /**
+   * Generates an `Original` object from a media file and its associated metadata.
+   *
+   * @param baseDirectory     the base directory path where the original media file resides
+   * @param mediaPath         the absolute path to the media file
+   * @param owner             the owner of the media file
+   * @param originalFromCache optionally provides a cached value of the `Original` object or a way to handle cache lookup issues; defaults to nothing cached`
+   * @return an `Either` containing either a `MediaIssue` if an error occurred during processing, or an `Original` object if successfully generated
+   */
+  def originalFromFile(
     baseDirectory: BaseDirectoryPath,
     mediaPath: OriginalPath,
     owner: Owner,
-    mediaCache: MediaCache = MediaNoCache
+    originalFromCache: => Either[MediaIssue, Option[Original]] = Right(None),
   ): Either[MediaIssue, Original] = {
     for {
-      cachedOriginal   <- mediaCache.originalGet(baseDirectory, mediaPath, owner) // TODO enhance to check for coherency
+      cachedOriginal   <- originalFromCache // TODO enhance to check for coherency
       fileSize         <- getOriginalFileSize(mediaPath)
       fileLastModified <- getOriginalFileLastModified(mediaPath)
       fileHash         <- if (cachedOriginal.isDefined) Right(cachedOriginal.get.fileHash) else getOriginalFileHash(mediaPath)
@@ -233,39 +254,32 @@ object MediaOperations {
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
       originalId        = buildOriginalId(baseDirectory, mediaPath, owner)
-      original          = Original(
-                            id = originalId,
-                            baseDirectory = baseDirectory,
-                            mediaPath = mediaPath,
-                            ownerId = owner.id,
-                            fileHash = fileHash,
-                            fileSize = fileSize,
-                            fileLastModified = FileLastModified(fileLastModified),
-                            cameraShootDateTime = shootDateTime,
-                            cameraName = cameraName,
-                            dimension = dimension,
-                            orientation = orientation,
-                            location = location
-                          )
-    } yield {
-      mediaCache.originalUpdate(original)
-      original
-    }
+    } yield  Original(
+      id = originalId,
+      baseDirectory = baseDirectory,
+      mediaPath = mediaPath,
+      ownerId = owner.id,
+      fileHash = fileHash,
+      fileSize = fileSize,
+      fileLastModified = FileLastModified(fileLastModified),
+      cameraShootDateTime = shootDateTime,
+      cameraName = cameraName,
+      dimension = dimension,
+      orientation = orientation,
+      location = location
+    )
   }
 
-  private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
-  private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|dib|tiff|ico|heif|heic)$""".r
+  /**
+   * Generates a `Media` object from an `Original` object by computing its properties
+   * such as timestamp, media access key, event, and media kind.
+   *
+   * @param original the `Original` object containing the base information about the media
+   * @return an `Either`, where the left side contains a `MediaIssue` if an error occurred during processing,
+   *         and the right side contains a constructed `Media` object if successful
+   */
 
-  def computeMediaKind(original: Original): Either[MediaIssue, MediaKind] = {
-    val ext = original.mediaPath.extension
-    ext match {
-      case VideoExtensionsRE(_) => Right(MediaKind.Video)
-      case PhotoExtensionsRE(_) => Right(MediaKind.Photo)
-      case _                    => Left(MediaFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
-    }
-  }
-
-  def originalToDefaultMedia(original: Original): Either[MediaIssue, Media] = {
+  def mediaFromOriginal(original: Original): Either[MediaIssue, Media] = {
     for {
       timestamp     <- computeMediaTimestamp(original)
       mediaAccessKey = buildDefaultMediaAccessKey(timestamp)

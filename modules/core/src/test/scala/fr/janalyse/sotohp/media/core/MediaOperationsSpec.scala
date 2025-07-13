@@ -88,7 +88,7 @@ object MediaOperationsSpec extends ZIOSpecDefault with TestDatasets {
       ),
       test("generate original record") {
         for {
-          original   <- from(mediaFileToOriginal(dataset1, dataset1Example1, fakeOwner))
+          original   <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner))
           cameraName <- from(original.cameraName)
         } yield assertTrue(
           original.fileHash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae",
@@ -99,8 +99,8 @@ object MediaOperationsSpec extends ZIOSpecDefault with TestDatasets {
       },
       test("generate media record") {
         for {
-          original      <- from(mediaFileToOriginal(dataset1, dataset1Example1, fakeOwner))
-          media         <- from(originalToDefaultMedia(original))
+          original      <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner))
+          media         <- from(mediaFromOriginal(original))
         } yield assertTrue(
           media.original == original,
           media.kind == MediaKind.Photo
