@@ -233,20 +233,24 @@ object MediaOperations {
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
       originalId        = buildOriginalId(baseDirectory, mediaPath, owner)
-    } yield Original(
-      id = originalId,
-      baseDirectory = baseDirectory,
-      mediaPath = mediaPath,
-      ownerId = owner.id,
-      fileHash = fileHash,
-      fileSize = fileSize,
-      fileLastModified = FileLastModified(fileLastModified),
-      cameraShootDateTime = shootDateTime,
-      cameraName = cameraName,
-      dimension = dimension,
-      orientation = orientation,
-      location = location
-    )
+      original          = Original(
+                            id = originalId,
+                            baseDirectory = baseDirectory,
+                            mediaPath = mediaPath,
+                            ownerId = owner.id,
+                            fileHash = fileHash,
+                            fileSize = fileSize,
+                            fileLastModified = FileLastModified(fileLastModified),
+                            cameraShootDateTime = shootDateTime,
+                            cameraName = cameraName,
+                            dimension = dimension,
+                            orientation = orientation,
+                            location = location
+                          )
+    } yield {
+      mediaCache.originalUpdate(original)
+      original
+    }
   }
 
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
