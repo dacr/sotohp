@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.media.core
 
-import fr.janalyse.sotohp.media.core.MediaOperations.*
+import fr.janalyse.sotohp.media.core.OriginalBuilder.*
 import fr.janalyse.sotohp.media.model.*
 import zio.*
 import zio.ZIO.*
@@ -10,22 +10,12 @@ import java.nio.file.{Files, Path, Paths}
 import java.time.{Instant, OffsetDateTime}
 import scala.jdk.CollectionConverters.*
 
-object MediaOperationsSpec extends ZIOSpecDefault with TestDatasets {
+object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
   override def spec = testLogic
 
   val testLogic =
-    suite("Photo operations")(
-      test("photo event exists") {
-        val check = (basedir: String, path: String, expected: Option[String]) => buildMediaEvent(BaseDirectoryPath(Path.of(basedir)), OriginalPath(Path.of(path))).map(_.name) == expected
-        assertTrue(
-          check("tmp", "tmp/toto.jpeg", None),
-          check("tmp/", "tmp/toto.jpeg", None),
-          check("tmp", "tmp/landscape/toto.jpeg", Some("landscape")),
-          check("tmp/", "tmp/landscape/toto.jpeg", Some("landscape")),
-          check("tmp", "tmp/country/landscape/toto.jpeg", Some("country/landscape"))
-        )
-      },
-      test("read photo meta data")(
+    suite("Original builder for photos")(
+      test("read media meta data")(
         for {
           metadata <- readDrewMetadata(dataset1Example1)
         } yield assertTrue(
@@ -95,15 +85,6 @@ object MediaOperationsSpec extends ZIOSpecDefault with TestDatasets {
           original.fileSize == FileSize(472624L),
           original.mediaPath == dataset1Example1,
           cameraName.text.contains("Canon")
-        )
-      },
-      test("generate media record") {
-        for {
-          original      <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner))
-          media         <- from(mediaFromOriginal(original))
-        } yield assertTrue(
-          media.original == original,
-          media.kind == MediaKind.Photo
         )
       }
     )

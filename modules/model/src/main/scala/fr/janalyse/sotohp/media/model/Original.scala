@@ -66,6 +66,10 @@ object FileSize {
 object FileLastModified {
   def apply(timeStamp: OffsetDateTime): FileLastModified = timeStamp
 }
+extension (fileLastModified:FileLastModified) {
+  @targetName("offsetDateTime_FileLastModified")
+  def offsetDateTime:OffsetDateTime = fileLastModified
+}
 
 object FileHash {
   def apply(hash: String): FileHash = hash

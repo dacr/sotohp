@@ -1,42 +1,32 @@
 package fr.janalyse.sotohp.media.core
 
 import com.drew.imaging.ImageMetadataReader
-import com.drew.metadata.{Metadata as DrewMetadata, Tag as DrewTag}
+import com.drew.metadata.bmp.BmpHeaderDirectory
 import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, ExifSubIFDDirectory, GpsDirectory}
 import com.drew.metadata.gif.GifImageDirectory
 import com.drew.metadata.jpeg.JpegDirectory
 import com.drew.metadata.png.PngDirectory
-import com.drew.metadata.bmp.BmpHeaderDirectory
-import fr.janalyse.sotohp.media.model.DecimalDegrees.*
-import fr.janalyse.sotohp.media.model.*
-import fr.janalyse.sotohp.media.core.HashOperations
-
-import java.nio.file.Path
-import java.time.{Instant, OffsetDateTime, ZoneId, ZoneOffset}
-import scala.jdk.CollectionConverters.*
+import com.drew.metadata.{Metadata as DrewMetadata, Tag as DrewTag}
 import com.fasterxml.uuid.Generators
+import fr.janalyse.sotohp.media.core.HashOperations
+import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.media.model.DecimalDegrees.*
 import wvlet.airframe.ulid.ULID
 
+import java.nio.file.Path
 import java.time.format.DateTimeFormatter
+import java.time.{Instant, OffsetDateTime, ZoneId, ZoneOffset}
+import scala.jdk.CollectionConverters.*
 import scala.util.{Failure, Success, Try}
 
-trait MediaIssue                                                                     extends Exception {
-  val message: String
-  val filePath: Path
-}
-case class MediaFileIssue(message: String, filePath: Path, throwable: Throwable)     extends Exception(message, throwable) with MediaIssue
-case class MediaInternalIssue(message: String, filePath: Path, throwable: Throwable) extends Exception(message, throwable) with MediaIssue
-
-class MediaOperations
-
-object MediaOperations {
-  private val logger = org.slf4j.LoggerFactory.getLogger(classOf[MediaOperations.type])
+object OriginalBuilder {
+  private val logger = org.slf4j.LoggerFactory.getLogger(classOf[OriginalBuilder.type])
 
   private val nameBaseUUIDGenerator = Generators.nameBasedGenerator()
 
-  def readDrewMetadata(mediaPath: OriginalPath): Either[MediaFileIssue, DrewMetadata] = {
+  def readDrewMetadata(mediaPath: OriginalPath): Either[OriginalFileIssue, DrewMetadata] = {
     Try(ImageMetadataReader.readMetadata(mediaPath.file)) match {
-      case Failure(exception) => Left(MediaFileIssue(s"Couldn't read image meta data in file", mediaPath.path, exception))
+      case Failure(exception) => Left(OriginalFileIssue(s"Couldn't read image meta data in file", mediaPath.path, exception))
       case Success(value)     => Right(value)
     }
   }
@@ -50,50 +40,27 @@ object MediaOperations {
     OriginalId(uuid)
   }
 
-  def buildDefaultMediaAccessKey(timestamp: OffsetDateTime): MediaAccessKey = {
-    val ulid = ULID.ofMillis(timestamp.toInstant.toEpochMilli)
-    MediaAccessKey(ulid)
-  }
-
-  def buildMediaEvent(baseDirectory: BaseDirectoryPath, originalPath: OriginalPath): Option[Event] = {
-    val eventName = Option(originalPath.parent).map { photoParentDir =>
-      baseDirectory.path.relativize(photoParentDir).toString
-    }
-    eventName
-      .filter(_.nonEmpty)
-      .map(name => Event(name = EventName(name), description = None, keywords = Set.empty))
-  }
-
-  def getOriginalFileSize(mediaPath: OriginalPath): Either[MediaFileIssue, FileSize] = {
+  def getOriginalFileSize(mediaPath: OriginalPath): Either[OriginalFileIssue, FileSize] = {
     Try(mediaPath.file.length()) match {
-      case Failure(exception) => Left(MediaFileIssue(s"Unable to get file size", mediaPath.path, exception))
+      case Failure(exception) => Left(OriginalFileIssue(s"Unable to get file size", mediaPath.path, exception))
       case Success(value)     => Right(FileSize(value))
     }
   }
 
-  def getOriginalFileLastModified(mediaPath: OriginalPath): Either[MediaFileIssue, OffsetDateTime] = {
+  def getOriginalFileLastModified(mediaPath: OriginalPath): Either[OriginalFileIssue, OffsetDateTime] = {
     val tried = Try(mediaPath.file.lastModified())
       .map(Instant.ofEpochMilli)
       .flatMap(instant => Try(instant.atZone(ZoneId.systemDefault()).toOffsetDateTime))
     tried match {
-      case Failure(exception) => Left(MediaFileIssue(s"Unable to get file last modified", mediaPath.path, exception))
+      case Failure(exception) => Left(OriginalFileIssue(s"Unable to get file last modified", mediaPath.path, exception))
       case Success(value)     => Right(value)
     }
   }
 
-  def getOriginalFileHash(mediaPath: OriginalPath): Either[MediaIssue, FileHash] = {
+  def getOriginalFileHash(mediaPath: OriginalPath): Either[OriginalIssue, FileHash] = {
     HashOperations.fileDigest(mediaPath.path) match {
-      case Left(error)  => Left(MediaFileIssue(s"Unable to compute file hash", mediaPath.path, error))
+      case Left(error)  => Left(OriginalFileIssue(s"Unable to compute file hash", mediaPath.path, error))
       case Right(value) => Right(FileHash(value))
-    }
-  }
-
-  def computeMediaTimestamp(original: Original): Either[MediaFileIssue, OffsetDateTime] = {
-    val sdt = original.cameraShootDateTime.filter(_.year >= 1990) // TODO - Add rule/config to control shootDataTime validity !
-    sdt match {
-      case Some(shootDateTime) => Right(shootDateTime.offsetDateTime)
-      case _                   => getOriginalFileLastModified(original.mediaPath)
-
     }
   }
 
@@ -217,30 +184,34 @@ object MediaOperations {
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
   private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|dib|tiff|ico|heif|heic)$""".r
 
-  def computeMediaKind(original: Original): Either[MediaIssue, MediaKind] = {
+  def computeMediaKind(original: Original): Either[OriginalIssue, MediaKind] = {
     val ext = original.mediaPath.extension
     ext match {
       case VideoExtensionsRE(_) => Right(MediaKind.Video)
       case PhotoExtensionsRE(_) => Right(MediaKind.Photo)
-      case _ => Left(MediaFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
+      case _                    => Left(OriginalFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
     }
   }
 
-  /**
-   * Generates an `Original` object from a media file and its associated metadata.
-   *
-   * @param baseDirectory     the base directory path where the original media file resides
-   * @param mediaPath         the absolute path to the media file
-   * @param owner             the owner of the media file
-   * @param originalFromCache optionally provides a cached value of the `Original` object or a way to handle cache lookup issues; defaults to nothing cached`
-   * @return an `Either` containing either a `MediaIssue` if an error occurred during processing, or an `Original` object if successfully generated
-   */
+  /** Generates an `Original` object from a media file and its associated metadata.
+    *
+    * @param baseDirectory
+    *   the base directory path where the original media file resides
+    * @param mediaPath
+    *   the absolute path to the media file
+    * @param owner
+    *   the owner of the media file
+    * @param originalFromCache
+    *   optionally provides a cached value of the `Original` object or a way to handle cache lookup issues; defaults to nothing cached`
+    * @return
+    *   an `Either` containing either a `MediaIssue` if an error occurred during processing, or an `Original` object if successfully generated
+    */
   def originalFromFile(
     baseDirectory: BaseDirectoryPath,
     mediaPath: OriginalPath,
     owner: Owner,
-    originalFromCache: => Either[MediaIssue, Option[Original]] = Right(None),
-  ): Either[MediaIssue, Original] = {
+    originalFromCache: => Either[OriginalIssue, Option[Original]] = Right(None)
+  ): Either[OriginalIssue, Original] = {
     for {
       cachedOriginal   <- originalFromCache // TODO enhance to check for coherency
       fileSize         <- getOriginalFileSize(mediaPath)
@@ -254,7 +225,7 @@ object MediaOperations {
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
       originalId        = buildOriginalId(baseDirectory, mediaPath, owner)
-    } yield  Original(
+    } yield Original(
       id = originalId,
       baseDirectory = baseDirectory,
       mediaPath = mediaPath,
@@ -269,34 +240,4 @@ object MediaOperations {
       location = location
     )
   }
-
-  /**
-   * Generates a `Media` object from an `Original` object by computing its properties
-   * such as timestamp, media access key, event, and media kind.
-   *
-   * @param original the `Original` object containing the base information about the media
-   * @return an `Either`, where the left side contains a `MediaIssue` if an error occurred during processing,
-   *         and the right side contains a constructed `Media` object if successful
-   */
-
-  def mediaFromOriginal(original: Original): Either[MediaIssue, Media] = {
-    for {
-      timestamp     <- computeMediaTimestamp(original)
-      mediaAccessKey = buildDefaultMediaAccessKey(timestamp)
-      event          = buildMediaEvent(original.baseDirectory, original.mediaPath)
-      kind          <- computeMediaKind(original)
-    } yield Media(
-      accessKey = mediaAccessKey,
-      kind = kind,
-      original = original,
-      event = event,
-      description = None,
-      starred = false,
-      keywords = Set.empty,
-      orientation = None,
-      shootDateTime = None,
-      location = None
-    )
-  }
-
 }
