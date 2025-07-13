@@ -214,15 +214,21 @@ object MediaOperations {
     result.flatten
   }
 
-  def mediaFileToOriginal(baseDirectory: BaseDirectoryPath, mediaPath: OriginalPath, owner: Owner): Either[MediaIssue, Original] = {
+  def mediaFileToOriginal(
+    baseDirectory: BaseDirectoryPath,
+    mediaPath: OriginalPath,
+    owner: Owner,
+    mediaCache: MediaCache = MediaNoCache
+  ): Either[MediaIssue, Original] = {
     for {
+      cachedOriginal   <- mediaCache.originalGet(baseDirectory, mediaPath, owner) // TODO enhance to check for coherency
       fileSize         <- getOriginalFileSize(mediaPath)
       fileLastModified <- getOriginalFileLastModified(mediaPath)
-      fileHash         <- getOriginalFileHash(mediaPath) // TODO costly add caching
+      fileHash         <- if (cachedOriginal.isDefined) Right(cachedOriginal.get.fileHash) else getOriginalFileHash(mediaPath)
       drewMetadata     <- readDrewMetadata(mediaPath)
       shootDateTime     = extractShootDateTime(drewMetadata)
       cameraName        = extractCameraName(drewMetadata)
-      //genericTags       = extractGenericTags(drewMetadata)
+      // genericTags       = extractGenericTags(drewMetadata)
       dimension         = extractDimension(drewMetadata)
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
@@ -245,13 +251,13 @@ object MediaOperations {
 
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
   private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|dib|tiff|ico|heif|heic)$""".r
-  
+
   def computeMediaKind(original: Original): Either[MediaIssue, MediaKind] = {
     val ext = original.mediaPath.extension
     ext match {
       case VideoExtensionsRE(_) => Right(MediaKind.Video)
       case PhotoExtensionsRE(_) => Right(MediaKind.Photo)
-      case _ => Left(MediaFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
+      case _                    => Left(MediaFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
     }
   }
 
