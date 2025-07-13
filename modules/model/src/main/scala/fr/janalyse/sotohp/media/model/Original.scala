@@ -77,9 +77,9 @@ object FileHash {
 
 object FirstSeen {
   def apply(timeStamp: OffsetDateTime): FirstSeen = timeStamp
-  extension (lastSeen: FirstSeen) {
-    @targetName("offsetDateTime_FirstSeen")
-    def offsetDateTime: OffsetDateTime = lastSeen
+
+  extension (firstSeen: FirstSeen) {
+    def offsetDateTime: OffsetDateTime = firstSeen
   }
 }
 
@@ -96,7 +96,7 @@ case class Original(
   dimension: Option[Dimension],
   orientation: Option[Orientation],
   location: Option[Location],
-  firstSeen: FirstSeen // First time this original has been seen by this tool
+  firstSeen: FirstSeen
 )
 
 case class OriginalCameraTags(

@@ -193,6 +193,8 @@ object OriginalBuilder {
     }
   }
 
+  def now() = OffsetDateTime.now(ZoneOffset.UTC)
+
   /** Generates an `Original` object from a media file and its associated metadata.
     *
     * @param baseDirectory
@@ -225,7 +227,7 @@ object OriginalBuilder {
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
       originalId        = buildOriginalId(baseDirectory, mediaPath, owner)
-      firstSeen         = if (cachedOriginal.isDefined) cachedOriginal.get.firstSeen else FirstSeen(OffsetDateTime.now(ZoneOffset.UTC))
+      firstSeen         = if (cachedOriginal.isDefined) cachedOriginal.get.firstSeen else FirstSeen(now())
     } yield Original(
       id = originalId,
       baseDirectory = baseDirectory,

@@ -14,6 +14,7 @@ enum MediaKind(code: Int) {
   case Video extends MediaKind(1)
 }
 
+
 case class Media(
   accessKey: MediaAccessKey,
   kind: MediaKind,
