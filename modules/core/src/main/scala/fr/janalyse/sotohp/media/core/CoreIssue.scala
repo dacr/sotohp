@@ -2,7 +2,9 @@ package fr.janalyse.sotohp.media.core
 
 import java.nio.file.Path
 
-trait OriginalIssue extends Exception {
+sealed trait CoreIssue extends Exception
+
+sealed trait OriginalIssue extends CoreIssue {
   val message: String
   val filePath: Path
 }

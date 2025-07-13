@@ -23,12 +23,12 @@ import scala.util.{Failure, Success, Try}
 object MediaBuilder {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[MediaBuilder.type])
 
-  def buildDefaultMediaAccessKey(timestamp: OffsetDateTime): MediaAccessKey = {
+  private def buildDefaultMediaAccessKey(timestamp: OffsetDateTime): MediaAccessKey = {
     val ulid = ULID.ofMillis(timestamp.toInstant.toEpochMilli)
     MediaAccessKey(ulid)
   }
 
-  def computeMediaTimestamp(original: Original): Either[OriginalFileIssue, OffsetDateTime] = {
+  private def computeMediaTimestamp(original: Original): Either[OriginalFileIssue, OffsetDateTime] = {
     val sdt = original.cameraShootDateTime.filter(_.year >= 1990) // TODO - Add rule/config to control shootDataTime validity !
     sdt match {
       case Some(shootDateTime) => Right(shootDateTime.offsetDateTime)
@@ -49,7 +49,7 @@ object MediaBuilder {
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
   private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|dib|tiff|ico|heif|heic)$""".r
 
-  def computeMediaKind(original: Original): Either[OriginalIssue, MediaKind] = {
+  def computeMediaKind(original: Original): Either[CoreIssue, MediaKind] = {
     val ext = original.mediaPath.extension
     ext match {
       case VideoExtensionsRE(_) => Right(MediaKind.Video)
@@ -63,10 +63,10 @@ object MediaBuilder {
     * @param original
     *   the `Original` object containing the base information about the media
     * @return
-    *   an `Either`, where the left side contains a `MediaIssue` if an error occurred during processing, and the right side contains a constructed `Media` object if successful
+    *   an `Either`, where the left side contains a `CoreIssue` if an error occurred during processing, and the right side contains a constructed `Media` object if successful
     */
 
-  def mediaFromOriginal(original: Original): Either[OriginalIssue, Media] = {
+  def mediaFromOriginal(original: Original): Either[CoreIssue, Media] = {
     for {
       timestamp     <- computeMediaTimestamp(original)
       mediaAccessKey = buildDefaultMediaAccessKey(timestamp)
