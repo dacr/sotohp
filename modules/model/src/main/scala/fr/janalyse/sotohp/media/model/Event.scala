@@ -1,13 +1,15 @@
 package fr.janalyse.sotohp.media.model
 
+import scala.annotation.targetName
+
 opaque type EventName        = String
 opaque type EventDescription = String
 
 object EventName {
   def apply(name: String): EventName = name
-}
-extension (eventName: EventName) {
-  def text: String = eventName
+  extension (eventName: EventName) {
+    def text: String = eventName
+  }
 }
 
 case class Event(

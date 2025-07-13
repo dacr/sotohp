@@ -201,7 +201,7 @@ object OriginalBuilder {
     *   the absolute path to the media file
     * @param owner
     *   the owner of the media file
-    * @param originalFromCache
+    * @param previouslySeenOriginal
     *   optionally provides a cached value of the `Original` object or a way to handle cache lookup issues; defaults to nothing cached`
     * @return
     *   an `Either` containing either a `MediaIssue` if an error occurred during processing, or an `Original` object if successfully generated
@@ -210,10 +210,10 @@ object OriginalBuilder {
     baseDirectory: BaseDirectoryPath,
     mediaPath: OriginalPath,
     owner: Owner,
-    originalFromCache: => Either[OriginalIssue, Option[Original]] = Right(None)
+    previouslySeenOriginal: => Either[OriginalIssue, Option[Original]] = Right(None)
   ): Either[OriginalIssue, Original] = {
     for {
-      cachedOriginal   <- originalFromCache // TODO enhance to check for coherency
+      cachedOriginal   <- previouslySeenOriginal
       fileSize         <- getOriginalFileSize(mediaPath)
       fileLastModified <- getOriginalFileLastModified(mediaPath)
       fileHash         <- if (cachedOriginal.isDefined) Right(cachedOriginal.get.fileHash) else getOriginalFileHash(mediaPath)
@@ -225,6 +225,7 @@ object OriginalBuilder {
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
       originalId        = buildOriginalId(baseDirectory, mediaPath, owner)
+      firstSeen         = if (cachedOriginal.isDefined) cachedOriginal.get.firstSeen else FirstSeen(OffsetDateTime.now(ZoneOffset.UTC))
     } yield Original(
       id = originalId,
       baseDirectory = baseDirectory,
@@ -237,7 +238,8 @@ object OriginalBuilder {
       cameraName = cameraName,
       dimension = dimension,
       orientation = orientation,
-      location = location
+      location = location,
+      firstSeen = firstSeen
     )
   }
 }

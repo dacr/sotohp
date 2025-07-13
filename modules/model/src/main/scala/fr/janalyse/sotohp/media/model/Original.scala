@@ -16,6 +16,7 @@ opaque type FileHash          = String
 opaque type OriginalId        = UUID
 opaque type ShootDateTime     = OffsetDateTime
 opaque type CameraName        = String
+opaque type FirstSeen         = OffsetDateTime
 
 object OriginalId {
   def apply(id: UUID): OriginalId = id
@@ -23,41 +24,36 @@ object OriginalId {
 
 object CameraName {
   def apply(name: String): CameraName = name
-}
 
-extension (cameraName: CameraName) {
-  def text: String = cameraName
+  extension (cameraName: CameraName) {
+    def text: String = cameraName
+  }
 }
 
 object BaseDirectoryPath {
   def apply(path: Path): BaseDirectoryPath = path
-}
-extension (baseDirPath: BaseDirectoryPath) {
-  @targetName("path_BaseDirectoryPath")
-  def path: Path = baseDirPath
+  extension (baseDirPath: BaseDirectoryPath) {
+    def path: Path = baseDirPath
+  }
 }
 
 object OriginalPath {
   def apply(path: Path): OriginalPath = path
-}
-extension (originalPath: OriginalPath) {
-  def parent: Path = originalPath.getParent
-  @targetName("file_OriginPath")
-  def file: File = originalPath.toFile
-  @targetName("path_OriginPath")
-  def path: Path = originalPath
-  @targetName("fileName_OriginPath")
-  def fileName: String = originalPath.getFileName.toString
-  @targetName("extension_OriginPath")
-  def extension: String = originalPath.getFileName.toString.split("\\.").last
+  extension (originalPath: OriginalPath) {
+    def parent: Path      = originalPath.getParent
+    def file: File        = originalPath.toFile
+    def path: Path        = originalPath
+    def fileName: String  = originalPath.getFileName.toString
+    def extension: String = originalPath.getFileName.toString.split("\\.").last
+  }
 }
 
 object ShootDateTime {
   def apply(timeStamp: OffsetDateTime): ShootDateTime = timeStamp
 }
 extension (shootDateTime: ShootDateTime) {
-  def year: Int = shootDateTime.getYear
-  def offsetDateTime:OffsetDateTime = shootDateTime
+  def year: Int                      = shootDateTime.getYear
+  def offsetDateTime: OffsetDateTime = shootDateTime
 }
 
 object FileSize {
@@ -66,20 +62,26 @@ object FileSize {
 
 object FileLastModified {
   def apply(timeStamp: OffsetDateTime): FileLastModified = timeStamp
-}
-extension (fileLastModified:FileLastModified) {
-  @targetName("offsetDateTime_FileLastModified")
-  def offsetDateTime:OffsetDateTime = fileLastModified
+  extension (fileLastModified: FileLastModified) {
+    def offsetDateTime: OffsetDateTime = fileLastModified
+  }
 }
 
 object FileHash {
   def apply(hash: String): FileHash = hash
+
+  extension (fileHash: FileHash) {
+    def code: String = fileHash
+  }
 }
 
-extension (fileHash: FileHash) {
-  def code: String = fileHash
+object FirstSeen {
+  def apply(timeStamp: OffsetDateTime): FirstSeen = timeStamp
+  extension (lastSeen: FirstSeen) {
+    @targetName("offsetDateTime_FirstSeen")
+    def offsetDateTime: OffsetDateTime = lastSeen
+  }
 }
-
 
 case class Original(
   id: OriginalId,
@@ -93,7 +95,8 @@ case class Original(
   cameraName: Option[CameraName],
   dimension: Option[Dimension],
   orientation: Option[Orientation],
-  location: Option[Location]
+  location: Option[Location],
+  firstSeen: FirstSeen // First time this original has been seen by this tool
 )
 
 case class OriginalCameraTags(
