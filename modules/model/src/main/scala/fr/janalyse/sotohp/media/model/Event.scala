@@ -1,5 +1,6 @@
 package fr.janalyse.sotohp.media.model
 
+import java.nio.file.Path
 import java.util.UUID
 import scala.annotation.targetName
 
@@ -24,9 +25,19 @@ object EventDescription {
   }
 }
 
+opaque type EventMediaDirectory = Path
+object EventMediaDirectory {
+  def apply(path: Path): EventMediaDirectory = path
+  extension (eventMediaDirectory: EventMediaDirectory) {
+    def path: Path = eventMediaDirectory
+  }
+}
+
 case class Event(
   id: EventId,
+  ownerId: OwnerId,
+  mediaDirectory: EventMediaDirectory, // Unique
   name: EventName,
   description: Option[EventDescription],
-  keywords: Set[Keyword]
+  keywords: Set[Keyword],
 )

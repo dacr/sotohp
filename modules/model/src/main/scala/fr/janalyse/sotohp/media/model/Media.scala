@@ -15,6 +15,14 @@ object MediaDescription {
   }
 }
 
+opaque type Starred = Boolean
+object Starred {
+  def apply(starred: Boolean): Starred = starred
+  extension (starred: Starred) {
+    def value: Boolean = starred
+  }
+}
+
 enum MediaKind(code: Int) {
   case Photo extends MediaKind(0)
   case Video extends MediaKind(1)
@@ -26,7 +34,7 @@ case class Media(
   original: Original,
   event: Option[Event],
   description: Option[MediaDescription],
-  starred: Boolean,
+  starred: Starred,
   keywords: Set[Keyword],
   orientation: Option[Orientation], // override original's orientation
   shootDateTime: Option[ShootDateTime], // override original's cameraShotDateTime

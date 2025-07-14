@@ -17,7 +17,7 @@ object MediaBuilderSpec extends ZIOSpecDefault with TestDatasets {
   val testLogic =
     suite("Media builder")(
       test("Media event exists") {
-        val check = (basedir: String, path: String, expected: Option[String]) => buildMediaEvent(BaseDirectoryPath(Path.of(basedir)), OriginalPath(Path.of(path))).map(_.name) == expected
+        val check = (basedir: String, path: String, expected: Option[String]) => buildMediaEvent(BaseDirectoryPath(Path.of(basedir)), OriginalPath(Path.of(path)), fakeOwner.id).map(_.name) == expected
         assertTrue(
           check("tmp", "tmp/toto.jpeg", None),
           check("tmp/", "tmp/toto.jpeg", None),
