@@ -4,12 +4,12 @@ import java.nio.file.Path
 import java.util.UUID
 import scala.annotation.targetName
 
-opaque type EventId          = UUID
+opaque type EventId = UUID
 object EventId {
   def apply(id: UUID): EventId = id
 }
 
-opaque type EventName        = String
+opaque type EventName = String
 object EventName {
   def apply(name: String): EventName = name
   extension (eventName: EventName) {
@@ -39,5 +39,5 @@ case class Event(
   mediaDirectory: EventMediaDirectory, // Unique
   name: EventName,
   description: Option[EventDescription],
-  keywords: Set[Keyword],
+  keywords: Set[Keyword]
 )

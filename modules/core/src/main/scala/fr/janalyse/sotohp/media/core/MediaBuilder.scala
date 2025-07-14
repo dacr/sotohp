@@ -66,13 +66,15 @@ object MediaBuilder {
     *
     * @param original
     *   the `Original` object containing the base information about the media
+    * @param knownEvent
+    *   event to which this media belongs to
     * @return
     *   an `Either`, where the left side contains a `CoreIssue` if an error occurred during processing, and the right side contains a constructed `Media` object if successful
     */
 
   def mediaFromOriginal(
     original: Original,
-    event: Option[Event]
+    knownEvent: Option[Event]
   ): Either[CoreIssue, Media] = {
     for {
       timestamp     <- computeMediaTimestamp(original)
@@ -82,7 +84,7 @@ object MediaBuilder {
       accessKey = mediaAccessKey,
       kind = kind,
       original = original,
-      event = event,
+      event = knownEvent,
       description = None,
       starred = Starred(false),
       keywords = Set.empty,

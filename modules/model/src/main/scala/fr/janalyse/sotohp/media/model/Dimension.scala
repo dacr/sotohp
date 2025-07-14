@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.media.model
 
-opaque type Width  = Int
+opaque type Width = Int
 object Width {
   def apply(width: Int): Width = width
   extension (width: Width) {

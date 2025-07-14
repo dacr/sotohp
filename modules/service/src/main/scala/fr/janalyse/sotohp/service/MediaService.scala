@@ -40,12 +40,13 @@ trait MediaService {
   def mediaMiniatureRead(key: MediaAccessKey): IO[ServiceIssue, Stream[ServiceStreamIssue, Byte]]
 
   // -------------------------------------------------------------------------------------------------------------------
+  // TODO improve event management
   def eventList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Event]]
   def eventGet(eventId: EventId): IO[ServiceIssue, Event]
   def eventDelete(eventId: EventId): IO[ServiceIssue, Unit]
   def eventCreate(
     ownerId: OwnerId,
-    mediaDirectory: EventMediaDirectory,
+    mediaDirectory: EventMediaDirectory, // TODO should be improved
     name: EventName,
     description: Option[EventDescription],
     keywords: Set[Keyword]
@@ -62,6 +63,7 @@ trait MediaService {
   def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Owner]
   def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit]
   def ownerCreate(
+    providedOwnerId: Option[OwnerId], // If not provided, it will be chosen automatically
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate]
@@ -78,6 +80,7 @@ trait MediaService {
   def storageGet(storageId: StorageId): IO[ServiceIssue, Storage]
   def storageDelete(storageId: StorageId): IO[ServiceIssue, Unit]
   def storageCreate(
+    providedStorageId: Option[StorageId], // If not provided, it will be chosen automatically
     ownerId: OwnerId,
     baseDirectory: BaseDirectoryPath,
     includeMask: Option[IncludeMask],
