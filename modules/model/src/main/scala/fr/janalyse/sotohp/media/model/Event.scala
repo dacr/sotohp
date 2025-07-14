@@ -36,7 +36,7 @@ object EventMediaDirectory {
 case class Event(
   id: EventId,
   ownerId: OwnerId,
-  mediaDirectory: EventMediaDirectory, // Unique
+  mediaDirectory: EventMediaDirectory, // Unicity on (ownerId/mediaDirectory)
   name: EventName,
   description: Option[EventDescription],
   keywords: Set[Keyword]
