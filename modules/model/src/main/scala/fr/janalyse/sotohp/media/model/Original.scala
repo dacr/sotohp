@@ -8,28 +8,20 @@ import java.time.OffsetDateTime
 import java.util.UUID
 import scala.annotation.targetName
 
-opaque type BaseDirectoryPath = Path
-opaque type OriginalPath      = Path
-opaque type FileSize          = Long
-opaque type FileLastModified  = OffsetDateTime
-opaque type FileHash          = String
-opaque type OriginalId        = UUID
-opaque type ShootDateTime     = OffsetDateTime
-opaque type CameraName        = String
-opaque type FirstSeen         = OffsetDateTime
-
+opaque type OriginalId = UUID
 object OriginalId {
   def apply(id: UUID): OriginalId = id
 }
 
+opaque type CameraName = String
 object CameraName {
   def apply(name: String): CameraName = name
-
   extension (cameraName: CameraName) {
     def text: String = cameraName
   }
 }
 
+opaque type BaseDirectoryPath = Path
 object BaseDirectoryPath {
   def apply(path: Path): BaseDirectoryPath = path
   extension (baseDirPath: BaseDirectoryPath) {
@@ -37,6 +29,7 @@ object BaseDirectoryPath {
   }
 }
 
+opaque type OriginalPath = Path
 object OriginalPath {
   def apply(path: Path): OriginalPath = path
   extension (originalPath: OriginalPath) {
@@ -48,6 +41,7 @@ object OriginalPath {
   }
 }
 
+opaque type ShootDateTime = OffsetDateTime
 object ShootDateTime {
   def apply(timeStamp: OffsetDateTime): ShootDateTime = timeStamp
 }
@@ -56,10 +50,12 @@ extension (shootDateTime: ShootDateTime) {
   def offsetDateTime: OffsetDateTime = shootDateTime
 }
 
+opaque type FileSize = Long
 object FileSize {
   def apply(size: Long): FileSize = size
 }
 
+opaque type FileLastModified = OffsetDateTime
 object FileLastModified {
   def apply(timeStamp: OffsetDateTime): FileLastModified = timeStamp
   extension (fileLastModified: FileLastModified) {
@@ -67,19 +63,11 @@ object FileLastModified {
   }
 }
 
+opaque type FileHash = String
 object FileHash {
   def apply(hash: String): FileHash = hash
-
   extension (fileHash: FileHash) {
     def code: String = fileHash
-  }
-}
-
-object FirstSeen {
-  def apply(timeStamp: OffsetDateTime): FirstSeen = timeStamp
-
-  extension (firstSeen: FirstSeen) {
-    def offsetDateTime: OffsetDateTime = firstSeen
   }
 }
 
@@ -95,8 +83,7 @@ case class Original(
   cameraName: Option[CameraName],
   dimension: Option[Dimension],
   orientation: Option[Orientation],
-  location: Option[Location],
-  firstSeen: FirstSeen
+  location: Option[Location]
 )
 
 case class OriginalCameraTags(

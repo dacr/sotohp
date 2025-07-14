@@ -18,6 +18,7 @@ import com.fasterxml.uuid.Generators
 import wvlet.airframe.ulid.ULID
 
 import java.time.format.DateTimeFormatter
+import java.util.UUID
 import scala.util.{Failure, Success, Try}
 
 object MediaBuilder {
@@ -36,15 +37,17 @@ object MediaBuilder {
     }
   }
 
-  def buildMediaEvent(baseDirectory: BaseDirectoryPath, originalPath: OriginalPath): Option[Event] = {
-    val eventName = Option(originalPath.parent).map { photoParentDir =>
-      baseDirectory.path.relativize(photoParentDir).toString
+  def buildMediaEvent(original: Original): Option[Event] = buildMediaEvent(original.baseDirectory, original.mediaPath)
+
+  def buildMediaEvent(originalBaseDirectory: BaseDirectoryPath, originalMediaPath: OriginalPath): Option[Event] = {
+    val eventId   = EventId(UUID.randomUUID())
+    val eventName = Option(originalMediaPath.parent).map { photoParentDir =>
+      originalBaseDirectory.path.relativize(photoParentDir).toString
     }
     eventName
       .filter(_.nonEmpty)
-      .map(name => Event(name = EventName(name), description = None, keywords = Set.empty))
+      .map(name => Event(id = eventId, name = EventName(name), description = None, keywords = Set.empty))
   }
-
 
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
   private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|tif|tiff|ico|heif|heic)$""".r
@@ -66,11 +69,13 @@ object MediaBuilder {
     *   an `Either`, where the left side contains a `CoreIssue` if an error occurred during processing, and the right side contains a constructed `Media` object if successful
     */
 
-  def mediaFromOriginal(original: Original): Either[CoreIssue, Media] = {
+  def mediaFromOriginal(
+    original: Original,
+    event: Option[Event]
+  ): Either[CoreIssue, Media] = {
     for {
       timestamp     <- computeMediaTimestamp(original)
       mediaAccessKey = buildDefaultMediaAccessKey(timestamp)
-      event          = buildMediaEvent(original.baseDirectory, original.mediaPath)
       kind          <- computeMediaKind(original)
     } yield Media(
       accessKey = mediaAccessKey,

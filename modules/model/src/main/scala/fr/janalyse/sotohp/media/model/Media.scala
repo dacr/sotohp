@@ -3,17 +3,22 @@ package fr.janalyse.sotohp.media.model
 import wvlet.airframe.ulid.ULID
 
 opaque type MediaAccessKey   = ULID
-opaque type MediaDescription = String
-
 object MediaAccessKey {
   def apply(id: ULID): MediaAccessKey = id
+}
+
+opaque type MediaDescription = String
+object MediaDescription {
+  def apply(description: String): MediaDescription = description
+  extension (mediaDescription: MediaDescription) {
+    def text: String = mediaDescription
+  }
 }
 
 enum MediaKind(code: Int) {
   case Photo extends MediaKind(0)
   case Video extends MediaKind(1)
 }
-
 
 case class Media(
   accessKey: MediaAccessKey,

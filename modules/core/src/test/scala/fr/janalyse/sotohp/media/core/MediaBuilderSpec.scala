@@ -28,8 +28,8 @@ object MediaBuilderSpec extends ZIOSpecDefault with TestDatasets {
       },
       test("generate media record") {
         for {
-          original      <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner))
-          media         <- from(mediaFromOriginal(original))
+          original      <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner.id, None))
+          media         <- from(mediaFromOriginal(original, None))
         } yield assertTrue(
           media.original == original,
           media.kind == MediaKind.Photo

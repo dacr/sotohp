@@ -31,11 +31,11 @@ object OriginalBuilder {
     }
   }
 
-  def buildOriginalId(baseDirectory: BaseDirectoryPath, mediaPath: OriginalPath, owner: Owner): OriginalId = {
+  def buildOriginalId(baseDirectory: BaseDirectoryPath, mediaPath: OriginalPath, ownerId: OwnerId): OriginalId = {
     // Using photo relative file path and owner id for photo identifier generation
     // as the same photo can be used within several directories or people
     val relativePath = baseDirectory.path.relativize(mediaPath.path)
-    val key          = s"${owner.id}:$relativePath"
+    val key          = s"${ownerId}:$relativePath"
     val uuid         = nameBaseUUIDGenerator.generate(key)
     OriginalId(uuid)
   }
@@ -148,19 +148,19 @@ object OriginalBuilder {
   def extractDimension(metadata: DrewMetadata): Option[Dimension] = {
     lazy val dimensionFromJpeg =
       Option(metadata.getFirstDirectoryOfType(classOf[JpegDirectory]))
-        .flatMap(dir => buildDimension2D(dir.getImageWidth, dir.getImageHeight))
+        .flatMap(dir => buildDimension2D(Width(dir.getImageWidth), Height(dir.getImageHeight)))
     lazy val dimensionFromPng  =
       Option(metadata.getFirstDirectoryOfType(classOf[PngDirectory]))
-        .flatMap(dir => buildDimension2D(dir.getInt(PngDirectory.TAG_IMAGE_WIDTH), dir.getInt(PngDirectory.TAG_IMAGE_HEIGHT)))
+        .flatMap(dir => buildDimension2D(Width(dir.getInt(PngDirectory.TAG_IMAGE_WIDTH)), Height(dir.getInt(PngDirectory.TAG_IMAGE_HEIGHT))))
     lazy val dimensionFromGif  =
       Option(metadata.getFirstDirectoryOfType(classOf[GifImageDirectory]))
-        .flatMap(dir => buildDimension2D(dir.getInt(GifImageDirectory.TAG_WIDTH), dir.getInt(GifImageDirectory.TAG_HEIGHT)))
+        .flatMap(dir => buildDimension2D(Width(dir.getInt(GifImageDirectory.TAG_WIDTH)), Height(dir.getInt(GifImageDirectory.TAG_HEIGHT))))
     lazy val dimensionFromBmp  =
       Option(metadata.getFirstDirectoryOfType(classOf[BmpHeaderDirectory]))
-        .flatMap(dir => buildDimension2D(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_WIDTH), dir.getInt(BmpHeaderDirectory.TAG_IMAGE_HEIGHT)))
+        .flatMap(dir => buildDimension2D(Width(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_WIDTH)), Height(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_HEIGHT))))
     lazy val dimensionFromExif =
       Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
-        .flatMap(dir => buildDimension2D(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH), dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT)))
+        .flatMap(dir => buildDimension2D(Width(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH)), Height(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT))))
 
     dimensionFromJpeg
       .orElse(dimensionFromPng)
@@ -201,24 +201,23 @@ object OriginalBuilder {
     *   the base directory path where the original media file resides
     * @param mediaPath
     *   the absolute path to the media file
-    * @param owner
-    *   the owner of the media file
-    * @param previouslySeenOriginal
-    *   optionally provides a cached value of the `Original` object or a way to handle cache lookup issues; defaults to nothing cached`
+    * @param ownerId
+    *   the owner id of the media file
+    * @param knownFileHash
+    *   optionally provides an already computed hash for this original file
     * @return
     *   an `Either` containing either a `MediaIssue` if an error occurred during processing, or an `Original` object if successfully generated
     */
   def originalFromFile(
     baseDirectory: BaseDirectoryPath,
     mediaPath: OriginalPath,
-    owner: Owner,
-    previouslySeenOriginal: => Either[OriginalIssue, Option[Original]] = Right(None)
+    ownerId: OwnerId,
+    knownFileHash: Option[FileHash]
   ): Either[OriginalIssue, Original] = {
     for {
-      cachedOriginal   <- previouslySeenOriginal
       fileSize         <- getOriginalFileSize(mediaPath)
       fileLastModified <- getOriginalFileLastModified(mediaPath)
-      fileHash         <- if (cachedOriginal.isDefined) Right(cachedOriginal.get.fileHash) else getOriginalFileHash(mediaPath)
+      fileHash         <- if (knownFileHash.isDefined) Right(knownFileHash.get) else getOriginalFileHash(mediaPath)
       drewMetadata     <- readDrewMetadata(mediaPath)
       shootDateTime     = extractShootDateTime(drewMetadata)
       cameraName        = extractCameraName(drewMetadata)
@@ -226,13 +225,12 @@ object OriginalBuilder {
       dimension         = extractDimension(drewMetadata)
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
-      originalId        = buildOriginalId(baseDirectory, mediaPath, owner)
-      firstSeen         = if (cachedOriginal.isDefined) cachedOriginal.get.firstSeen else FirstSeen(now())
+      originalId        = buildOriginalId(baseDirectory, mediaPath, ownerId)
     } yield Original(
       id = originalId,
       baseDirectory = baseDirectory,
       mediaPath = mediaPath,
-      ownerId = owner.id,
+      ownerId = ownerId,
       fileHash = fileHash,
       fileSize = fileSize,
       fileLastModified = FileLastModified(fileLastModified),
@@ -240,8 +238,7 @@ object OriginalBuilder {
       cameraName = cameraName,
       dimension = dimension,
       orientation = orientation,
-      location = location,
-      firstSeen = firstSeen
+      location = location
     )
   }
 }

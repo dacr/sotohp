@@ -18,6 +18,13 @@ object LastSynchronized {
   }
 }
 
+opaque type FirstSeen = OffsetDateTime
+object FirstSeen {
+  def apply(timeStamp: OffsetDateTime): FirstSeen = timeStamp
+  extension (firstSeen: FirstSeen) {
+    def offsetDateTime: OffsetDateTime = firstSeen
+  }
+}
 
 case class State(
   originalId: OriginalId,

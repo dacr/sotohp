@@ -18,8 +18,8 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
     suite("Photo original stream")(
       test("collect original photos with flat dataset") {
         for {
-          photoSearchFileRoot <- from(FileSystemSearchRoot.build(fakeOwner, dataset1.toString))
-          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot))
+          photoSearchFileRoot <- from(FileSystemSearch.makeStorage(fakeOwner.id, dataset1.toString))
+          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot, MediaBuilder.buildMediaEvent))
           mediasStream         = ZStream.fromJavaStream(mediasJavaStream)
           results             <- mediasStream.runCollect
           medias               = results.collect { case Right(original) => original }
@@ -34,8 +34,8 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
       },
       test("collect original photos with tree dataset") {
         for {
-          photoSearchFileRoot <- from(FileSystemSearchRoot.build(fakeOwner, dataset2.toString))
-          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot))
+          photoSearchFileRoot <- from(FileSystemSearch.makeStorage(fakeOwner.id, dataset2.toString))
+          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot, MediaBuilder.buildMediaEvent))
           mediasStream         = ZStream.fromJavaStream(mediasJavaStream)
           results             <- mediasStream.runCollect
           medias               = results.collect { case Right(original) => original }

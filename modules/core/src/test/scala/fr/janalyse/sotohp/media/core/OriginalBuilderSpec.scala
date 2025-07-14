@@ -6,7 +6,6 @@ import zio.*
 import zio.ZIO.*
 import zio.test.*
 
-import java.nio.file.{Files, Path, Paths}
 import java.time.{Instant, OffsetDateTime}
 import scala.jdk.CollectionConverters.*
 
@@ -63,8 +62,8 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
           metadata  <- from(readDrewMetadata(dataset1Example1))
           dimension <- from(extractDimension(metadata))
         } yield assertTrue(
-          dimension.width == 1333,
-          dimension.height == 2000
+          dimension.width == Width(1333),
+          dimension.height == Height(2000)
         )
       ),
       test("orientation can be extracted")(
@@ -78,7 +77,7 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
       ),
       test("generate original record") {
         for {
-          original   <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner))
+          original   <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner.id, None))
           cameraName <- from(original.cameraName)
         } yield assertTrue(
           original.fileHash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae",
