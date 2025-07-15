@@ -6,23 +6,16 @@ import fr.janalyse.sotohp.media.model.*
 
 import java.time.OffsetDateTime
 
-case class TimeRange(
-  start: Option[OffsetDateTime],
-  end: Option[OffsetDateTime]
-)
-
-case class MediaQuery(
-  ownerId: Option[OwnerId],
-  keywords: Set[Keyword],
-  timeRange: Option[TimeRange]
-)
-
 trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
-  def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
-  def mediaSearch(query: MediaQuery): IO[ServiceIssue, Stream[ServiceStreamIssue, Media]]
-  def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Media]
+  def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
+  def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): IO[ServiceIssue, Stream[ServiceStreamIssue, Media]]
+  def mediaFirst(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
+  def mediaPrevious(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
+  def mediaNext(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
+  def mediaLast(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
+  def mediaGet(key: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Media]
   def mediaUpdate(
     key: MediaAccessKey,
     eventId: Option[EventId],
@@ -46,7 +39,7 @@ trait MediaService {
   def eventDelete(eventId: EventId): IO[ServiceIssue, Unit]
   def eventCreate(
     ownerId: OwnerId,
-    mediaDirectory: EventMediaDirectory, // TODO should be improved
+    mediaRelativeDirectory: EventMediaDirectory,
     name: EventName,
     description: Option[EventDescription],
     keywords: Set[Keyword]

@@ -27,16 +27,16 @@ object EventDescription {
 
 opaque type EventMediaDirectory = Path
 object EventMediaDirectory {
-  def apply(path: Path): EventMediaDirectory = path
+  def apply(relativePath: Path): EventMediaDirectory = relativePath
   extension (eventMediaDirectory: EventMediaDirectory) {
-    def path: Path = eventMediaDirectory
+    def relativePath: Path = eventMediaDirectory
   }
 }
 
 case class Event(
-  id: EventId,
+  id: EventId, // TODO use named uuid based on ownerId and relative path ?
   ownerId: OwnerId,
-  mediaDirectory: EventMediaDirectory, // Unicity on (ownerId/mediaDirectory)
+  mediaRelativeDirectory: EventMediaDirectory, // TODO Unicity on (ownerId/mediaDirectory) + path relative to search root
   name: EventName,
   description: Option[EventDescription],
   keywords: Set[Keyword]

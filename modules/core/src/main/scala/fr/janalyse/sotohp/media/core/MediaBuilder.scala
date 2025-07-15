@@ -47,7 +47,7 @@ object MediaBuilder {
     val mediaDirectory = EventMediaDirectory(originalMediaPath.parent)
     eventName
       .filter(_.nonEmpty)
-      .map(name => Event(id = eventId, ownerId = ownerId, mediaDirectory = mediaDirectory, name = EventName(name), description = None, keywords = Set.empty))
+      .map(name => Event(id = eventId, ownerId = ownerId, mediaRelativeDirectory = mediaDirectory, name = EventName(name), description = None, keywords = Set.empty))
   }
 
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
