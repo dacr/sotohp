@@ -32,7 +32,7 @@ object FileSystemSearch {
     }
   }
 
-  def makeStorage(
+  def makeStore(
     ownerId: OwnerId,
     baseDirectorySpec: String,
     includeMaskPattern: Option[String] = None,
@@ -42,9 +42,9 @@ object FileSystemSearch {
       baseDirectory <- makeBaseDirectory(baseDirectorySpec)
       includeMask   <- makeIncludeMask(includeMaskPattern)
       ignoreMask    <- makeIgnoreMask(ignoreMaskPattern)
-      storageId      = StoreId(UUID.randomUUID())
+      storeId        = StoreId(UUID.randomUUID())
     } yield Store(
-      id = storageId,
+      id = storeId,
       ownerId = ownerId,
       baseDirectory = baseDirectory,
       includeMask = includeMask,
@@ -84,8 +84,8 @@ object FileSystemSearch {
   }
 
   def mediasStreamFromSearchRoot(
-                                  searchRoot: Store,
-                                  eventGetter: Original => Option[Event]
+    searchRoot: Store,
+    eventGetter: Original => Option[Event]
   ): Either[FileSystemSearchIssue, JStream[Either[CoreIssue, Media]]] = {
     originalsStreamFromSearchRoot(searchRoot)
       .map { stream =>
