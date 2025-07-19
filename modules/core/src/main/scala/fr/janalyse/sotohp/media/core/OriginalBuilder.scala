@@ -130,9 +130,9 @@ object OriginalBuilder {
       longitude <- Option(gps.getGeoLocation).map(_.getLongitude).map(LongitudeDecimalDegrees.apply)
     } yield {
       Location(
-        latitude = latitude,
+        latitude =latitude,
         longitude = longitude,
-        altitude = altitude
+        altitude = altitude.map(AltitudeMeanSeaLevel.apply)
       )
     }
   }

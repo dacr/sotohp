@@ -6,6 +6,9 @@ import java.time.OffsetDateTime
 opaque type OwnerId   = ULID
 object OwnerId {
   def apply(id: ULID): OwnerId = id
+  extension (ownerId: OwnerId) {
+    def asString: String = ownerId.toString
+  }
 }
 
 opaque type FirstName = String
@@ -21,6 +24,9 @@ object LastName {
 opaque type BirthDate = OffsetDateTime
 object BirthDate {
   def apply(date: OffsetDateTime): BirthDate = date
+  extension (birthDate: BirthDate) {
+    def offsetDateTime: OffsetDateTime = birthDate
+  }
 }
 
 case class Owner(

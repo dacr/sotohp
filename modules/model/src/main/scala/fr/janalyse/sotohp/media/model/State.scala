@@ -2,15 +2,15 @@ package fr.janalyse.sotohp.media.model
 
 import java.time.OffsetDateTime
 
-type LastSeen = OffsetDateTime
-object LastSeen {
-  def apply(date: OffsetDateTime): LastSeen = date
-  extension (lastSeen: LastSeen) {
-    def offsetDateTime: OffsetDateTime = lastSeen
+opaque type LastChecked = OffsetDateTime
+object LastChecked {
+  def apply(date: OffsetDateTime): LastChecked = date
+  extension (lastChecked: LastChecked) {
+    def offsetDateTime: OffsetDateTime = lastChecked
   }
 }
 
-type LastSynchronized = OffsetDateTime
+opaque type LastSynchronized = OffsetDateTime
 object LastSynchronized {
   def apply(date: OffsetDateTime): LastSynchronized = date
   extension (lastSynchronized: LastSynchronized) {
@@ -28,7 +28,8 @@ object FirstSeen {
 
 case class State(
   originalId: OriginalId,
+  mediaAccessKey: MediaAccessKey,
   firstSeen: FirstSeen,
-  lastSeen: LastSeen,
+  lastChecked: LastChecked,
   lastSynchronized: Option[LastSynchronized]
 )

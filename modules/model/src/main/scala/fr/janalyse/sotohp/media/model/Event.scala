@@ -7,6 +7,9 @@ import scala.annotation.targetName
 opaque type EventId = UUID
 object EventId {
   def apply(id: UUID): EventId = id
+  extension (eventId: EventId) {
+    def asString: String = eventId.toString
+  } 
 }
 
 opaque type EventName = String
@@ -27,9 +30,9 @@ object EventDescription {
 
 opaque type EventMediaDirectory = Path
 object EventMediaDirectory {
-  def apply(relativePath: Path): EventMediaDirectory = relativePath
+  def apply(path: Path): EventMediaDirectory = path
   extension (eventMediaDirectory: EventMediaDirectory) {
-    def relativePath: Path = eventMediaDirectory
+    def path: Path = eventMediaDirectory
   }
 }
 

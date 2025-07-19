@@ -37,13 +37,13 @@ object FileSystemSearch {
     baseDirectorySpec: String,
     includeMaskPattern: Option[String] = None,
     ignoreMaskPattern: Option[String] = None
-  ): Either[FileSystemSearchIssue, Storage] =
+  ): Either[FileSystemSearchIssue, Store] =
     for {
       baseDirectory <- makeBaseDirectory(baseDirectorySpec)
       includeMask   <- makeIncludeMask(includeMaskPattern)
       ignoreMask    <- makeIgnoreMask(ignoreMaskPattern)
-      storageId      = StorageId(UUID.randomUUID())
-    } yield Storage(
+      storageId      = StoreId(UUID.randomUUID())
+    } yield Store(
       id = storageId,
       ownerId = ownerId,
       baseDirectory = baseDirectory,
@@ -57,10 +57,10 @@ object FileSystemSearch {
     (includeMask.isEmpty || includeMask.get.isIncluded(path.toString))
   }
 
-  private type SearchRootResult = (searchRoot: Storage, originalPath: OriginalPath)
+  private type SearchRootResult = (searchRoot: Store, originalPath: OriginalPath)
 
   private def fileStreamFromSearchRoot(
-    searchRoot: Storage
+    searchRoot: Store
   ): Either[FileSystemSearchIssue, JStream[SearchRootResult]] = {
     import searchRoot.{baseDirectory, includeMask, ignoreMask}
     val maxDepth   = 10
@@ -73,7 +73,7 @@ object FileSystemSearch {
   }
 
   def originalsStreamFromSearchRoot(
-    searchRoot: Storage
+    searchRoot: Store
   ): Either[FileSystemSearchIssue, JStream[Either[OriginalIssue, Original]]] = {
     fileStreamFromSearchRoot(searchRoot)
       .map(stream =>
@@ -84,8 +84,8 @@ object FileSystemSearch {
   }
 
   def mediasStreamFromSearchRoot(
-    searchRoot: Storage,
-    eventGetter: Original => Option[Event]
+                                  searchRoot: Store,
+                                  eventGetter: Original => Option[Event]
   ): Either[FileSystemSearchIssue, JStream[Either[CoreIssue, Media]]] = {
     originalsStreamFromSearchRoot(searchRoot)
       .map { stream =>

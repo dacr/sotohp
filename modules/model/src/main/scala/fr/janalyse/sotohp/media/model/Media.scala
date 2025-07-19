@@ -5,6 +5,9 @@ import wvlet.airframe.ulid.ULID
 opaque type MediaAccessKey = ULID
 object MediaAccessKey {
   def apply(id: ULID): MediaAccessKey = id
+  extension (mediaAccessKey: MediaAccessKey) {
+    def asString: String = mediaAccessKey.toString
+  }
 }
 
 opaque type MediaDescription = String

@@ -11,6 +11,9 @@ import scala.annotation.targetName
 opaque type OriginalId = UUID
 object OriginalId {
   def apply(id: UUID): OriginalId = id
+  extension (originalId: OriginalId) {
+    def asString: String = originalId.toString
+  }
 }
 
 opaque type CameraName = String
@@ -53,6 +56,9 @@ extension (shootDateTime: ShootDateTime) {
 opaque type FileSize = Long
 object FileSize {
   def apply(size: Long): FileSize = size
+  extension (fileSize: FileSize) {
+    def value: Long = fileSize
+  }
 }
 
 opaque type FileLastModified = OffsetDateTime

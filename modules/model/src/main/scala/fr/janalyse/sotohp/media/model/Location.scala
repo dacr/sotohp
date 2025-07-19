@@ -1,6 +1,12 @@
 package fr.janalyse.sotohp.media.model
 
-type AltitudeMeanSeaLevel = Double // https://en.wikipedia.org/wiki/Sea_level
+opaque type AltitudeMeanSeaLevel = Double // https://en.wikipedia.org/wiki/Sea_level
+object AltitudeMeanSeaLevel {
+  def apply(value: Double): AltitudeMeanSeaLevel = value
+  extension (alt: AltitudeMeanSeaLevel) {
+    def value: Double = alt
+  }
+}
 
 import fr.janalyse.sotohp.media.model.DecimalDegrees.*
 import fr.janalyse.sotohp.media.model.DegreeMinuteSeconds.*

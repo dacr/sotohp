@@ -42,17 +42,17 @@ trait PhotoStoreCollections {
 
 class PhotoStoreServiceLive private (
   lmdb: LMDB,
-  statesCollection: LMDBCollection[DaoPhotoState],
-  sourcesCollection: LMDBCollection[DaoPhotoSource],
-  metaDataCollection: LMDBCollection[DaoPhotoMetaData],
-  placesCollection: LMDBCollection[DaoPhotoPlace],
-  miniaturesCollection: LMDBCollection[DaoMiniatures],
-  normalizedCollection: LMDBCollection[DaoNormalizedPhoto],
-  classificationsCollection: LMDBCollection[DaoPhotoClassifications],
-  objectsCollection: LMDBCollection[DaoPhotoObjects],
-  facesCollection: LMDBCollection[DaoPhotoFaces],
-  faceFeaturesCollection: LMDBCollection[DaoFaceFeatures],
-  descriptionsCollection: LMDBCollection[DaoPhotoDescription]
+  statesCollection: LMDBCollection[String, DaoPhotoState],
+  sourcesCollection: LMDBCollection[String, DaoPhotoSource],
+  metaDataCollection: LMDBCollection[String, DaoPhotoMetaData],
+  placesCollection: LMDBCollection[String, DaoPhotoPlace],
+  miniaturesCollection: LMDBCollection[String, DaoMiniatures],
+  normalizedCollection: LMDBCollection[String, DaoNormalizedPhoto],
+  classificationsCollection: LMDBCollection[String, DaoPhotoClassifications],
+  objectsCollection: LMDBCollection[String, DaoPhotoObjects],
+  facesCollection: LMDBCollection[String, DaoPhotoFaces],
+  faceFeaturesCollection: LMDBCollection[String, DaoFaceFeatures],
+  descriptionsCollection: LMDBCollection[String, DaoPhotoDescription]
 ) extends PhotoStoreService {
 
   private def convertFailures: PartialFunction[StorageSystemError | StorageUserError, PhotoStoreIssue] = {
@@ -605,18 +605,18 @@ class PhotoStoreServiceLive private (
 object PhotoStoreServiceLive extends PhotoStoreCollections {
 
   def setup(lmdb: LMDB) = for {
-    _                         <- foreach(allCollections)(col => lmdb.collectionAllocate(col).ignore)
-    statesCollection          <- lmdb.collectionGet[DaoPhotoState](photoStatesCollectionName)
-    sourcesCollection         <- lmdb.collectionGet[DaoPhotoSource](photoSourcesCollectionName)
-    metaDataCollection        <- lmdb.collectionGet[DaoPhotoMetaData](photoMetaDataCollectionName)
-    placesCollection          <- lmdb.collectionGet[DaoPhotoPlace](photoPlacesCollectionName)
-    miniaturesCollection      <- lmdb.collectionGet[DaoMiniatures](photoMiniaturesCollectionName)
-    normalizedCollection      <- lmdb.collectionGet[DaoNormalizedPhoto](photoNormalizedCollectionName)
-    classificationsCollection <- lmdb.collectionGet[DaoPhotoClassifications](photoClassificationsCollectionName)
-    objectsCollection         <- lmdb.collectionGet[DaoPhotoObjects](photoObjectsCollectionName)
-    facesCollection           <- lmdb.collectionGet[DaoPhotoFaces](photoFacesCollectionName)
-    faceFeaturesCollection    <- lmdb.collectionGet[DaoFaceFeatures](photoFaceFeaturesCollectionName)
-    descriptionsCollection    <- lmdb.collectionGet[DaoPhotoDescription](photoDescriptionsCollectionName)
+    _                         <- foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
+    statesCollection          <- lmdb.collectionGet[String, DaoPhotoState](photoStatesCollectionName)
+    sourcesCollection         <- lmdb.collectionGet[String, DaoPhotoSource](photoSourcesCollectionName)
+    metaDataCollection        <- lmdb.collectionGet[String, DaoPhotoMetaData](photoMetaDataCollectionName)
+    placesCollection          <- lmdb.collectionGet[String, DaoPhotoPlace](photoPlacesCollectionName)
+    miniaturesCollection      <- lmdb.collectionGet[String, DaoMiniatures](photoMiniaturesCollectionName)
+    normalizedCollection      <- lmdb.collectionGet[String, DaoNormalizedPhoto](photoNormalizedCollectionName)
+    classificationsCollection <- lmdb.collectionGet[String, DaoPhotoClassifications](photoClassificationsCollectionName)
+    objectsCollection         <- lmdb.collectionGet[String, DaoPhotoObjects](photoObjectsCollectionName)
+    facesCollection           <- lmdb.collectionGet[String, DaoPhotoFaces](photoFacesCollectionName)
+    faceFeaturesCollection    <- lmdb.collectionGet[String, DaoFaceFeatures](photoFaceFeaturesCollectionName)
+    descriptionsCollection    <- lmdb.collectionGet[String, DaoPhotoDescription](photoDescriptionsCollectionName)
   } yield PhotoStoreServiceLive(
     lmdb,
     statesCollection,

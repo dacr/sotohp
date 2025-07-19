@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.service
 import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.media.model.*
+import zio.lmdb.LMDB
 
 import java.time.OffsetDateTime
 
@@ -69,22 +70,32 @@ trait MediaService {
   ): IO[ServiceIssue, Owner]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def storageList(): IO[ServiceIssue, List[Storage]]
-  def storageGet(storageId: StorageId): IO[ServiceIssue, Storage]
-  def storageDelete(storageId: StorageId): IO[ServiceIssue, Unit]
+  def storageList(): IO[ServiceIssue, List[Store]]
+  def storageGet(storageId: StoreId): IO[ServiceIssue, Store]
+  def storageDelete(storageId: StoreId): IO[ServiceIssue, Unit]
   def storageCreate(
-    providedStorageId: Option[StorageId], // If not provided, it will be chosen automatically
+    providedStorageId: Option[StoreId], // If not provided, it will be chosen automatically
     ownerId: OwnerId,
     baseDirectory: BaseDirectoryPath,
     includeMask: Option[IncludeMask],
     ignoreMask: Option[IgnoreMask]
-  ): IO[ServiceIssue, Storage]
+  ): IO[ServiceIssue, Store]
   def storageUpdate(
-    storageId: StorageId,
+    storageId: StoreId,
     includeMask: Option[IncludeMask],
     ignoreMask: Option[IgnoreMask]
-  ): IO[ServiceIssue, Storage]
+  ): IO[ServiceIssue, Store]
 
   // -------------------------------------------------------------------------------------------------------------------
   def synchronize(): IO[ServiceIssue, Unit]
+}
+
+object MediaService {
+  val live: ZLayer[LMDB, LMDBIssues, MediaService] = ZLayer.fromZIO(
+    for {
+      lmdb             <- ZIO.service[LMDB]
+      mediaServiceLive <- MediaServiceLive.setup(lmdb)
+    } yield mediaServiceLive
+  )
+
 }
