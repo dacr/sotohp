@@ -78,7 +78,7 @@ object FileSystemSearch {
     fileStreamFromSearchRoot(searchRoot)
       .map(stream =>
         stream.map { case (searchRoot = sr, originalPath = op) =>
-          OriginalBuilder.originalFromFile(sr.baseDirectory, op, sr.ownerId, None)
+          OriginalBuilder.originalFromFile(sr, op, None)
         }
       )
   }

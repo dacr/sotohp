@@ -1,7 +1,6 @@
 package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.media.model.*
-import fr.janalyse.sotohp.media.model.DecimalDegrees.{LatitudeDecimalDegrees, LongitudeDecimalDegrees}
 import wvlet.airframe.ulid.ULID
 import zio.json.internal.{RetractReader, Write}
 import zio.json.{JsonCodec, JsonDecoder, JsonEncoder, JsonError}

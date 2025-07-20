@@ -208,9 +208,8 @@ object OriginalBuilder {
     *   an `Either` containing either a `MediaIssue` if an error occurred during processing, or an `Original` object if successfully generated
     */
   def originalFromFile(
-    baseDirectory: BaseDirectoryPath,
+    store: Store,
     mediaPath: OriginalPath,
-    ownerId: OwnerId,
     knownFileHash: Option[FileHash]
   ): Either[OriginalIssue, Original] = {
     for {
@@ -224,11 +223,10 @@ object OriginalBuilder {
       dimension         = extractDimension(drewMetadata)
       orientation       = extractOrientation(drewMetadata)
       location          = extractLocation(drewMetadata)
-      originalId        = buildOriginalId(baseDirectory, mediaPath, ownerId)
+      originalId        = buildOriginalId(store.baseDirectory, mediaPath, store.ownerId)
     } yield Original(
       id = originalId,
-      baseDirectory = baseDirectory,
-      ownerId = ownerId,
+      store = store,
       mediaPath = mediaPath,
       fileHash = fileHash,
       fileSize = fileSize,

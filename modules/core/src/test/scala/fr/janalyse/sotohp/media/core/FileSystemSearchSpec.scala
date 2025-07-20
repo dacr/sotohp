@@ -23,7 +23,7 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
           mediasStream         = ZStream.fromJavaStream(mediasJavaStream)
           results             <- mediasStream.runCollect
           medias               = results.collect { case Right(original) => original }
-          baseDirectories      = medias.map(_.original.baseDirectory)
+          baseDirectories      = medias.map(_.original.store.baseDirectory)
           mediaPaths           = medias.map(_.original.mediaPath)
         } yield assertTrue(
           medias.size == 5,
@@ -39,7 +39,7 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
           mediasStream         = ZStream.fromJavaStream(mediasJavaStream)
           results             <- mediasStream.runCollect
           medias               = results.collect { case Right(original) => original }
-          baseDirectories      = medias.map(_.original.baseDirectory)
+          baseDirectories      = medias.map(_.original.store.baseDirectory)
           mediaPaths           = medias.map(_.original.mediaPath)
           mediaEvents          = medias.flatMap(_.event.map(_.name.text))
         } yield assertTrue(

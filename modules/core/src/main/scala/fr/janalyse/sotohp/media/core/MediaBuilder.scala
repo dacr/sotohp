@@ -36,17 +36,25 @@ object MediaBuilder {
     }
   }
 
-  def buildMediaEvent(original: Original): Option[Event] = buildMediaEvent(original.baseDirectory, original.mediaPath, original.ownerId)
+  def buildMediaEvent(original: Original): Option[Event] = buildMediaEvent(original.store, original.mediaPath)
 
-  def buildMediaEvent(originalBaseDirectory: BaseDirectoryPath, originalMediaPath: OriginalPath, ownerId: OwnerId): Option[Event] = {
+  def buildMediaEvent(store: Store, originalMediaPath: OriginalPath): Option[Event] = {
     val eventId        = EventId(UUID.randomUUID())
     val eventName      = Option(originalMediaPath.parent).map { photoParentDir =>
-      originalBaseDirectory.path.relativize(photoParentDir).toString
+      store.baseDirectory.path.relativize(photoParentDir).toString
     }
     val mediaDirectory = EventMediaDirectory(originalMediaPath.parent)
     eventName
       .filter(_.nonEmpty)
-      .map(name => Event(id = eventId, ownerId = ownerId, mediaRelativeDirectory = mediaDirectory, name = EventName(name), description = None, keywords = Set.empty))
+      .map(name =>
+        Event(
+          id = eventId,
+          attachment = None,
+          name = EventName(name),
+          description = None,
+          keywords = Set.empty
+        )
+      )
   }
 
   private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
@@ -83,7 +91,7 @@ object MediaBuilder {
       accessKey = mediaAccessKey,
       kind = kind,
       original = original,
-      event = knownEvent::Nil,
+      event = knownEvent.toList,
       description = None,
       starred = Starred(false),
       keywords = Set.empty,

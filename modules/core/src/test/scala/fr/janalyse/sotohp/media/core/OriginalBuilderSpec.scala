@@ -77,7 +77,7 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
       ),
       test("generate original record") {
         for {
-          original   <- from(originalFromFile(dataset1, dataset1Example1, fakeOwner.id, None))
+          original   <- from(originalFromFile(fakeStore1, dataset1Example1, None))
           cameraName <- from(original.cameraName)
         } yield assertTrue(
           original.fileHash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae",

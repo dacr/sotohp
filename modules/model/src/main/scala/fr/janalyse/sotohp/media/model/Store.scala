@@ -4,6 +4,6 @@ case class Store(
   id: StoreId,
   ownerId: OwnerId,
   baseDirectory: BaseDirectoryPath,
-  includeMask: Option[IncludeMask],
-  ignoreMask: Option[IgnoreMask]
+  includeMask: Option[IncludeMask] = None,
+  ignoreMask: Option[IgnoreMask] = None
 )
