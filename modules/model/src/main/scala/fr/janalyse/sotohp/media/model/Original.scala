@@ -11,6 +11,7 @@ case class Original(
   fileLastModified: FileLastModified,
   cameraShootDateTime: Option[ShootDateTime],
   cameraName: Option[CameraName],
+  // TODO add field for camera owner coming from exif
   dimension: Option[Dimension],
   orientation: Option[Orientation],
   location: Option[Location]
