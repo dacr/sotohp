@@ -10,7 +10,6 @@ import com.drew.metadata.{Metadata as DrewMetadata, Tag as DrewTag}
 import com.fasterxml.uuid.Generators
 import fr.janalyse.sotohp.media.core.HashOperations
 import fr.janalyse.sotohp.media.model.*
-import fr.janalyse.sotohp.media.model.DecimalDegrees.*
 import wvlet.airframe.ulid.ULID
 
 import java.nio.file.Path
@@ -229,8 +228,8 @@ object OriginalBuilder {
     } yield Original(
       id = originalId,
       baseDirectory = baseDirectory,
-      mediaPath = mediaPath,
       ownerId = ownerId,
+      mediaPath = mediaPath,
       fileHash = fileHash,
       fileSize = fileSize,
       fileLastModified = FileLastModified(fileLastModified),

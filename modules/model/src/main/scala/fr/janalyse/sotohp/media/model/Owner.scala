@@ -1,33 +1,5 @@
 package fr.janalyse.sotohp.media.model
 
-import wvlet.airframe.ulid.ULID
-import java.time.OffsetDateTime
-
-opaque type OwnerId   = ULID
-object OwnerId {
-  def apply(id: ULID): OwnerId = id
-  extension (ownerId: OwnerId) {
-    def asString: String = ownerId.toString
-  }
-}
-
-opaque type FirstName = String
-object FirstName {
-  def apply(name: String): FirstName = name
-}
-
-opaque type LastName  = String
-object LastName {
-  def apply(name: String): LastName = name
-}
-
-opaque type BirthDate = OffsetDateTime
-object BirthDate {
-  def apply(date: OffsetDateTime): BirthDate = date
-  extension (birthDate: BirthDate) {
-    def offsetDateTime: OffsetDateTime = birthDate
-  }
-}
 
 case class Owner(
   id: OwnerId,

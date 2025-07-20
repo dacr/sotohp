@@ -46,7 +46,7 @@ class MediaServiceLive private (
     starred: Starred,
     keywords: Set[Keyword],
     orientation: Option[Orientation],
-    shootDateTime: Option[ShootDateTime],
+    shootDateTime: Option[ShootDateTime], // If updated the key:MediaAccessKey will be updated
     location: Option[Location]
   ): IO[ServiceIssue, Media] = ???
 
@@ -82,15 +82,15 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  override def storageList(): IO[ServiceIssue, List[Store]] = ???
+  override def storeList(): IO[ServiceIssue, List[Store]] = ???
 
-  override def storageGet(storageId: StoreId): IO[ServiceIssue, Store] = ???
+  override def storeGet(storeId: StoreId): IO[ServiceIssue, Store] = ???
 
-  override def storageDelete(storageId: StoreId): IO[ServiceIssue, Unit] = ???
+  override def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit] = ???
 
-  override def storageCreate(providedStorageId: Option[StoreId], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = ???
+  override def storeCreate(providedStoreId: Option[StoreId], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = ???
 
-  override def storageUpdate(storageId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = ???
+  override def storeUpdate(storeId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
 

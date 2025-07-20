@@ -6,7 +6,7 @@ import zio.lmdb.json.LMDBCodecJson
 
 case class DaoEvent(
   id: EventId,
-  ownerId: OwnerId,
+  storeId: StoreId,
   mediaRelativeDirectory: EventMediaDirectory,
   name: EventName,
   description: Option[EventDescription],

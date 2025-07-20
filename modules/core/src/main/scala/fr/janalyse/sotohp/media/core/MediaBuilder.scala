@@ -7,7 +7,6 @@ import com.drew.metadata.gif.GifImageDirectory
 import com.drew.metadata.jpeg.JpegDirectory
 import com.drew.metadata.png.PngDirectory
 import com.drew.metadata.bmp.BmpHeaderDirectory
-import fr.janalyse.sotohp.media.model.DecimalDegrees.*
 import fr.janalyse.sotohp.media.model.*
 import fr.janalyse.sotohp.media.core.HashOperations
 
@@ -84,7 +83,7 @@ object MediaBuilder {
       accessKey = mediaAccessKey,
       kind = kind,
       original = original,
-      event = knownEvent,
+      event = knownEvent::Nil,
       description = None,
       starred = Starred(false),
       keywords = Set.empty,

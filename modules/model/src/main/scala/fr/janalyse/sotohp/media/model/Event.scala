@@ -1,45 +1,9 @@
 package fr.janalyse.sotohp.media.model
 
-import java.nio.file.Path
-import java.util.UUID
-import scala.annotation.targetName
-
-opaque type EventId = UUID
-object EventId {
-  def apply(id: UUID): EventId = id
-  extension (eventId: EventId) {
-    def asString: String = eventId.toString
-  } 
-}
-
-opaque type EventName = String
-object EventName {
-  def apply(name: String): EventName = name
-  extension (eventName: EventName) {
-    def text: String = eventName
-  }
-}
-
-opaque type EventDescription = String
-object EventDescription {
-  def apply(description: String): EventDescription = description
-  extension (eventDescription: EventDescription) {
-    def text: String = eventDescription
-  }
-}
-
-opaque type EventMediaDirectory = Path
-object EventMediaDirectory {
-  def apply(path: Path): EventMediaDirectory = path
-  extension (eventMediaDirectory: EventMediaDirectory) {
-    def path: Path = eventMediaDirectory
-  }
-}
-
 case class Event(
-  id: EventId, // TODO use named uuid based on ownerId and relative path ?
+  id: EventId,
   ownerId: OwnerId,
-  mediaRelativeDirectory: EventMediaDirectory, // TODO Unicity on (ownerId/mediaDirectory) + path relative to search root
+  attachment: Option[(store: Store, eventMediaDirectory: EventMediaDirectory)], // for event based on a relative directory path within a given store
   name: EventName,
   description: Option[EventDescription],
   keywords: Set[Keyword]

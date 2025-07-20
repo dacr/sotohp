@@ -19,9 +19,9 @@ val versions = new {
   val elastic4s  = "8.18.1"
   val metadata   = "2.19.0"
   val ulid       = "2025.1.14"
-  //val javafx     = "21"
+  // val javafx     = "21"
   val djl        = "0.33.0"
-  //  val tapir      = "1.5.0"
+  val chimney    = "1.8.2"
 }
 
 lazy val deepJavaLearningLibs = Seq(
@@ -104,7 +104,7 @@ lazy val moduleSearch =
         "nl.gn0s1s" %% "elastic4s-effect-zio"    % versions.elastic4s,
         "nl.gn0s1s" %% "elastic4s-client-esjava" % versions.elastic4s,
         "nl.gn0s1s" %% "elastic4s-json-zio"      % versions.elastic4s
-      ),
+      )
     )
 
 lazy val moduleProcessor =
@@ -132,6 +132,7 @@ lazy val modulePhotoService =
       name := "sotohp-service",
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
+        "io.scalaland" %% "chimney" % versions.chimney
       )
     )
 
@@ -142,8 +143,8 @@ lazy val userInterfacesCLI =
     .dependsOn(moduleCore, moduleProcessor, moduleSearch)
     .settings(
       sharedSettings,
-      name                                                     := "sotohp-cli",
-      fork                                                     := true,
+      name := "sotohp-cli",
+      fork := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         "dev.zio"             %% "zio"                       % versions.zio,
@@ -154,9 +155,9 @@ lazy val userInterfacesCLI =
         "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
         // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
         "com.github.haifengl" %% "smile-scala"               % "4.3.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
-      ),
+      )
       // dependency conflict between smile and elastic4s with jackson-databind
-      //dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
+      // dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
     )
 
 lazy val userInterfacesGUI =

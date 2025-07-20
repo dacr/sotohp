@@ -70,18 +70,18 @@ trait MediaService {
   ): IO[ServiceIssue, Owner]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def storageList(): IO[ServiceIssue, List[Store]]
-  def storageGet(storageId: StoreId): IO[ServiceIssue, Store]
-  def storageDelete(storageId: StoreId): IO[ServiceIssue, Unit]
-  def storageCreate(
-    providedStorageId: Option[StoreId], // If not provided, it will be chosen automatically
+  def storeList(): IO[ServiceIssue, List[Store]]
+  def storeGet(storeId: StoreId): IO[ServiceIssue, Store]
+  def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit]
+  def storeCreate(
+    providedStoreId: Option[StoreId], // If not provided, it will be chosen automatically
     ownerId: OwnerId,
     baseDirectory: BaseDirectoryPath,
     includeMask: Option[IncludeMask],
     ignoreMask: Option[IgnoreMask]
   ): IO[ServiceIssue, Store]
-  def storageUpdate(
-    storageId: StoreId,
+  def storeUpdate(
+    storeId: StoreId,
     includeMask: Option[IncludeMask],
     ignoreMask: Option[IgnoreMask]
   ): IO[ServiceIssue, Store]

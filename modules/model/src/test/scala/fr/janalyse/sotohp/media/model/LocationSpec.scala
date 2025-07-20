@@ -1,7 +1,6 @@
 package fr.janalyse.sotohp.media.model
 
-import fr.janalyse.sotohp.media.model.DecimalDegrees.*
-import fr.janalyse.sotohp.media.model.DegreeMinuteSeconds.*
+import fr.janalyse.sotohp.media.model.*
 import zio.*
 import zio.ZIO.{from, *}
 import zio.test.*
