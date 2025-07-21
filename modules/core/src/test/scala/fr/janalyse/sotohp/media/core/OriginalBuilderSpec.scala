@@ -72,18 +72,58 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
           orientation <- from(extractOrientation(metadata))
         } yield assertTrue(
           orientation.code == 1,
-          orientation.description == "Horizontal (normal)"
+          orientation.description == "Horizontal (normal)",
+        )
+      ),
+      test("aperture can be extracted")(
+        for {
+          metadata <- from(readDrewMetadata(dataset1Example1))
+          aperture <- from(extractAperture(metadata))
+        } yield assertTrue(
+          aperture.sexy == "F4.0"
+        )
+      ),
+      test("shutterSpeed can be extracted")(
+        for {
+          metadata     <- from(readDrewMetadata(dataset1Example1))
+          shutterSpeed <- from(extractShutterSpeed(metadata))
+        } yield assertTrue(
+          shutterSpeed.sexy == "1/99 s"
+        )
+      ),
+      test("iso can be extracted")(
+        for {
+          metadata <- from(readDrewMetadata(dataset1Example1))
+          iso      <- from(extractISO(metadata))
+        } yield assertTrue(
+          iso.selected == 100
+        )
+      ),
+      test("focalLength can be extracted")(
+        for {
+          metadata <- from(readDrewMetadata(dataset1Example1))
+          focalLength      <- from(extractFocalLength(metadata))
+        } yield assertTrue(
+          focalLength.sexy == "50.0 mm"
+        )
+      ),
+      test("artist can be extracted")(
+        for {
+          metadata   <- from(readDrewMetadata(dataset1Example1))
+          artistInfo <- from(extractArtistInfo(metadata))
+        } yield assertTrue(
+          artistInfo.artist.contains("DAVID")
         )
       ),
       test("generate original record") {
         for {
-          original   <- from(originalFromFile(fakeStore1, dataset1Example1, None))
-          cameraName <- from(original.cameraName)
+          original <- from(originalFromFile(fakeStore1, dataset1Example1, None))
         } yield assertTrue(
           original.fileHash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae",
           original.fileSize == FileSize(472624L),
           original.mediaPath == dataset1Example1,
-          cameraName.text.contains("Canon")
+          original.cameraName.exists(_.text.contains("Canon")),
+          original.artistInfo.exists(_.artist.contains("DAVID"))
         )
       }
     )

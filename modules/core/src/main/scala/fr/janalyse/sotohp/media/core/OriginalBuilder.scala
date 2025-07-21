@@ -83,6 +83,13 @@ object OriginalBuilder {
     metadataTagsToGenericTags(metaDataTags)
   }
 
+  private def extractExif(metadata: DrewMetadata) = {
+    Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+  }
+  private def extractExifSub(metadata: DrewMetadata) = {
+    Option(metadata.getFirstDirectoryOfType(classOf[ExifSubIFDDirectory]))
+  }
+
   private val exifDateTimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss [XXX][XX][X]")
 
   def parseExifDateTimeFormat(spec: String, timeZoneOffsetSpec: String): OffsetDateTime = {
@@ -92,7 +99,7 @@ object OriginalBuilder {
   def extractShootDateTime(metadata: DrewMetadata): Option[ShootDateTime] = {
     val result = Try {
       for {
-        exif              <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+        exif              <- extractExif(metadata)
         if exif.containsTag(ExifDirectoryBase.TAG_DATETIME)
         exifSubIFD         = Option(metadata.getFirstDirectoryOfType(classOf[ExifSubIFDDirectory]))
         shootDateTimeRaw  <- Option(exif.getString(ExifDirectoryBase.TAG_DATETIME))
@@ -114,10 +121,55 @@ object OriginalBuilder {
   def extractCameraName(metadata: DrewMetadata): Option[CameraName] = {
     val tagName = ExifDirectoryBase.TAG_MODEL
     for {
-      exif       <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+      exif       <- extractExif(metadata)
       if exif.containsTag(tagName)
       cameraName <- Option(exif.getString(tagName))
     } yield CameraName(cameraName)
+  }
+
+  def extractArtistInfo(metadata: DrewMetadata): Option[ArtistInfo] = {
+    val tagName = ExifDirectoryBase.TAG_ARTIST
+    for {
+      exif   <- extractExif(metadata)
+      if exif.containsTag(tagName)
+      artist <- Option(exif.getString(tagName))
+    } yield ArtistInfo(artist)
+  }
+
+  def extractAperture(metadata: DrewMetadata): Option[Aperture] = {
+    val tagName = ExifDirectoryBase.TAG_APERTURE
+    for {
+      exif     <- extractExifSub(metadata)
+      if exif.containsTag(tagName)
+      aperture <- Option(exif.getDouble(tagName))
+    } yield Aperture(aperture)
+  }
+
+  def extractShutterSpeed(metadata: DrewMetadata): Option[ShutterSpeed] = {
+    val tagName = ExifDirectoryBase.TAG_SHUTTER_SPEED
+    for {
+      exif         <- extractExifSub(metadata)
+      if exif.containsTag(tagName)
+      shutterSpeed <- Option(exif.getDouble(tagName)) // TODO Use Rational
+    } yield ShutterSpeed(shutterSpeed)
+  }
+
+  def extractFocalLength(metadata: DrewMetadata): Option[FocalLength] = {
+    val tagName = ExifDirectoryBase.TAG_FOCAL_LENGTH
+    for {
+      exif         <- extractExifSub(metadata)
+      if exif.containsTag(tagName)
+      focalLength <- Option(exif.getDouble(tagName))
+    } yield FocalLength(focalLength)
+  }
+
+  def extractISO(metadata: DrewMetadata): Option[ISO] = {
+    val tagName = ExifDirectoryBase.TAG_ISO_EQUIVALENT
+    for {
+      exif <- extractExifSub(metadata)
+      if exif.containsTag(tagName)
+      iso  <- Option(exif.getDouble(tagName))
+    } yield ISO(iso)
   }
 
   def extractLocation(metadata: DrewMetadata): Option[Location] = {
@@ -129,7 +181,7 @@ object OriginalBuilder {
       longitude <- Option(gps.getGeoLocation).map(_.getLongitude).map(LongitudeDecimalDegrees.apply)
     } yield {
       Location(
-        latitude =latitude,
+        latitude = latitude,
         longitude = longitude,
         altitude = altitude.map(AltitudeMeanSeaLevel.apply)
       )
@@ -158,7 +210,7 @@ object OriginalBuilder {
       Option(metadata.getFirstDirectoryOfType(classOf[BmpHeaderDirectory]))
         .flatMap(dir => buildDimension2D(Width(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_WIDTH)), Height(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_HEIGHT))))
     lazy val dimensionFromExif =
-      Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+      extractExif(metadata)
         .flatMap(dir => buildDimension2D(Width(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH)), Height(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT))))
 
     dimensionFromJpeg
@@ -171,7 +223,7 @@ object OriginalBuilder {
   def extractOrientation(metadata: DrewMetadata): Option[Orientation] = {
     val tagName = ExifDirectoryBase.TAG_ORIENTATION
     val result  = for {
-      exif            <- Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
+      exif            <- extractExif(metadata)
       if exif.containsTag(tagName)
       orientationCode <- Option(exif.getInt(tagName))
     } yield {
@@ -219,9 +271,14 @@ object OriginalBuilder {
       drewMetadata     <- readDrewMetadata(mediaPath)
       shootDateTime     = extractShootDateTime(drewMetadata)
       cameraName        = extractCameraName(drewMetadata)
+      artistInfo        = extractArtistInfo(drewMetadata)
       // genericTags       = extractGenericTags(drewMetadata)
       dimension         = extractDimension(drewMetadata)
       orientation       = extractOrientation(drewMetadata)
+      aperture          = extractAperture(drewMetadata)
+      shutterSpeed      = extractShutterSpeed(drewMetadata)
+      iso               = extractISO(drewMetadata)
+      focalLength       = extractFocalLength(drewMetadata)
       location          = extractLocation(drewMetadata)
       originalId        = buildOriginalId(store.baseDirectory, mediaPath, store.ownerId)
     } yield Original(
@@ -233,9 +290,14 @@ object OriginalBuilder {
       fileLastModified = FileLastModified(fileLastModified),
       cameraShootDateTime = shootDateTime,
       cameraName = cameraName,
+      artistInfo = artistInfo,
       dimension = dimension,
       orientation = orientation,
-      location = location
+      location = location,
+      aperture = aperture,
+      shutterSpeed = shutterSpeed,
+      iso = iso,
+      focalLength = focalLength
     )
   }
 }

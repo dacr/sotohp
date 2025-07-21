@@ -11,10 +11,14 @@ case class Original(
   fileLastModified: FileLastModified,
   cameraShootDateTime: Option[ShootDateTime],
   cameraName: Option[CameraName],
-  // TODO add field for camera owner coming from exif
+  artistInfo: Option[ArtistInfo],
   dimension: Option[Dimension],
   orientation: Option[Orientation],
-  location: Option[Location]
+  location: Option[Location],
+  aperture: Option[Aperture],
+  shutterSpeed: Option[ShutterSpeed],
+  iso: Option[ISO],
+  focalLength: Option[FocalLength],
 )
 
 case class OriginalCameraTags(

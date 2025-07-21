@@ -1,16 +1,15 @@
 package fr.janalyse.sotohp.media
 
 import java.time.OffsetDateTime
-import java.util.UUID
+import java.util.{Locale, UUID}
 import wvlet.airframe.ulid.ULID
-
 import java.time.OffsetDateTime
 import scala.util.matching.Regex
 import java.io.File
 import java.nio.file.Path
 import java.time.OffsetDateTime
-import java.util.UUID
 import scala.annotation.targetName
+import scala.math.{pow, sqrt}
 import scala.util.{Failure, Success, Try}
 
 package object model {
@@ -426,6 +425,54 @@ package object model {
           m.toDouble / 60d +
           s.toDouble / 3600d
       if ("NE".contains(ref.toUpperCase)) dd else -dd
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type ArtistInfo = String
+  object ArtistInfo {
+    def apply(artist: String): ArtistInfo = artist
+    extension (artistInfo:ArtistInfo) {
+      def artist: String = artistInfo
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type Aperture = Double
+  object Aperture {
+    def apply(aperture: Double): Aperture = aperture
+    extension (aperture:Aperture) {
+      def selected: Double = aperture
+      def sexy: String = "F%.1f".formatLocal(Locale.US, pow(sqrt(2), aperture))
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type ShutterSpeed = Double
+  object ShutterSpeed {
+    def apply(shutterSpeed: Double): ShutterSpeed = shutterSpeed
+    extension (shutterSpeed:ShutterSpeed) {
+      def selected: Double = shutterSpeed
+      def sexy: String = "1/%.0f s".formatLocal(Locale.US, pow(2, shutterSpeed))
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type FocalLength = Double
+  object FocalLength {
+    def apply(focalLength: Double): FocalLength = focalLength
+    extension (focalLength:FocalLength) {
+      def selected: Double = focalLength
+      def sexy:String = "%.1f mm".formatLocal(Locale.US, focalLength)
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type ISO = Double
+  object ISO {
+    def apply(iso: Double): ISO = iso
+    extension (iso:ISO) {
+      def selected: Double = iso
     }
   }
 
