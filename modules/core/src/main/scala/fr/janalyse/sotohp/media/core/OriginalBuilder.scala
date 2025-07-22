@@ -295,7 +295,7 @@ object OriginalBuilder {
       orientation = orientation,
       location = location,
       aperture = aperture,
-      shutterSpeed = shutterSpeed,
+      exposureTime = shutterSpeed,
       iso = iso,
       focalLength = focalLength
     )

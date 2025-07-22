@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.service
 import fr.janalyse.sotohp.media.model.*
 import wvlet.airframe.ulid.ULID
 import zio.json.internal.{RetractReader, Write}
-import zio.json.{JsonCodec, JsonDecoder, JsonEncoder, JsonError}
+import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder, JsonError}
 
 import java.nio.file.Path
 import scala.util.matching.Regex
@@ -85,6 +85,29 @@ package object dao {
     (trace: List[JsonError], in: RetractReader) => AltitudeMeanSeaLevel(JsonDecoder.double.unsafeDecode(trace, in))
   )
 
+  given JsonCodec[Aperture] = new JsonCodec(
+    (a: Aperture, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.selected, indent, out),
+    (trace: List[JsonError], in: RetractReader) => Aperture(JsonDecoder.double.unsafeDecode(trace, in))
+  )
+
+  given JsonCodec[ISO] = new JsonCodec(
+    (a: ISO, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.selected, indent, out),
+    (trace: List[JsonError], in: RetractReader) => ISO(JsonDecoder.double.unsafeDecode(trace, in))
+  )
+
+  case class EncodedExposureTime(numerator: Long, denominator: Long)
+  given encodedExposureTimeCodec: JsonCodec[EncodedExposureTime] = DeriveJsonCodec.gen[EncodedExposureTime]
+
+  given JsonCodec[ExposureTime] = new JsonCodec(
+    encodedExposureTimeCodec.encoder.contramap(a => EncodedExposureTime(a.numerator, a.denominator)),
+    encodedExposureTimeCodec.decoder.map(a => ExposureTime(a.numerator, a.denominator))
+  )
+
+  given JsonCodec[FocalLength] = new JsonCodec(
+    (a: FocalLength, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.selected, indent, out),
+    (trace: List[JsonError], in: RetractReader) => FocalLength(JsonDecoder.double.unsafeDecode(trace, in))
+  )
+
   given JsonCodec[FileLastModified] = new JsonCodec(
     (a: FileLastModified, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
     (trace: List[JsonError], in: RetractReader) => FileLastModified(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
@@ -118,6 +141,11 @@ package object dao {
   given JsonCodec[CameraName] = new JsonCodec(
     (a: CameraName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
     (trace: List[JsonError], in: RetractReader) => CameraName(JsonDecoder.string.unsafeDecode(trace, in))
+  )
+
+  given JsonCodec[ArtistInfo] = new JsonCodec(
+    (a: ArtistInfo, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => ArtistInfo(JsonDecoder.string.unsafeDecode(trace, in))
   )
 
   given JsonCodec[EventName] = new JsonCodec(
