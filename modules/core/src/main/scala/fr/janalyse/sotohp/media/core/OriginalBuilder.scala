@@ -83,7 +83,7 @@ object OriginalBuilder {
     metadataTagsToGenericTags(metaDataTags)
   }
 
-  private def extractExif(metadata: DrewMetadata) = {
+  private def extractExif(metadata: DrewMetadata)    = {
     Option(metadata.getFirstDirectoryOfType(classOf[ExifIFD0Directory]))
   }
   private def extractExifSub(metadata: DrewMetadata) = {
@@ -145,19 +145,19 @@ object OriginalBuilder {
     } yield Aperture(aperture)
   }
 
-  def extractShutterSpeed(metadata: DrewMetadata): Option[ShutterSpeed] = {
-    val tagName = ExifDirectoryBase.TAG_SHUTTER_SPEED
+  def extractExposureTime(metadata: DrewMetadata): Option[ExposureTime] = {
+    val tagName = ExifDirectoryBase.TAG_EXPOSURE_TIME // TAG_SHUTTER_SPEED
     for {
       exif         <- extractExifSub(metadata)
       if exif.containsTag(tagName)
-      shutterSpeed <- Option(exif.getDouble(tagName)) // TODO Use Rational
-    } yield ShutterSpeed(shutterSpeed)
+      exposureTime <- Option(exif.getRational(tagName)) // TODO Use Rational
+    } yield ExposureTime(exposureTime.getNumerator, exposureTime.getDenominator)
   }
 
   def extractFocalLength(metadata: DrewMetadata): Option[FocalLength] = {
     val tagName = ExifDirectoryBase.TAG_FOCAL_LENGTH
     for {
-      exif         <- extractExifSub(metadata)
+      exif        <- extractExifSub(metadata)
       if exif.containsTag(tagName)
       focalLength <- Option(exif.getDouble(tagName))
     } yield FocalLength(focalLength)
@@ -276,7 +276,7 @@ object OriginalBuilder {
       dimension         = extractDimension(drewMetadata)
       orientation       = extractOrientation(drewMetadata)
       aperture          = extractAperture(drewMetadata)
-      shutterSpeed      = extractShutterSpeed(drewMetadata)
+      shutterSpeed      = extractExposureTime(drewMetadata)
       iso               = extractISO(drewMetadata)
       focalLength       = extractFocalLength(drewMetadata)
       location          = extractLocation(drewMetadata)

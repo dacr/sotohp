@@ -72,7 +72,7 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
           orientation <- from(extractOrientation(metadata))
         } yield assertTrue(
           orientation.code == 1,
-          orientation.description == "Horizontal (normal)",
+          orientation.description == "Horizontal (normal)"
         )
       ),
       test("aperture can be extracted")(
@@ -83,12 +83,12 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
           aperture.sexy == "F4.0"
         )
       ),
-      test("shutterSpeed can be extracted")(
+      test("exposureTime can be extracted")(
         for {
           metadata     <- from(readDrewMetadata(dataset1Example1))
-          shutterSpeed <- from(extractShutterSpeed(metadata))
+          exposureTime <- from(extractExposureTime(metadata))
         } yield assertTrue(
-          shutterSpeed.sexy == "1/99 s"
+          exposureTime.sexy == "1/100 s"
         )
       ),
       test("iso can be extracted")(
@@ -101,8 +101,8 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
       ),
       test("focalLength can be extracted")(
         for {
-          metadata <- from(readDrewMetadata(dataset1Example1))
-          focalLength      <- from(extractFocalLength(metadata))
+          metadata    <- from(readDrewMetadata(dataset1Example1))
+          focalLength <- from(extractFocalLength(metadata))
         } yield assertTrue(
           focalLength.sexy == "50.0 mm"
         )

@@ -448,12 +448,12 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type ShutterSpeed = Double
-  object ShutterSpeed {
-    def apply(shutterSpeed: Double): ShutterSpeed = shutterSpeed
-    extension (shutterSpeed:ShutterSpeed) {
-      def selected: Double = shutterSpeed
-      def sexy: String = "1/%.0f s".formatLocal(Locale.US, pow(2, shutterSpeed))
+  opaque type ExposureTime = (numerator:Long, denominator:Long)
+  object ExposureTime {
+    def apply(numerator: Long, denominator: Long): ExposureTime = (numerator, denominator)
+    extension (exposureTime:ExposureTime) {
+      def selected: Double = exposureTime.numerator.toDouble / exposureTime.denominator.toDouble
+      def sexy: String = "%d/%d s".formatLocal(Locale.US, exposureTime.numerator, exposureTime.denominator)
     }
   }
 
