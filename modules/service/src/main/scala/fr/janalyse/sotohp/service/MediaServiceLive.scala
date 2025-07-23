@@ -6,6 +6,7 @@ import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.{LMDB, LMDBCodec, LMDBCollection, LMDBKodec, StorageSystemError, StorageUserError}
 import zio.stream.Stream
+import io.scalaland.chimney.dsl.*
 
 import java.nio.ByteBuffer
 import java.util.UUID
@@ -37,7 +38,7 @@ class MediaServiceLive private (
 
   override def mediaLast(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaGet(key: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Media] = ???
+  override def mediaGet(key: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
 
   override def mediaUpdate(
     key: MediaAccessKey,
@@ -48,7 +49,7 @@ class MediaServiceLive private (
     orientation: Option[Orientation],
     shootDateTime: Option[ShootDateTime], // If updated the key:MediaAccessKey will be updated
     location: Option[Location]
-  ): IO[ServiceIssue, Media] = ???
+  ): IO[ServiceIssue, Option[Media]] = ???
 
   override def mediaNormalizedRead(key: MediaAccessKey): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Byte]] = ???
 
@@ -60,37 +61,70 @@ class MediaServiceLive private (
 
   override def eventList(): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Event]] = ???
 
-  override def eventGet(eventId: EventId): IO[ServiceIssue, Event] = ???
+  override def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]] = ???
 
   override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = ???
 
   override def eventCreate(ownerId: OwnerId, mediaRelativeDirectory: EventMediaDirectory, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Event] = ???
 
-  override def eventUpdate(eventId: EventId, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Event] = ???
+  override def eventUpdate(eventId: EventId, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
 
   override def ownerList(): IO[ServiceIssue, List[Owner]] = ???
 
-  override def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Owner] = ???
+  override def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]] = ???
 
   override def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit] = ???
 
   override def ownerCreate(providedOwnerId: Option[OwnerId], firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Owner] = ???
 
-  override def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Owner] = ???
+  override def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Option[Owner]] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  override def storeList(): IO[ServiceIssue, List[Store]] = ???
+  override def storeList(): IO[ServiceIssue, List[Store]] = {
+    stores
+      .stream()
+      .map(daoStore => daoStore.transformInto[Store])
+      .runCollect
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect stores : $err"), _.toList)
+  }
 
-  override def storeGet(storeId: StoreId): IO[ServiceIssue, Store] = ???
+  override def storeGet(storeId: StoreId): IO[ServiceIssue, Option[Store]] = {
+    stores
+      .fetch(storeId)
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch store : $err"), foundDaoStore => foundDaoStore.map(_.transformInto[Store]))
+  }
 
-  override def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit] = ???
+  override def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit] = {
+    stores
+      .delete(storeId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete store : $err"))
+      .unit
+  }
 
-  override def storeCreate(providedStoreId: Option[StoreId], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = ???
+  override def storeCreate(providedStoreId: Option[StoreId], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = {
+    for {
+      storeId <- ZIO
+                   .from(providedStoreId)
+                   .orElse(ZIO.attempt(StoreId(UUID.randomUUID())))
+                   .mapError(err => ServiceInternalIssue(s"Unable to create a store identifier : $err"))
+      store    = Store(storeId, ownerId, baseDirectory, includeMask, ignoreMask)
+      _       <- stores
+                   .upsert(store.id, _ => store.transformInto[DaoStore])
+                   .mapError(err => ServiceDatabaseIssue(s"Couldn't create store : $err"))
+    } yield store
+  }
 
-  override def storeUpdate(storeId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = ???
+  override def storeUpdate(storeId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Option[Store]] = {
+    for {
+      foundDaoStore <- stores
+                         .update(storeId, _.copy(includeMask = includeMask, ignoreMask = ignoreMask))
+                         .mapError(err => ServiceDatabaseIssue(s"Couldn't update store : $err"))
+      store          = foundDaoStore.map(_.transformInto[Store])
+    } yield store
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
 
