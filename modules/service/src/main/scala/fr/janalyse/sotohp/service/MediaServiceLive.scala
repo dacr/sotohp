@@ -88,6 +88,7 @@ class MediaServiceLive private (
       .stream()
       .map(daoStore => daoStore.transformInto[Store])
       .runCollect
+      .logError("Couldn't collect stores :")
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect stores : $err"), _.toList)
   }
 

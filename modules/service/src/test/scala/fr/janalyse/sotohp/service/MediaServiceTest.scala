@@ -25,10 +25,20 @@ object MediaServiceTest extends BaseSpecDefault {
         storeUpdated.includeMask.isDefined,
         afterDelete.isEmpty
       )
+    ),
+    test("list stores")(
+      for {
+        fakeOwnerId  <- ZIO.attempt(OwnerId(ULID.newULID))
+        paths = List("samples/dataset1", "samples/dataset2", "samples/dataset3").map(dir => BaseDirectoryPath(Path.of(dir)))
+        createdStores <- ZIO.foreach(paths)(path => MediaService.storeCreate(None, fakeOwnerId, path, None, None))
+        storesFetched <- MediaService.storeList()
+      } yield assertTrue(
+        storesFetched.size == 3
+      )
     )
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteStores.provide(LMDB.liveWithDatabaseName("sotohp-unit-test-db") >>> MediaService.live, Scope.default)
+    suiteStores.provideShared(LMDB.liveWithDatabaseName("sotohp-unit-test-db") >>> MediaService.live, Scope.default)
 
 }
