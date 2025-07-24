@@ -28,10 +28,11 @@ object MediaServiceTest extends BaseSpecDefault {
     ),
     test("list stores")(
       for {
-        fakeOwnerId  <- ZIO.attempt(OwnerId(ULID.newULID))
-        paths = List("samples/dataset1", "samples/dataset2", "samples/dataset3").map(dir => BaseDirectoryPath(Path.of(dir)))
+        fakeOwnerId   <- ZIO.attempt(OwnerId(ULID.newULID))
+        paths          = List("samples/dataset1", "samples/dataset2", "samples/dataset3").map(dir => BaseDirectoryPath(Path.of(dir)))
         createdStores <- ZIO.foreach(paths)(path => MediaService.storeCreate(None, fakeOwnerId, path, None, None))
         storesFetched <- MediaService.storeList()
+        _             <- ZIO.foreach(storesFetched)(store => MediaService.storeDelete(store.id))
       } yield assertTrue(
         storesFetched.size == 3
       )

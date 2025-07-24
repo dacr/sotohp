@@ -9,6 +9,7 @@ import zio.stream.Stream
 import io.scalaland.chimney.dsl.*
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 import scala.util.{Failure, Success, Try}
 
@@ -135,10 +136,11 @@ class MediaServiceLive private (
 }
 
 object MediaServiceLive {
+  val charset = StandardCharsets.UTF_8 // TODO improve charset support
 
   // -------------------------------------------------------------------------------------------------------------------
   private def uuidBytesToEither(uuidBytes: ByteBuffer): Either[String, UUID] = Try {
-    UUID.fromString(new String(uuidBytes.array(), "UTF-8"))
+    UUID.fromString(charset.decode(uuidBytes).toString)
   } match {
     case Failure(exception) => Left(exception.getMessage)
     case Success(uuid)      => Right(uuid)
@@ -146,7 +148,7 @@ object MediaServiceLive {
 
   // -------------------------------------------------------------------------------------------------------------------
   private def ulidBytesToEither(ulidBytes: ByteBuffer): Either[String, ULID] = Try {
-    ULID.fromString(new String(ulidBytes.array(), "UTF-8"))
+    ULID.fromString(charset.decode(ulidBytes).toString)
   } match {
     case Failure(exception) => Left(exception.getMessage)
     case Success(ulid)      => Right(ulid)
@@ -154,37 +156,37 @@ object MediaServiceLive {
 
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[OriginalId] = new LMDBKodec {
-    def encode(key: OriginalId): Array[Byte]                     = key.asString.getBytes()
+    def encode(key: OriginalId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, OriginalId] = uuidBytesToEither(keyBytes).map(OriginalId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[EventId] = new LMDBKodec {
-    def encode(key: EventId): Array[Byte]                     = key.asString.getBytes()
+    def encode(key: EventId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, EventId] = uuidBytesToEither(keyBytes).map(EventId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[MediaAccessKey] = new LMDBKodec {
-    def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes()
+    def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = ulidBytesToEither(keyBytes).map(MediaAccessKey.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[OwnerId] = new LMDBKodec {
-    def encode(key: OwnerId): Array[Byte]                     = key.asString.getBytes()
+    def encode(key: OwnerId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, OwnerId] = ulidBytesToEither(keyBytes).map(OwnerId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[StoreId] = new LMDBKodec {
-    def encode(key: StoreId): Array[Byte]                     = key.asString.getBytes()
+    def encode(key: StoreId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, StoreId] = uuidBytesToEither(keyBytes).map(StoreId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBCodec[MediaAccessKey] = new LMDBCodec {
-    def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes()
+    def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = ulidBytesToEither(keyBytes).map(MediaAccessKey.apply)
   }
 
