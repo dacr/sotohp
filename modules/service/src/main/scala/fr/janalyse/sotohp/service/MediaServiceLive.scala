@@ -72,15 +72,48 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  override def ownerList(): IO[ServiceIssue, List[Owner]] = ???
+  override def ownerList(): IO[ServiceIssue, List[Owner]] = {
+    owners
+      .stream()
+      .map(daoOwner => daoOwner.transformInto[Owner])
+      .runCollect
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect owners : $err"), _.toList)
+  }
 
-  override def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]] = ???
+  override def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]] = {
+    owners
+      .fetch(ownerId)
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch owner : $err"), foundDaoOwner => foundDaoOwner.map(_.transformInto[Owner]))
+  }
 
-  override def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit] = ???
+  override def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit] = {
+    owners
+      .delete(ownerId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete owner : $err"))
+      .unit
+  }
 
-  override def ownerCreate(providedOwnerId: Option[OwnerId], firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Owner] = ???
+  override def ownerCreate(providedOwnerId: Option[OwnerId], firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Owner] = {
+    for {
+      ownerId <- ZIO
+                   .from(providedOwnerId)
+                   .orElse(ZIO.attempt(OwnerId(ULID.newULID)))
+                   .mapError(err => ServiceInternalIssue(s"Unable to create an owner identifier : $err"))
+      owner    = Owner(ownerId, firstName, lastName, birthDate)
+      _       <- owners
+                   .upsert(owner.id, _ => owner.transformInto[DaoOwner])
+                   .mapError(err => ServiceDatabaseIssue(s"Couldn't create owner : $err"))
+    } yield owner
+  }
 
-  override def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Option[Owner]] = ???
+  override def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Option[Owner]] = {
+    for {
+      foundDaoOwner <- owners
+                         .update(ownerId, _.copy(firstName = firstName, lastName = lastName, birthDate = birthDate))
+                         .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
+      owner          = foundDaoOwner.map(_.transformInto[Owner])
+    } yield owner
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -89,7 +122,6 @@ class MediaServiceLive private (
       .stream()
       .map(daoStore => daoStore.transformInto[Store])
       .runCollect
-      .logError("Couldn't collect stores :")
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect stores : $err"), _.toList)
   }
 
