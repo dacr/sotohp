@@ -59,6 +59,17 @@ class MediaServiceLive private (
   override def mediaMiniatureRead(key: MediaAccessKey): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Byte]] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
+  override def originalList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Original]] = ???
+
+  override def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]] = ???
+
+  override def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = ???
+
+  override def originalCreate(store: Store, mediaPath: OriginalPath, fileHash: FileHash, fileSize: FileSize, fileLastModified: FileLastModified, cameraShootDateTime: Option[ShootDateTime], cameraName: Option[CameraName], artistInfo: Option[ArtistInfo], dimension: Option[Dimension], orientation: Option[Orientation], location: Option[Location], aperture: Option[Aperture], exposureTime: Option[ExposureTime], iso: Option[ISO], focalLength: Option[FocalLength]): IO[ServiceIssue, Original] = ???
+
+  override def originalUpdate(originalId: OriginalId, fileLastModified: FileLastModified): IO[ServiceIssue, Option[Original]] = ???
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   def daoEvent2Event(daoEvent: DaoEvent): IO[ServiceIssue, Event] = {
     for {
@@ -214,6 +225,7 @@ class MediaServiceLive private (
   override def synchronize(): IO[ServiceIssue, Unit] = {
     ???
   }
+
 }
 
 object MediaServiceLive {

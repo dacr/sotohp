@@ -34,7 +34,29 @@ trait MediaService {
   def mediaMiniatureRead(key: MediaAccessKey): IO[ServiceIssue, Stream[ServiceStreamIssue, Byte]]
 
   // -------------------------------------------------------------------------------------------------------------------
-  // TODO improve event management
+  def originalList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Original]]
+  def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]]
+  def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit]
+  def originalCreate(
+    store: Store,
+    mediaPath: OriginalPath,
+    fileHash: FileHash,
+    fileSize: FileSize,
+    fileLastModified: FileLastModified,
+    cameraShootDateTime: Option[ShootDateTime],
+    cameraName: Option[CameraName],
+    artistInfo: Option[ArtistInfo],
+    dimension: Option[Dimension],
+    orientation: Option[Orientation],
+    location: Option[Location],
+    aperture: Option[Aperture],
+    exposureTime: Option[ExposureTime],
+    iso: Option[ISO],
+    focalLength: Option[FocalLength]
+  ): IO[ServiceIssue, Original]
+  def originalUpdate(originalId: OriginalId, fileLastModified: FileLastModified): IO[ServiceIssue, Option[Original]]
+
+  // -------------------------------------------------------------------------------------------------------------------
   def eventList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Event]]
   def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]]
   def eventDelete(eventId: EventId): IO[ServiceIssue, Unit]
@@ -90,7 +112,6 @@ trait MediaService {
   def synchronize(): IO[ServiceIssue, Unit]
 }
 
-
 object MediaService {
 
   val live: ZLayer[LMDB, LMDBIssues, MediaService] = ZLayer.fromZIO(
@@ -129,6 +150,47 @@ object MediaService {
     ZIO.serviceWithZIO(_.mediaUpdate(key, eventId, description, starred, keywords, orientation, shootDateTime, location))
 
   // -------------------------------------------------------------------------------------------------------------------
+  def originalList(): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Original]]                                         = ZIO.serviceWithZIO(_.originalList())
+  def originalGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Original]]                                        = ZIO.serviceWithZIO(_.originalGet(originalId))
+  def originalDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]                                                 = ZIO.serviceWithZIO(_.originalDelete(originalId))
+  def originalCreate(
+    store: Store,
+    mediaPath: OriginalPath,
+    fileHash: FileHash,
+    fileSize: FileSize,
+    fileLastModified: FileLastModified,
+    cameraShootDateTime: Option[ShootDateTime],
+    cameraName: Option[CameraName],
+    artistInfo: Option[ArtistInfo],
+    dimension: Option[Dimension],
+    orientation: Option[Orientation],
+    location: Option[Location],
+    aperture: Option[Aperture],
+    exposureTime: Option[ExposureTime],
+    iso: Option[ISO],
+    focalLength: Option[FocalLength]
+  ): ZIO[MediaService, ServiceIssue, Original] = ZIO.serviceWithZIO(
+    _.originalCreate(
+      store,
+      mediaPath,
+      fileHash,
+      fileSize,
+      fileLastModified,
+      cameraShootDateTime,
+      cameraName,
+      artistInfo,
+      dimension,
+      orientation,
+      location,
+      aperture,
+      exposureTime,
+      iso,
+      focalLength
+    )
+  )
+  def originalUpdate(originalId: OriginalId, fileLastModified: FileLastModified): ZIO[MediaService, ServiceIssue, Option[Original]] = ZIO.serviceWithZIO(_.originalUpdate(originalId, fileLastModified))
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   def mediaNormalizedRead(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Byte]] = ZIO.serviceWithZIO(_.mediaNormalizedRead(key))
 
@@ -147,7 +209,8 @@ object MediaService {
   def eventCreate(attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Event] =
     ZIO.serviceWithZIO(_.eventCreate(attachment, name, description, keywords))
 
-  def eventUpdate(eventId: EventId, attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Option[Event]] = ZIO.serviceWithZIO(_.eventUpdate(eventId, attachment, name, description, keywords))
+  def eventUpdate(eventId: EventId, attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Option[Event]] =
+    ZIO.serviceWithZIO(_.eventUpdate(eventId, attachment, name, description, keywords))
 
   // -------------------------------------------------------------------------------------------------------------------
 
