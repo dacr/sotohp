@@ -39,14 +39,14 @@ trait MediaService {
   def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]]
   def eventDelete(eventId: EventId): IO[ServiceIssue, Unit]
   def eventCreate(
-    ownerId: OwnerId,
-    mediaRelativeDirectory: EventMediaDirectory,
+    attachment: Option[EventAttachment],
     name: EventName,
     description: Option[EventDescription],
     keywords: Set[Keyword]
   ): IO[ServiceIssue, Event]
   def eventUpdate(
     eventId: EventId,
+    attachment: Option[EventAttachment],
     name: EventName,
     description: Option[EventDescription],
     keywords: Set[Keyword]
@@ -144,10 +144,10 @@ object MediaService {
 
   def eventDelete(eventId: EventId): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.eventDelete(eventId))
 
-  def eventCreate(ownerId: OwnerId, mediaRelativeDirectory: EventMediaDirectory, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Event] =
-    ZIO.serviceWithZIO(_.eventCreate(ownerId, mediaRelativeDirectory, name, description, keywords))
+  def eventCreate(attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Event] =
+    ZIO.serviceWithZIO(_.eventCreate(attachment, name, description, keywords))
 
-  def eventUpdate(eventId: EventId, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Option[Event]] = ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, keywords))
+  def eventUpdate(eventId: EventId, attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Option[Event]] = ZIO.serviceWithZIO(_.eventUpdate(eventId, attachment, name, description, keywords))
 
   // -------------------------------------------------------------------------------------------------------------------
 

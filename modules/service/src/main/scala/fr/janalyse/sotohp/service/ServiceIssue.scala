@@ -8,4 +8,4 @@ case class ServiceInternalIssue(message: String) extends Exception(message) with
 
 sealed trait ServiceStreamIssue extends Exception
 
-case class ServiceStreamInternalIssue(message: String, throwable: Throwable) extends Exception(message, throwable) with ServiceStreamIssue
+case class ServiceStreamInternalIssue(message: String) extends Exception(message) with ServiceStreamIssue

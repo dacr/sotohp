@@ -10,6 +10,44 @@ import java.nio.file.Path
 
 object MediaServiceTest extends BaseSpecDefault {
 
+  def suiteEvents = suite("Events")(
+    test("event create read update delete")(
+      for {
+        eventCreated <- MediaService.eventCreate(None, EventName("test-event"), None, Set.empty)
+        eventFetched <- MediaService.eventGet(eventCreated.id)
+        eventUpdated <- MediaService
+                          .eventUpdate(
+                            eventId = eventCreated.id,
+                            attachment = None,
+                            name = EventName("updated-event"),
+                            description = Some(EventDescription("hello")),
+                            keywords = Set.empty
+                          )
+                          .some
+        _            <- MediaService.eventDelete(eventCreated.id)
+        afterDelete  <- MediaService.eventGet(eventCreated.id)
+      } yield assertTrue(
+        eventCreated.name == EventName("test-event"),
+        eventFetched.contains(eventCreated),
+        eventUpdated.name == EventName("updated-event"),
+        eventUpdated.description.contains("hello"),
+        afterDelete.isEmpty
+      )
+    ),
+    test("list events") {
+      val eventNames = List("event1", "event2", "event3")
+      for {
+        createdEvents       <- ZIO.foreach(eventNames)(name => MediaService.eventCreate(None, EventName(name), None, Set.empty))
+        eventsFetchedStream <- MediaService.eventList()
+        eventsFetched       <- eventsFetchedStream.runCollect
+        _                   <- ZIO.foreachDiscard(eventsFetched)(event => MediaService.eventDelete(event.id))
+      } yield assertTrue(
+        createdEvents.size == 3,
+        eventsFetched.size == 3
+      )
+    }
+  )
+
   def suiteOwners = suite("Owners")(
     test("owner create read update delete")(
       for {
@@ -67,6 +105,8 @@ object MediaServiceTest extends BaseSpecDefault {
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    (suiteStores + suiteOwners).provideShared(LMDB.liveWithDatabaseName("sotohp-unit-test-db") >>> MediaService.live, Scope.default)
+    (suiteStores + suiteOwners + suiteEvents)
+      .provideShared(LMDB.liveWithDatabaseName("sotohp-unit-test-db") >>> MediaService.live, Scope.default)
+      @@ TestAspect.sequential
 
 }

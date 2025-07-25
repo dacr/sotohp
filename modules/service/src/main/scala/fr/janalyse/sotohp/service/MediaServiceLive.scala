@@ -60,15 +60,64 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  override def eventList(): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Event]] = ???
+  def daoEvent2Event(daoEvent: DaoEvent): IO[ServiceIssue, Event] = {
+    for {
+      maybeAttachment <- ZIO
+                           .foreach(daoEvent.attachment) { daoAttachment =>
+                             storeGet(daoAttachment.storeId).map { maybeStore =>
+                               maybeStore.map(store => EventAttachment(store, daoAttachment.eventMediaDirectory))
+                             }
+                           }
+                           .map(_.flatten)
+    } yield Event(
+      id = daoEvent.id,
+      attachment = maybeAttachment,
+      name = daoEvent.name,
+      description = daoEvent.description,
+      keywords = daoEvent.keywords
+    )
+  }
 
-  override def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]] = ???
+  override def eventList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Event]] = ZIO.succeed {
+    events
+      .stream()
+      .tap(daoEvent => ZIO.succeed(println(s"daoEvent : $daoEvent")))
+      .mapZIO(daoEvent2Event)
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect events : $err"))
+  }
 
-  override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = ???
+  override def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]] = for {
+    foundDaoEvent <- events.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
+    foundEvent    <- ZIO.foreach(foundDaoEvent)(daoEvent2Event)
+  } yield foundEvent
 
-  override def eventCreate(ownerId: OwnerId, mediaRelativeDirectory: EventMediaDirectory, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Event] = ???
+  override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = {
+    events
+      .delete(eventId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
+      .unit
+  }
 
-  override def eventUpdate(eventId: EventId, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = ???
+  override def eventCreate(attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Event] = {
+    println(s"eventCreate : attachment=$attachment, name=$name, description=$description, keywords=$keywords")
+    for {
+      eventId <- Random.nextUUID.map(EventId.apply)
+      event    = Event(eventId, attachment, name, description, keywords)
+      _       <- events
+                   .upsert(eventId, _ => event.transformInto[DaoEvent])
+                   .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
+    } yield event
+  }
+
+  override def eventUpdate(eventId: EventId, attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = {
+    for {
+      foundDaoEvent <- events
+                         .update(eventId, _.copy(attachment = attachment.transformInto[Option[DaoEventAttachment]], name = name, description = description, keywords = keywords))
+                         .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
+      event         <- ZIO.foreach(foundDaoEvent)(daoEvent2Event)
+    } yield event
+
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
 
