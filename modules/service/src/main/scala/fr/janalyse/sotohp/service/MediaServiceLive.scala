@@ -30,7 +30,7 @@ class MediaServiceLive private (
 
   override def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Media]] = ???
+  override def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): Stream[ServiceStreamIssue, Media] = ???
 
   override def mediaFirst(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
 
@@ -53,11 +53,11 @@ class MediaServiceLive private (
     location: Option[Location]
   ): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaNormalizedRead(key: MediaAccessKey): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Byte]] = ???
+  override def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
 
-  override def mediaOriginalRead(key: MediaAccessKey): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Byte]] = ???
+  override def mediaOriginalRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
 
-  override def mediaMiniatureRead(key: MediaAccessKey): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Byte]] = ???
+  override def mediaMiniatureRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
 

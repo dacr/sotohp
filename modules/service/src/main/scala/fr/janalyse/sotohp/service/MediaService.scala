@@ -11,7 +11,7 @@ trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
   def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
-  def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): IO[ServiceIssue, Stream[ServiceStreamIssue, Media]]
+  def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): Stream[ServiceStreamIssue, Media]
   def mediaFirst(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
   def mediaPrevious(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
   def mediaNext(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
@@ -29,9 +29,9 @@ trait MediaService {
   ): IO[ServiceIssue, Option[Media]]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def mediaNormalizedRead(key: MediaAccessKey): IO[ServiceIssue, Stream[ServiceStreamIssue, Byte]]
-  def mediaOriginalRead(key: MediaAccessKey): IO[ServiceIssue, Stream[ServiceStreamIssue, Byte]]
-  def mediaMiniatureRead(key: MediaAccessKey): IO[ServiceIssue, Stream[ServiceStreamIssue, Byte]]
+  def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte]
+  def mediaOriginalRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte]
+  def mediaMiniatureRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte]
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Original]]
@@ -108,7 +108,7 @@ object MediaService {
 
   def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFind(nearKey, ownerId))
 
-  def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Media]] = ZIO.serviceWithZIO(_.mediaSearch(keywordsFilter, ownerId))
+  def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter, ownerId))
 
   def mediaFirst(ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFirst(ownerId))
 
@@ -140,11 +140,11 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def mediaNormalizedRead(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Byte]] = ZIO.serviceWithZIO(_.mediaNormalizedRead(key))
+  def mediaNormalizedRead(key: MediaAccessKey): ZStream[MediaService, ServiceStreamIssue, Byte] = ZStream.serviceWithStream(_.mediaNormalizedRead(key))
 
-  def mediaOriginalRead(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Byte]] = ZIO.serviceWithZIO(_.mediaOriginalRead(key))
+  def mediaOriginalRead(key: MediaAccessKey): ZStream[MediaService, ServiceStreamIssue, Byte] = ZStream.serviceWithStream(_.mediaOriginalRead(key))
 
-  def mediaMiniatureRead(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Byte]] = ZIO.serviceWithZIO(_.mediaMiniatureRead(key))
+  def mediaMiniatureRead(key: MediaAccessKey): ZStream[MediaService, ServiceStreamIssue, Byte] = ZStream.serviceWithStream(_.mediaMiniatureRead(key))
 
   // -------------------------------------------------------------------------------------------------------------------
 
