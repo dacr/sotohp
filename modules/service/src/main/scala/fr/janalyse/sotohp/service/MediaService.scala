@@ -34,7 +34,13 @@ trait MediaService {
   def mediaMiniatureRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def originalList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Original]]
+  def stateList(): Stream[ServiceStreamIssue, State]
+  def stateGet(originalId: OriginalId): IO[ServiceIssue, Option[State]]
+  def stateDelete(originalId: OriginalId): IO[ServiceIssue, Unit]
+  def stateUpsert(originalId: OriginalId, state: State): IO[ServiceIssue, State]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def originalList(): Stream[ServiceStreamIssue, Original]
   def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]]
   def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit]
   def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original]
@@ -133,10 +139,16 @@ object MediaService {
     ZIO.serviceWithZIO(_.mediaUpdate(key, eventId, description, starred, keywords, orientation, shootDateTime, location))
 
   // -------------------------------------------------------------------------------------------------------------------
-  def originalList(): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Original]]                                         = ZIO.serviceWithZIO(_.originalList())
-  def originalGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Original]]                                        = ZIO.serviceWithZIO(_.originalGet(originalId))
-  def originalDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]                                                 = ZIO.serviceWithZIO(_.originalDelete(originalId))
-  def originalUpsert(providedOriginal: Original): ZIO[MediaService, ServiceIssue, Original]                                         = ZIO.serviceWithZIO(_.originalUpsert(providedOriginal))
+  def stateList(): ZStream[MediaService, ServiceStreamIssue, State]                             = ZStream.serviceWithStream(_.stateList())
+  def stateGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[State]]          = ZIO.serviceWithZIO(_.stateGet(originalId))
+  def stateDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]                = ZIO.serviceWithZIO(_.stateDelete(originalId))
+  def stateUpsert(originalId: OriginalId, state: State): ZIO[MediaService, ServiceIssue, State] = ZIO.serviceWithZIO(_.stateUpsert(originalId, state))
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())
+  def originalGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Original]] = ZIO.serviceWithZIO(_.originalGet(originalId))
+  def originalDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]          = ZIO.serviceWithZIO(_.originalDelete(originalId))
+  def originalUpsert(providedOriginal: Original): ZIO[MediaService, ServiceIssue, Original]  = ZIO.serviceWithZIO(_.originalUpsert(providedOriginal))
 
   // -------------------------------------------------------------------------------------------------------------------
 

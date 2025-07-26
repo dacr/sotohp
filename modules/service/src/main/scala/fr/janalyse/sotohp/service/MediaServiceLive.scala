@@ -60,6 +60,32 @@ class MediaServiceLive private (
   override def mediaMiniatureRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
+  def stateList(): Stream[ServiceStreamIssue, State] = {
+    states
+      .stream()
+      .map(daoState => daoState.transformInto[State])
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect states : $err"))
+  }
+  def stateGet(originalId: OriginalId): IO[ServiceIssue, Option[State]] = {
+    states
+      .fetch(originalId)
+      .map(maybeDaoState => maybeDaoState.map(_.transformInto[State]))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch state : $err"))
+  }
+  def stateDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = {
+    states
+      .delete(originalId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete state : $err"))
+      .unit
+  }
+  def stateUpsert(originalId: OriginalId, state: State): IO[ServiceIssue, State] = {
+    states
+      .upsert(originalId, _ => state.transformInto[DaoState])
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update state : $err"))
+      .as(state)
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   def daoOriginal2Original(daoOriginal: DaoOriginal): IO[ServiceIssue, Original] = {
     for {
@@ -68,7 +94,12 @@ class MediaServiceLive private (
     } yield original
   }
 
-  override def originalList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Original]] = ???
+  override def originalList(): Stream[ServiceStreamIssue, Original] = {
+    originals
+      .stream()
+      .mapZIO(daoOriginal2Original)
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect originals : $err"))
+  }
 
   override def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]] = for {
     maybeDaoOriginal <- originals.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
@@ -85,7 +116,7 @@ class MediaServiceLive private (
   override def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original] = {
     originals
       .upsert(providedOriginal.id, previous => providedOriginal.into[DaoOriginal].transform)
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't create original : $err"))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update original : $err"))
       .as(providedOriginal)
   }
 
