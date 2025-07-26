@@ -117,9 +117,8 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
       ),
       test("generate original record") {
         for {
-          original <- from(originalFromFile(fakeStore1, dataset1Example1, None))
+          original <- from(originalFromFile(fakeStore1, dataset1Example1))
         } yield assertTrue(
-          original.fileHash.code == "08dcaea985eaa1a9445bacc9dfe0f789092f9acfdc46d28e41cd0497444a9eae",
           original.fileSize == FileSize(472624L),
           original.mediaPath == dataset1Example1,
           original.cameraName.exists(_.text.contains("Canon")),

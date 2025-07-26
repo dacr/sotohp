@@ -56,10 +56,10 @@ object OriginalBuilder {
     }
   }
 
-  def getOriginalFileHash(mediaPath: OriginalPath): Either[OriginalIssue, FileHash] = {
+  def computeOriginalHash(mediaPath: OriginalPath): Either[OriginalIssue, OriginalHash] = {
     HashOperations.fileDigest(mediaPath.path) match {
       case Left(error)  => Left(OriginalFileIssue(s"Unable to compute file hash", mediaPath.path, error))
-      case Right(value) => Right(FileHash(value))
+      case Right(value) => Right(OriginalHash(value))
     }
   }
 
@@ -261,13 +261,11 @@ object OriginalBuilder {
     */
   def originalFromFile(
     store: Store,
-    mediaPath: OriginalPath,
-    knownFileHash: Option[FileHash]
+    mediaPath: OriginalPath
   ): Either[OriginalIssue, Original] = {
     for {
       fileSize         <- getOriginalFileSize(mediaPath)
       fileLastModified <- getOriginalFileLastModified(mediaPath)
-      fileHash         <- if (knownFileHash.isDefined) Right(knownFileHash.get) else getOriginalFileHash(mediaPath)
       drewMetadata     <- readDrewMetadata(mediaPath)
       shootDateTime     = extractShootDateTime(drewMetadata)
       cameraName        = extractCameraName(drewMetadata)
@@ -285,7 +283,6 @@ object OriginalBuilder {
       id = originalId,
       store = store,
       mediaPath = mediaPath,
-      fileHash = fileHash,
       fileSize = fileSize,
       fileLastModified = FileLastModified(fileLastModified),
       cameraShootDateTime = shootDateTime,

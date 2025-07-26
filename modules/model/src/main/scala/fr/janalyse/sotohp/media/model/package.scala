@@ -202,13 +202,13 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type FileHash = String
+  opaque type OriginalHash = String
 
-  object FileHash {
-    def apply(hash: String): FileHash = hash
+  object OriginalHash {
+    def apply(hash: String): OriginalHash = hash
 
-    extension (fileHash: FileHash) {
-      def code: String = fileHash
+    extension (originalHash: OriginalHash) {
+      def code: String = originalHash
     }
   }
 
@@ -271,13 +271,13 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type FirstSeen = OffsetDateTime
+  opaque type AddedOn = OffsetDateTime
 
-  object FirstSeen {
-    def apply(timeStamp: OffsetDateTime): FirstSeen = timeStamp
+  object AddedOn {
+    def apply(timeStamp: OffsetDateTime): AddedOn = timeStamp
 
-    extension (firstSeen: FirstSeen) {
-      def offsetDateTime: OffsetDateTime = firstSeen
+    extension (addedOn: AddedOn) {
+      def offsetDateTime: OffsetDateTime = addedOn
     }
   }
 
@@ -432,7 +432,7 @@ package object model {
   opaque type ArtistInfo = String
   object ArtistInfo {
     def apply(artist: String): ArtistInfo = artist
-    extension (artistInfo:ArtistInfo) {
+    extension (artistInfo: ArtistInfo) {
       def artist: String = artistInfo
     }
   }
@@ -441,21 +441,21 @@ package object model {
   opaque type Aperture = Double
   object Aperture {
     def apply(aperture: Double): Aperture = aperture
-    extension (aperture:Aperture) {
+    extension (aperture: Aperture) {
       def selected: Double = aperture
-      def sexy: String = "F%.1f".formatLocal(Locale.US, pow(sqrt(2), aperture))
+      def sexy: String     = "F%.1f".formatLocal(Locale.US, pow(sqrt(2), aperture))
     }
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type ExposureTime = (numerator:Long, denominator:Long)
+  opaque type ExposureTime = (numerator: Long, denominator: Long)
   object ExposureTime {
     def apply(numerator: Long, denominator: Long): ExposureTime = (numerator, denominator)
-    extension (exposureTime:ExposureTime) {
-      def numerator: Long = exposureTime.numerator
+    extension (exposureTime: ExposureTime) {
+      def numerator: Long   = exposureTime.numerator
       def denominator: Long = exposureTime.denominator
-      def selected: Double = exposureTime.numerator.toDouble / exposureTime.denominator.toDouble
-      def sexy: String = "%d/%d s".formatLocal(Locale.US, exposureTime.numerator, exposureTime.denominator)
+      def selected: Double  = exposureTime.numerator.toDouble / exposureTime.denominator.toDouble
+      def sexy: String      = "%d/%d s".formatLocal(Locale.US, exposureTime.numerator, exposureTime.denominator)
     }
   }
 
@@ -463,9 +463,9 @@ package object model {
   opaque type FocalLength = Double
   object FocalLength {
     def apply(focalLength: Double): FocalLength = focalLength
-    extension (focalLength:FocalLength) {
+    extension (focalLength: FocalLength) {
       def selected: Double = focalLength
-      def sexy:String = "%.1f mm".formatLocal(Locale.US, focalLength)
+      def sexy: String     = "%.1f mm".formatLocal(Locale.US, focalLength)
     }
   }
 
@@ -473,7 +473,7 @@ package object model {
   opaque type ISO = Double
   object ISO {
     def apply(iso: Double): ISO = iso
-    extension (iso:ISO) {
+    extension (iso: ISO) {
       def selected: Double = iso
     }
   }

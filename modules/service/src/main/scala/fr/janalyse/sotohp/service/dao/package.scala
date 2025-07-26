@@ -50,9 +50,9 @@ package object dao {
     (trace: List[JsonError], in: RetractReader) => MediaAccessKey(ULID(JsonDecoder.string.unsafeDecode(trace, in)))
   )
 
-  given JsonCodec[FileHash] = new JsonCodec(
-    (a: FileHash, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FileHash(JsonDecoder.string.unsafeDecode(trace, in))
+  given JsonCodec[OriginalHash] = new JsonCodec(
+    (a: OriginalHash, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => OriginalHash(JsonDecoder.string.unsafeDecode(trace, in))
   )
 
   given JsonCodec[FileSize] = new JsonCodec(
@@ -123,9 +123,9 @@ package object dao {
     (trace: List[JsonError], in: RetractReader) => BirthDate(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
   )
 
-  given JsonCodec[FirstSeen] = new JsonCodec(
-    (a: FirstSeen, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FirstSeen(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
+  given JsonCodec[AddedOn] = new JsonCodec(
+    (a: AddedOn, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
+    (trace: List[JsonError], in: RetractReader) => AddedOn(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
   )
 
   given JsonCodec[LastChecked] = new JsonCodec(

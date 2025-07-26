@@ -5,8 +5,9 @@ import zio.lmdb.json.LMDBCodecJson
 
 case class DaoState(
   originalId: OriginalId,
-  mediaAccessKey: MediaAccessKey,
-  firstSeen: FirstSeen,
-  lastChecked: LastChecked,
-  lastSynchronized: Option[LastSynchronized]
+  originalHash: OriginalHash,
+  originalAddedOn: AddedOn,
+  originalLastChecked: LastChecked,
+  mediaAccessKey: Option[MediaAccessKey],
+  mediaLastSynchronized: Option[LastSynchronized]
 ) derives LMDBCodecJson

@@ -9,7 +9,6 @@ case class DaoOriginal(
   id: OriginalId,
   storeId: StoreId,
   mediaPath: OriginalPath,
-  fileHash: FileHash,
   fileSize: FileSize,
   fileLastModified: FileLastModified,
   cameraShootDateTime: Option[ShootDateTime],
@@ -26,7 +25,8 @@ case class DaoOriginal(
 
 object DaoOriginal {
   given Transformer[Original, DaoOriginal] =
-    Transformer.define[Original, DaoOriginal]
+    Transformer
+      .define[Original, DaoOriginal]
       .withFieldComputed(_.storeId, _.store.id)
       .buildTransformer
 }

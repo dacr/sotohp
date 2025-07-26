@@ -6,7 +6,6 @@ case class Original(
   id: OriginalId,
   store: Store,
   mediaPath: OriginalPath,
-  fileHash: FileHash,
   fileSize: FileSize,
   fileLastModified: FileLastModified,
   cameraShootDateTime: Option[ShootDateTime],

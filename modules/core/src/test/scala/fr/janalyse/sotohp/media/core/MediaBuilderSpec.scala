@@ -29,7 +29,7 @@ object MediaBuilderSpec extends ZIOSpecDefault with TestDatasets {
       },
       test("generate media record") {
         for {
-          original      <- from(originalFromFile(fakeStore1, dataset1Example1, None))
+          original      <- from(originalFromFile(fakeStore1, dataset1Example1))
           media         <- from(mediaFromOriginal(original, None))
         } yield assertTrue(
           media.original == original,
