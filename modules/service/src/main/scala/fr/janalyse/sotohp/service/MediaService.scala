@@ -37,27 +37,10 @@ trait MediaService {
   def originalList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Original]]
   def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]]
   def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit]
-  def originalCreate(
-    store: Store,
-    mediaPath: OriginalPath,
-    fileHash: FileHash,
-    fileSize: FileSize,
-    fileLastModified: FileLastModified,
-    cameraShootDateTime: Option[ShootDateTime],
-    cameraName: Option[CameraName],
-    artistInfo: Option[ArtistInfo],
-    dimension: Option[Dimension],
-    orientation: Option[Orientation],
-    location: Option[Location],
-    aperture: Option[Aperture],
-    exposureTime: Option[ExposureTime],
-    iso: Option[ISO],
-    focalLength: Option[FocalLength]
-  ): IO[ServiceIssue, Original]
-  def originalUpdate(originalId: OriginalId, fileLastModified: FileLastModified): IO[ServiceIssue, Option[Original]]
+  def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def eventList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Event]]
+  def eventList(): Stream[ServiceStreamIssue, Event]
   def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]]
   def eventDelete(eventId: EventId): IO[ServiceIssue, Unit]
   def eventCreate(
@@ -75,7 +58,7 @@ trait MediaService {
   ): IO[ServiceIssue, Option[Event]]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def ownerList(): IO[ServiceIssue, List[Owner]]
+  def ownerList(): Stream[ServiceIssue, Owner]
   def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]]
   def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit]
   def ownerCreate(
@@ -92,7 +75,7 @@ trait MediaService {
   ): IO[ServiceIssue, Option[Owner]]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def storeList(): IO[ServiceIssue, List[Store]]
+  def storeList(): Stream[ServiceIssue, Store]
   def storeGet(storeId: StoreId): IO[ServiceIssue, Option[Store]]
   def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit]
   def storeCreate(
@@ -153,42 +136,7 @@ object MediaService {
   def originalList(): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Original]]                                         = ZIO.serviceWithZIO(_.originalList())
   def originalGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Original]]                                        = ZIO.serviceWithZIO(_.originalGet(originalId))
   def originalDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]                                                 = ZIO.serviceWithZIO(_.originalDelete(originalId))
-  def originalCreate(
-    store: Store,
-    mediaPath: OriginalPath,
-    fileHash: FileHash,
-    fileSize: FileSize,
-    fileLastModified: FileLastModified,
-    cameraShootDateTime: Option[ShootDateTime],
-    cameraName: Option[CameraName],
-    artistInfo: Option[ArtistInfo],
-    dimension: Option[Dimension],
-    orientation: Option[Orientation],
-    location: Option[Location],
-    aperture: Option[Aperture],
-    exposureTime: Option[ExposureTime],
-    iso: Option[ISO],
-    focalLength: Option[FocalLength]
-  ): ZIO[MediaService, ServiceIssue, Original] = ZIO.serviceWithZIO(
-    _.originalCreate(
-      store,
-      mediaPath,
-      fileHash,
-      fileSize,
-      fileLastModified,
-      cameraShootDateTime,
-      cameraName,
-      artistInfo,
-      dimension,
-      orientation,
-      location,
-      aperture,
-      exposureTime,
-      iso,
-      focalLength
-    )
-  )
-  def originalUpdate(originalId: OriginalId, fileLastModified: FileLastModified): ZIO[MediaService, ServiceIssue, Option[Original]] = ZIO.serviceWithZIO(_.originalUpdate(originalId, fileLastModified))
+  def originalUpsert(providedOriginal: Original): ZIO[MediaService, ServiceIssue, Original]                                         = ZIO.serviceWithZIO(_.originalUpsert(providedOriginal))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -200,7 +148,7 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def eventList(): ZIO[MediaService, ServiceIssue, Stream[ServiceStreamIssue, Event]] = ZIO.serviceWithZIO(_.eventList())
+  def eventList(): ZStream[MediaService, ServiceStreamIssue, Event] = ZStream.serviceWithStream(_.eventList())
 
   def eventGet(eventId: EventId): ZIO[MediaService, ServiceIssue, Option[Event]] = ZIO.serviceWithZIO(_.eventGet(eventId))
 
@@ -214,7 +162,7 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def ownerList(): ZIO[MediaService, ServiceIssue, List[Owner]] = ZIO.serviceWithZIO(_.ownerList())
+  def ownerList(): ZStream[MediaService, ServiceIssue, Owner] = ZStream.serviceWithStream(_.ownerList())
 
   def ownerGet(ownerId: OwnerId): ZIO[MediaService, ServiceIssue, Option[Owner]] = ZIO.serviceWithZIO(_.ownerGet(ownerId))
 
@@ -226,7 +174,7 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def storeList(): ZIO[MediaService, ServiceIssue, List[Store]] = ZIO.serviceWithZIO(_.storeList())
+  def storeList(): ZStream[MediaService, ServiceIssue, Store] = ZStream.serviceWithStream(_.storeList())
 
   def storeGet(storeId: StoreId): ZIO[MediaService, ServiceIssue, Option[Store]] = ZIO.serviceWithZIO(_.storeGet(storeId))
 

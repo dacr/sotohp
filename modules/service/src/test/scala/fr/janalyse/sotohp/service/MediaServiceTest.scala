@@ -37,10 +37,9 @@ object MediaServiceTest extends BaseSpecDefault {
     test("list events") {
       val eventNames = List("event1", "event2", "event3")
       for {
-        createdEvents       <- ZIO.foreach(eventNames)(name => MediaService.eventCreate(None, EventName(name), None, Set.empty))
-        eventsFetchedStream <- MediaService.eventList()
-        eventsFetched       <- eventsFetchedStream.runCollect
-        _                   <- ZIO.foreachDiscard(eventsFetched)(event => MediaService.eventDelete(event.id))
+        createdEvents <- ZIO.foreach(eventNames)(name => MediaService.eventCreate(None, EventName(name), None, Set.empty))
+        eventsFetched <- MediaService.eventList().runCollect
+        _             <- ZIO.foreachDiscard(eventsFetched)(event => MediaService.eventDelete(event.id))
       } yield assertTrue(
         createdEvents.size == 3,
         eventsFetched.size == 3
@@ -67,7 +66,7 @@ object MediaServiceTest extends BaseSpecDefault {
       val lastNames = List("doe1", "doe2", "doe3")
       for {
         createdOwners <- ZIO.foreach(lastNames)(name => MediaService.ownerCreate(None, FirstName("joe"), LastName(name), None))
-        ownersFetched <- MediaService.ownerList()
+        ownersFetched <- MediaService.ownerList().runCollect
         _             <- ZIO.foreachDiscard(ownersFetched)(owner => MediaService.ownerDelete(owner.id))
       } yield assertTrue(
         ownersFetched.size == 3
@@ -96,7 +95,7 @@ object MediaServiceTest extends BaseSpecDefault {
         fakeOwnerId   <- ZIO.attempt(OwnerId(ULID.newULID))
         paths          = List("samples/dataset1", "samples/dataset2", "samples/dataset3").map(dir => BaseDirectoryPath(Path.of(dir)))
         createdStores <- ZIO.foreach(paths)(path => MediaService.storeCreate(None, fakeOwnerId, path, None, None))
-        storesFetched <- MediaService.storeList()
+        storesFetched <- MediaService.storeList().runCollect
         _             <- ZIO.foreachDiscard(storesFetched)(store => MediaService.storeDelete(store.id))
       } yield assertTrue(
         storesFetched.size == 3

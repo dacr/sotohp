@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.media.model.*
+import io.scalaland.chimney.Transformer
 import zio.json.JsonCodec
 import zio.lmdb.json.LMDBCodecJson
 
@@ -22,3 +23,10 @@ case class DaoOriginal(
   iso: Option[ISO],
   focalLength: Option[FocalLength]
 ) derives LMDBCodecJson
+
+object DaoOriginal {
+  given Transformer[Original, DaoOriginal] =
+    Transformer.define[Original, DaoOriginal]
+      .withFieldComputed(_.storeId, _.store.id)
+      .buildTransformer
+}

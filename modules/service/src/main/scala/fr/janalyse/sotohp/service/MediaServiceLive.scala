@@ -1,11 +1,12 @@
 package fr.janalyse.sotohp.service
 
+import fr.janalyse.sotohp.media.core.{FileSystemSearch, OriginalBuilder}
 import fr.janalyse.sotohp.media.model.*
 import fr.janalyse.sotohp.service.dao.*
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.{LMDB, LMDBCodec, LMDBCollection, LMDBKodec, StorageSystemError, StorageUserError}
-import zio.stream.Stream
+import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
 
 import java.nio.ByteBuffer
@@ -59,15 +60,34 @@ class MediaServiceLive private (
   override def mediaMiniatureRead(key: MediaAccessKey): IO[ServiceIssue, stream.Stream[ServiceStreamIssue, Byte]] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  def daoOriginal2Original(daoOriginal: DaoOriginal): IO[ServiceIssue, Original] = {
+    for {
+      store   <- storeGet(daoOriginal.storeId).someOrFail(ServiceDatabaseIssue(s"Couldn't find store for original : ${daoOriginal.storeId}"))
+      original = daoOriginal.into[Original].withFieldConst(_.store, store).transform
+    } yield original
+  }
+
   override def originalList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Original]] = ???
 
-  override def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]] = ???
+  override def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]] = for {
+    maybeDaoOriginal <- originals.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
+    maybeOriginal    <- ZIO.foreach(maybeDaoOriginal)(daoOriginal2Original)
+  } yield maybeOriginal
 
-  override def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = ???
+  override def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = {
+    originals
+      .delete(originalId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete original : $err"))
+      .unit
+  }
 
-  override def originalCreate(store: Store, mediaPath: OriginalPath, fileHash: FileHash, fileSize: FileSize, fileLastModified: FileLastModified, cameraShootDateTime: Option[ShootDateTime], cameraName: Option[CameraName], artistInfo: Option[ArtistInfo], dimension: Option[Dimension], orientation: Option[Orientation], location: Option[Location], aperture: Option[Aperture], exposureTime: Option[ExposureTime], iso: Option[ISO], focalLength: Option[FocalLength]): IO[ServiceIssue, Original] = ???
-
-  override def originalUpdate(originalId: OriginalId, fileLastModified: FileLastModified): IO[ServiceIssue, Option[Original]] = ???
+  override def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original] = {
+    originals
+      .upsert(providedOriginal.id, previous => providedOriginal.into[DaoOriginal].transform)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't create original : $err"))
+      .as(providedOriginal)
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -75,21 +95,17 @@ class MediaServiceLive private (
     for {
       maybeAttachment <- ZIO
                            .foreach(daoEvent.attachment) { daoAttachment =>
-                             storeGet(daoAttachment.storeId).map { maybeStore =>
-                               maybeStore.map(store => EventAttachment(store, daoAttachment.eventMediaDirectory))
-                             }
+                             storeGet(daoAttachment.storeId)
+                               .map { maybeStore =>
+                                 maybeStore.map(store => EventAttachment(store, daoAttachment.eventMediaDirectory))
+                               }
+                               .someOrFail(ServiceDatabaseIssue(s"Couldn't find store for event attachment : ${daoAttachment.storeId}"))
                            }
-                           .map(_.flatten)
-    } yield Event(
-      id = daoEvent.id,
-      attachment = maybeAttachment,
-      name = daoEvent.name,
-      description = daoEvent.description,
-      keywords = daoEvent.keywords
-    )
+      event            = daoEvent.into[Event].withFieldConst(_.attachment, maybeAttachment).transform
+    } yield event
   }
 
-  override def eventList(): IO[ServiceIssue, Stream[ServiceStreamIssue, Event]] = ZIO.succeed {
+  override def eventList(): Stream[ServiceStreamIssue, Event] = {
     events
       .stream()
       .tap(daoEvent => ZIO.succeed(println(s"daoEvent : $daoEvent")))
@@ -98,9 +114,9 @@ class MediaServiceLive private (
   }
 
   override def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]] = for {
-    foundDaoEvent <- events.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
-    foundEvent    <- ZIO.foreach(foundDaoEvent)(daoEvent2Event)
-  } yield foundEvent
+    maybeDaoEvent <- events.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
+    maybeEvent    <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
+  } yield maybeEvent
 
   override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = {
     events
@@ -115,35 +131,33 @@ class MediaServiceLive private (
       eventId <- Random.nextUUID.map(EventId.apply)
       event    = Event(eventId, attachment, name, description, keywords)
       _       <- events
-                   .upsert(eventId, _ => event.transformInto[DaoEvent])
+                   .upsert(eventId, _ => event.into[DaoEvent].transform)
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
     } yield event
   }
 
   override def eventUpdate(eventId: EventId, attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = {
     for {
-      foundDaoEvent <- events
+      maybeDaoEvent <- events
                          .update(eventId, _.copy(attachment = attachment.transformInto[Option[DaoEventAttachment]], name = name, description = description, keywords = keywords))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
-      event         <- ZIO.foreach(foundDaoEvent)(daoEvent2Event)
+      event         <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
     } yield event
 
   }
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  override def ownerList(): IO[ServiceIssue, List[Owner]] = {
+  override def ownerList(): Stream[ServiceIssue, Owner] = {
     owners
       .stream()
-      .map(daoOwner => daoOwner.transformInto[Owner])
-      .runCollect
-      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect owners : $err"), _.toList)
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect owners : $err"), daoOwner => daoOwner.transformInto[Owner])
   }
 
   override def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]] = {
     owners
       .fetch(ownerId)
-      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch owner : $err"), foundDaoOwner => foundDaoOwner.map(_.transformInto[Owner]))
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch owner : $err"), maybeDaoOwner => maybeDaoOwner.map(_.transformInto[Owner]))
   }
 
   override def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit] = {
@@ -168,27 +182,26 @@ class MediaServiceLive private (
 
   override def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Option[Owner]] = {
     for {
-      foundDaoOwner <- owners
+      maybeDaoOwner <- owners
                          .update(ownerId, _.copy(firstName = firstName, lastName = lastName, birthDate = birthDate))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
-      owner          = foundDaoOwner.map(_.transformInto[Owner])
-    } yield owner
+      maybeOwner          = maybeDaoOwner.map(_.transformInto[Owner])
+    } yield maybeOwner
   }
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  override def storeList(): IO[ServiceIssue, List[Store]] = {
+  override def storeList(): Stream[ServiceIssue, Store] = {
     stores
       .stream()
       .map(daoStore => daoStore.transformInto[Store])
-      .runCollect
-      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect stores : $err"), _.toList)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't collect stores : $err"))
   }
 
   override def storeGet(storeId: StoreId): IO[ServiceIssue, Option[Store]] = {
     stores
       .fetch(storeId)
-      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch store : $err"), foundDaoStore => foundDaoStore.map(_.transformInto[Store]))
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch store : $err"), maybeDaoStore => maybeDaoStore.map(_.transformInto[Store]))
   }
 
   override def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit] = {
@@ -213,17 +226,23 @@ class MediaServiceLive private (
 
   override def storeUpdate(storeId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Option[Store]] = {
     for {
-      foundDaoStore <- stores
+      maybeDaoStore <- stores
                          .update(storeId, _.copy(includeMask = includeMask, ignoreMask = ignoreMask))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update store : $err"))
-      store          = foundDaoStore.map(_.transformInto[Store])
-    } yield store
+      maybeStore          = maybeDaoStore.map(_.transformInto[Store])
+    } yield maybeStore
   }
 
   // -------------------------------------------------------------------------------------------------------------------
 
   override def synchronize(): IO[ServiceIssue, Unit] = {
-    ???
+    storeList()
+      .mapZIO(store => ZIO.from(FileSystemSearch.originalsStreamFromSearchRoot(store)))
+      .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
+      .right
+      .mapZIO(original => originalUpsert(original))
+      .runDrain
+      .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
   }
 
 }
