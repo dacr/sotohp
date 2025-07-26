@@ -47,7 +47,7 @@ package object dao {
 
   given JsonCodec[MediaAccessKey] = new JsonCodec(
     (a: MediaAccessKey, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => MediaAccessKey(ULID(JsonDecoder.string.unsafeDecode(trace, in)))
+    (trace: List[JsonError], in: RetractReader) => MediaAccessKey(JsonDecoder.string.unsafeDecode(trace, in))
   )
 
   given JsonCodec[OriginalHash] = new JsonCodec(

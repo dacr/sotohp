@@ -296,6 +296,13 @@ object MediaServiceLive {
     case Failure(exception) => Left(exception.getMessage)
     case Success(ulid)      => Right(ulid)
   }
+  // -------------------------------------------------------------------------------------------------------------------
+  private def stringBytesToEither(bytes: ByteBuffer): Either[String, String] = Try {
+    charset.decode(bytes).toString
+  } match {
+    case Failure(exception) => Left(exception.getMessage)
+    case Success(str)      => Right(str)
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[OriginalId] = new LMDBKodec {
@@ -312,7 +319,7 @@ object MediaServiceLive {
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[MediaAccessKey] = new LMDBKodec {
     def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = ulidBytesToEither(keyBytes).map(MediaAccessKey.apply)
+    def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = stringBytesToEither(keyBytes).map(MediaAccessKey.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -330,7 +337,7 @@ object MediaServiceLive {
   // -------------------------------------------------------------------------------------------------------------------
   given LMDBCodec[MediaAccessKey] = new LMDBCodec {
     def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = ulidBytesToEither(keyBytes).map(MediaAccessKey.apply)
+    def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = stringBytesToEither(keyBytes).map(MediaAccessKey.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------

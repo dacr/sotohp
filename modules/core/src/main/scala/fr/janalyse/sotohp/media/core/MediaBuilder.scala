@@ -23,9 +23,9 @@ import scala.util.{Failure, Success, Try}
 object MediaBuilder {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[MediaBuilder.type])
 
-  private def buildDefaultMediaAccessKey(timestamp: OffsetDateTime): MediaAccessKey = {
-    val ulid = ULID.ofMillis(timestamp.toInstant.toEpochMilli)
-    MediaAccessKey(ulid)
+  private def buildDefaultMediaAccessKey(ownerId: OwnerId, mediaTimestamp: OffsetDateTime): MediaAccessKey = {
+    val ulid = ULID.ofMillis(mediaTimestamp.toInstant.toEpochMilli)
+    MediaAccessKey(ownerId, ulid)
   }
 
   private def computeMediaTimestamp(original: Original): Either[OriginalFileIssue, OffsetDateTime] = {
@@ -85,7 +85,7 @@ object MediaBuilder {
   ): Either[CoreIssue, Media] = {
     for {
       timestamp     <- computeMediaTimestamp(original)
-      mediaAccessKey = buildDefaultMediaAccessKey(timestamp)
+      mediaAccessKey = buildDefaultMediaAccessKey(original.store.ownerId, timestamp)
       kind          <- computeMediaKind(original)
     } yield Media(
       accessKey = mediaAccessKey,

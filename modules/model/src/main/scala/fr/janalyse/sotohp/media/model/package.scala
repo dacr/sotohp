@@ -15,35 +15,37 @@ import scala.util.{Failure, Success, Try}
 package object model {
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type Width = Int
+  opaque type OwnerId = ULID
 
-  object Width {
-    def apply(width: Int): Width = width
+  object OwnerId {
+    def apply(id: ULID): OwnerId = id
 
-    extension (width: Width) {
-      def value: Int = width
+    extension (ownerId: OwnerId) {
+      def asString: String = ownerId.toString
     }
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type Height = Int
-
-  object Height {
-    def apply(height: Int): Height = height
-
-    extension (height: Height) {
-      def value: Int = height
-    }
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  opaque type MediaAccessKey = ULID
+  // use a default encoding that optimize speed to access medias using a default time based order
+  opaque type MediaAccessKey = (ownerId: OwnerId, ulid: ULID)
 
   object MediaAccessKey {
-    def apply(id: ULID): MediaAccessKey = id
+    private val sep      = "/"
+    private val ulidSize = 26
+
+    def apply(ownerId: OwnerId, ulid: ULID): MediaAccessKey = (ownerId, ulid)
+
+    def apply(input: String): MediaAccessKey = {
+      if (input.length < (ulidSize + 1)) throw new IllegalArgumentException(s"given MediaAccessKey input ($input) is invalid")
+      else {
+        val ownerIdStr = input.substring(0, ulidSize)
+        val ulidStr    = input.substring(ulidSize + 1)
+        (OwnerId(ULID(ownerIdStr)), ULID(ulidStr))
+      }
+    }
 
     extension (mediaAccessKey: MediaAccessKey) {
-      def asString: String = mediaAccessKey.toString
+      def asString: String = s"${mediaAccessKey.ownerId.toString}$sep${mediaAccessKey.ulid.toString}" // natural ordering by (owner / timestamp)
     }
   }
 
@@ -209,17 +211,6 @@ package object model {
 
     extension (originalHash: OriginalHash) {
       def code: String = originalHash
-    }
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  opaque type OwnerId = ULID
-
-  object OwnerId {
-    def apply(id: ULID): OwnerId = id
-
-    extension (ownerId: OwnerId) {
-      def asString: String = ownerId.toString
     }
   }
 
@@ -475,6 +466,28 @@ package object model {
     def apply(iso: Double): ISO = iso
     extension (iso: ISO) {
       def selected: Double = iso
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type Width = Int
+
+  object Width {
+    def apply(width: Int): Width = width
+
+    extension (width: Width) {
+      def value: Int = width
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type Height = Int
+
+  object Height {
+    def apply(height: Int): Height = height
+
+    extension (height: Height) {
+      def value: Int = height
     }
   }
 
