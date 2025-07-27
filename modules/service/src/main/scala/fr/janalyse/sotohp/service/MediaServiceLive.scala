@@ -316,10 +316,10 @@ class MediaServiceLive private (
   private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
     // TODO first basic and naive implementation - not good for complexity
     events
-      //.collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory)) // TODO BUG IN ZIO-LMDB !!
-      .stream() // TODO workaround
-      .runCollect // TODO workaround
-      .map(_.filter(daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))) // TODO workaround
+      .collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory)) // TODO BUG IN ZIO-LMDB !!
+      //.stream() // TODO workaround
+      //.runCollect // TODO workaround
+      //.map(_.filter(daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))) // TODO workaround
       .map(_.headOption)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"))
       .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
