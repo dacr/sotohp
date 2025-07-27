@@ -18,7 +18,17 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         _         <- MediaService.synchronize()
         originals <- MediaService.originalList().runCollect
       } yield assertTrue(
-        originals.size == 12
+        originals.size == 12,
+        originals.forall(_.cameraShootDateTime.isDefined),
+        originals.forall(_.cameraName.isDefined),
+        originals.exists(_.artistInfo.isDefined), // available only if it has been configured on the camera
+        originals.forall(_.dimension.isDefined),
+        originals.forall(_.orientation.isDefined),
+        originals.exists(_.location.isDefined), // available only if gps info has been configured or was available
+        originals.forall(_.aperture.isDefined),
+        originals.forall(_.exposureTime.isDefined),
+        originals.forall(_.iso.isDefined),
+        originals.forall(_.focalLength.isDefined)
       )
     }
   )
