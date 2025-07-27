@@ -7,12 +7,14 @@ import zio.lmdb.LMDB
 import zio.test.*
 
 import java.nio.file.Path
+import java.time.OffsetDateTime
 
 object MediaServiceSynchronizeTest extends BaseSpecDefault {
 
   def suiteSynchronization = suite("Synchronize")(
     test("standard scenario") {
       for {
+        epoch          <- Clock.currentDateTime // Virtual Clock so == epoch
         owner          <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
         store          <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
         _              <- MediaService.synchronize()
@@ -42,9 +44,10 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         states.size == 13,
         medias.size == 13,
         medias.filter(_.event.nonEmpty).size == 12,
-        originalsAgain == originals,
-        eventsAgain == events,
-        statesAgain != states,                    // originalLastChecked should differ
+        originals == originalsAgain,
+        events == eventsAgain,
+        states != statesAgain,                    // originalLastChecked should differ :
+        states == statesAgain.map(_.copy(originalLastChecked = LastChecked(epoch))),
         mediasAgain == medias
       )
     }
