@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.media.model
 case class Media(
   accessKey: MediaAccessKey,
   original: Original,
-  event: List[Event],
+  events: List[Event],
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],

@@ -43,7 +43,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         events.size == 6,
         states.size == 13,
         medias.size == 13,
-        medias.filter(_.event.nonEmpty).size == 12,
+        medias.filter(_.events.nonEmpty).size == 12,
         originals == originalsAgain,
         events == eventsAgain,
         states != statesAgain,                    // originalLastChecked should differ :
@@ -56,7 +56,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
   override def spec: Spec[TestEnvironment & Scope, Any] =
     (suiteSynchronization)
       .provideShared(
-        LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${java.util.UUID.randomUUID()}") >>> MediaService.live,
+        LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live,
         Scope.default
       )
       @@ TestAspect.sequential

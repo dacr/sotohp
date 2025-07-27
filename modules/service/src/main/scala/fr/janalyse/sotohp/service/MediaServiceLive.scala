@@ -35,7 +35,7 @@ class MediaServiceLive private (
       media     = daoMedia
                     .into[Media]
                     .withFieldConst(_.original, original)
-                    .withFieldConst(_.event, events.toList)
+                    .withFieldConst(_.events, events.toList)
                     .transform
     } yield media
   }
@@ -71,6 +71,7 @@ class MediaServiceLive private (
     updatedMedia: Media
   ): IO[ServiceIssue, Option[Media]] = ???
 
+  // -------------------------------------------------------------------------------------------------------------------
   override def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
 
   override def mediaOriginalRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
@@ -433,7 +434,7 @@ object MediaServiceLive {
 
   // -------------------------------------------------------------------------------------------------------------------
   private val originalsCollectionName = "originals"
-  private val statesCollectionName    = "links"
+  private val statesCollectionName    = "states"
   private val eventsCollectionName    = "events"
   private val mediasCollectionName    = "medias"
   private val ownersCollectionName    = "owners"

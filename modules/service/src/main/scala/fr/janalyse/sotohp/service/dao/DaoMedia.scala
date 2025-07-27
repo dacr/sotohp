@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.media.model.*
+import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
 
 case class DaoMedia(
@@ -14,3 +15,12 @@ case class DaoMedia(
   shootDateTime: Option[ShootDateTime], // override original's cameraShotDateTime
   location: Option[DaoLocation]         // replace the original's location (user-defined or deducted location)
 ) derives LMDBCodecJson
+
+object DaoMedia {
+  given Transformer[Media, DaoMedia] =
+    Transformer
+      .define[Media, DaoMedia]
+      .withFieldComputed(_.events, _.events.map(_.id).toSet)
+      .withFieldComputed(_.originalId, _.original.id)
+      .buildTransformer
+}

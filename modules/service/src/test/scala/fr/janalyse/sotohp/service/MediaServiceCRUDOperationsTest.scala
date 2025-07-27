@@ -105,7 +105,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
     (suiteStores + suiteOwners + suiteEvents)
-      .provideShared(LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${java.util.UUID.randomUUID()}") >>> MediaService.live, Scope.default)
+      .provideShared(LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live, Scope.default)
       @@ TestAspect.sequential
 
 }

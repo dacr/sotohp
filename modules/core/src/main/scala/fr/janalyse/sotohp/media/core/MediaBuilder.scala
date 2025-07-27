@@ -85,7 +85,7 @@ object MediaBuilder {
     Media(
       accessKey = mediaAccessKey,
       original = original,
-      event = knownEvent.toList,
+      events = knownEvent.toList,
       description = None,
       starred = Starred(false),
       keywords = Set.empty,
