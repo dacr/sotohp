@@ -13,13 +13,19 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
   def suiteSynchronization = suite("Synchronize")(
     test("standard scenario") {
       for {
-        owner     <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
-        store     <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
-        _         <- MediaService.synchronize()
-        originals <- MediaService.originalList().runCollect
-        events    <- MediaService.eventList().runCollect
-        states    <- MediaService.stateList().runCollect
-        medias    <- MediaService.mediaList().runCollect
+        owner          <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
+        store          <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
+        _              <- MediaService.synchronize()
+        originals      <- MediaService.originalList().runCollect
+        events         <- MediaService.eventList().runCollect
+        states         <- MediaService.stateList().runCollect
+        medias         <- MediaService.mediaList().runCollect
+        _              <- TestClock.adjust(1.hour)
+        _              <- MediaService.synchronize()
+        originalsAgain <- MediaService.originalList().runCollect
+        eventsAgain    <- MediaService.eventList().runCollect
+        statesAgain    <- MediaService.stateList().runCollect
+        mediasAgain    <- MediaService.mediaList().runCollect
       } yield assertTrue(
         originals.size == 13,
         originals.forall(_.cameraShootDateTime.isDefined),
@@ -35,7 +41,11 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         events.size == 6,
         states.size == 13,
         medias.size == 13,
-        medias.filter(_.event.nonEmpty).size == 12
+        medias.filter(_.event.nonEmpty).size == 12,
+        originalsAgain == originals,
+        eventsAgain == events,
+        statesAgain != states,                    // originalLastChecked should differ
+        mediasAgain == medias
       )
     }
   )
