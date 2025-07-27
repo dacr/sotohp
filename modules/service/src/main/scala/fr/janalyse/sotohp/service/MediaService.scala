@@ -10,6 +10,7 @@ import java.time.OffsetDateTime
 trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
+  def mediaList(): Stream[ServiceStreamIssue, Media]
   def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
   def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): Stream[ServiceStreamIssue, Media]
   def mediaFirst(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
@@ -42,6 +43,7 @@ trait MediaService {
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): Stream[ServiceStreamIssue, Original]
   def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]]
+  def originalExists(originalId: OriginalId): IO[ServiceIssue, Boolean]
   def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit]
   def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original]
 
@@ -112,6 +114,8 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  def mediaList(): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaList())
+
   def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFind(nearKey, ownerId))
 
   def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter, ownerId))
@@ -147,6 +151,7 @@ object MediaService {
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())
   def originalGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Original]] = ZIO.serviceWithZIO(_.originalGet(originalId))
+  def originalExists(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Boolean]       = ZIO.serviceWithZIO(_.originalExists(originalId))
   def originalDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]          = ZIO.serviceWithZIO(_.originalDelete(originalId))
   def originalUpsert(providedOriginal: Original): ZIO[MediaService, ServiceIssue, Original]  = ZIO.serviceWithZIO(_.originalUpsert(providedOriginal))
 

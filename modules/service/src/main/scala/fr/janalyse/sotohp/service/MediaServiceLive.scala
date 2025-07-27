@@ -28,6 +28,25 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  def daoMedia2Media(daoMedia: DaoMedia): IO[ServiceIssue, Media] = {
+    for {
+      original <- originalGet(daoMedia.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${daoMedia.originalId}"))
+      events   <- ZIO.foreach(daoMedia.events)(eventId => eventGet(eventId).some.mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err")))
+      media     = daoMedia
+                    .into[Media]
+                    .withFieldConst(_.original, original)
+                    .withFieldConst(_.event, events.toList)
+                    .transform
+    } yield media
+  }
+
+  override def mediaList(): Stream[ServiceStreamIssue, Media] = {
+    medias
+      .stream()
+      .mapZIO(daoMedia2Media)
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect medias : $err"))
+  }
+
   override def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
 
   override def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): Stream[ServiceStreamIssue, Media] = ???
@@ -60,19 +79,19 @@ class MediaServiceLive private (
   override def mediaMiniatureRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
-  def stateList(): Stream[ServiceStreamIssue, State] = {
+  def stateList(): Stream[ServiceStreamIssue, State]                             = {
     states
       .stream()
       .map(daoState => daoState.transformInto[State])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect states : $err"))
   }
-  def stateGet(originalId: OriginalId): IO[ServiceIssue, Option[State]] = {
+  def stateGet(originalId: OriginalId): IO[ServiceIssue, Option[State]]          = {
     states
       .fetch(originalId)
       .map(maybeDaoState => maybeDaoState.map(_.transformInto[State]))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch state : $err"))
   }
-  def stateDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = {
+  def stateDelete(originalId: OriginalId): IO[ServiceIssue, Unit]                = {
     states
       .delete(originalId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete state : $err"))
@@ -105,6 +124,9 @@ class MediaServiceLive private (
     maybeDaoOriginal <- originals.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
     maybeOriginal    <- ZIO.foreach(maybeDaoOriginal)(daoOriginal2Original)
   } yield maybeOriginal
+
+  override def originalExists(originalId: OriginalId): IO[ServiceIssue, Boolean] =
+    originals.contains(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't lookup original : $err"))
 
   override def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = {
     originals
@@ -216,7 +238,7 @@ class MediaServiceLive private (
       maybeDaoOwner <- owners
                          .update(ownerId, _.copy(firstName = firstName, lastName = lastName, birthDate = birthDate))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
-      maybeOwner          = maybeDaoOwner.map(_.transformInto[Owner])
+      maybeOwner     = maybeDaoOwner.map(_.transformInto[Owner])
     } yield maybeOwner
   }
 
@@ -260,18 +282,51 @@ class MediaServiceLive private (
       maybeDaoStore <- stores
                          .update(storeId, _.copy(includeMask = includeMask, ignoreMask = ignoreMask))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update store : $err"))
-      maybeStore          = maybeDaoStore.map(_.transformInto[Store])
+      maybeStore     = maybeDaoStore.map(_.transformInto[Store])
     } yield maybeStore
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  private def synchronizeOriginal(original: Original): IO[ServiceIssue, Original]                        = {
+    for {
+      available <- originalExists(original.id)
+      _         <- originalUpsert(original).when(!available)
+    } yield original
+  }
+
+  private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
+    for {
+      currentState <- stateGet(original.id)
+      now          <- Clock.currentDateTime
+      updatedState  = currentState
+                        .map(_.copy(originalLastChecked = LastChecked(now)))
+                        .getOrElse(
+                          State(
+                            originalId = original.id,
+                            originalHash = None,
+                            originalAddedOn = AddedOn(now),
+                            originalLastChecked = LastChecked(now),
+                            mediaAccessKey = None,
+                            mediaLastSynchronized = None
+                          )
+                        )
+      state        <- stateUpsert(original.id, updatedState)
+    } yield (original, state)
+  }
+
+  private def synchronizeMedia(input:(original: Original, state:State)):IO[ServiceIssue, Media] = {
+    ???
+  }
 
   override def synchronize(): IO[ServiceIssue, Unit] = {
     storeList()
       .mapZIO(store => ZIO.from(FileSystemSearch.originalsStreamFromSearchRoot(store)))
       .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
       .right
-      .mapZIO(original => originalUpsert(original))
+      .mapZIO(synchronizeOriginal)
+      .mapZIO(synchronizeState)
+      .mapZIO(synchronizeMedia)
       .runDrain
       .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
   }
@@ -301,7 +356,7 @@ object MediaServiceLive {
     charset.decode(bytes).toString
   } match {
     case Failure(exception) => Left(exception.getMessage)
-    case Success(str)      => Right(str)
+    case Success(str)       => Right(str)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
