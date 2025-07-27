@@ -14,16 +14,16 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
   def suiteSynchronization = suite("Synchronize")(
     test("standard scenario") {
       for {
-        epoch          <- Clock.currentDateTime // Virtual Clock so == epoch
+        epoch          <- Clock.currentDateTime      // Virtual Clock so == epoch
         owner          <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
         store          <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
-        _              <- MediaService.synchronize()
+        _              <- MediaService.synchronize() // ------ FIRST SYNC
         originals      <- MediaService.originalList().runCollect
         events         <- MediaService.eventList().runCollect
         states         <- MediaService.stateList().runCollect
         medias         <- MediaService.mediaList().runCollect
         _              <- TestClock.adjust(1.hour)
-        _              <- MediaService.synchronize()
+        _              <- MediaService.synchronize() // ------ SECOND SYNC
         originalsAgain <- MediaService.originalList().runCollect
         eventsAgain    <- MediaService.eventList().runCollect
         statesAgain    <- MediaService.stateList().runCollect
