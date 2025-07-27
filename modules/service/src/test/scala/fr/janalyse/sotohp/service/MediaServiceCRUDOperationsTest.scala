@@ -8,7 +8,7 @@ import zio.test.*
 
 import java.nio.file.Path
 
-object MediaServiceTest extends BaseSpecDefault {
+object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
 
   def suiteEvents = suite("Events")(
     test("event create read update delete")(
@@ -105,7 +105,7 @@ object MediaServiceTest extends BaseSpecDefault {
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
     (suiteStores + suiteOwners + suiteEvents)
-      .provideShared(LMDB.liveWithDatabaseName("sotohp-unit-test-db") >>> MediaService.live, Scope.default)
+      .provideShared(LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${java.util.UUID.randomUUID()}") >>> MediaService.live, Scope.default)
       @@ TestAspect.sequential
 
 }
