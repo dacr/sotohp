@@ -23,52 +23,48 @@ import scala.util.{Failure, Success, Try}
 object MediaBuilder {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[MediaBuilder.type])
 
-  private def buildDefaultMediaAccessKey(ownerId: OwnerId, mediaTimestamp: OffsetDateTime): MediaAccessKey = {
-    val ulid = ULID.ofMillis(mediaTimestamp.toInstant.toEpochMilli)
-    MediaAccessKey(ownerId, ulid)
+  def buildDefaultMediaAccessKey(original: Original): MediaAccessKey = {
+    val timestamp = computeMediaTimestamp(original)
+    val ulid      = ULID.ofMillis(timestamp.toInstant.toEpochMilli)
+    MediaAccessKey(original.store.ownerId, ulid)
   }
 
-  private def computeMediaTimestamp(original: Original): Either[OriginalFileIssue, OffsetDateTime] = {
+  private def computeMediaTimestamp(original: Original): OffsetDateTime = {
     val sdt = original.cameraShootDateTime.filter(_.year >= 1990) // TODO - Add rule/config to control shootDataTime validity !
     sdt match {
-      case Some(shootDateTime) => Right(shootDateTime.offsetDateTime)
-      case _                   => Right(original.fileLastModified.offsetDateTime)
+      case Some(shootDateTime) => shootDateTime.offsetDateTime
+      case _                   => original.fileLastModified.offsetDateTime
     }
+  }
+
+  def buildEventAttachment(original: Original): Option[EventAttachment] = buildEventAttachment(original.store, original.mediaPath)
+
+  def buildEventAttachment(store: Store, originalMediaPath: OriginalPath): Option[EventAttachment] = {
+    val relativeDirectory = Option(originalMediaPath.parent).map { photoParentDir =>
+      store.baseDirectory.path.relativize(photoParentDir)
+    }
+
+    relativeDirectory.map(dir => EventAttachment(store, EventMediaDirectory(dir))).filter(_.eventMediaDirectory.path.toString.nonEmpty)
   }
 
   def buildDefaultMediaEvent(original: Original): Option[Event] = buildDefaultMediaEvent(original.store, original.mediaPath)
 
   def buildDefaultMediaEvent(store: Store, originalMediaPath: OriginalPath): Option[Event] = {
-    val eventId        = EventId(UUID.randomUUID())
-    val relativeDirectory      = Option(originalMediaPath.parent).map { photoParentDir =>
-      store.baseDirectory.path.relativize(photoParentDir)
-    }
-    val eventName = relativeDirectory.map(_.toString)
-    val mediaRelativeDirectory = EventMediaDirectory(relativeDirectory.getOrElse(Path.of(".")))
+    val eventId         = EventId(UUID.randomUUID())
+    val eventAttachment = buildEventAttachment(store, originalMediaPath)
+    val eventName       = eventAttachment.map(_.eventMediaDirectory.toString)
 
     eventName
       .filter(_.nonEmpty)
       .map(name =>
         Event(
           id = eventId,
-          attachment = Some(EventAttachment(store, mediaRelativeDirectory)),
+          attachment = eventAttachment,
           name = EventName(name),
           description = None,
           keywords = Set.empty
         )
       )
-  }
-
-  private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
-  private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|tif|tiff|ico|heif|heic)$""".r
-
-  def computeMediaKind(original: Original): Either[CoreIssue, MediaKind] = {
-    val ext = original.mediaPath.extension
-    ext match {
-      case VideoExtensionsRE(_) => Right(MediaKind.Video)
-      case PhotoExtensionsRE(_) => Right(MediaKind.Photo)
-      case _                    => Left(OriginalFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
-    }
   }
 
   /** Generates a `Media` object from an `Original` object by computing its properties such as timestamp, media access key, event, and media kind.
@@ -84,14 +80,10 @@ object MediaBuilder {
   def mediaFromOriginal(
     original: Original,
     knownEvent: Option[Event]
-  ): Either[CoreIssue, Media] = {
-    for {
-      timestamp     <- computeMediaTimestamp(original)
-      mediaAccessKey = buildDefaultMediaAccessKey(original.store.ownerId, timestamp)
-      kind          <- computeMediaKind(original)
-    } yield Media(
+  ): Either[CoreIssue, Media] = Right {
+    val mediaAccessKey = buildDefaultMediaAccessKey(original)
+    Media(
       accessKey = mediaAccessKey,
-      kind = kind,
       original = original,
       event = knownEvent.toList,
       description = None,

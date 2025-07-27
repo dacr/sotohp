@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.media.core.{FileSystemSearch, OriginalBuilder}
+import fr.janalyse.sotohp.media.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.media.model.*
 import fr.janalyse.sotohp.service.dao.*
 import wvlet.airframe.ulid.ULID
@@ -59,17 +59,16 @@ class MediaServiceLive private (
 
   override def mediaLast(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaGet(key: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
+    medias
+      .fetch(key)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
+      .flatMap(maybeDaoMedia => ZIO.foreach(maybeDaoMedia)(daoMedia2Media))
+  }
 
   override def mediaUpdate(
     key: MediaAccessKey,
-    eventId: Option[EventId],
-    description: Option[MediaDescription],
-    starred: Starred,
-    keywords: Set[Keyword],
-    orientation: Option[Orientation],
-    shootDateTime: Option[ShootDateTime], // If updated the key:MediaAccessKey will be updated
-    location: Option[Location]
+    updatedMedia: Media
   ): IO[ServiceIssue, Option[Media]] = ???
 
   override def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
@@ -161,7 +160,6 @@ class MediaServiceLive private (
   override def eventList(): Stream[ServiceStreamIssue, Event] = {
     events
       .stream()
-      .tap(daoEvent => ZIO.succeed(println(s"daoEvent : $daoEvent")))
       .mapZIO(daoEvent2Event)
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect events : $err"))
   }
@@ -179,7 +177,6 @@ class MediaServiceLive private (
   }
 
   override def eventCreate(attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Event] = {
-    println(s"eventCreate : attachment=$attachment, name=$name, description=$description, keywords=$keywords")
     for {
       eventId <- Random.nextUUID.map(EventId.apply)
       event    = Event(eventId, attachment, name, description, keywords)
@@ -288,7 +285,7 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  private def synchronizeOriginal(original: Original): IO[ServiceIssue, Original]                        = {
+  private def synchronizeOriginal(original: Original): IO[ServiceIssue, Original] = {
     for {
       available <- originalExists(original.id)
       _         <- originalUpsert(original).when(!available)
@@ -307,7 +304,7 @@ class MediaServiceLive private (
                             originalHash = None,
                             originalAddedOn = AddedOn(now),
                             originalLastChecked = LastChecked(now),
-                            mediaAccessKey = None,
+                            mediaAccessKey = MediaBuilder.buildDefaultMediaAccessKey(original),
                             mediaLastSynchronized = None
                           )
                         )
@@ -315,8 +312,47 @@ class MediaServiceLive private (
     } yield (original, state)
   }
 
-  private def synchronizeMedia(input:(original: Original, state:State)):IO[ServiceIssue, Media] = {
-    ???
+  private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
+    // TODO first basic and naive implementation - not good for complexity
+    events
+      //.collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory)) // TODO BUG IN ZIO-LMDB !!
+      .stream() // TODO workaround
+      .runCollect // TODO workaround
+      .map(_.filter(daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))) // TODO workaround
+      .map(_.headOption)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"))
+      .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
+  }
+
+  private def createDefaultEvent(attachment: EventAttachment): IO[ServiceIssue, Event] = {
+    // TODO add automatic keywords extraction
+    eventCreate(attachment = Some(attachment), name = EventName(attachment.eventMediaDirectory.toString), description = None, keywords = Set.empty)
+  }
+
+  private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, Media] = {
+    val relatedEventAttachment = MediaBuilder.buildEventAttachment(input.original)
+    for {
+      mayBeEvent   <- ZIO
+                        .foreach(relatedEventAttachment)(attachment => getEventForAttachment(attachment).someOrElseZIO(createDefaultEvent(attachment)))
+      currentMedia <- mediaGet(input.state.mediaAccessKey) // already existing media is the source of truth !
+                        .someOrElseZIO {
+                          val daoMedia = DaoMedia(
+                            accessKey = input.state.mediaAccessKey,
+                            originalId = input.original.id,
+                            events = mayBeEvent.map(_.id).toSet,
+                            description = None,
+                            starred = Starred(false),
+                            keywords = Set.empty,
+                            orientation = None,
+                            shootDateTime = None,
+                            location = None
+                          )
+                          medias
+                            .upsert(input.state.mediaAccessKey, _ => daoMedia)
+                            .flatMap(daoMedia2Media)
+                            .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
+                        }
+    } yield currentMedia
   }
 
   override def synchronize(): IO[ServiceIssue, Unit] = {

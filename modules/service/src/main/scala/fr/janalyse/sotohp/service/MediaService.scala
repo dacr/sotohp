@@ -17,16 +17,11 @@ trait MediaService {
   def mediaPrevious(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
   def mediaNext(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
   def mediaLast(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
-  def mediaGet(key: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
+  def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]]
+
   def mediaUpdate(
-    key: MediaAccessKey,
-    eventId: Option[EventId],
-    description: Option[MediaDescription],
-    starred: Starred,
-    keywords: Set[Keyword],
-    orientation: Option[Orientation],
-    shootDateTime: Option[ShootDateTime],
-    location: Option[Location]
+    key: MediaAccessKey, // current media key
+    updatedMedia:Media // can contain the media key to use
   ): IO[ServiceIssue, Option[Media]]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -128,19 +123,13 @@ object MediaService {
 
   def mediaLast(ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaLast(ownerId))
 
-  def mediaGet(key: MediaAccessKey, ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGet(key, ownerId))
-
+  def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGet(key))
+  
   def mediaUpdate(
     key: MediaAccessKey,
-    eventId: Option[EventId],
-    description: Option[MediaDescription],
-    starred: Starred,
-    keywords: Set[Keyword],
-    orientation: Option[Orientation],
-    shootDateTime: Option[ShootDateTime],
-    location: Option[Location]
+    updatedMedia: Media
   ): ZIO[MediaService, ServiceIssue, Option[Media]] =
-    ZIO.serviceWithZIO(_.mediaUpdate(key, eventId, description, starred, keywords, orientation, shootDateTime, location))
+    ZIO.serviceWithZIO(_.mediaUpdate(key, updatedMedia))
 
   // -------------------------------------------------------------------------------------------------------------------
   def stateList(): ZStream[MediaService, ServiceStreamIssue, State]                             = ZStream.serviceWithStream(_.stateList())

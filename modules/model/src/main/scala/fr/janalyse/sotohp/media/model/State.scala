@@ -5,6 +5,6 @@ case class State(
   originalHash: Option[OriginalHash], // lazily computed as it is a costly operation
   originalAddedOn: AddedOn,
   originalLastChecked: LastChecked,
-  mediaAccessKey: Option[MediaAccessKey],
+  mediaAccessKey: MediaAccessKey,
   mediaLastSynchronized: Option[LastSynchronized]
 )

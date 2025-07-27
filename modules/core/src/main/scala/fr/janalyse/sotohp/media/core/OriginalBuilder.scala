@@ -232,19 +232,19 @@ object OriginalBuilder {
     result.flatten
   }
 
-  private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
-  private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|dib|tiff|ico|heif|heic)$""".r
+  def now() = OffsetDateTime.now(ZoneOffset.UTC)
 
-  def computeMediaKind(original: Original): Either[OriginalIssue, MediaKind] = {
-    val ext = original.mediaPath.extension
+  private val VideoExtensionsRE = """(?i)^(mp4|mov|avi|mkv|wmv|mpg|mpeg)$""".r
+  private val PhotoExtensionsRE = """(?i)^(jpg|jpeg|png|gif|bmp|tif|tiff|ico|heif|heic)$""".r
+
+  def computeMediaKind(mediaPath: OriginalPath): Either[OriginalIssue, MediaKind] = {
+    val ext = mediaPath.extension
     ext match {
       case VideoExtensionsRE(_) => Right(MediaKind.Video)
       case PhotoExtensionsRE(_) => Right(MediaKind.Photo)
-      case _                    => Left(OriginalFileIssue(s"Unsupported file extension $ext", original.mediaPath.path, new Exception("Unsupported file extension")))
+      case _                    => Left(OriginalFileIssue(s"Unsupported file extension $ext", mediaPath.path, new Exception("Unsupported file extension")))
     }
   }
-
-  def now() = OffsetDateTime.now(ZoneOffset.UTC)
 
   /** Generates an `Original` object from a media file and its associated metadata.
     *
@@ -266,6 +266,7 @@ object OriginalBuilder {
     for {
       fileSize         <- getOriginalFileSize(mediaPath)
       fileLastModified <- getOriginalFileLastModified(mediaPath)
+      kind             <- computeMediaKind(mediaPath)
       drewMetadata     <- readDrewMetadata(mediaPath)
       shootDateTime     = extractShootDateTime(drewMetadata)
       cameraName        = extractCameraName(drewMetadata)
@@ -285,6 +286,7 @@ object OriginalBuilder {
       mediaPath = mediaPath,
       fileSize = fileSize,
       fileLastModified = FileLastModified(fileLastModified),
+      kind = kind,
       cameraShootDateTime = shootDateTime,
       cameraName = cameraName,
       artistInfo = artistInfo,

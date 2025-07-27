@@ -11,6 +11,7 @@ case class DaoOriginal(
   mediaPath: OriginalPath,
   fileSize: FileSize,
   fileLastModified: FileLastModified,
+  kind: MediaKind,
   cameraShootDateTime: Option[ShootDateTime],
   cameraName: Option[CameraName],
   artistInfo: Option[ArtistInfo],

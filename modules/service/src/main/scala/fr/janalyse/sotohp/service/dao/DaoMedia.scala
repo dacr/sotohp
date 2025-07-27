@@ -5,7 +5,6 @@ import zio.lmdb.json.LMDBCodecJson
 
 case class DaoMedia(
   accessKey: MediaAccessKey,
-  kind: MediaKind,
   originalId: OriginalId,
   events: Set[EventId],
   description: Option[MediaDescription],

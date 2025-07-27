@@ -18,6 +18,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         _         <- MediaService.synchronize()
         originals <- MediaService.originalList().runCollect
         events    <- MediaService.eventList().runCollect
+        states    <- MediaService.stateList().runCollect
         medias    <- MediaService.mediaList().runCollect
       } yield assertTrue(
         originals.size == 13,
@@ -32,8 +33,9 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         originals.forall(_.iso.isDefined),
         originals.forall(_.focalLength.isDefined),
         events.size == 6,
+        states.size == 13,
         medias.size == 13,
-        medias.filter(_.event.nonEmpty).size == 12,
+        medias.filter(_.event.nonEmpty).size == 12
       )
     }
   )

@@ -8,6 +8,6 @@ case class DaoState(
   originalHash: Option[OriginalHash],
   originalAddedOn: AddedOn,
   originalLastChecked: LastChecked,
-  mediaAccessKey: Option[MediaAccessKey],
+  mediaAccessKey: MediaAccessKey,
   mediaLastSynchronized: Option[LastSynchronized]
 ) derives LMDBCodecJson

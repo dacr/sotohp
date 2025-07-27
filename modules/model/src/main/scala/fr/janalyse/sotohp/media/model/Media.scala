@@ -2,7 +2,6 @@ package fr.janalyse.sotohp.media.model
 
 case class Media(
   accessKey: MediaAccessKey,
-  kind: MediaKind,
   original: Original,
   event: List[Event],
   description: Option[MediaDescription],
