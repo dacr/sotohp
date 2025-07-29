@@ -119,12 +119,14 @@ object OriginalBuilder {
   }
 
   def extractCameraName(metadata: DrewMetadata): Option[CameraName] = {
-    val tagName = ExifDirectoryBase.TAG_MODEL
+    val modelTagName = ExifDirectoryBase.TAG_MODEL
+    val makerTagName = ExifDirectoryBase.TAG_MAKE
     for {
       exif       <- extractExif(metadata)
-      if exif.containsTag(tagName)
-      cameraName <- Option(exif.getString(tagName))
-    } yield CameraName(cameraName)
+      if exif.containsTag(modelTagName) && exif.containsTag(makerTagName)
+      cameraModel <- Option(exif.getString(modelTagName))
+      cameraMaker      <- Option(exif.getString(makerTagName))
+    } yield CameraName(s"$cameraMaker/$cameraModel")
   }
 
   def extractArtistInfo(metadata: DrewMetadata): Option[ArtistInfo] = {

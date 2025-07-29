@@ -293,6 +293,16 @@ class MediaServiceLive private (
     } yield original
   }
 
+  /** Generate if needed original related artifacts (miniatures & normalized original)
+    * @param original
+    * @return
+    *   given original
+    */
+  private def synchronizeArtifacts(original: Original): IO[ServiceIssue, Original] = {
+    // TODO
+    ZIO.succeed(original)
+  }
+
   private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
     for {
       currentState <- stateGet(original.id)
@@ -316,12 +326,8 @@ class MediaServiceLive private (
   private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
     // TODO first basic and naive implementation - not good for complexity
     events
-      .collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory)) // TODO BUG IN ZIO-LMDB !!
-      //.stream() // TODO workaround
-      //.runCollect // TODO workaround
-      //.map(_.filter(daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))) // TODO workaround
-      .map(_.headOption)
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"))
+      .collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"), _.headOption)
       .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
   }
 
@@ -330,7 +336,7 @@ class MediaServiceLive private (
     eventCreate(attachment = Some(attachment), name = EventName(attachment.eventMediaDirectory.toString), description = None, keywords = Set.empty)
   }
 
-  private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, Media] = {
+  private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val relatedEventAttachment = MediaBuilder.buildEventAttachment(input.original)
     for {
       mayBeEvent   <- ZIO
@@ -353,7 +359,12 @@ class MediaServiceLive private (
                             .flatMap(daoMedia2Media)
                             .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
                         }
-    } yield currentMedia
+    } yield (currentMedia, input.state)
+  }
+
+  private def synchronizeSearchEngine(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
+    // TODO to implement
+    ZIO.succeed(input)
   }
 
   override def synchronize(): IO[ServiceIssue, Unit] = {
@@ -362,8 +373,11 @@ class MediaServiceLive private (
       .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
       .right
       .mapZIO(synchronizeOriginal)
+      .mapZIO(synchronizeArtifacts)
       .mapZIO(synchronizeState)
       .mapZIO(synchronizeMedia)
+      .filter(_.state.mediaLastSynchronized.isEmpty)
+      .mapZIO(synchronizeSearchEngine)
       .runDrain
       .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
   }
