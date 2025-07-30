@@ -12,6 +12,7 @@ import io.scalaland.chimney.dsl.*
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import java.util.regex.Pattern
 import scala.util.{Failure, Success, Try}
 
 type LMDBIssues = StorageUserError | StorageSystemError
@@ -333,7 +334,13 @@ class MediaServiceLive private (
 
   private def createDefaultEvent(attachment: EventAttachment): IO[ServiceIssue, Event] = {
     // TODO add automatic keywords extraction
-    eventCreate(attachment = Some(attachment), name = EventName(attachment.eventMediaDirectory.toString), description = None, keywords = Set.empty)
+    val autoKeywords = keywordSentenceToKeywords(attachment.store.id, attachment.store.baseDirectory.toString)
+    eventCreate(
+      attachment = Some(attachment),
+      name = EventName(attachment.eventMediaDirectory.toString),
+      description = None,
+      keywords = Set.empty,
+    )
   }
 
   private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
@@ -382,6 +389,25 @@ class MediaServiceLive private (
       .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
   }
 
+  // -------------------------------------------------------------------------------------------------------------------
+
+  override def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]] = ???
+
+  override def keywordList(storeId: StoreId): IO[ServiceIssue, List[(keyword: Keyword, counter: RuntimeFlags)]] = ???
+
+  override def keywordDelete(storeId: StoreId, keyword: Keyword): IO[ServiceIssue, Unit] = ???
+
+  override def keywordExcludingList(storeId: StoreId): IO[ServiceIssue, List[Keyword]] = ???
+
+  override def keywordExcludingUpsert(storeId: StoreId, excludedKeywords: List[Keyword]): IO[ServiceIssue, Unit] = ???
+
+  override def keywordFixingList(storeId: StoreId): IO[ServiceIssue, List[(pattern: Pattern, replacement: String)]] = ???
+
+  override def keywordFixingUpsert(storeId: StoreId, fixes: List[(pattern: Pattern, replacement: String)]): IO[ServiceIssue, Unit] = ???
+
+  override def keywordMappingList(storeId: StoreId): IO[ServiceIssue, List[(from: String, to: String)]] = ???
+
+  override def keywordMappingUpsert(storeId: StoreId, fixes: List[(from: Pattern, to: String)]): IO[ServiceIssue, Unit] = ???
 }
 
 object MediaServiceLive {

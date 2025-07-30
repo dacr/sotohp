@@ -6,6 +6,7 @@ import fr.janalyse.sotohp.media.model.*
 import zio.lmdb.LMDB
 
 import java.time.OffsetDateTime
+import java.util.regex.Pattern
 
 trait MediaService {
 
@@ -96,6 +97,21 @@ trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
   def synchronize(): IO[ServiceIssue, Unit]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]]
+
+  def keywordList(storeId: StoreId): IO[ServiceIssue, List[(keyword:Keyword, counter:Int)]]
+  def keywordDelete(storeId: StoreId, keyword:Keyword): IO[ServiceIssue, Unit]
+
+  def keywordExcludingList(storeId: StoreId): IO[ServiceIssue, List[Keyword]]
+  def keywordExcludingUpsert(storeId: StoreId, excludedKeywords:List[Keyword]): IO[ServiceIssue, Unit]
+
+  def keywordFixingList(storeId: StoreId): IO[ServiceIssue, List[(pattern:Pattern, replacement:String)]]
+  def keywordFixingUpsert(storeId: StoreId, fixes:List[(pattern:Pattern, replacement:String)]): IO[ServiceIssue, Unit]
+
+  def keywordMappingList(storeId: StoreId): IO[ServiceIssue, List[(from:String, to:String)]]
+  def keywordMappingUpsert(storeId: StoreId, fixes:List[(from:Pattern, to:String)]): IO[ServiceIssue, Unit]
 }
 
 object MediaService {
@@ -194,4 +210,23 @@ object MediaService {
   // -------------------------------------------------------------------------------------------------------------------
 
   def synchronize(): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronize())
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def keywordList(storeId: StoreId): ZIO[MediaService, ServiceIssue, List[(keyword: Keyword, counter: Int)]] = ZIO.serviceWithZIO(_.keywordList(storeId))
+
+  def keywordDelete(storeId: StoreId, keyword: Keyword): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.keywordDelete(storeId, keyword))
+
+  def keywordExcludingList(storeId: StoreId): ZIO[MediaService, ServiceIssue, List[Keyword]] = ZIO.serviceWithZIO(_.keywordExcludingList(storeId))
+
+  def keywordExcludingUpsert(storeId: StoreId, excludedKeywords: List[Keyword]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.keywordExcludingUpsert(storeId, excludedKeywords))
+
+  def keywordFixingList(storeId: StoreId): ZIO[MediaService, ServiceIssue, List[(pattern: Pattern, replacement: String)]] = ZIO.serviceWithZIO(_.keywordFixingList(storeId))
+
+  def keywordFixingUpsert(storeId: StoreId, fixes: List[(pattern: Pattern, replacement: String)]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.keywordFixingUpsert(storeId, fixes))
+
+  def keywordMappingList(storeId: StoreId): ZIO[MediaService, ServiceIssue, List[(from: String, to: String)]] = ZIO.serviceWithZIO(_.keywordMappingList(storeId))
+
+  def keywordMappingUpsert(storeId: StoreId, fixes: List[(from: Pattern, to: String)]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.keywordMappingUpsert(storeId, fixes))
+
 }
