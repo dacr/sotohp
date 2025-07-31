@@ -209,6 +209,7 @@ object MediaService {
   def synchronize(): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronize())
 
   // -------------------------------------------------------------------------------------------------------------------
+  def keywordSentenceToKeywords(storeId: StoreId, sentence: String): ZIO[MediaService, ServiceIssue, Set[Keyword]] = ZIO.serviceWithZIO(_.keywordSentenceToKeywords(storeId, sentence))
 
   def keywordList(storeId: StoreId): ZIO[MediaService, ServiceIssue, Map[Keyword, Int]]        = ZIO.serviceWithZIO(_.keywordList(storeId))
   def keywordDelete(storeId: StoreId, keyword: Keyword): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.keywordDelete(storeId, keyword))

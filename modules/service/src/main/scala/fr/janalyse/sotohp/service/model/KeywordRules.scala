@@ -10,7 +10,6 @@ case class Rewriting(
 )
 
 case class KeywordRules(
-  storeId: StoreId,
   ignoring: Set[String],
   mappings: Map[String, String],
   rewritings: List[Rewriting]

@@ -26,7 +26,6 @@ object DaoRewriting {
 }
 
 case class DaoKeywordRules(
-  storeId: StoreId,
   ignoring: Set[String],
   mappings: Map[String,String],
   rewritings: List[DaoRewriting]

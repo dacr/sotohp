@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.service.model.{KeywordRules, Rewriting}
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.LMDB
@@ -103,8 +104,39 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
     )
   )
 
+  def suiteKeywords = suite("keywords")(
+    test("keyword rules create read update delete")(
+      for {
+        owner        <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
+        store        <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
+        rules         = KeywordRules(ignoring = Set.empty, mappings = Map.empty, rewritings = Nil)
+        _            <- MediaService.keywordRulesUpsert(store.id, rules)
+        rulesFetched <- MediaService.keywordRulesGet(store.id).some
+        _            <- MediaService.keywordRulesUpsert(store.id, rules.copy(ignoring = Set("with")))
+        rulesUpdated <- MediaService.keywordRulesGet(store.id).some
+        _            <- MediaService.keywordRulesDelete(store.id)
+      } yield assertTrue(
+        rulesFetched.ignoring.isEmpty,
+        rulesUpdated.ignoring.size == 1
+      )
+    ),
+    test("keyword rules usage")(
+      for {
+        owner       <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
+        store       <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
+        _           <- MediaService.keywordRulesUpsert(
+                         store.id,
+                         KeywordRules(ignoring = Set("with", "i", "am"), mappings = Map("nigght" -> "night"), rewritings = Rewriting("(42)(thing)".r, "$2$1") :: Nil)
+                       )
+        result1 <- MediaService.keywordSentenceToKeywords(store.id, "I am with nigght 42thing")
+      } yield assertTrue(
+        result1 == Set("night", "thing42").map(Keyword.apply)
+      )
+    )
+  )
+
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    (suiteStores + suiteOwners + suiteEvents)
+    (suiteStores + suiteOwners + suiteEvents + suiteKeywords)
       .provideShared(LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live, Scope.default)
       @@ TestAspect.sequential
 

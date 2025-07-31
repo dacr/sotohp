@@ -427,6 +427,7 @@ class MediaServiceLive private (
     for {
       mayBeRules <- keywordRulesGet(storeId)
       keywords    = mayBeRules.map(rules => extractKeywords(sentence, rules)).getOrElse(Set.empty)
+      // TODO add automatic keywords for year and month ?
     } yield keywords.map(Keyword.apply)
   }
 
@@ -443,7 +444,17 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't extract store keywords : $err"))
   }
 
-  override def keywordDelete(storeId: StoreId, keyword: Keyword): IO[ServiceIssue, Unit] = ???
+  override def keywordDelete(storeId: StoreId, keyword: Keyword): IO[ServiceIssue, Unit] = {
+    // TODO first implementation - too slow but with low memory usage
+    mediaList()
+      .filter(_.original.store.id == storeId)
+      .map(media => media.copy(keywords = media.keywords.filterNot(_.text == keyword.text)))
+      .flatMap(media => ZStream.fromIterable(media.events))
+      .map(event => event.copy(keywords = event.keywords.filterNot(_.text == keyword.text)))
+      .tap(event => eventUpdate(event.id, attachment = event.attachment, name = event.name, description = event.description, keywords = event.keywords))
+      .runDrain
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete keyword : $err"))
+  }
 
   override def keywordRulesList(): IO[ServiceIssue, Chunk[KeywordRules]] = {
     keywordRules

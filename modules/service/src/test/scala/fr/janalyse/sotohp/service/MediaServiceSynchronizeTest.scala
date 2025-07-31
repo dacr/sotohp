@@ -21,7 +21,6 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         _              <- MediaService.keywordRulesUpsert(
                             store.id,
                             KeywordRules(
-                              store.id,
                               ignoring = Set("la", "dans", "le", "et", "en"),
                               mappings = Map(),
                               rewritings = List.empty
