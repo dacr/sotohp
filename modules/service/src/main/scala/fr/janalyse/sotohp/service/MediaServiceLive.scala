@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.service
 import fr.janalyse.sotohp.media.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.media.model.*
 import fr.janalyse.sotohp.service.dao.*
+import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.{LMDB, LMDBCodec, LMDBCollection, LMDBKodec, StorageSystemError, StorageUserError}
@@ -13,6 +14,7 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.regex.Pattern
+import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 
 type LMDBIssues = StorageUserError | StorageSystemError
@@ -24,7 +26,8 @@ class MediaServiceLive private (
   events: LMDBCollection[EventId, DaoEvent],
   medias: LMDBCollection[MediaAccessKey, DaoMedia],
   owners: LMDBCollection[OwnerId, DaoOwner],
-  stores: LMDBCollection[StoreId, DaoStore]
+  stores: LMDBCollection[StoreId, DaoStore],
+  keywordRules: LMDBCollection[StoreId, DaoKeywordRules]
 ) extends MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -334,13 +337,14 @@ class MediaServiceLive private (
 
   private def createDefaultEvent(attachment: EventAttachment): IO[ServiceIssue, Event] = {
     // TODO add automatic keywords extraction
-    val autoKeywords = keywordSentenceToKeywords(attachment.store.id, attachment.store.baseDirectory.toString)
-    eventCreate(
-      attachment = Some(attachment),
-      name = EventName(attachment.eventMediaDirectory.toString),
-      description = None,
-      keywords = Set.empty,
-    )
+    keywordSentenceToKeywords(attachment.store.id, attachment.eventMediaDirectory.toString).flatMap { autoKeywords =>
+      eventCreate(
+        attachment = Some(attachment),
+        name = EventName(attachment.eventMediaDirectory.toString),
+        description = None,
+        keywords = autoKeywords
+      )
+    }
   }
 
   private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
@@ -391,23 +395,85 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  override def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]] = ???
+  private def camelTokenize(that: String): Array[String] = that.split("(?=[A-Z][^A-Z])|(?:(?<=[^A-Z])(?=[A-Z]+))")
 
-  override def keywordList(storeId: StoreId): IO[ServiceIssue, List[(keyword: Keyword, counter: RuntimeFlags)]] = ???
+  private def camelToKebabCase(that: String): String = camelTokenize(that).map(_.toLowerCase).mkString("-")
+
+  @tailrec
+  private def keywordApplyRewritings(rewritings: List[Rewriting], input: String): String = {
+    rewritings match {
+      case Nil                                     => input
+      case Rewriting(regex, replacement) :: remain => keywordApplyRewritings(remain, regex.replaceAllIn(input, replacement))
+    }
+  }
+
+  def extractKeywords(sentence: String, rules: KeywordRules): Set[String] = {
+    keywordApplyRewritings(rules.rewritings, sentence)
+      .split("[- /,']+")
+      .toList
+      .filter(_.size > 0)
+      // .filterNot(_.contains("'"))
+      .flatMap(key => camelToKebabCase(key).split("-")) // TODO add dedicated option to rules ?
+      .map(token => rules.mappings.get(token.toLowerCase).getOrElse(token))
+      .flatMap(_.split("[- ]+"))
+      .filter(_.trim.size > 0)
+      .filterNot(_.matches("^[-0-9]+$"))                // TODO add option to rules to ignore standalone numbers
+      .map(_.toLowerCase)
+      .filterNot(key => rules.ignoring.contains(key))
+      .toSet
+  }
+
+  override def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]] = {
+    for {
+      mayBeRules <- keywordRulesGet(storeId)
+      keywords    = mayBeRules.map(rules => extractKeywords(sentence, rules)).getOrElse(Set.empty)
+    } yield keywords.map(Keyword.apply)
+  }
+
+  override def keywordList(storeId: StoreId): IO[ServiceIssue, Map[Keyword, Int]] = {
+    // TODO first implementation - too slow but with low memory usage
+    mediaList()
+      .filter(_.original.store.id == storeId)
+      .map(media => (media.keywords.toList ++ media.events.flatMap(_.keywords)).groupMapReduce(_.text)(_ => 1)(_ + _))
+      .runFold(Map.empty[Keyword, Int])((acc, curr) =>
+        curr.foldLeft(acc) { case (res, (keyword, count)) =>
+          res + (Keyword(keyword) -> (count + res.getOrElse(Keyword(keyword), 0)))
+        }
+      )
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't extract store keywords : $err"))
+  }
 
   override def keywordDelete(storeId: StoreId, keyword: Keyword): IO[ServiceIssue, Unit] = ???
 
-  override def keywordExcludingList(storeId: StoreId): IO[ServiceIssue, List[Keyword]] = ???
+  override def keywordRulesList(): IO[ServiceIssue, Chunk[KeywordRules]] = {
+    keywordRules
+      .stream()
+      .mapZIO(r => ZIO.attempt(r.transformInto[KeywordRules]))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't collect keyword rules : $err"))
+      .runCollect
+  }
 
-  override def keywordExcludingUpsert(storeId: StoreId, excludedKeywords: List[Keyword]): IO[ServiceIssue, Unit] = ???
+  override def keywordRulesGet(storeId: StoreId): IO[ServiceIssue, Option[KeywordRules]] = {
+    keywordRules
+      .fetch(storeId)
+      .flatMap(r => ZIO.attempt(r.map(_.transformInto[KeywordRules])))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get keyword rules : $err"))
+  }
 
-  override def keywordFixingList(storeId: StoreId): IO[ServiceIssue, List[(pattern: Pattern, replacement: String)]] = ???
+  override def keywordRulesUpsert(storeId: StoreId, rules: KeywordRules): IO[ServiceIssue, Unit] = {
+    keywordRules
+      .upsert(storeId, _ => rules.transformInto[DaoKeywordRules])
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update keyword rules : $err"))
+      .unit
+  }
 
-  override def keywordFixingUpsert(storeId: StoreId, fixes: List[(pattern: Pattern, replacement: String)]): IO[ServiceIssue, Unit] = ???
+  override def keywordRulesDelete(storeId: StoreId): IO[ServiceIssue, Unit] = {
+    keywordRules
+      .delete(storeId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete keyword rule : $err"))
+      .unit
+  }
 
-  override def keywordMappingList(storeId: StoreId): IO[ServiceIssue, List[(from: String, to: String)]] = ???
-
-  override def keywordMappingUpsert(storeId: StoreId, fixes: List[(from: Pattern, to: String)]): IO[ServiceIssue, Unit] = ???
 }
 
 object MediaServiceLive {
@@ -473,23 +539,33 @@ object MediaServiceLive {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  private val originalsCollectionName = "originals"
-  private val statesCollectionName    = "states"
-  private val eventsCollectionName    = "events"
-  private val mediasCollectionName    = "medias"
-  private val ownersCollectionName    = "owners"
-  private val storesCollectionName    = "stores"
-  private val allCollections          = List(originalsCollectionName, statesCollectionName, eventsCollectionName, mediasCollectionName, ownersCollectionName, storesCollectionName)
+  private val originalsCollectionName    = "originals"
+  private val statesCollectionName       = "states"
+  private val eventsCollectionName       = "events"
+  private val mediasCollectionName       = "medias"
+  private val ownersCollectionName       = "owners"
+  private val storesCollectionName       = "stores"
+  private val keywordRulesCollectionName = "keywordRules"
+  private val allCollections             = List(
+    originalsCollectionName,
+    statesCollectionName,
+    eventsCollectionName,
+    mediasCollectionName,
+    ownersCollectionName,
+    storesCollectionName,
+    keywordRulesCollectionName
+  )
 
   def setup(lmdb: LMDB): IO[LMDBIssues, MediaService] = for {
-    _             <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
-    originalsColl <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
-    statesColl    <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
-    eventsColl    <- lmdb.collectionGet[EventId, DaoEvent](eventsCollectionName)
-    mediasColl    <- lmdb.collectionGet[MediaAccessKey, DaoMedia](mediasCollectionName)
-    ownersColl    <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
-    storesColl    <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
-  } yield new MediaServiceLive(lmdb, originalsColl, statesColl, eventsColl, mediasColl, ownersColl, storesColl)
+    _                <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
+    originalsColl    <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
+    statesColl       <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
+    eventsColl       <- lmdb.collectionGet[EventId, DaoEvent](eventsCollectionName)
+    mediasColl       <- lmdb.collectionGet[MediaAccessKey, DaoMedia](mediasCollectionName)
+    ownersColl       <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
+    storesColl       <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
+    keywordRulesColl <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
+  } yield new MediaServiceLive(lmdb, originalsColl, statesColl, eventsColl, mediasColl, ownersColl, storesColl, keywordRulesColl)
 
   // -------------------------------------------------------------------------------------------------------------------
 

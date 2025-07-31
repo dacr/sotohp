@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.service.model.KeywordRules
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.LMDB
@@ -17,6 +18,15 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         epoch          <- Clock.currentDateTime      // Virtual Clock so == epoch
         owner          <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
         store          <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
+        _              <- MediaService.keywordRulesUpsert(
+                            store.id,
+                            KeywordRules(
+                              store.id,
+                              ignoring = Set("la", "dans", "le", "et", "en"),
+                              mappings = Map(),
+                              rewritings = List.empty
+                            )
+                          )
         _              <- MediaService.synchronize() // ------ FIRST SYNC
         originals      <- MediaService.originalList().runCollect
         events         <- MediaService.eventList().runCollect
@@ -28,6 +38,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         eventsAgain    <- MediaService.eventList().runCollect
         statesAgain    <- MediaService.stateList().runCollect
         mediasAgain    <- MediaService.mediaList().runCollect
+        keywords       <- MediaService.keywordList(store.id)
       } yield assertTrue(
         originals.size == 13,
         originals.forall(_.cameraShootDateTime.isDefined),
@@ -48,7 +59,8 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         events == eventsAgain,
         states != statesAgain,                    // originalLastChecked should differ :
         states == statesAgain.map(_.copy(originalLastChecked = LastChecked(epoch))),
-        mediasAgain == medias
+        mediasAgain == medias,
+        keywords.size == 19
       )
     }
   )
