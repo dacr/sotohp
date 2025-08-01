@@ -6,7 +6,7 @@ import ai.djl.modality.Classifications
 import ai.djl.modality.Classifications.Classification
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.repository.zoo.{Criteria, ModelZoo}
-import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.media.model.*
 import fr.janalyse.sotohp.store.*
 import zio.*
 import zio.ZIOAspect.*

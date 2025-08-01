@@ -1,8 +1,8 @@
 package fr.janalyse.sotohp.processor
 
+import fr.janalyse.sotohp.media.imaging.BasicImaging
 import zio.*
 import zio.test.*
-import fr.janalyse.sotohp.processor.BasicImaging
 
 import java.awt.Color
 import java.awt.image.BufferedImage

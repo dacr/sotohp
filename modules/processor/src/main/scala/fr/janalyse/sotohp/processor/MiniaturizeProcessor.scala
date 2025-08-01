@@ -2,6 +2,7 @@ package fr.janalyse.sotohp.processor
 
 import fr.janalyse.sotohp.config.*
 import fr.janalyse.sotohp.core.*
+import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.store.PhotoStoreService
 import org.apache.commons.imaging.Imaging

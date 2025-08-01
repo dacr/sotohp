@@ -1,12 +1,12 @@
-package fr.janalyse.sotohp.processor
+package fr.janalyse.sotohp.media.imaging
 
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.nio.file.Path
 import javax.imageio.{IIOImage, ImageIO, ImageWriteParam}
 import scala.jdk.CollectionConverters.*
-import scala.util.Using
 import scala.math.*
+import scala.util.Using
 
 case object BasicImaging {
 
@@ -85,9 +85,8 @@ case object BasicImaging {
   }
 
   def display(image: BufferedImage, title: String = "Image display"): javax.swing.JFrame = {
-    import javax.swing.{ImageIcon, JFrame, JLabel}
-    import javax.swing.WindowConstants
     import java.awt.FlowLayout
+    import javax.swing.{ImageIcon, JFrame, JLabel, WindowConstants}
 
     val icon  = ImageIcon(image)
     val frame = JFrame()

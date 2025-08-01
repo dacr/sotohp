@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.processor
 import zio.*
 import fr.janalyse.sotohp.config.*
 import fr.janalyse.sotohp.core.PhotoOperations
+import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.Photo
 
 import java.awt.image.BufferedImage

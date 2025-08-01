@@ -2,8 +2,9 @@ package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.config.SotohpConfig
 import fr.janalyse.sotohp.core.*
+import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.{BasicImaging, FaceFeaturesProcessor, FacesProcessor, NormalizeProcessor}
+import fr.janalyse.sotohp.processor.{FaceFeaturesProcessor, FacesProcessor, NormalizeProcessor}
 import fr.janalyse.sotohp.store.{LazyPhoto, PhotoStoreIssue, PhotoStoreService}
 import smile.math.distance.{EuclideanDistance, Metric}
 import smile.util.SparseArray

@@ -20,8 +20,3 @@ case class Original(
   iso: Option[ISO],
   focalLength: Option[FocalLength]
 )
-
-case class OriginalCameraTags(
-  originalId: OriginalId,
-  tags: Map[String, String]
-)
