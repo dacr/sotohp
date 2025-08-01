@@ -9,13 +9,13 @@ import java.time.OffsetDateTime
 case class SearchServiceIssue(message: String, throwables: Seq[Throwable])
 
 trait SearchService {
-  def publish(medias: Chunk[(State, Media)]): IO[SearchServiceIssue, Chunk[(State, Media)]]
-  def unpublish(state: State, media: Media): IO[SearchServiceIssue, Unit]
+  def publish(medias: Chunk[Media]): IO[SearchServiceIssue, Chunk[Media]]
+  def unpublish(media: Media): IO[SearchServiceIssue, Unit]
 }
 
 object SearchService {
-  def publish(medias: Chunk[(State, Media)]): ZIO[SearchService, SearchServiceIssue, Chunk[(State, Media)]] = ZIO.serviceWithZIO(_.publish(medias))
-  def unpublish(state: State, media: Media): ZIO[SearchService, SearchServiceIssue, Unit]                   = ZIO.serviceWithZIO(_.unpublish(state, media))
+  def publish(medias: Chunk[Media]): ZIO[SearchService, SearchServiceIssue, Chunk[Media]] = ZIO.serviceWithZIO(_.publish(medias))
+  def unpublish(media: Media): ZIO[SearchService, SearchServiceIssue, Unit]               = ZIO.serviceWithZIO(_.unpublish(media))
 
   val live = ZLayer.fromZIO(
     for {
@@ -34,21 +34,21 @@ object SearchService {
 }
 
 class SearchServiceLive(elasticOperations: ElasticOperations, config: SearchServiceConfig) extends SearchService {
-  def publish(medias: Chunk[(State, Media)]): IO[SearchServiceIssue, Chunk[(State, Media)]] = {
+  def publish(medias: Chunk[Media]): IO[SearchServiceIssue, Chunk[Media]] = {
     elasticOperations
-      .upsert(config.indexPrefix, medias.map((state, media) => SaoMedia.fromMedia(state, media)))(_.timestamp, _.id)
+      .upsert(config.indexPrefix, medias.map(media => SaoMedia.fromMedia(media)))(_.timestamp, _.id)
       .when(config.enabled)
       .logError("couldn't upsert some or all photos from the given chunk of photos")
       .mapError(errs => SearchServiceIssue(s"Couldn't upsert", errs))
       .map(_ => medias)
   }
 
-  override def unpublish(state: State, media: Media): IO[SearchServiceIssue, Unit] = {
+  override def unpublish(media: Media): IO[SearchServiceIssue, Unit] = {
     elasticOperations
-      .delete(config.indexPrefix, state.mediaAccessKey.asString, media.timestamp)
+      .delete(config.indexPrefix, media.accessKey.asString, media.timestamp)
       .when(config.enabled)
       .map(_ => ())
-      .logError(s"Couldn't unpublish ${state.mediaAccessKey.asString} ${media.timestamp}")
-      .mapError(err => SearchServiceIssue(s"Couldn't unpublish ${state.mediaAccessKey.asString} ${media.timestamp}", err :: Nil))
+      .logError(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}")
+      .mapError(err => SearchServiceIssue(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}", err :: Nil))
   }
 }

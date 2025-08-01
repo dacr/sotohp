@@ -20,7 +20,6 @@ case class SaoMedia(
   filePath: String,
   fileSize: Long,
   fileLastUpdated: OffsetDateTime,
-  fileHash: Option[String],
   // ----------------- USER DATA -----------------
   event: Option[String], // the default attached event
   keywords: List[String],
@@ -46,7 +45,7 @@ case class SaoMedia(
 
 object SaoMedia {
 
-  def fromMedia(state: State, media: Media): SaoMedia = {
+  def fromMedia(media: Media): SaoMedia = {
     val event =
       media.events
         .find(_.attachment.isDefined)
@@ -55,13 +54,12 @@ object SaoMedia {
     val keywords = media.keywords ++ media.events.flatMap(_.keywords)
     val location = media.location.orElse(media.original.location)
     SaoMedia(
-      id = state.mediaAccessKey.asString,
+      id = media.accessKey.asString,
       timestamp = media.timestamp,
       // ----------------- ORIGINAL FILE INFO -----------------
       filePath = media.original.mediaPath.toString,
       fileSize = media.original.fileSize.value,
       fileLastUpdated = media.original.fileLastModified.offsetDateTime,
-      fileHash = state.originalHash.map(_.code),
       // ----------------- USER DATA -----------------
       event = event,
       keywords = keywords.map(_.text).toList,
