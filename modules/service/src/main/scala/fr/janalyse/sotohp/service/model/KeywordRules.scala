@@ -1,7 +1,6 @@
 package fr.janalyse.sotohp.service.model
 
-import fr.janalyse.sotohp.media.model.StoreId
-
+import fr.janalyse.sotohp.model.StoreId
 import scala.util.matching.Regex
 
 case class Rewriting(

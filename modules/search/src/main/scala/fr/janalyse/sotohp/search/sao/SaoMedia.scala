@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.search.sao
 
 import zio.json.JsonCodec
-import fr.janalyse.sotohp.media.model.{Media, State}
+import fr.janalyse.sotohp.model.{Media, State}
 
 import java.time.OffsetDateTime
 import scala.util.matching.Regex

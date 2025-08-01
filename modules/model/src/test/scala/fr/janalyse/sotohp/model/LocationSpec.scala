@@ -1,8 +1,10 @@
-package fr.janalyse.sotohp.media.model
+package fr.janalyse.sotohp.model
 
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp
+import fr.janalyse.sotohp.model
+import fr.janalyse.sotohp.model.*
 import zio.*
-import zio.ZIO.{from, *}
+import zio.ZIO.*
 import zio.test.*
 
 import scala.util.{Success, Try}

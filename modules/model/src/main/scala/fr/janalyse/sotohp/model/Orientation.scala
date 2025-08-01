@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.media.model
+package fr.janalyse.sotohp.model
 
 enum Orientation(val code: Int, val description: String, val rotationDegrees: Int = 0) {
   case Horizontal                            extends Orientation(1, "Horizontal (normal)")

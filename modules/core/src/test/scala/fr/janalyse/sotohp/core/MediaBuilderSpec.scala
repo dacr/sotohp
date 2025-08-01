@@ -1,8 +1,8 @@
-package fr.janalyse.sotohp.media.core
+package fr.janalyse.sotohp.core
 
-import fr.janalyse.sotohp.media.core.OriginalBuilder.originalFromFile
-import fr.janalyse.sotohp.media.core.MediaBuilder.*
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.core.OriginalBuilder.originalFromFile
+import fr.janalyse.sotohp.core.MediaBuilder.*
+import fr.janalyse.sotohp.model.*
 import zio.*
 import zio.ZIO.*
 import zio.test.*

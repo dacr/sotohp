@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.media
+package fr.janalyse.sotohp
 
 import java.time.OffsetDateTime
 import java.util.{Locale, UUID}

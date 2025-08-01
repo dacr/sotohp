@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.search
 
 import zio.*
-import fr.janalyse.sotohp.media.model.{State, Media, MediaAccessKey}
+import fr.janalyse.sotohp.model.{State, Media, MediaAccessKey}
 import fr.janalyse.sotohp.search.sao.SaoMedia
 
 import java.time.OffsetDateTime

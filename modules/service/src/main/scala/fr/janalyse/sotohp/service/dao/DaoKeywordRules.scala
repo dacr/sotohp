@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service.dao
 
-import fr.janalyse.sotohp.media.model.StoreId
+import fr.janalyse.sotohp.model.StoreId
 import fr.janalyse.sotohp.service.model.Rewriting
 import zio.lmdb.json.LMDBCodecJson
 import io.scalaland.chimney.Transformer

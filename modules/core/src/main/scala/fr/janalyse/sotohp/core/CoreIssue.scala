@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.media.core
+package fr.janalyse.sotohp.core
 
 import java.nio.file.Path
 

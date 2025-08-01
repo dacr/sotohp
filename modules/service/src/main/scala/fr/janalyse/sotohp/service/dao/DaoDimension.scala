@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service.dao
 
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.model.*
 import zio.json.JsonCodec
 import zio.lmdb.json.LMDBCodecJson
 

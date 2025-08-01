@@ -146,49 +146,49 @@ lazy val modulePhotoService =
       )
     )
 
-lazy val userInterfacesCLI =
-  project
-    .in(file("user-interfaces/cli"))
-    .settings(sharedSettings)
-    .dependsOn(moduleCore/*, moduleProcessor*/, moduleSearch)
-    .settings(
-      sharedSettings,
-      name := "sotohp-cli",
-      fork := true,
-      javaOptions ++= lmdbJavaOptions,
-      libraryDependencies ++= Seq(
-        "dev.zio"             %% "zio"                       % versions.zio,
-        "dev.zio"             %% "zio-config"                % versions.zioconfig,
-        "dev.zio"             %% "zio-config-typesafe"       % versions.zioconfig,
-        "dev.zio"             %% "zio-config-magnolia"       % versions.zioconfig,
-        "dev.zio"             %% "zio-logging"               % versions.ziologging, // Temporary
-        "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
-        // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
-        "com.github.haifengl" %% "smile-scala"               % "4.3.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
-      )
-      // dependency conflict between smile and elastic4s with jackson-databind
-      // dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
-    )
+//lazy val userInterfacesCLI =
+//  project
+//    .in(file("user-interfaces/cli"))
+//    .settings(sharedSettings)
+//    .dependsOn(moduleCore/*, moduleProcessor*/, moduleSearch)
+//    .settings(
+//      sharedSettings,
+//      name := "sotohp-cli",
+//      fork := true,
+//      javaOptions ++= lmdbJavaOptions,
+//      libraryDependencies ++= Seq(
+//        "dev.zio"             %% "zio"                       % versions.zio,
+//        "dev.zio"             %% "zio-config"                % versions.zioconfig,
+//        "dev.zio"             %% "zio-config-typesafe"       % versions.zioconfig,
+//        "dev.zio"             %% "zio-config-magnolia"       % versions.zioconfig,
+//        "dev.zio"             %% "zio-logging"               % versions.ziologging, // Temporary
+//        "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
+//        // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
+//        "com.github.haifengl" %% "smile-scala"               % "4.3.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
+//      )
+//      // dependency conflict between smile and elastic4s with jackson-databind
+//      // dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
+//    )
 
-lazy val userInterfacesGUI =
-  project
-    .in(file("user-interfaces/gui"))
-    .settings(sharedSettings)
-    .dependsOn(moduleCore)
-    .settings(
-      sharedSettings,
-      name := "sotohp-gui",
-      fork := true,
-      // See default.nix to setup the right environment
-      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
-      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
-      javaOptions ++= lmdbJavaOptions,
-      libraryDependencies ++= Seq(
-        // "org.openjfx"  % "javafx-graphics" % versions.javafx classifier osName,
-        // "org.openjfx"  % "javafx-controls" % versions.javafx classifier osName,
-        "org.scalafx" %% "scalafx" % "21.0.0-R32"
-      )
-    )
+//lazy val userInterfacesGUI =
+//  project
+//    .in(file("user-interfaces/gui"))
+//    .settings(sharedSettings)
+//    .dependsOn(moduleCore)
+//    .settings(
+//      sharedSettings,
+//      name := "sotohp-gui",
+//      fork := true,
+//      // See default.nix to setup the right environment
+//      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
+//      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
+//      javaOptions ++= lmdbJavaOptions,
+//      libraryDependencies ++= Seq(
+//        // "org.openjfx"  % "javafx-graphics" % versions.javafx classifier osName,
+//        // "org.openjfx"  % "javafx-controls" % versions.javafx classifier osName,
+//        "org.scalafx" %% "scalafx" % "21.0.0-R32"
+//      )
+//    )
 
 //
 //lazy val webapi =

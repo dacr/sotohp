@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.model.KeywordRules
 import wvlet.airframe.ulid.ULID
 import zio.*

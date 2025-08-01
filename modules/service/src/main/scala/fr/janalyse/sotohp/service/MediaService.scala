@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.service
 
 import zio.*
 import zio.stream.*
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.model.KeywordRules
 import zio.lmdb.LMDB
 

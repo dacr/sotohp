@@ -1,6 +1,6 @@
-package fr.janalyse.sotohp.media.core
+package fr.janalyse.sotohp.core
 
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.model.*
 
 import java.nio.file.{FileVisitOption, Files, Path}
 import java.nio.file.attribute.BasicFileAttributes

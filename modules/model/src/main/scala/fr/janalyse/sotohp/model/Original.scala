@@ -1,6 +1,6 @@
-package fr.janalyse.sotohp.media.model
+package fr.janalyse.sotohp.model
 
-import fr.janalyse.sotohp.media.model
+import fr.janalyse.sotohp.model
 
 case class Original(
   id: OriginalId,

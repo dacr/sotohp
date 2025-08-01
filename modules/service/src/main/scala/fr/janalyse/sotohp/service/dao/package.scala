@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.model.*
 import wvlet.airframe.ulid.ULID
 import zio.json.internal.{RetractReader, Write}
 import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder, JsonError}

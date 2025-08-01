@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.media.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
+import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID

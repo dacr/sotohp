@@ -1,6 +1,7 @@
-package fr.janalyse.sotohp.media.core
+package fr.janalyse.sotohp.core
 
-import fr.janalyse.sotohp.media.model.*
+import fr.janalyse.sotohp.core.{FileSystemSearch, MediaBuilder}
+import fr.janalyse.sotohp.model.*
 import zio.*
 import zio.ZIO.*
 import zio.stream.ZStream

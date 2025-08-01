@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.media.core
+package fr.janalyse.sotohp.core
 
 import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.{Metadata as DrewMetadata, Tag as DrewTag}
@@ -7,8 +7,7 @@ import com.drew.metadata.gif.GifImageDirectory
 import com.drew.metadata.jpeg.JpegDirectory
 import com.drew.metadata.png.PngDirectory
 import com.drew.metadata.bmp.BmpHeaderDirectory
-import fr.janalyse.sotohp.media.model.*
-import fr.janalyse.sotohp.media.core.HashOperations
+import fr.janalyse.sotohp.model.*
 
 import java.nio.file.Path
 import java.time.{Instant, OffsetDateTime, ZoneId, ZoneOffset}
