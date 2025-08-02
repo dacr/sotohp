@@ -15,6 +15,9 @@ case class MiniaturizeIssue(message: String, exception: Throwable) extends Excep
 
 object MiniaturizeProcessor extends Processor {
 
+  override def close(): Unit = {
+  }
+  
   private def miniaturizePhoto(referenceSize: Int, input: Path, output: Path) = {
     for {
       config       <- MiniaturizerConfig.config

@@ -18,6 +18,11 @@ import scala.jdk.CollectionConverters.*
 case class ClassificationIssue(message: String, exception: Throwable) extends Exception(message, exception) with CoreIssue
 
 class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Classifications]) extends Processor {
+
+  override def close(): Unit = {
+    imageClassificationPredictor.close()
+  }
+
   private def cleanupClassName(input: String): String =
     input.replaceAll("""^n\d+ """, "")
 
@@ -31,10 +36,8 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
       .toList
       .asInstanceOf[List[Classification]]
       .filter(_.getProbability >= 0.5d)
-      .map(_.getClassName)
-      .map(cleanupClassName)
-      .flatMap(_.split(""",\s+"""))
-      .distinct
+      .map(ob => (cleanupClassName(ob.getClassName), ob.getProbability))
+      .flatMap((name, prob) => name.split(""",\s+""").toList.map(_ -> prob))
       .map(DetectedClassification.apply)
   }
 
@@ -65,21 +68,29 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
 
 object ClassificationProcessor {
 
-  lazy val imageClassificationCriteria =
-    Criteria.builder
-      .optApplication(Application.CV.IMAGE_CLASSIFICATION)
-      .setTypes(classOf[Image], classOf[Classifications])
-      // ------------------------------------
-      // .optFilter("flavor","v1")
-      // .optFilter("dataset","cifar10")
-      // ------------------------------------
-      // .optFilter("flavor","v3_large")
-      // .optFilter("dataset","imagenet")
-      // ------------------------------------
-      .optFilter("flavor", "v1d")
-      .optFilter("dataset", "imagenet")
-      // .optProgress(new ProgressBar)
-      .build
+  def base = Criteria.builder
+    .optApplication(Application.CV.IMAGE_CLASSIFICATION)
+    .setTypes(classOf[Image], classOf[Classifications])
+
+  lazy val imageClassificationCriteria = {
+    // ------------------------------------
+    // .optFilter("flavor","v1")
+    // .optFilter("dataset","cifar10")
+    // ------------------------------------
+    // .optFilter("flavor","v3_large")
+    // .optFilter("dataset","imagenet")
+    // ------------------------------------
+    // base.optFilter("flavor", "v1d").optFilter("dataset", "imagenet").build
+    // base.optModelUrls("djl://ai.djl.mxnet/inceptionv3").build
+    // base.optModelUrls("djl://ai.djl.mxnet/darknet").build
+    // base.optModelUrls("djl://ai.djl.mxnet/senet").build
+    // base.optModelUrls("djl://ai.djl.mxnet/mobilenet").optFilter("flavor", "v2").optFilter("multiplier", "0.5").build
+    // base.optModelUrls("djl://ai.djl.mxnet/resnet").optFilter("layers", "101").optFilter("dataset","imagenet").build
+
+    base.optFilter("layers", "101").optFilter("dataset", "imagenet").build
+    // base.optModelUrls("djl://ai.djl.mxnet/se_resnext").optFilter("flavor", "64x4d").build
+    // base.optModelUrls("djl://ai.djl.mxnet/resnet").optFilter("layers", "152").build
+  }
 
   lazy val imageClassificationModel = ModelZoo.loadModel(imageClassificationCriteria)
 

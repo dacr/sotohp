@@ -17,6 +17,10 @@ case class FaceFeaturesExtractIssue(message: String, err: Throwable) extends Exc
 
 class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends Processor {
 
+  override def close(): Unit = {
+    predictor.close()
+  }
+
   private def extractFaceImage(
     face: DetectedFace,
     originalImage: BufferedImage

@@ -25,6 +25,9 @@ case class FacesDetectionIssue(message: String, exception: Throwable)
 
 class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends Processor {
 
+  override def close(): Unit = {
+    facesPredictor.close()
+  }
   private def makeFaceId(original: Original): FaceId = {
     // Note: up 2^80 possible values for the same millis
     FaceId(ULID.ofMillis(original.timestamp.toInstant.toEpochMilli))

@@ -4,6 +4,7 @@ import fr.janalyse.sotohp.model.Original
 
 case class DetectedObject(
   name: String,
+  probability: Double,
   box: BoundingBox
 )
 

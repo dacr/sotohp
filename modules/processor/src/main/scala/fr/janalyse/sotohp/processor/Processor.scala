@@ -11,7 +11,7 @@ import java.nio.file.Path
 
 case class ProcessorIssue(message: String, exception: Throwable) extends Exception(message, exception) with CoreIssue
 
-trait Processor {
+trait Processor extends AutoCloseable {
 
   def getProcessorDataCachePath(original: Original): IO[ConfigInvalid, Path] = {
     for {
