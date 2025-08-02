@@ -35,12 +35,13 @@ object NormalizeProcessor extends Processor {
     } yield newDimension
   }
 
-  /** generates normalized photo
-    *
-    * @param original
-    * @return
-    *   photo with updated normalized field if some changes have occurred
-    */
+  /**
+   * Normalizes the given original media file by resizing it and saving the normalized version.
+   *
+   * @param original The original media file to be normalized, containing metadata and file information such as its path, size, orientation, etc.
+   * @return An effect that can produce either a `CoreIssue` if an error occurs during the normalization process, 
+   *         or an `OriginalNormalized` containing the normalized file and its new dimensions.
+   */
   def normalize(original: Original): IO[CoreIssue, OriginalNormalized] = {
     val logic = for {
       input     <- ZIO

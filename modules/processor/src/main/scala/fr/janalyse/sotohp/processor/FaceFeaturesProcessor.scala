@@ -19,35 +19,35 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
 
   private def extractFaceImage(
     face: DetectedFace,
-    image: BufferedImage
+    originalImage: BufferedImage
   ): IO[FaceFeaturesExtractIssue, BufferedImage] = {
-    val x           = (face.box.x.value * image.getWidth).toInt
-    val y           = (face.box.y.value * image.getHeight).toInt
-    val width       = (face.box.width.value * image.getWidth).toInt
-    val height      = (face.box.height.value * image.getHeight).toInt
+    val x           = (face.box.x.value * originalImage.getWidth).toInt
+    val y           = (face.box.y.value * originalImage.getHeight).toInt
+    val width       = (face.box.width.value * originalImage.getWidth).toInt
+    val height      = (face.box.height.value * originalImage.getHeight).toInt
     val fixedX      = if (x < 0) 0 else x
     val fixedY      = if (y < 0) 0 else y
-    val fixedWidth  = if (fixedX + width < image.getWidth()) width else image.getWidth - fixedX
-    val fixedHeight = if (fixedY + height < image.getHeight()) height else image.getHeight - fixedY
+    val fixedWidth  = if (fixedX + width < originalImage.getWidth()) width else originalImage.getWidth - fixedX
+    val fixedHeight = if (fixedY + height < originalImage.getHeight()) height else originalImage.getHeight - fixedY
 
     ZIO
-      .attempt(image.getSubimage(fixedX, fixedY, fixedWidth, fixedHeight))
+      .attempt(originalImage.getSubimage(fixedX, fixedY, fixedWidth, fixedHeight))
       .mapError(err => FaceFeaturesExtractIssue(s"Couldn't extract face from image [$fixedX, $fixedY, $fixedWidth, $fixedHeight]", err))
   }
 
   private def extractFaceFeatures(
     face: DetectedFace,
-    image: BufferedImage,
-    OriginalId: OriginalId
+    originalImage: BufferedImage
   ): IO[CoreIssue, FaceFeatures] = {
 
     for {
+      faceImage        <- extractFaceImage(face, originalImage)
       faceImageResized <- ZIO
-                            .attempt(BasicImaging.resize(image, 160, 160))
-                            .mapError(err => FaceFeaturesExtractIssue("Couldn't resize image", err))
+                            .attempt(BasicImaging.resize(faceImage, 160, 160))
+                            .mapError(err => FaceFeaturesExtractIssue("Couldn't resize face image", err))
       djlImage         <- ZIO
                             .attempt(ImageFactory.getInstance().fromImage(faceImageResized))
-                            .mapError(err => FaceFeaturesExtractIssue("Couldn't load Image", err))
+                            .mapError(err => FaceFeaturesExtractIssue("Couldn't load face Image", err))
       features         <- ZIO
                             .attempt(predictor.predict(djlImage))
                             .mapError(err => FaceFeaturesExtractIssue("Couldn't predict face features", err))
@@ -60,25 +60,31 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
 
   }
 
-  def extractPhotoFaceFeatures(originalFaces: OriginalFaces): IO[CoreIssue, OriginalFaceFeatures] = {
+  /**
+   * Extracts features from faces detected in the input `OriginalFaces` object while applying filtering and processing.
+   *
+   * @param faces the `OriginalFaces` object containing the original image and the list of detected faces to process
+   * @return an `IO` effect resulting in either a `CoreIssue` (in case of an error) or an `OriginalFaceFeatures` containing the processed face features
+   */
+  def extractFaceFeatures(faces: OriginalFaces): IO[CoreIssue, OriginalFaceFeatures] = {
     val minRatio = 80d / 1600d // TODO use config parameter
     val logic    = for {
-      image                <- loadBestInputPhoto(originalFaces.original)
-      selectedFaces         = originalFaces.faces
+      originalImage        <- loadBestInputPhoto(faces.original)
+      selectedFaces         = faces.faces
                                 .filter(face => face.box.width.value >= minRatio || face.box.height.value >= minRatio)
       selectedFaceFeatures <- ZIO
                                 .foreach(selectedFaces) { face =>
-                                  extractFaceFeatures(face, image, originalFaces.original.id) @@ annotated("faceId" -> face.faceId.toString())
+                                  extractFaceFeatures(face, originalImage) @@ annotated("faceId" -> face.faceId.toString)
                                 }
                                 .logError("Face features issue")
                                 .mapError(err => FaceFeaturesIssue(s"Unable to compute face features: $err"))
                                 .option
-    } yield OriginalFaceFeatures(original = originalFaces.original, successful = selectedFaceFeatures.isDefined, features = selectedFaceFeatures.getOrElse(Nil))
+    } yield OriginalFaceFeatures(original = faces.original, successful = selectedFaceFeatures.isDefined, features = selectedFaceFeatures.getOrElse(Nil))
 
     logic
       .logError("Face features issue")
-      @@ annotated("originalId" -> originalFaces.original.id.asString)
-      @@ annotated("originalPath" -> originalFaces.original.mediaPath.toString)
+      @@ annotated("originalId" -> faces.original.id.asString)
+      @@ annotated("originalPath" -> faces.original.mediaPath.toString)
   }
 
 }

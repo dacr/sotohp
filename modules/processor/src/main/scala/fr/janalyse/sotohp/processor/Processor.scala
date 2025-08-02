@@ -4,7 +4,7 @@ import zio.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.Original
 import fr.janalyse.sotohp.core.{ConfigInvalid, CoreIssue}
-import fr.janalyse.sotohp.processor.config.{InternalDataConfig, MiniaturizerConfig, NormalizerConfig}
+import fr.janalyse.sotohp.processor.config.{CacheDataConfig, MiniaturizerConfig, NormalizerConfig}
 
 import java.awt.image.BufferedImage
 import java.nio.file.Path
@@ -13,9 +13,9 @@ case class ProcessorIssue(message: String, exception: Throwable) extends Excepti
 
 trait Processor {
 
-  def getPhotoArtifactsCachePath(original: Original): IO[ConfigInvalid, Path] = {
+  def getProcessorDataCachePath(original: Original): IO[ConfigInvalid, Path] = {
     for {
-      dataDir    <- InternalDataConfig.config.map(_.baseDirectory)
+      dataDir    <- CacheDataConfig.config.map(_.directory)
       storeDir    = original.store.id.asString
       originalDir = original.id.asString
       path        = Path.of(dataDir, storeDir, "originals-cache", originalDir)
@@ -25,7 +25,7 @@ trait Processor {
   def getNormalizedPhotoFilePath(original: Original): IO[ConfigInvalid, Path] = {
     for {
       format   <- NormalizerConfig.config.map(_.format)
-      basePath <- getPhotoArtifactsCachePath(original)
+      basePath <- getProcessorDataCachePath(original)
       target    = s"normalized.$format"
       path      = basePath.resolve(target)
     } yield path
@@ -33,14 +33,14 @@ trait Processor {
 
   def getMiniaturePhotoFilePath(original: Original, size: Int): IO[ConfigInvalid, Path] = {
     for {
-      format <- MiniaturizerConfig.config.map(_.format)
-      basePath <- getPhotoArtifactsCachePath(original)
-      target = s"miniature-$size.$format"
-      path = basePath.resolve(target)
+      format   <- MiniaturizerConfig.config.map(_.format)
+      basePath <- getProcessorDataCachePath(original)
+      target    = s"miniature-$size.$format"
+      path      = basePath.resolve(target)
     } yield path
   }
 
-  def getBestInputPhotoFile(original: Original): IO[CoreIssue, Path] = for {
+  def getBestInputOriginalFile(original: Original): IO[CoreIssue, Path] = for {
     normalizedInput <- getNormalizedPhotoFilePath(original) // faster because lighter
     input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)
                        else
@@ -51,7 +51,7 @@ trait Processor {
 
   def loadBestInputPhoto(original: Original): IO[CoreIssue, BufferedImage] = {
     for {
-      imagePath     <- getBestInputPhotoFile(original)
+      imagePath     <- getBestInputOriginalFile(original)
       bufferedImage <- ZIO
                          .attempt(BasicImaging.load(imagePath))
                          .mapError(th => ProcessorIssue(s"Couldn't load image $imagePath", th))

@@ -1,5 +1,6 @@
 package fr.janalyse.sotohp.search
 
+import fr.janalyse.sotohp.core.ConfigInvalid
 import zio.*
 import zio.config.*
 import zio.config.magnolia.*
@@ -14,8 +15,13 @@ case class SearchServiceConfig(
 )
 
 object SearchServiceConfig {
-  val config =
+  val derivedConfig =
     deriveConfig[SearchServiceConfig]
       .mapKey(toKebabCase)
       .nested("sotohp", "search-service")
+
+  val config =
+    ZIO
+      .config(derivedConfig)
+      .mapError(err => ConfigInvalid("Couldn't build SearchServiceConfig", err))
 }

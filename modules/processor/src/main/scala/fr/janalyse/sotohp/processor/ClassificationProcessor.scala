@@ -41,12 +41,12 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
   /** analyse photo content using various neural networks
     *
     * @param original
-    * @return originalClassifications
-    *   photo with updated miniatures field if some changes have occurred
+    * @return
+    *   originalClassifications photo with updated miniatures field if some changes have occurred
     */
-  private def classify(original: Original) = {
+  def classify(original: Original) = {
     val logic = for {
-      input           <- getBestInputPhotoFile(original)
+      input           <- getBestInputOriginalFile(original)
       classifications <- ZIO
                            .attempt(doClassifyImage(input))
                            .mapError(th => ObjectsDetectionIssue("Unable to compute classifications", th))

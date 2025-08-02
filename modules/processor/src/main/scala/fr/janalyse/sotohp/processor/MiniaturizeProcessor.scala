@@ -31,7 +31,7 @@ object MiniaturizeProcessor extends Processor {
 
   private def buildMiniature(original: Original, size: Int) = {
     for {
-      input     <- getBestInputPhotoFile(original)
+      input     <- getBestInputOriginalFile(original)
       output    <- getMiniaturePhotoFilePath(original, size)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
@@ -43,11 +43,12 @@ object MiniaturizeProcessor extends Processor {
 
   // ===================================================================================================================
 
-  /** generates original miniatures
-    * @param original
-    * @return
-    *   original miniatures
-    */
+  /**
+   * Generates a collection of miniatures for a given original object based on predefined reference sizes.
+   *
+   * @param original the original media object for which miniatures will be generated
+   * @return a result encapsulating either a CoreIssue in case of an error or a collection of generated miniatures grouped by size
+   */
   def miniaturize(original: Original): IO[CoreIssue, OriginalMiniatures] = {
     val logic = for {
       referencesSizes <- MiniaturizerConfig.config.map(_.referenceSizes)

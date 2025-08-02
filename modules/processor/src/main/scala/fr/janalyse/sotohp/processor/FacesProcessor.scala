@@ -56,22 +56,21 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     detected
   }
 
-  /** analyse photo content using various neural networks
-    *
-    * @param photo
-    * @return
-    *   photo with updated miniatures field if some changes have occurred
-    */
-  private def detectFaces(original: Original) = {
+  /**
+   * Extracts faces detected in the image represented by the provided original instance.
+   *
+   * @param original The original image metadata and associated details, used to locate and analyze the image file for face detection.
+   */
+  private def extractFaces(original: Original) = {
     val logic = for {
-      input <- getBestInputPhotoFile(original)
+      input         <- getBestInputOriginalFile(original)
       originalFaces <- ZIO
-                 .attempt(doDetectFaces(original, input))
-                 .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
-                 .tap(faces => ZIO.log(s"found ${faces.size} faces"))
-                 .logError("Faces detection issue")
-                 .option
-                 .map(faces => OriginalFaces(original = original, faces.isDefined,  faces = faces.getOrElse(Nil)))
+                         .attempt(doDetectFaces(original, input))
+                         .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
+                         .tap(faces => ZIO.log(s"found ${faces.size} faces"))
+                         .logError("Faces detection issue")
+                         .option
+                         .map(faces => OriginalFaces(original = original, faces.isDefined, faces = faces.getOrElse(Nil)))
     } yield originalFaces
     logic
       @@ annotated("originalId" -> original.id.asString)

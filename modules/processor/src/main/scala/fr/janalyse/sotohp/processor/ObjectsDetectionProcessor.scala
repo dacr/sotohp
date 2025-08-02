@@ -44,15 +44,19 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
     detected
   }
 
-  /** analyse photo content using various neural networks
-    *
-    * @param original
-    * @return
-    *   photo with updated miniatures field if some changes have occurred
-    */
-  def detectObjects(original: Original): IO[CoreIssue, OriginalDetectedObjects] = {
+
+  /**
+   * Extracts detected objects from the given original image using an object detection mechanism.
+   *
+   * @param original The original image from which objects need to be detected. This contains various metadata 
+   *                 about the image such as its path, size, and additional attributes.
+   * @return An `IO` computation that either results in a `CoreIssue` in case of failure or produces an 
+   *         `OriginalDetectedObjects` instance which encapsulates the detection results including a flag 
+   *         indicating success and the list of detected objects.
+   */
+  def extractObjects(original: Original): IO[CoreIssue, OriginalDetectedObjects] = {
     val logic = for {
-      input        <- getBestInputPhotoFile(original)
+      input        <- getBestInputOriginalFile(original)
       mayBeObjects <- ZIO
                         .attempt(doDetectObjects(input))
                         .mapError(th => ObjectsDetectionIssue("Unable to recognize objects", th))

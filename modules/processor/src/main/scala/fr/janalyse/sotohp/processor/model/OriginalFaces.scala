@@ -7,7 +7,8 @@ type FaceId = ULID
 object FaceId {
   def apply(value: ULID): FaceId = value
   extension (faceId: FaceId) {
-    def code: ULID = faceId
+    def code: ULID       = faceId
+    def asString: String = faceId.toString
   }
 }
 

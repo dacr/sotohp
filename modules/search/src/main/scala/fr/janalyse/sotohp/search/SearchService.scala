@@ -19,10 +19,7 @@ object SearchService {
 
   val live = ZLayer.fromZIO(
     for {
-      config            <- ZIO
-                             .config(SearchServiceConfig.config)
-                             .tapError(err => ZIO.logError(err.toString))
-                             .mapError(th => SearchServiceIssue(s"Couldn't get search engine configuration", Nil))
+      config            <- SearchServiceConfig.config
       _                 <- ZIO.logInfo(config.toString)
       elasticOperations <- ZIO
                              .attempt(ElasticOperations(config))

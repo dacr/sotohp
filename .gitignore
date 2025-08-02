@@ -10,10 +10,9 @@ nohup.out
 *.iml
 *.tmp
 null
-data.mdb
 
 # direnv
-.envrc/
+.envrc
 .env/
 
 # IDE or build tool related
@@ -30,6 +29,5 @@ project/metals.sbt
 # sotohp related data
 originals-*
 cluster*/
-
-# Security purposes
-.envrc
+.sotohp/
+.lmdb/

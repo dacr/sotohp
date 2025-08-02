@@ -6,17 +6,18 @@ import zio.config.*
 import zio.config.magnolia.*
 import zio.config.typesafe.*
 
-case class InternalDataConfig(
-  baseDirectory: String
+case class CacheDataConfig(
+  directory: String
 )
 
-object InternalDataConfig {
+object CacheDataConfig {
   private val derivedConfig =
-    deriveConfig[InternalDataConfig]
+    deriveConfig[CacheDataConfig]
       .mapKey(toKebabCase)
-      .nested("sotohp", "processors", "internal-data")
+      .nested("sotohp", "processors", "data-cache")
 
   val config =
-    ZIO.config(derivedConfig)
+    ZIO
+      .config(derivedConfig)
       .mapError(err => ConfigInvalid("Couldn't build InternalDataConfig", err))
 }
