@@ -25,7 +25,7 @@ case class FacesDetectionIssue(message: String, exception: Throwable)
 
 class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends Processor {
 
-  override def close(): Unit = {
+  override def close(): Unit                         = {
     facesPredictor.close()
   }
   private def makeFaceId(original: Original): FaceId = {
@@ -59,12 +59,12 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     detected
   }
 
-  /**
-   * Extracts faces detected in the image represented by the provided original instance.
-   *
-   * @param original The original image metadata and associated details, used to locate and analyze the image file for face detection.
-   */
-  private def extractFaces(original: Original) = {
+  /** Extracts faces detected in the image represented by the provided original instance.
+    *
+    * @param original
+    *   The original image metadata and associated details, used to locate and analyze the image file for face detection.
+    */
+  def extractFaces(original: Original) = {
     val logic = for {
       input         <- getBestInputOriginalFile(original)
       originalFaces <- ZIO
