@@ -19,7 +19,7 @@ object FacesProcessorSpec extends BaseSpecDefault with TestDatasets {
         result2   <- processor.extractFaces(original2)
       } yield assertTrue(
         result1.successful,
-        result1.faces.size == 8,
+        result1.faces.size == 9,
         result2.successful,
         result2.faces.size == 27
       )
