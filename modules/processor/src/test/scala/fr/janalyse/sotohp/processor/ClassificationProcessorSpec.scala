@@ -16,6 +16,7 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
         original2 <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileMountain))
         original3 <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileSeacoast))
         original4 <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileSkiWinter))
+        original5 <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileCarRace))
         processor <- ZIO.attempt(ClassificationProcessor.allocate())
         result1   <- processor.classify(original1)
         names1     = result1.classifications.map(_.name)
@@ -25,6 +26,8 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
         names3     = result3.classifications.map(_.name)
         result4   <- processor.classify(original4)
         names4     = result4.classifications.map(_.name)
+        result5   <- processor.classify(original5)
+        names5     = result5.classifications.map(_.name)
       } yield assertTrue(
         result1.successful,
         names1.size == 0,
@@ -37,7 +40,10 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
         names3.contains("coast"),
         result4.successful,
         names4.size == 1,
-        names4.contains("alp")
+        names4.contains("alp"),
+        result5.successful,
+        names5.size == 1,
+        names5.contains("go-kart")
       )
     }
   )
