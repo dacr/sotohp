@@ -117,26 +117,26 @@ lazy val moduleSearch =
       )
     )
 
-//lazy val moduleProcessor =
-//  project
-//    .in(file("modules/processor"))
-//    .dependsOn(moduleCore, moduleImaging)
-//    .settings(
-//      sharedSettings,
-//      name := "sotohp-processor",
-//      fork := true,
-//      javaOptions ++= lmdbJavaOptions,
-//      libraryDependencies ++= Seq(
-//        // "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
-//        "org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
-//      ),
-//      libraryDependencies ++= deepJavaLearningLibs
-//    )
+lazy val moduleProcessor =
+  project
+    .in(file("modules/processor"))
+    .dependsOn(moduleCore, moduleImaging)
+    .settings(
+      sharedSettings,
+      name := "sotohp-processor",
+      fork := true,
+      javaOptions ++= lmdbJavaOptions,
+      libraryDependencies ++= Seq(
+        // "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
+        "org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
+      ),
+      libraryDependencies ++= deepJavaLearningLibs
+    )
 
 lazy val modulePhotoService =
   project
     .in(file("modules/service"))
-    .dependsOn(moduleCore, moduleSearch/*, moduleProcessor*/)
+    .dependsOn(moduleCore, moduleSearch, moduleProcessor)
     .settings(
       sharedSettings,
       name := "sotohp-service",

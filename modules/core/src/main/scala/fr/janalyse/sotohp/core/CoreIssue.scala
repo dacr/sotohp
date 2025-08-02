@@ -1,8 +1,10 @@
 package fr.janalyse.sotohp.core
 
+import zio.Config
+
 import java.nio.file.Path
 
-sealed trait CoreIssue extends Exception {
+trait CoreIssue extends Exception {
   val message: String
 }
 
@@ -18,3 +20,5 @@ sealed trait FileSystemSearchIssue extends CoreIssue
 case class FileSystemSearchInvalidBaseDirectory(message: String, path: String, throwable: Throwable) extends Exception(message, throwable) with FileSystemSearchIssue
 case class FileSystemSearchInvalidPatternFilter(message: String, throwable: Throwable)               extends Exception(message, throwable) with FileSystemSearchIssue
 case class FileSystemSearchFindIssue(message: String, throwable: Throwable)                          extends Exception(message, throwable) with FileSystemSearchIssue
+
+case class ConfigInvalid(message: String, error: Config.Error) extends Exception(message, error) with CoreIssue

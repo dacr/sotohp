@@ -6,21 +6,22 @@ import ai.djl.modality.Classifications
 import ai.djl.modality.Classifications.Classification
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.repository.zoo.{Criteria, ModelZoo}
-import fr.janalyse.sotohp.media.model.*
-import fr.janalyse.sotohp.store.*
+import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.core.*
+import fr.janalyse.sotohp.processor.model.*
 import zio.*
 import zio.ZIOAspect.*
 
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
 
-case class ClassificationIssue(message: String, exception: Throwable) extends Exception(message, exception)
+case class ClassificationIssue(message: String, exception: Throwable) extends Exception(message, exception) with CoreIssue
 
 class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Classifications]) extends Processor {
   private def cleanupClassName(input: String): String =
     input.replaceAll("""^n\d+ """, "")
 
-  private def doClassifyImage(path: Path): List[String] = {
+  private def doClassifyImage(path: Path): List[DetectedClassification] = {
     val img = ImageFactory.getInstance().fromFile(path)
 
     val found: Classifications = imageClassificationPredictor.predict(img)
@@ -34,40 +35,31 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
       .map(cleanupClassName)
       .flatMap(_.split(""",\s+"""))
       .distinct
-  }
-
-  private def classify(photo: Photo) = {
-    for {
-      input        <- getBestInputPhotoFile(photo)
-      knownClasses <- PhotoStoreService.photoClassificationsGet(photo.source.photoId)
-      classes      <- ZIO
-                        .from(knownClasses)
-                        .orElse(
-                          ZIO
-                            .attempt(doClassifyImage(input))
-                            .tap(cls => ZIO.log(s"found classes : ${cls.mkString(",")}"))
-                            .map(found => PhotoClassifications(found.map(DetectedClassification.apply)))
-                        )
-      _            <- PhotoStoreService
-                        .photoClassificationsUpsert(photo.source.photoId, classes)
-                        .when(knownClasses.isEmpty)
-    } yield photo.copy(foundClassifications = Some(classes)) // TODO return updated record
+      .map(DetectedClassification.apply)
   }
 
   /** analyse photo content using various neural networks
     *
-    * @param photo
-    * @return
+    * @param original
+    * @return originalClassifications
     *   photo with updated miniatures field if some changes have occurred
     */
-  def analyze(photo: Photo): RIO[PhotoStoreService, Photo] = {
-    // TODO : quick, dirty & unfinished first implementation
-    classify(photo)
-      .logError("Classification issue")
-      .option
-      .someOrElse(photo)
-      @@ annotated("photoId" -> photo.source.photoId.toString())
-      @@ annotated("photoPath" -> photo.source.original.path.toString)
+  private def classify(original: Original) = {
+    val logic = for {
+      input           <- getBestInputPhotoFile(original)
+      classifications <- ZIO
+                           .attempt(doClassifyImage(input))
+                           .mapError(th => ObjectsDetectionIssue("Unable to compute classifications", th))
+                           .tap(cls => ZIO.log(s"found classes : ${cls.mkString(",")}"))
+                           .logError("Classification issue")
+                           .option
+                           .map(mayBeClasses => OriginalClassifications(original, mayBeClasses.isDefined, mayBeClasses.getOrElse(Nil)))
+    } yield classifications
+
+    logic
+      @@ annotated("originalId" -> original.id.asString)
+      @@ annotated("originalPath" -> original.mediaPath.toString)
+
   }
 }
 

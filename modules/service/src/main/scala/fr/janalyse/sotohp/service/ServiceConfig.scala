@@ -8,5 +8,5 @@ case class ServiceConfig(
 ) derives Config
 
 object ServiceConfig {
-  val cfg = ZIO.config[ServiceConfig]
+  val config = ZIO.config[ServiceConfig]
 }

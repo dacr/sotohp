@@ -2,8 +2,8 @@ package fr.janalyse.sotohp.processor
 
 import zio.*
 import zio.ZIOAspect.*
-import fr.janalyse.sotohp.store.*
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.processor.model.*
 import ai.djl.Application
 import ai.djl.engine.Engine
 import ai.djl.inference.Predictor
@@ -16,7 +16,6 @@ import ai.djl.repository.zoo.ModelZoo
 import ai.djl.repository.zoo.ZooModel
 import ai.djl.training.util.ProgressBar
 import ai.djl.modality.Classifications.Classification
-import fr.janalyse.sotohp.config.{SotohpConfig, SotohpConfigIssue}
 
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
@@ -26,12 +25,12 @@ case class FacesDetectionIssue(message: String, exception: Throwable)
 
 class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends Processor {
 
-  private def makeFaceId(photo: Photo): FaceId = {
-    // Note : up 2^80 possible values for the same millis
-    FaceId(ULID.ofMillis(photo.timestamp.toInstant.toEpochMilli))
+  private def makeFaceId(original: Original): FaceId = {
+    // Note: up 2^80 possible values for the same millis
+    FaceId(ULID.ofMillis(original.timestamp.toInstant.toEpochMilli))
   }
 
-  private def doDetectFaces(photo: Photo, path: Path): List[DetectedFace] = {
+  private def doDetectFaces(original: Original, path: Path): List[DetectedFace] = {
     val loadedImage: Image           = ImageFactory.getInstance().fromFile(path)
     val detection: DetectedObjects   = facesPredictor.predict(loadedImage)
     val detected: List[DetectedFace] =
@@ -44,38 +43,17 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
         .filter(_.getProbability >= 0.8d)
         .map(ob =>
           DetectedFace(
-            someoneId = None,
             box = BoundingBox(
-              x = ob.getBoundingBox.getBounds.getX,
-              y = ob.getBoundingBox.getBounds.getY,
-              width = ob.getBoundingBox.getBounds.getWidth,
-              height = ob.getBoundingBox.getBounds.getHeight
+              x = XAxis(ob.getBoundingBox.getBounds.getX),
+              y = YAxis(ob.getBoundingBox.getBounds.getY),
+              width = BoxWidth(ob.getBoundingBox.getBounds.getWidth),
+              height = BoxHeight(ob.getBoundingBox.getBounds.getHeight)
             ),
-            faceId = makeFaceId(photo)
+            faceId = makeFaceId(original)
           )
         )
 
     detected
-  }
-
-  private def detectFaces(photo: Photo) = {
-    for {
-      input      <- getBestInputPhotoFile(photo)
-      knownFaces <- PhotoStoreService.photoFacesGet(photo.source.photoId)
-      // knownFaces = None
-      faces      <- ZIO
-                      .from(knownFaces)
-                      .orElse(
-                        ZIO
-                          .attempt(doDetectFaces(photo, input))
-                          .mapError(th => FacesDetectionIssue("Couldn't analyze photo", th))
-                          .tap(faces => ZIO.log(s"found ${faces.size} faces"))
-                          .map(faces => PhotoFaces(faces = faces, count = faces.size))
-                      )
-      _          <- PhotoStoreService
-                      .photoFacesUpsert(photo.source.photoId, faces)
-                      .when(knownFaces.isEmpty)
-    } yield photo.copy(foundFaces = Some(faces))
   }
 
   /** analyse photo content using various neural networks
@@ -84,15 +62,22 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def analyze(photo: Photo): RIO[PhotoStoreService, Photo] = {
-    // TODO : quick, dirty & unfinished first implementation
-    detectFaces(photo)
-      .logError("Faces detection issue")
-      .option
-      .someOrElse(photo)
-      @@ annotated("photoId" -> photo.source.photoId.toString())
-      @@ annotated("photoPath" -> photo.source.original.path.toString)
+  private def detectFaces(original: Original) = {
+    val logic = for {
+      input <- getBestInputPhotoFile(original)
+      originalFaces <- ZIO
+                 .attempt(doDetectFaces(original, input))
+                 .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
+                 .tap(faces => ZIO.log(s"found ${faces.size} faces"))
+                 .logError("Faces detection issue")
+                 .option
+                 .map(faces => OriginalFaces(original = original, faces.isDefined,  faces = faces.getOrElse(Nil)))
+    } yield originalFaces
+    logic
+      @@ annotated("originalId" -> original.id.asString)
+      @@ annotated("originalPath" -> original.mediaPath.toString)
   }
+
 }
 
 object FacesProcessor {

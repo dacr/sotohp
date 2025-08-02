@@ -16,6 +16,5 @@ case class Media(
   def timestamp: OffsetDateTime =
     shootDateTime
       .map(_.offsetDateTime)
-      .orElse(original.cameraShootDateTime.map(_.offsetDateTime))
-      .getOrElse(original.fileLastModified.offsetDateTime)
+      .getOrElse(original.timestamp)
 }

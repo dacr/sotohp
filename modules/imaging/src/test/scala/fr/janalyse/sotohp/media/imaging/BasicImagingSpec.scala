@@ -1,8 +1,8 @@
-package fr.janalyse.sotohp.processor
+package fr.janalyse.sotohp.media.imaging
 
 import fr.janalyse.sotohp.media.imaging.BasicImaging
-import zio.*
 import zio.test.*
+import zio.{test, *}
 
 import java.awt.Color
 import java.awt.image.BufferedImage
@@ -151,8 +151,8 @@ object BasicImagingSpec extends ZIOSpecDefault {
       ),
       suite("Image input/output feature")(
         test("should be able to save and load images") {
-          import java.nio.file.*
           import java.nio.*
+          import java.nio.file.*
           for {
             original    <- ZIO.attempt(imageSample())
             tmpPath      = Path.of(scala.util.Properties.tmpDir)
@@ -169,8 +169,8 @@ object BasicImagingSpec extends ZIOSpecDefault {
         }
       ),
       test("should be able to reshape an image file") {
-        import java.nio.file.*
         import java.nio.*
+        import java.nio.file.*
         for {
           original    <- ZIO.attempt(imageSample())
           tmpPath      = Path.of(scala.util.Properties.tmpDir)

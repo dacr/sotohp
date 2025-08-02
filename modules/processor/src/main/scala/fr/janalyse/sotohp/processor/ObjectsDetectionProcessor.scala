@@ -6,15 +6,16 @@ import ai.djl.modality.Classifications
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.modality.cv.output.DetectedObjects
 import ai.djl.repository.zoo.{Criteria, ModelZoo}
+import fr.janalyse.sotohp.core.CoreIssue
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.store.*
+import fr.janalyse.sotohp.processor.model.*
 import zio.*
 import zio.ZIOAspect.*
 
 import java.nio.file.Path
 import scala.jdk.CollectionConverters.*
 
-case class ObjectsDetectionIssue(message: String, exception: Throwable) extends Exception(message, exception)
+case class ObjectsDetectionIssue(message: String, exception: Throwable) extends Exception(message, exception) with CoreIssue
 
 class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, DetectedObjects]) extends Processor {
   def doDetectObjects(path: Path): List[DetectedObject] = {
@@ -32,10 +33,10 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
           DetectedObject(
             name = ob.getClassName.trim,
             box = BoundingBox(
-              x = ob.getBoundingBox.getBounds.getX,
-              y = ob.getBoundingBox.getBounds.getY,
-              width = ob.getBoundingBox.getBounds.getWidth,
-              height = ob.getBoundingBox.getBounds.getHeight
+              x = XAxis(ob.getBoundingBox.getBounds.getX),
+              y = YAxis(ob.getBoundingBox.getBounds.getY),
+              width = BoxWidth(ob.getBoundingBox.getBounds.getWidth),
+              height = BoxHeight(ob.getBoundingBox.getBounds.getHeight)
             )
           )
         )
@@ -43,40 +44,28 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
     detected
   }
 
-  def detectObjects(photo: Photo) = {
-    for {
-      input        <- getBestInputPhotoFile(photo)
-      knownObjects <- PhotoStoreService.photoObjectsGet(photo.source.photoId)
-      // knownObjects = None
-      objects      <- ZIO
-                        .from(knownObjects)
-                        .orElse(
-                          ZIO
-                            .attempt(doDetectObjects(input))
-                            .tap(objs => ZIO.log(s"found objects : ${objs.mkString(",")}"))
-                            .map(detectedObjects => PhotoObjects(objects = detectedObjects))
-                        )
-      _            <- PhotoStoreService
-                        .photoObjectsUpsert(photo.source.photoId, objects)
-                        .when(knownObjects.isEmpty)
-    } yield photo.copy(foundObjects = Some(objects))
-  }
-
   /** analyse photo content using various neural networks
     *
-    * @param photo
+    * @param original
     * @return
     *   photo with updated miniatures field if some changes have occurred
     */
-  def analyze(photo: Photo): RIO[PhotoStoreService, Photo] = {
-    // TODO : quick, dirty & unfinished first implementation
-    detectObjects(photo)
-      .logError("Objects detection issue")
-      .option
-      .someOrElse(photo)
-      @@ annotated("photoId" -> photo.source.photoId.toString())
-      @@ annotated("photoPath" -> photo.source.original.path.toString)
+  def detectObjects(original: Original): IO[CoreIssue, OriginalDetectedObjects] = {
+    val logic = for {
+      input        <- getBestInputPhotoFile(original)
+      mayBeObjects <- ZIO
+                        .attempt(doDetectObjects(input))
+                        .mapError(th => ObjectsDetectionIssue("Unable to recognize objects", th))
+                        .tap(objs => ZIO.log(s"found objects : ${objs.mkString(",")}"))
+                        .logError("Objects detection issue")
+                        .option
+    } yield OriginalDetectedObjects(original, mayBeObjects.isDefined, mayBeObjects.getOrElse(List.empty))
+
+    logic
+      @@ annotated("originalId" -> original.id.asString)
+      @@ annotated("originalPath" -> original.mediaPath.toString)
   }
+
 }
 
 object ObjectsDetectionProcessor {

@@ -1,99 +1,66 @@
 package fr.janalyse.sotohp.processor
 
-import fr.janalyse.sotohp.config.*
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.store.PhotoStoreService
+import fr.janalyse.sotohp.processor.config.MiniaturizerConfig
+import fr.janalyse.sotohp.processor.model.{OriginalMiniature, OriginalMiniatures}
 import org.apache.commons.imaging.Imaging
 import zio.*
 import zio.ZIOAspect.*
 
 import java.nio.file.Path
 
-case class MiniaturizeIssue(message: String, exception: Throwable) extends Exception(message, exception)
+case class MiniaturizeIssue(message: String, exception: Throwable) extends Exception(message, exception) with CoreIssue
 
 object MiniaturizeProcessor extends Processor {
 
   private def miniaturizePhoto(referenceSize: Int, input: Path, output: Path) = {
     for {
-      config <- SotohpConfig.zioConfig
-      _      <- ZIO
-                  .attempt(
-                    //        Thumbnails
-                    //          .of(input.toFile)
-                    //          .useExifOrientation(true)
-                    //          .size(referenceSize, referenceSize)
-                    //          .keepAspectRatio(true)
-                    //          .outputQuality(config.miniaturizer.quality)
-                    //          .allowOverwrite(false)
-                    //          .toFile(output.toFile)
-                    BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.normalizer.quality))
-                  )
-                  .mapError(th => MiniaturizeIssue("Couldn't generate miniature photo", th))
-                  .tap(_ => ZIO.logInfo("Miniaturize"))
-                  .uninterruptible
-                  .ignoreLogged // Photo file may have internal issues
-    } yield ()
+      config       <- MiniaturizerConfig.config
+      newDimension <- ZIO
+                        .attempt(
+                          BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.quality))
+                        )
+                        .mapError(th => MiniaturizeIssue("Couldn't generate miniature photo", th))
+                        .tap(_ => ZIO.logInfo("Miniaturize"))
+                        .uninterruptible
+                        .logError
+    } yield newDimension
   }
 
-  private def buildMiniature(photo: Photo, size: Int) = {
-    val alreadyKnownMiniatures = photo.miniatures
+  private def buildMiniature(original: Original, size: Int) = {
     for {
-      input     <- getBestInputPhotoFile(photo)
-      output    <- PhotoOperations.getMiniaturePhotoFilePath(photo.source, size)
+      input     <- getBestInputPhotoFile(original)
+      output    <- getMiniaturePhotoFilePath(original, size)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
                      .mapError(th => MiniaturizeIssue("Couldn't target path", th))
-      _         <- miniaturizePhoto(size, input, output)
-                     .when(!output.toFile.exists())
+      dimension <- miniaturizePhoto(size, input, output)
                      @@ annotated("inputFile" -> input.toString)
-      dimension <- ZIO
-                     .from(alreadyKnownMiniatures.flatMap(m => m.sources.find(_.size == size)).map(_.dimension)) // faster
-                     .orElse(
-                       ZIO
-                         .attempt(Imaging.getImageSize(output.toFile))                                           // slower
-                         .map(jdim => Dimension2D(width = jdim.getWidth.toInt, height = jdim.getHeight.toInt))
-                     )
-                     .mapError(th => MiniaturizeIssue("Couldn't get normalized photo size", th))
-    } yield MiniatureSource(size = size, dimension = dimension)
-  }
-
-  private def upsertMiniaturesRecordIfNeeded(photo: Photo, miniaturesSources: List[MiniatureSource]) = {
-    val alreadyKnownMiniatures = photo.miniatures
-    val updatedMiniatures      = Miniatures(sources = miniaturesSources)
-    val upsertNeeded           = !alreadyKnownMiniatures.contains(updatedMiniatures)
-    for {
-      _         <- PhotoStoreService
-                     .photoMiniaturesUpsert(photo.source.photoId, updatedMiniatures)
-                     .when(upsertNeeded)
-      miniatures = if (upsertNeeded) updatedMiniatures else alreadyKnownMiniatures.get
-    } yield miniatures
+    } yield OriginalMiniature(size = size, dimension = Dimension(Width(dimension.width), Height(dimension.height)))
   }
 
   // ===================================================================================================================
 
-  /** generates photo miniatures
-    * @param photo
+  /** generates original miniatures
+    * @param original
     * @return
-    *   photo with updated miniatures field if some changes have occurred
+    *   original miniatures
     */
-  def miniaturize(photo: Photo): RIO[PhotoStoreService, Photo] = {
+  def miniaturize(original: Original): IO[CoreIssue, OriginalMiniatures] = {
     val logic = for {
-      referencesSizes   <- SotohpConfig.zioConfig.map(_.miniaturizer.referenceSizes)
-      miniaturesSources <- ZIO.foreach(referencesSizes) { referenceSize =>
-                             buildMiniature(photo, referenceSize)
-                               @@ annotated("referenceSize" -> referenceSize.toString)
-                           }
-      miniatures        <- upsertMiniaturesRecordIfNeeded(photo, miniaturesSources)
-    } yield photo.copy(miniatures = Some(miniatures))
+      referencesSizes <- MiniaturizerConfig.config.map(_.referenceSizes)
+      miniatures      <- ZIO.foreach(referencesSizes) { referenceSize =>
+                           buildMiniature(original, referenceSize)
+                             @@ annotated("referenceSize" -> referenceSize.toString)
+                         }
+    } yield OriginalMiniatures(original, miniatures.groupBy(_.size).view.mapValues(_.head).toMap)
 
     logic
       .logError(s"Miniaturization issue")
-      .option
-      .someOrElse(photo)
-      @@ annotated("photoId" -> photo.source.photoId.toString())
-      @@ annotated("photoPath" -> photo.source.original.path.toString)
+      @@ annotated("originalId" -> original.id.asString)
+      @@ annotated("originalPath" -> original.mediaPath.toString)
   }
 
 }

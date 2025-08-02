@@ -136,7 +136,7 @@ case object BasicImaging {
     targetMaxSize: Int,
     rotateDegrees: Option[Double] = None,
     compressionLevel: Option[Double] = None
-  ): Unit = {
+  ): (width:Int, height:Int) = {
     val originalImage = load(input)
     val ratio        = targetMaxSize.toDouble / math.max(originalImage.getWidth, originalImage.getHeight)
     val targetWidth  = (originalImage.getWidth() * ratio).toInt
@@ -147,6 +147,7 @@ case object BasicImaging {
         rotate(resizedImage, rotateDegrees.get)
       else resizedImage
     save(output, finalImage, compressionLevel)
+    (width = finalImage.getWidth, height = finalImage.getHeight)
   }
 
 }

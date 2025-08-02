@@ -2,6 +2,8 @@ package fr.janalyse.sotohp.model
 
 import fr.janalyse.sotohp.model
 
+import java.time.OffsetDateTime
+
 case class Original(
   id: OriginalId,
   store: Store,
@@ -19,4 +21,10 @@ case class Original(
   exposureTime: Option[ExposureTime],
   iso: Option[ISO],
   focalLength: Option[FocalLength]
-)
+) {
+  def timestamp: OffsetDateTime =
+    cameraShootDateTime
+      .map(_.offsetDateTime)
+      .getOrElse(fileLastModified.offsetDateTime)
+
+}

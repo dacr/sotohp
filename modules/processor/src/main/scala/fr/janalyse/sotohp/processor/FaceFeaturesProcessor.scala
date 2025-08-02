@@ -3,97 +3,82 @@ package fr.janalyse.sotohp.processor
 import ai.djl.inference.Predictor
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.repository.zoo.{Criteria, ZooModel}
-import fr.janalyse.sotohp.config.*
+import fr.janalyse.sotohp.core.CoreIssue
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.store.PhotoStoreService
+import fr.janalyse.sotohp.processor.model.*
 import zio.*
 import zio.ZIOAspect.*
 
 import java.awt.image.BufferedImage
 
-case class FaceFeaturesIssue(message: String, exception: Throwable) extends Exception(message, exception)
+case class FaceFeaturesIssue(message: String)                        extends Exception(message) with CoreIssue
+case class FaceFeaturesExtractIssue(message: String, err: Throwable) extends Exception(message, err) with CoreIssue
 
 class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends Processor {
 
   private def extractFaceImage(
     face: DetectedFace,
-    lazyImage: ZIO[Any, Any, BufferedImage]
-  ): ZIO[Any, Any, BufferedImage] = {
-    for {
-      image      <- lazyImage
-      x           = (face.box.x * image.getWidth).toInt
-      y           = (face.box.y * image.getHeight).toInt
-      width       = (face.box.width * image.getWidth).toInt
-      height      = (face.box.height * image.getHeight).toInt
-      fixedX      = if (x < 0) 0 else x
-      fixedY      = if (y < 0) 0 else y
-      fixedWidth  = if (fixedX + width < image.getWidth()) width else image.getWidth - fixedX
-      fixedHeight = if (fixedY + height < image.getHeight()) height else image.getHeight - fixedY
-      faceImage  <- ZIO
-                      .attempt(image.getSubimage(fixedX, fixedY, fixedWidth, fixedHeight))
-                      .mapError(err => FaceFeaturesIssue(s"Couldn't extract face from image [$fixedX, $fixedY, $fixedWidth, $fixedHeight]", err))
-    } yield faceImage
+    image: BufferedImage
+  ): IO[FaceFeaturesExtractIssue, BufferedImage] = {
+    val x           = (face.box.x.value * image.getWidth).toInt
+    val y           = (face.box.y.value * image.getHeight).toInt
+    val width       = (face.box.width.value * image.getWidth).toInt
+    val height      = (face.box.height.value * image.getHeight).toInt
+    val fixedX      = if (x < 0) 0 else x
+    val fixedY      = if (y < 0) 0 else y
+    val fixedWidth  = if (fixedX + width < image.getWidth()) width else image.getWidth - fixedX
+    val fixedHeight = if (fixedY + height < image.getHeight()) height else image.getHeight - fixedY
+
+    ZIO
+      .attempt(image.getSubimage(fixedX, fixedY, fixedWidth, fixedHeight))
+      .mapError(err => FaceFeaturesExtractIssue(s"Couldn't extract face from image [$fixedX, $fixedY, $fixedWidth, $fixedHeight]", err))
   }
 
   private def extractFaceFeatures(
     face: DetectedFace,
-    lazyImage: ZIO[Any, Any, BufferedImage],
-    photoId: PhotoId
-  ) = {
+    image: BufferedImage,
+    OriginalId: OriginalId
+  ): IO[CoreIssue, FaceFeatures] = {
 
-    val faceFeatureExtract = for {
-      faceImage        <- extractFaceImage(face, lazyImage)
+    for {
       faceImageResized <- ZIO
-                            .attempt(BasicImaging.resize(faceImage, 160, 160))
-                            .mapError(err => FaceFeaturesIssue("Couldn't resize image", err))
+                            .attempt(BasicImaging.resize(image, 160, 160))
+                            .mapError(err => FaceFeaturesExtractIssue("Couldn't resize image", err))
       djlImage         <- ZIO
                             .attempt(ImageFactory.getInstance().fromImage(faceImageResized))
-                            .mapError(err => FaceFeaturesIssue("Couldn't load Image", err))
+                            .mapError(err => FaceFeaturesExtractIssue("Couldn't load Image", err))
       features         <- ZIO
                             .attempt(predictor.predict(djlImage))
-                            .mapError(err => FaceFeaturesIssue("Couldn't predict face features", err))
+                            .mapError(err => FaceFeaturesExtractIssue("Couldn't predict face features", err))
       faceFeatures      = FaceFeatures(
-                            photoId = photoId,
-                            someoneId = None,
+                            faceId = face.faceId,
                             box = face.box,
                             features = features
                           )
-      _                <- PhotoStoreService
-                            .photoFaceFeaturesUpsert(face.faceId, faceFeatures)
-                            .mapError(err => FaceFeaturesIssue("Couldn't upsert face features for face", err))
-    } yield ()
+    } yield faceFeatures
 
-    for {
-      foundFaceFeatures <- PhotoStoreService
-                             .photoFaceFeaturesGet(face.faceId)
-      _                 <- faceFeatureExtract
-                             .when(foundFaceFeatures.isEmpty)
-    } yield ()
   }
 
-  def extractPhotoFaceFeatures(photo: Photo): RIO[PhotoStoreService, Int] = {
-    val logic = for {
-      config       <- SotohpConfig.zioConfig
-      minRatio      = 80d / 1600d // TODO use config parameter
-      lazyImage    <- loadBestInputPhoto(photo).memoize
-      event         = photo.description.flatMap(_.event).map(_.text).getOrElse("no-event-given")
-      selectedFaces = photo.foundFaces
-                        .map(_.faces)
-                        .getOrElse(Nil)
-                        .filter(face => face.box.width >= minRatio || face.box.height >= minRatio)
-      _            <- ZIO.foreachDiscard(selectedFaces) { face =>
-                        extractFaceFeatures(face, lazyImage, photo.source.photoId)
-                          @@ annotated("faceId" -> face.faceId.toString())
-                      }
-    } yield selectedFaces.size
+  def extractPhotoFaceFeatures(originalFaces: OriginalFaces): IO[CoreIssue, OriginalFaceFeatures] = {
+    val minRatio = 80d / 1600d // TODO use config parameter
+    val logic    = for {
+      image                <- loadBestInputPhoto(originalFaces.original)
+      selectedFaces         = originalFaces.faces
+                                .filter(face => face.box.width.value >= minRatio || face.box.height.value >= minRatio)
+      selectedFaceFeatures <- ZIO
+                                .foreach(selectedFaces) { face =>
+                                  extractFaceFeatures(face, image, originalFaces.original.id) @@ annotated("faceId" -> face.faceId.toString())
+                                }
+                                .logError("Face features issue")
+                                .mapError(err => FaceFeaturesIssue(s"Unable to compute face features: $err"))
+                                .option
+    } yield OriginalFaceFeatures(original = originalFaces.original, successful = selectedFaceFeatures.isDefined, features = selectedFaceFeatures.getOrElse(Nil))
 
     logic
       .logError("Face features issue")
-      .option
-      .someOrElse(0)
-      @@ annotated("photoId" -> photo.source.photoId.toString())
-      @@ annotated("photoPath" -> photo.source.original.path.toString)
+      @@ annotated("originalId" -> originalFaces.original.id.asString)
+      @@ annotated("originalPath" -> originalFaces.original.mediaPath.toString)
   }
 
 }
