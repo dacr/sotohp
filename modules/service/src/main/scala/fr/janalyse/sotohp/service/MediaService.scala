@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.service
 import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces}
+import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalNormalized}
 import fr.janalyse.sotohp.service.model.KeywordRules
 import zio.lmdb.LMDB
 
@@ -13,9 +13,10 @@ import java.util.regex.Pattern
 trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
-  def mediaList(): Stream[ServiceStreamIssue, Media]
   def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
   def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media]
+
+  def mediaList(): Stream[ServiceStreamIssue, Media]
   def mediaFirst(): IO[ServiceIssue, Option[Media]]
   def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
   def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
@@ -42,6 +43,7 @@ trait MediaService {
   def classifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications]
   def faces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces]
   def objects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects]
+  def normalized(originalId: OriginalId): IO[ServiceIssue, OriginalNormalized]
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): Stream[ServiceStreamIssue, Original]
@@ -128,11 +130,11 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def mediaList(): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaList())
-
   def mediaFind(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFind(nearKey))
 
   def mediaSearch(keywordsFilter: Set[Keyword]): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter))
+
+  def mediaList(): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaList())
 
   def mediaFirst(): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFirst())
 
@@ -160,6 +162,7 @@ object MediaService {
   def classifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalClassifications] = ZIO.serviceWithZIO(_.classifications(originalId))
   def faces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalFaces]                     = ZIO.serviceWithZIO(_.faces(originalId))
   def objects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalDetectedObjects]         = ZIO.serviceWithZIO(_.objects(originalId))
+  def normalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalNormalized]           = ZIO.serviceWithZIO(_.normalized(originalId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())

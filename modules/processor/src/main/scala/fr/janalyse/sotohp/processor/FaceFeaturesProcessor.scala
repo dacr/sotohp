@@ -98,21 +98,24 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
 }
 
 object FaceFeaturesProcessor {
-  def allocate(): FaceFeaturesProcessor = {
-    val criteria: Criteria[Image, Array[Float]] =
-      Criteria
-        .builder()
-        .setTypes(classOf[Image], classOf[Array[Float]])
-        .optModelUrls("https://resources.djl.ai/test-models/pytorch/face_feature.zip")
-        .optModelName("face_feature") // specify model file prefix
-        .optTranslator(new FeatureExtraction.FaceFeatureTranslator())
-        // .optProgress(new ProgressBar())
-        .optEngine("PyTorch")         // Use PyTorch engine
-        .build()
+  def allocate(): IO[FaceFeaturesExtractIssue, FaceFeaturesProcessor] =
+    ZIO
+      .attemptBlocking {
+        val criteria: Criteria[Image, Array[Float]] =
+          Criteria
+            .builder()
+            .setTypes(classOf[Image], classOf[Array[Float]])
+            .optModelUrls("https://resources.djl.ai/test-models/pytorch/face_feature.zip")
+            .optModelName("face_feature") // specify model file prefix
+            .optTranslator(new FeatureExtraction.FaceFeatureTranslator())
+            // .optProgress(new ProgressBar())
+            .optEngine("PyTorch")         // Use PyTorch engine
+            .build()
 
-    val model: ZooModel[Image, Array[Float]] = criteria.loadModel()
-    val predictor                            = model.newPredictor() // not thread safe !
-    FaceFeaturesProcessor(predictor)
-  }
+        val model: ZooModel[Image, Array[Float]] = criteria.loadModel()
+        val predictor                            = model.newPredictor() // not thread safe !
+        FaceFeaturesProcessor(predictor)
+      }
+      .mapError(err => FaceFeaturesExtractIssue("Unable to allocate face features processor", err))
 
 }

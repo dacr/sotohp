@@ -53,7 +53,7 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
       input        <- getOriginalBestInputFileForProcessors(original)
       mayBeClasses <- ZIO
                         .attempt(doClassifyImage(input))
-                        .mapError(th => ObjectsDetectionIssue("Unable to compute classifications", th))
+                        .mapError(th => ClassificationIssue("Unable to compute classifications", th))
                         .tap(cls => ZIO.log(s"found classes : ${cls.mkString(",")}"))
                         .logError("Classification issue")
                         .option
@@ -96,8 +96,11 @@ object ClassificationProcessor {
 
   lazy val imageClassificationModel = ModelZoo.loadModel(imageClassificationCriteria)
 
-  def allocate(): ClassificationProcessor = {
-    val imageClassificationPredictor = imageClassificationModel.newPredictor() // not thread safe !
-    ClassificationProcessor(imageClassificationPredictor)
+  def allocate(): IO[ClassificationIssue, ClassificationProcessor] = {
+    ZIO
+      .attemptBlocking(
+        ClassificationProcessor(imageClassificationModel.newPredictor() /* not thread safe !*/ )
+      )
+      .mapError(ClassificationIssue("Unable to allocate classification processor", _))
   }
 }

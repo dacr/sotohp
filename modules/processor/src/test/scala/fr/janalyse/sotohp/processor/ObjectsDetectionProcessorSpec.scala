@@ -15,9 +15,9 @@ object ObjectsDetectionProcessorSpec extends BaseSpecDefault with TestDatasets {
       for {
         original1 <- ZIO.from(originalFromFile(datasetObjectsFakeStore, datasetObjectsFileMixtureOfObjects))
         original2 <- ZIO.from(originalFromFile(datasetObjectsFakeStore, datasetObjectsFilePersonBicycle))
-        processor <- ZIO.attempt(ObjectsDetectionProcessor.allocate())
-        result1 <- processor.extractObjects(original1)
-        result2 <- processor.extractObjects(original2)
+        processor <- ObjectsDetectionProcessor.allocate()
+        result1   <- processor.extractObjects(original1)
+        result2   <- processor.extractObjects(original2)
       } yield assertTrue(
         result1.status.successful,
         result1.objects.map(_.name).size == 9,

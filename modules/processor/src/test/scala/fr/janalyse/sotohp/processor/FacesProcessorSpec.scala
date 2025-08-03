@@ -14,7 +14,7 @@ object FacesProcessorSpec extends BaseSpecDefault with TestDatasets {
       for {
         original1 <- ZIO.from(originalFromFile(datasetFacesFakeStore, datasetFacesFileMondement))
         original2 <- ZIO.from(originalFromFile(datasetFacesFakeStore, datasetFacesFileMariage))
-        processor <- ZIO.attempt(FacesProcessor.allocate())
+        processor <- FacesProcessor.allocate()
         result1   <- processor.extractFaces(original1)
         result2   <- processor.extractFaces(original2)
       } yield assertTrue(

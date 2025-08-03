@@ -1,49 +1,48 @@
 package fr.janalyse.sotohp.gui
 
-import fr.janalyse.sotohp.core.PhotoOperations
 import zio.*
-import fr.janalyse.sotohp.model.{Miniatures, NormalizedPhoto, PhotoClassifications, PhotoDescription, PhotoFaces, PhotoObjects, PhotoOrientation, PhotoPlace, PhotoSource}
-import fr.janalyse.sotohp.store.{PhotoStoreService, LazyPhoto}
+import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.processor.model.*
+import fr.janalyse.sotohp.service.MediaService
 
 import java.nio.file.Path
 import java.time.OffsetDateTime
 
 case class PhotoToShow(
   shootDateTime: Option[OffsetDateTime],
-  orientation: Option[PhotoOrientation],
-  source: PhotoSource,
-  place: Option[PhotoPlace] = None,
-  miniatures: Option[Miniatures] = None,
-  normalized: Option[NormalizedPhoto] = None,
+  orientation: Option[Orientation],
+  media: Media,
+  place: Option[Location] = None,
+  normalized: Option[Normalized] = None,
   normalizedPath: Option[Path] = None,
-  description: Option[PhotoDescription] = None,
-  foundClassifications: Option[PhotoClassifications] = None,
-  foundObjects: Option[PhotoObjects] = None,
-  foundFaces: Option[PhotoFaces] = None
+  description: Option[MediaDescription] = None,
+  event: Option[Event] = None,
+  foundClassifications: Option[List[DetectedClassification]] = None,
+  foundObjects: Option[List[DetectedObject]] = None,
+  foundFaces: Option[List[DetectedFace]] = None
 )
 
 object PhotoToShow {
-  def fromLazyPhoto(zphoto: LazyPhoto): ZIO[PhotoStoreService, Any, PhotoToShow] = for {
-    source          <- zphoto.source.some
-    place           <- zphoto.place
-    shootDateTime   <- zphoto.metaData.map(_.flatMap(_.shootDateTime))
-    orientation     <- zphoto.metaData.map(_.flatMap(_.orientation))
-    miniatures      <- zphoto.miniatures
-    normalized      <- zphoto.normalized
-    normalizedPath  <- PhotoOperations.getNormalizedPhotoFilePath(source).when(normalized.isDefined)
-    description     <- zphoto.description
-    classifications <- zphoto.foundClassifications
-    objects         <- zphoto.foundObjects
-    faces           <- zphoto.foundFaces
+  def fromLazyPhoto(media: Media): ZIO[MediaService, Any, PhotoToShow] = for {
+    normalized      <- MediaService.normalized(media.original.id).map(_.normalized)
+    classifications <- MediaService.classifications(media.original.id).map(_.classifications).option
+    objects         <- MediaService.objects(media.original.id).map(_.objects).option
+    faces           <- MediaService.faces(media.original.id).map(_.faces).option
+    place            = media.location.orElse(media.original.location)
+    shootDateTime    = media.shootDateTime.orElse(media.original.cameraShootDateTime)
+    orientation      = media.orientation.orElse(media.original.orientation)
+    description      = media.description
+    event            = media.events.find(_.attachment.isDefined)
+    normalizedPath   = normalized.map(_.path)
     photoToView      = PhotoToShow(
-                         shootDateTime = shootDateTime,
+                         shootDateTime = shootDateTime.map(_.offsetDateTime),
                          orientation = orientation,
-                         source = source,
+                         media = media,
                          place = place,
-                         miniatures = miniatures,
                          normalized = normalized,
                          normalizedPath = normalizedPath,
                          description = description,
+                         event = event,
                          foundClassifications = classifications,
                          foundObjects = objects,
                          foundFaces = faces

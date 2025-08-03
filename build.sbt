@@ -137,7 +137,7 @@ lazy val moduleProcessor =
       libraryDependencies ++= deepJavaLearningLibs
     )
 
-lazy val modulePhotoService =
+lazy val moduleService =
   project
     .in(file("modules/service"))
     .dependsOn(moduleCore, moduleSearch, moduleProcessor)
@@ -174,25 +174,25 @@ lazy val modulePhotoService =
 //      // dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
 //    )
 
-//lazy val userInterfacesGUI =
-//  project
-//    .in(file("user-interfaces/gui"))
-//    .settings(sharedSettings)
-//    .dependsOn(moduleCore)
-//    .settings(
-//      sharedSettings,
-//      name := "sotohp-gui",
-//      fork := true,
-//      // See default.nix to setup the right environment
-//      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
-//      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
-//      javaOptions ++= lmdbJavaOptions,
-//      libraryDependencies ++= Seq(
-//        // "org.openjfx"  % "javafx-graphics" % versions.javafx classifier osName,
-//        // "org.openjfx"  % "javafx-controls" % versions.javafx classifier osName,
-//        "org.scalafx" %% "scalafx" % "21.0.0-R32"
-//      )
-//    )
+lazy val userInterfacesGUI =
+  project
+    .in(file("user-interfaces/gui"))
+    .settings(sharedSettings)
+    .dependsOn(moduleService)
+    .settings(
+      sharedSettings,
+      name := "sotohp-gui",
+      fork := true,
+      // See default.nix to setup the right environment
+      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
+      // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
+      javaOptions ++= lmdbJavaOptions,
+      libraryDependencies ++= Seq(
+        // "org.openjfx"  % "javafx-graphics" % versions.javafx classifier osName,
+        // "org.openjfx"  % "javafx-controls" % versions.javafx classifier osName,
+        "org.scalafx" %% "scalafx" % "21.0.0-R32"
+      )
+    )
 
 //
 //lazy val webapi =

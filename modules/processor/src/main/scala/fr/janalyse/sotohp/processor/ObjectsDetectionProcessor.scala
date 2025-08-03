@@ -93,8 +93,11 @@ object ObjectsDetectionProcessor {
 
   lazy val objectDetectionsModel = ModelZoo.loadModel(objectDetectionsCriteria)
 
-  def allocate(): ObjectsDetectionProcessor = {
-    val objectsDetectionPredictor = objectDetectionsModel.newPredictor() // not thread safe !
-    ObjectsDetectionProcessor(objectsDetectionPredictor)
-  }
+  def allocate(): IO[ObjectsDetectionIssue, ObjectsDetectionProcessor] =
+    ZIO
+      .attempt {
+        val objectsDetectionPredictor = objectDetectionsModel.newPredictor() // not thread safe !
+        ObjectsDetectionProcessor(objectsDetectionPredictor)
+      }
+      .mapError(err => ObjectsDetectionIssue("Unable to allocate objects detection processor", err))
 }

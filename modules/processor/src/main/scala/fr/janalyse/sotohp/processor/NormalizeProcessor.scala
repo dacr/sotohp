@@ -4,7 +4,7 @@ import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.core.{ConfigInvalid, CoreIssue}
 import fr.janalyse.sotohp.processor.config.NormalizerConfig
-import fr.janalyse.sotohp.processor.model.{OriginalNormalized, ProcessedStatus}
+import fr.janalyse.sotohp.processor.model.{Normalized, OriginalNormalized, ProcessedStatus}
 import zio.*
 import zio.ZIOAspect.*
 
@@ -54,8 +54,8 @@ object NormalizeProcessor extends Processor {
       _              <- makeOutputDirectories(output)
       mayBeDimension <- resizePhoto(input, output, original.orientation).option
       status          = ProcessedStatus(successful = mayBeDimension.isDefined, timestamp = now)
-      dimension       = mayBeDimension.map(d => Dimension(Width(d.width), Height(d.height)))
-    } yield OriginalNormalized(original, status, dimension)
+      normalized       = mayBeDimension.map(d => Normalized(Dimension(Width(d.width), Height(d.height)), output))
+    } yield OriginalNormalized(original, status, normalized)
 
     logic
       .logError(s"Normalization issue")

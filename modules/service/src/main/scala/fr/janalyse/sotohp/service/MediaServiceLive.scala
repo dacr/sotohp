@@ -2,7 +2,8 @@ package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces}
+import fr.janalyse.sotohp.processor.{ClassificationProcessor, FacesProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
+import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalNormalized}
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID
@@ -83,7 +84,7 @@ class MediaServiceLive private (
   override def mediaLast(): IO[ServiceIssue, Option[Media]] = {
     medias
       .last()
-      .map(result => result.map((key,media)=> media))
+      .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get last media : $err"))
   }
@@ -134,11 +135,49 @@ class MediaServiceLive private (
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  def classifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications] = ???
+  def classifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications] = {
+    // TODO temporary implementation - very low performance
+    for {
+      original        <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      classifications <- ZIO
+                           .acquireReleaseWith(ClassificationProcessor.allocate())(processor => ZIO.succeed(processor.close())) { processor =>
+                             processor
+                               .classify(original)
+                           }
+                           .mapError(err => ServiceInternalIssue(s"Unable to get original classifications : $err"))
+    } yield classifications
+  }
 
-  def faces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces] = ???
+  def faces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces] = {
+    for {
+      original <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      faces    <- ZIO
+                    .acquireReleaseWith(FacesProcessor.allocate())(processor => ZIO.succeed(processor.close())) { processor =>
+                      processor.extractFaces(original)
+                    }
+                    .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces : $err"))
+    } yield faces
+  }
 
-  def objects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects] = ???
+  def objects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects] = {
+    for {
+      original <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      objects  <- ZIO
+                    .acquireReleaseWith(ObjectsDetectionProcessor.allocate())(processor => ZIO.succeed(processor.close())) { processor =>
+                      processor.extractObjects(original)
+                    }
+                    .mapError(err => ServiceInternalIssue(s"Unable to get original detected objects : $err"))
+    } yield objects
+  }
+
+  def normalized(originalId: OriginalId): IO[ServiceIssue, OriginalNormalized] = {
+    for {
+      original   <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      normalized <- NormalizeProcessor
+                      .normalize(original)
+                      .mapError(err => ServiceInternalIssue(s"Unable to normalize original : $err"))
+    } yield normalized
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
 

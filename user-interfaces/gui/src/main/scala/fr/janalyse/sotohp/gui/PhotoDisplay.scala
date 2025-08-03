@@ -49,9 +49,9 @@ class PhotoDisplay extends Region {
     currentPhoto.foreach { photo =>
       clear()
       val (filepath, rotationDegrees) = {
-        if (isZoomed()) photo.source.original.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
+        if (isZoomed()) photo.media.original.mediaPath.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
         else photo.normalizedPath.map(_ -> 0).getOrElse(
-          photo.source.original.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
+          photo.media.original.mediaPath.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
         )
       }
       val image    = Image(java.io.FileInputStream(filepath.toFile))
@@ -84,15 +84,15 @@ class PhotoDisplay extends Region {
           gc.drawImage(image, imageX, imageY, image.getWidth, image.getHeight)
           if (showFaces) {
             photo.foundFaces.foreach { photoFaces =>
-              photoFaces.faces.foreach { face =>
+              photoFaces.foreach { face =>
                 import face.box.x, face.box.y, face.box.{width => w}, face.box.{height => h}
                 gc.setLineWidth(2d)
                 gc.setStroke(Color.BLUE)
                 gc.strokeRect(
-                  imageX + x * image.getWidth,
-                  imageY + y * image.getHeight,
-                  w * image.getWidth,
-                  h * image.getHeight
+                  imageX + x.value * image.getWidth,
+                  imageY + y.value * image.getHeight,
+                  w.value * image.getWidth,
+                  h.value * image.getHeight
                 )
               }
             }

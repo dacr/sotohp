@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.gui
 
-import fr.janalyse.sotohp.model.PhotoPlace
-import fr.janalyse.sotohp.store.{PhotoStoreService, PhotoStoreSystemIssue}
+import fr.janalyse.sotohp.model.Location
+import fr.janalyse.sotohp.service.MediaService
 import javafx.scene.input.{KeyCode, TransferMode}
 import zio.*
 import zio.lmdb.LMDB
@@ -27,9 +27,9 @@ enum UserAction {
 
 object PhotoViewerApp extends ZIOAppDefault {
 
-  def buildGoogleMapsHyperLink(place: PhotoPlace): String = {
-    val lat = place.latitude
-    val lon = place.longitude
+  def buildGoogleMapsHyperLink(location: Location): String = {
+    val lat = location.latitude
+    val lon = location.longitude
     s"https://www.google.com/maps/search/?api=1&query=$lat,$lon"
   }
 
@@ -98,13 +98,10 @@ object PhotoViewerApp extends ZIOAppDefault {
       infoHasGPS.onMouseClicked = event => {
         photo.place.foreach(place => hostServices.showDocument(buildGoogleMapsHyperLink(place)))
       }
-      infoEvent.text = 
-        photo
-          .description
-          .flatMap(_.event)
-          .map(_.text)
-          .getOrElse(noEventText)
-          .appendedAll(s" (${photo.source.photoId.id})") // TODO temporary added for debug purposes
+      infoEvent.text = photo.event
+        .map(_.name.text)
+        .getOrElse(noEventText)
+        .appendedAll(s" (${photo.media.accessKey.asString})") // TODO temporary added for debug purposes
       infoEvent.onMouseClicked = event => {
         val clipboard = Clipboard.systemClipboard
         clipboard.content = ClipboardContent(DataFormat.PlainText -> infoEvent.text.get())
@@ -112,11 +109,11 @@ object PhotoViewerApp extends ZIOAppDefault {
       display.onDragDetected = event => {
         if (event.isPrimaryButtonDown) {
           val dragBoard = display.startDragAndDrop(TransferMode.COPY)
-          val content   = ClipboardContent(DataFormat.Files -> java.util.List.of(photo.source.original.path.toFile))
+          val content   = ClipboardContent(DataFormat.Files -> java.util.List.of(photo.media.original.mediaPath.path.toFile))
           dragBoard.setContent(content)
         }
       }
-      display.drawImage(photo) // normalized photo are already rotated
+      display.drawImage(photo)                                // normalized photo are already rotated
     }
   }
 
@@ -125,27 +122,27 @@ object PhotoViewerApp extends ZIOAppDefault {
       userActionHub   <- Hub.unbounded[UserAction]
       photoHub        <- Hub.unbounded[PhotoToShow]
       currentPhotoRef <- Ref.make(Option.empty[PhotoToShow])
-      toFirstPhoto     = PhotoStoreService
-                           .photoFirst()
+      toFirstPhoto     = MediaService
+                           .mediaFirst()
                            .some
                            .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
                            .flatMap(photo => photoHub.offer(photo))
-      toLastPhoto      = PhotoStoreService
-                           .photoLast()
+      toLastPhoto      = MediaService
+                           .mediaLast()
                            .some
                            .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
                            .flatMap(photo => photoHub.offer(photo))
       toPreviousPhoto  = currentPhotoRef.get.flatMap(current =>
-                           PhotoStoreService
-                             .photoPrevious(current.get.source.photoId)
+                           MediaService
+                             .mediaPrevious(current.get.media.accessKey)
                              .some
                              .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
                              .flatMap(photo => photoHub.offer(photo))
                              .orElse(toFirstPhoto)
                          )
       toNextPhoto      = currentPhotoRef.get.flatMap(current =>
-                           PhotoStoreService
-                             .photoNext(current.get.source.photoId)
+                           MediaService
+                             .mediaNext(current.get.media.accessKey)
                              .some
                              .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
                              .flatMap(photo => photoHub.offer(photo))
@@ -190,7 +187,20 @@ object PhotoViewerApp extends ZIOAppDefault {
     } yield ()
   }
 
+  val bootstrapWithTestSample = {
+    import fr.janalyse.sotohp.model.*
+    import java.nio.file.Path
+    import wvlet.airframe.ulid.ULID
+    val ownerId = OwnerId(ULID.fromString("01F3Z0GHD0P7S9T7RK7JDJGZ8H"))
+    for {
+      owner <- MediaService.ownerCreate(Some(ownerId), FirstName("John"), LastName("Doe"), None)
+      _     <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples")), None, None)
+      _     <- MediaService.synchronize()
+    } yield ()
+  }
+
   val photoViewApp = for {
+    _  <- bootstrapWithTestSample.whenZIO(System.env("PHOTOS_TEST_ENV").map(_.isDefined))
     fx <- ZIO.succeed(FxApp())
     _  <- ZIO.attemptBlocking(fx.main(Array.empty)).fork
     _  <- fxBridge(fx)
@@ -198,7 +208,7 @@ object PhotoViewerApp extends ZIOAppDefault {
 
   override def run = photoViewApp.provide(
     LMDB.liveWithDatabaseName("photos"),
-    PhotoStoreService.live,
+    MediaService.live,
     Scope.default,
     Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
   )

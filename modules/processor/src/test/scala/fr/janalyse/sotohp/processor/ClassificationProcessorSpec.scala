@@ -17,7 +17,7 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
         original3 <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileSeacoast))
         original4 <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileSkiWinter))
         original5 <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileCarRace))
-        processor <- ZIO.attempt(ClassificationProcessor.allocate())
+        processor <- ClassificationProcessor.allocate()
         result1   <- processor.classify(original1)
         names1     = result1.classifications.map(_.name)
         result2   <- processor.classify(original2)

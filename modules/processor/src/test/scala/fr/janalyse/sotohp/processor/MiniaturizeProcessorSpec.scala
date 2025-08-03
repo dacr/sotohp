@@ -12,12 +12,12 @@ object MiniaturizeProcessorSpec extends BaseSpecDefault with TestDatasets {
   def suiteFaces = suite("Faces processor")(
     test("standard scenario") {
       for {
-        original <- ZIO.from(originalFromFile(datasetFacesFakeStore, datasetFacesFileMondement))
-        processor <- ZIO.attempt(FacesProcessor.allocate())
-        result   <- processor.extractFaces(original)
+        original  <- ZIO.from(originalFromFile(datasetFacesFakeStore, datasetFacesFileMondement))
+        processor <- FacesProcessor.allocate()
+        result    <- processor.extractFaces(original)
       } yield assertTrue(
         result.status.successful,
-        result.faces.size == 9,
+        result.faces.size == 9
       )
     }
   )
