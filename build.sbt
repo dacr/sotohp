@@ -57,12 +57,15 @@ val sharedSettings = Seq(
   releasePublishArtifactsAction := PgpKeys.publishSigned.value, // MUST BE SET HERE TO TRIGGER THIS REQUIREMENT
   scalacOptions ++= Seq("-deprecation"), // "-Xfatal-warnings"
   Test / fork                   := true,
+  Test / baseDirectory          := (ThisBuild / baseDirectory).value,
   libraryDependencies ++= Seq(
     "dev.zio" %% "zio-test"     % versions.zio % Test,
     "dev.zio" %% "zio-test-sbt" % versions.zio % Test
   ),
   testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 )
+
+// ---------------------------------------------------------------------------------------------------------------------
 
 lazy val moduleModel =
   project
@@ -129,7 +132,7 @@ lazy val moduleProcessor =
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         // "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
-        //"org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
+        // "org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
       ),
       libraryDependencies ++= deepJavaLearningLibs
     )
