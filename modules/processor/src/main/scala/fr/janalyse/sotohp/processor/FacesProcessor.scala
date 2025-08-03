@@ -66,7 +66,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     */
   def extractFaces(original: Original) = {
     val logic = for {
-      input         <- getBestInputOriginalFile(original)
+      input         <- getOriginalBestInputFileForProcessors(original)
       originalFaces <- ZIO
                          .attempt(doDetectFaces(original, input))
                          .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))

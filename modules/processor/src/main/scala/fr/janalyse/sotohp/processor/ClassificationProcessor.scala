@@ -49,7 +49,7 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
     */
   def classify(original: Original) = {
     val logic = for {
-      input           <- getBestInputOriginalFile(original)
+      input           <- getOriginalBestInputFileForProcessors(original)
       classifications <- ZIO
                            .attempt(doClassifyImage(input))
                            .mapError(th => ObjectsDetectionIssue("Unable to compute classifications", th))

@@ -22,7 +22,7 @@ trait Processor extends AutoCloseable {
     } yield path
   }
 
-  def getNormalizedPhotoFilePath(original: Original): IO[ConfigInvalid, Path] = {
+  def getOriginalNormalizedFilePath(original: Original): IO[ConfigInvalid, Path] = {
     for {
       format   <- NormalizerConfig.config.map(_.format)
       basePath <- getProcessorDataCachePath(original)
@@ -31,7 +31,7 @@ trait Processor extends AutoCloseable {
     } yield path
   }
 
-  def getMiniaturePhotoFilePath(original: Original, size: Int): IO[ConfigInvalid, Path] = {
+  def getOriginalMiniatureFilePath(original: Original, size: Int): IO[ConfigInvalid, Path] = {
     for {
       format   <- MiniaturizerConfig.config.map(_.format)
       basePath <- getProcessorDataCachePath(original)
@@ -40,8 +40,17 @@ trait Processor extends AutoCloseable {
     } yield path
   }
 
-  def getBestInputOriginalFile(original: Original): IO[CoreIssue, Path] = for {
-    normalizedInput <- getNormalizedPhotoFilePath(original) // faster because lighter
+  def getOriginalMiniaturesFilePaths(original: Original): IO[ConfigInvalid, Map[Int, Path]] = {
+    for {
+      config   <- MiniaturizerConfig.config
+      basePath <- getProcessorDataCachePath(original)
+      format    = config.format
+      paths     = config.referenceSizes.map(size => size -> basePath.resolve(s"miniature-$size.$format"))
+    } yield paths.toMap
+  }
+
+  def getOriginalBestInputFileForProcessors(original: Original): IO[CoreIssue, Path] = for {
+    normalizedInput <- getOriginalNormalizedFilePath(original) // faster because lighter
     input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)
                        else
                          ZIO
@@ -49,9 +58,9 @@ trait Processor extends AutoCloseable {
                            .mapError(th => ProcessorIssue(s"Couldn't build input path for original photo", th))
   } yield input
 
-  def loadBestInputPhoto(original: Original): IO[CoreIssue, BufferedImage] = {
+  def loadOriginalBestInputFileForProcessors(original: Original): IO[CoreIssue, BufferedImage] = {
     for {
-      imagePath     <- getBestInputOriginalFile(original)
+      imagePath     <- getOriginalBestInputFileForProcessors(original)
       bufferedImage <- ZIO
                          .attempt(BasicImaging.load(imagePath))
                          .mapError(th => ProcessorIssue(s"Couldn't load image $imagePath", th))

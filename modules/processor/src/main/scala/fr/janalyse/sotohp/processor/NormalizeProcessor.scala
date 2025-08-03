@@ -49,7 +49,7 @@ object NormalizeProcessor extends Processor {
       input     <- ZIO
                      .attempt(original.mediaPath.path.toAbsolutePath)
                      .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
-      output    <- getNormalizedPhotoFilePath(original)
+      output    <- getOriginalNormalizedFilePath(original)
       _         <- makeOutputDirectories(output)
       dimension <- resizePhoto(input, output, original.orientation)
     } yield OriginalNormalized(original, Dimension(Width(dimension.width), Height(dimension.height)))

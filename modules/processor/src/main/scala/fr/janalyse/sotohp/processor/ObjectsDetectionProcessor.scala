@@ -59,7 +59,7 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
     */
   def extractObjects(original: Original): IO[CoreIssue, OriginalDetectedObjects] = {
     val logic = for {
-      input        <- getBestInputOriginalFile(original)
+      input        <- getOriginalBestInputFileForProcessors(original)
       mayBeObjects <- ZIO
                         .attempt(doDetectObjects(input))
                         .mapError(th => ObjectsDetectionIssue("Unable to recognize objects", th))

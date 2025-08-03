@@ -33,8 +33,8 @@ object MiniaturizeProcessor extends Processor {
 
   private def buildMiniature(original: Original, size: Int) = {
     for {
-      input     <- getBestInputOriginalFile(original)
-      output    <- getMiniaturePhotoFilePath(original, size)
+      input     <- getOriginalBestInputFileForProcessors(original)
+      output    <- getOriginalMiniatureFilePath(original, size)
       _         <- ZIO
                      .attempt(output.getParent.toFile.mkdirs())
                      .mapError(th => MiniaturizeIssue("Couldn't target path", th))

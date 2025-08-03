@@ -73,7 +73,7 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
   def extractFaceFeatures(faces: OriginalFaces): IO[CoreIssue, OriginalFaceFeatures] = {
     val minRatio = 80d / 1600d // TODO use config parameter
     val logic    = for {
-      originalImage        <- loadBestInputPhoto(faces.original)
+      originalImage        <- loadOriginalBestInputFileForProcessors(faces.original)
       selectedFaces         = faces.faces
                                 .filter(face => face.box.width.value >= minRatio || face.box.height.value >= minRatio)
       selectedFaceFeatures <- ZIO
