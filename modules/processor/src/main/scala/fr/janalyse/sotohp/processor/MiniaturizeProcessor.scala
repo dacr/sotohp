@@ -5,7 +5,6 @@ import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.config.MiniaturizerConfig
 import fr.janalyse.sotohp.processor.model.{OriginalMiniature, OriginalMiniatures}
-import org.apache.commons.imaging.Imaging
 import zio.*
 import zio.ZIOAspect.*
 

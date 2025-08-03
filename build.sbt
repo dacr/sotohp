@@ -9,7 +9,7 @@ ThisBuild / scalaVersion := "3.7.2"
 publishArtifact := false // no artifact for "root" project
 
 val versions = new {
-  val zio        = "2.1.19"
+  val zio        = "2.1.20"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.4"
   val ziojson    = "0.7.44"
@@ -56,6 +56,7 @@ lazy val osName = System.getProperty("os.name") match {
 val sharedSettings = Seq(
   releasePublishArtifactsAction := PgpKeys.publishSigned.value, // MUST BE SET HERE TO TRIGGER THIS REQUIREMENT
   scalacOptions ++= Seq("-deprecation"), // "-Xfatal-warnings"
+  Test / fork                   := true,
   libraryDependencies ++= Seq(
     "dev.zio" %% "zio-test"     % versions.zio % Test,
     "dev.zio" %% "zio-test-sbt" % versions.zio % Test
@@ -128,7 +129,7 @@ lazy val moduleProcessor =
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         // "net.coobird"        % "thumbnailator"   % "0.4.20",    // https://github.com/coobird/thumbnailator
-        "org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
+        //"org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
       ),
       libraryDependencies ++= deepJavaLearningLibs
     )

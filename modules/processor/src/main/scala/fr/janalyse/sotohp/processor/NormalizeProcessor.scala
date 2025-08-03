@@ -5,7 +5,6 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.core.{ConfigInvalid, CoreIssue}
 import fr.janalyse.sotohp.processor.config.NormalizerConfig
 import fr.janalyse.sotohp.processor.model.OriginalNormalized
-import org.apache.commons.imaging.Imaging
 import zio.*
 import zio.ZIOAspect.*
 
