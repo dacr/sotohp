@@ -191,10 +191,12 @@ object PhotoViewerApp extends ZIOAppDefault {
     import fr.janalyse.sotohp.model.*
     import java.nio.file.Path
     import wvlet.airframe.ulid.ULID
+    import java.util.UUID
     val ownerId = OwnerId(ULID.fromString("01F3Z0GHD0P7S9T7RK7JDJGZ8H"))
+    val storeId = StoreId(UUID.fromString("cafecafe-beef-beef-beef-cafecafecafe"))
     for {
       owner <- MediaService.ownerCreate(Some(ownerId), FirstName("John"), LastName("Doe"), None)
-      _     <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples")), None, None)
+      _     <- MediaService.storeCreate(Some(storeId), owner.id, BaseDirectoryPath(Path.of("samples")), None, None)
       _     <- MediaService.synchronize()
     } yield ()
   }
@@ -206,10 +208,12 @@ object PhotoViewerApp extends ZIOAppDefault {
     _  <- fxBridge(fx)
   } yield ()
 
+  val configProvider = Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
+
   override def run = photoViewApp.provide(
-    LMDB.liveWithDatabaseName("photos"),
+    configProvider >>> LMDB.live,
     MediaService.live,
     Scope.default,
-    Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
+    configProvider
   )
 }
