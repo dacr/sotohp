@@ -29,19 +29,19 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
         result5   <- processor.classify(original5)
         names5     = result5.classifications.map(_.name)
       } yield assertTrue(
-        result1.successful,
+        result1.status.successful,
         names1.size == 0,
         //names1.contains("lakeside"),
-        result2.successful,
+        result2.status.successful,
         names2.size == 1,
         names2.contains("alp"),
-        result3.successful,
+        result3.status.successful,
         names3.size == 4,
         names3.contains("coast"),
-        result4.successful,
+        result4.status.successful,
         names4.size == 1,
         names4.contains("alp"),
-        result5.successful,
+        result5.status.successful,
         names5.size == 1,
         names5.contains("go-kart")
       )

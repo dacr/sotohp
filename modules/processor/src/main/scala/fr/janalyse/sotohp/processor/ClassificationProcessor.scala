@@ -49,15 +49,17 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
     */
   def classify(original: Original) = {
     val logic = for {
-      input           <- getOriginalBestInputFileForProcessors(original)
-      classifications <- ZIO
-                           .attempt(doClassifyImage(input))
-                           .mapError(th => ObjectsDetectionIssue("Unable to compute classifications", th))
-                           .tap(cls => ZIO.log(s"found classes : ${cls.mkString(",")}"))
-                           .logError("Classification issue")
-                           .option
-                           .map(mayBeClasses => OriginalClassifications(original, mayBeClasses.isDefined, mayBeClasses.getOrElse(Nil)))
-    } yield classifications
+      now          <- Clock.currentDateTime
+      input        <- getOriginalBestInputFileForProcessors(original)
+      mayBeClasses <- ZIO
+                        .attempt(doClassifyImage(input))
+                        .mapError(th => ObjectsDetectionIssue("Unable to compute classifications", th))
+                        .tap(cls => ZIO.log(s"found classes : ${cls.mkString(",")}"))
+                        .logError("Classification issue")
+                        .option
+      status        = ProcessedStatus(successful = mayBeClasses.isDefined, timestamp = now)
+      classes       = mayBeClasses.getOrElse(Nil)
+    } yield OriginalClassifications(original, status, classes)
 
     logic
       @@ annotated("originalId" -> original.id.asString)

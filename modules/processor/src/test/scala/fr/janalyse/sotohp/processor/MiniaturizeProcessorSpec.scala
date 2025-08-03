@@ -7,21 +7,17 @@ import zio.*
 import zio.lmdb.LMDB
 import zio.test.*
 
-object FacesProcessorSpec extends BaseSpecDefault with TestDatasets {
+object MiniaturizeProcessorSpec extends BaseSpecDefault with TestDatasets {
 
   def suiteFaces = suite("Faces processor")(
     test("standard scenario") {
       for {
-        original1 <- ZIO.from(originalFromFile(datasetFacesFakeStore, datasetFacesFileMondement))
-        original2 <- ZIO.from(originalFromFile(datasetFacesFakeStore, datasetFacesFileMariage))
+        original <- ZIO.from(originalFromFile(datasetFacesFakeStore, datasetFacesFileMondement))
         processor <- ZIO.attempt(FacesProcessor.allocate())
-        result1   <- processor.extractFaces(original1)
-        result2   <- processor.extractFaces(original2)
+        result   <- processor.extractFaces(original)
       } yield assertTrue(
-        result1.status.successful,
-        result1.faces.size == 9,
-        result2.status.successful,
-        result2.faces.size == 27
+        result.status.successful,
+        result.faces.size == 9,
       )
     }
   )

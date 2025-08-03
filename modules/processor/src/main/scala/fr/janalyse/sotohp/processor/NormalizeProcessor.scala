@@ -4,18 +4,18 @@ import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.core.{ConfigInvalid, CoreIssue}
 import fr.janalyse.sotohp.processor.config.NormalizerConfig
-import fr.janalyse.sotohp.processor.model.OriginalNormalized
+import fr.janalyse.sotohp.processor.model.{OriginalNormalized, ProcessedStatus}
 import zio.*
 import zio.ZIOAspect.*
 
 import java.nio.file.Path
+import scala.concurrent.Future.successful
 
 case class NormalizeIssue(message: String, exception: Throwable) extends Exception(message, exception) with CoreIssue
 
 object NormalizeProcessor extends Processor {
 
-  override def close(): Unit = {
-  }
+  override def close(): Unit = {}
 
   private def makeOutputDirectories(output: Path) = {
     ZIO
@@ -37,22 +37,25 @@ object NormalizeProcessor extends Processor {
     } yield newDimension
   }
 
-  /**
-   * Normalizes the given original media file by resizing it and saving the normalized version.
-   *
-   * @param original The original media file to be normalized, containing metadata and file information such as its path, size, orientation, etc.
-   * @return An effect that can produce either a `CoreIssue` if an error occurs during the normalization process,
-   *         or an `OriginalNormalized` containing the normalized file and its new dimensions.
-   */
+  /** Normalizes the given original media file by resizing it and saving the normalized version.
+    *
+    * @param original
+    *   The original media file to be normalized, containing metadata and file information such as its path, size, orientation, etc.
+    * @return
+    *   An effect that can produce either a `CoreIssue` if an error occurs during the normalization process, or an `OriginalNormalized` containing the normalized file and its new dimensions.
+    */
   def normalize(original: Original): IO[CoreIssue, OriginalNormalized] = {
     val logic = for {
-      input     <- ZIO
-                     .attempt(original.mediaPath.path.toAbsolutePath)
-                     .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
-      output    <- getOriginalNormalizedFilePath(original)
-      _         <- makeOutputDirectories(output)
-      dimension <- resizePhoto(input, output, original.orientation)
-    } yield OriginalNormalized(original, Dimension(Width(dimension.width), Height(dimension.height)))
+      now            <- Clock.currentDateTime
+      input          <- ZIO
+                          .attempt(original.mediaPath.path.toAbsolutePath)
+                          .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
+      output         <- getOriginalNormalizedFilePath(original)
+      _              <- makeOutputDirectories(output)
+      mayBeDimension <- resizePhoto(input, output, original.orientation).option
+      status          = ProcessedStatus(successful = mayBeDimension.isDefined, timestamp = now)
+      dimension       = mayBeDimension.map(d => Dimension(Width(d.width), Height(d.height)))
+    } yield OriginalNormalized(original, status, dimension)
 
     logic
       .logError(s"Normalization issue")

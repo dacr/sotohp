@@ -10,6 +10,6 @@ case class FaceFeatures(
 
 case class OriginalFaceFeatures(
   original: Original,
-  successful: Boolean,
+  status: ProcessedStatus,
   features: List[FaceFeatures]
-)
+) extends ProcessorResult

@@ -9,6 +9,6 @@ case class DetectedClassification(
 
 case class OriginalClassifications(
   original: Original,
-  successful: Boolean,
+  status: ProcessedStatus,
   classifications: List[DetectedClassification]
-)
+) extends ProcessorResult

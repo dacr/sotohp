@@ -19,6 +19,6 @@ case class DetectedFace(
 
 case class OriginalFaces(
   original: Original,
-  successful: Boolean,
+  status: ProcessedStatus,
   faces: List[DetectedFace]
-)
+) extends ProcessorResult

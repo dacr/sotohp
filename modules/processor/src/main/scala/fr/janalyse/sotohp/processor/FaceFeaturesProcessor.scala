@@ -64,26 +64,30 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
 
   }
 
-  /**
-   * Extracts features from faces detected in the input `OriginalFaces` object while applying filtering and processing.
-   *
-   * @param faces the `OriginalFaces` object containing the original image and the list of detected faces to process
-   * @return an `IO` effect resulting in either a `CoreIssue` (in case of an error) or an `OriginalFaceFeatures` containing the processed face features
-   */
+  /** Extracts features from faces detected in the input `OriginalFaces` object while applying filtering and processing.
+    *
+    * @param faces
+    *   the `OriginalFaces` object containing the original image and the list of detected faces to process
+    * @return
+    *   an `IO` effect resulting in either a `CoreIssue` (in case of an error) or an `OriginalFaceFeatures` containing the processed face features
+    */
   def extractFaceFeatures(faces: OriginalFaces): IO[CoreIssue, OriginalFaceFeatures] = {
     val minRatio = 80d / 1600d // TODO use config parameter
     val logic    = for {
-      originalImage        <- loadOriginalBestInputFileForProcessors(faces.original)
-      selectedFaces         = faces.faces
-                                .filter(face => face.box.width.value >= minRatio || face.box.height.value >= minRatio)
-      selectedFaceFeatures <- ZIO
-                                .foreach(selectedFaces) { face =>
-                                  extractFaceFeatures(face, originalImage) @@ annotated("faceId" -> face.faceId.toString)
-                                }
-                                .logError("Face features issue")
-                                .mapError(err => FaceFeaturesIssue(s"Unable to compute face features: $err"))
-                                .option
-    } yield OriginalFaceFeatures(original = faces.original, successful = selectedFaceFeatures.isDefined, features = selectedFaceFeatures.getOrElse(Nil))
+      now               <- Clock.currentDateTime
+      originalImage     <- loadOriginalBestInputFileForProcessors(faces.original)
+      selectedFaces      = faces.faces
+                             .filter(face => face.box.width.value >= minRatio || face.box.height.value >= minRatio)
+      mayBeFaceFeatures <- ZIO
+                             .foreach(selectedFaces) { face =>
+                               extractFaceFeatures(face, originalImage) @@ annotated("faceId" -> face.faceId.toString)
+                             }
+                             .logError("Face features issue")
+                             .mapError(err => FaceFeaturesIssue(s"Unable to compute face features: $err"))
+                             .option
+      status             = ProcessedStatus(successful = mayBeFaceFeatures.isDefined, timestamp = now)
+      features           = mayBeFaceFeatures.getOrElse(Nil)
+    } yield OriginalFaceFeatures(faces.original, status, features)
 
     logic
       .logError("Face features issue")

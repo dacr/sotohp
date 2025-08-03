@@ -10,6 +10,6 @@ case class DetectedObject(
 
 case class OriginalDetectedObjects(
   original: Original,
-  successful: Boolean,
+  status: ProcessedStatus,
   objects: List[DetectedObject]
-)
+) extends ProcessorResult

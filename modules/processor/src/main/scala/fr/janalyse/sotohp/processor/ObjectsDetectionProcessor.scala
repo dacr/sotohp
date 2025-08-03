@@ -59,6 +59,7 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
     */
   def extractObjects(original: Original): IO[CoreIssue, OriginalDetectedObjects] = {
     val logic = for {
+      now          <- Clock.currentDateTime
       input        <- getOriginalBestInputFileForProcessors(original)
       mayBeObjects <- ZIO
                         .attempt(doDetectObjects(input))
@@ -66,7 +67,9 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
                         .tap(objs => ZIO.log(s"found objects : ${objs.mkString(",")}"))
                         .logError("Objects detection issue")
                         .option
-    } yield OriginalDetectedObjects(original, mayBeObjects.isDefined, mayBeObjects.getOrElse(List.empty))
+      status        = ProcessedStatus(successful = mayBeObjects.isDefined, timestamp = now)
+      objects       = mayBeObjects.getOrElse(Nil)
+    } yield OriginalDetectedObjects(original, status, objects)
 
     logic
       @@ annotated("originalId" -> original.id.asString)

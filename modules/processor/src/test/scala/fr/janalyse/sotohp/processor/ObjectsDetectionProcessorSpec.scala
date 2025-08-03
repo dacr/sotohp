@@ -19,11 +19,11 @@ object ObjectsDetectionProcessorSpec extends BaseSpecDefault with TestDatasets {
         result1 <- processor.extractObjects(original1)
         result2 <- processor.extractObjects(original2)
       } yield assertTrue(
-        result1.successful,
+        result1.status.successful,
         result1.objects.map(_.name).size == 9,
         result1.objects.map(_.name).contains("scissors"),
         result1.objects.map(_.name).contains("apple"),
-        result2.successful,
+        result2.status.successful,
         result2.objects.map(_.name).size == 2,
         result2.objects.map(_.name).contains("person")
       )

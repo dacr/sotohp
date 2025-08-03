@@ -66,15 +66,17 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     */
   def extractFaces(original: Original) = {
     val logic = for {
-      input         <- getOriginalBestInputFileForProcessors(original)
-      originalFaces <- ZIO
-                         .attempt(doDetectFaces(original, input))
-                         .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
-                         .tap(faces => ZIO.log(s"found ${faces.size} faces"))
-                         .logError("Faces detection issue")
-                         .option
-                         .map(faces => OriginalFaces(original = original, faces.isDefined, faces = faces.getOrElse(Nil)))
-    } yield originalFaces
+      now        <- Clock.currentDateTime
+      input      <- getOriginalBestInputFileForProcessors(original)
+      mayBeFaces <- ZIO
+                      .attempt(doDetectFaces(original, input))
+                      .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
+                      .tap(faces => ZIO.log(s"found ${faces.size} faces"))
+                      .logError("Faces detection issue")
+                      .option
+      status      = ProcessedStatus(successful = mayBeFaces.isDefined, timestamp = now)
+      faces       = mayBeFaces.getOrElse(Nil)
+    } yield OriginalFaces(original, status, faces)
     logic
       @@ annotated("originalId" -> original.id.asString)
       @@ annotated("originalPath" -> original.mediaPath.toString)

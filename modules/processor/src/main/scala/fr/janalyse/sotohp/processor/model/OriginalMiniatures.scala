@@ -9,5 +9,6 @@ case class OriginalMiniature(
 
 case class OriginalMiniatures(
   original: Original,
+  status: ProcessedStatus,
   miniatures: Map[Int, OriginalMiniature]
-)
+) extends ProcessorResult

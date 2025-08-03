@@ -4,5 +4,6 @@ import fr.janalyse.sotohp.model.*
 
 case class OriginalNormalized(
   original: Original,
-  dimension: Dimension
-)
+  status: ProcessedStatus,
+  dimension: Option[Dimension]
+) extends ProcessorResult
