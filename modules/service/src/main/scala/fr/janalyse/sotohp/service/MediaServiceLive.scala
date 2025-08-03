@@ -56,13 +56,37 @@ class MediaServiceLive private (
 
   override def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media] = ???
 
-  override def mediaFirst(): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaFirst(): IO[ServiceIssue, Option[Media]] = {
+    medias
+      .head()
+      .map(result => result.map((key, media) => media))
+      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get first media : $err"))
+  }
 
-  override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
+    medias
+      .previous(nearKey)
+      .map(result => result.map((key, media) => media))
+      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get previous media : $err"))
+  }
 
-  override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
+    medias
+      .next(nearKey)
+      .map(result => result.map((key, media) => media))
+      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get next media : $err"))
+  }
 
-  override def mediaLast(): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaLast(): IO[ServiceIssue, Option[Media]] = {
+    medias
+      .last()
+      .map(result => result.map((key,media)=> media))
+      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get last media : $err"))
+  }
 
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
     medias
