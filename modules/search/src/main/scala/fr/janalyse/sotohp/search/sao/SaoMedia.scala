@@ -14,12 +14,11 @@ case class SaoGeoPoint(
 
 // SearchAccessObject Photo
 case class SaoMedia(
-  id: String,
-  timestamp: OffsetDateTime,
+  id: String, // MediaAccessKey
+  timestamp: OffsetDateTime, // Media timestamp, allowing changes by the users
+  originalId: String,
   // ----------------- ORIGINAL FILE INFO -----------------
-  filePath: String,
   fileSize: Long,
-  fileLastUpdated: OffsetDateTime,
   // ----------------- USER DATA -----------------
   event: Option[String], // the default attached event
   keywords: List[String],
@@ -56,10 +55,9 @@ object SaoMedia {
     SaoMedia(
       id = media.accessKey.asString,
       timestamp = media.timestamp,
+      originalId = media.original.id.asString,
       // ----------------- ORIGINAL FILE INFO -----------------
-      filePath = media.original.mediaPath.toString,
       fileSize = media.original.fileSize.value,
-      fileLastUpdated = media.original.fileLastModified.offsetDateTime,
       // ----------------- USER DATA -----------------
       event = event,
       keywords = keywords.map(_.text).toList,
