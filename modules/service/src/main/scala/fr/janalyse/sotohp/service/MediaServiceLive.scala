@@ -2,6 +2,7 @@ package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces}
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID
@@ -51,17 +52,17 @@ class MediaServiceLive private (
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect medias : $err"))
   }
 
-  override def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): Stream[ServiceStreamIssue, Media] = ???
+  override def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media] = ???
 
-  override def mediaFirst(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaFirst(): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaPrevious(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaNext(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = ???
 
-  override def mediaLast(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaLast(): IO[ServiceIssue, Option[Media]] = ???
 
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
     medias
@@ -107,6 +108,13 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update state : $err"))
       .as(state)
   }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def classifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications] = ???
+
+  def faces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces] = ???
+
+  def objects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
 

@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.service
 import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces}
 import fr.janalyse.sotohp.service.model.KeywordRules
 import zio.lmdb.LMDB
 
@@ -13,12 +14,12 @@ trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
   def mediaList(): Stream[ServiceStreamIssue, Media]
-  def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
-  def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): Stream[ServiceStreamIssue, Media]
-  def mediaFirst(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
-  def mediaPrevious(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
-  def mediaNext(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
-  def mediaLast(ownerId: Option[OwnerId]): IO[ServiceIssue, Option[Media]]
+  def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
+  def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media]
+  def mediaFirst(): IO[ServiceIssue, Option[Media]]
+  def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
+  def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
+  def mediaLast(): IO[ServiceIssue, Option[Media]]
   def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]]
 
   def mediaUpdate(
@@ -36,6 +37,11 @@ trait MediaService {
   def stateGet(originalId: OriginalId): IO[ServiceIssue, Option[State]]
   def stateDelete(originalId: OriginalId): IO[ServiceIssue, Unit]
   def stateUpsert(originalId: OriginalId, state: State): IO[ServiceIssue, State]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def classifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications]
+  def faces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces]
+  def objects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects]
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): Stream[ServiceStreamIssue, Original]
@@ -124,17 +130,17 @@ object MediaService {
 
   def mediaList(): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaList())
 
-  def mediaFind(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFind(nearKey, ownerId))
+  def mediaFind(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFind(nearKey))
 
-  def mediaSearch(keywordsFilter: Set[Keyword], ownerId: Option[OwnerId]): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter, ownerId))
+  def mediaSearch(keywordsFilter: Set[Keyword]): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter))
 
-  def mediaFirst(ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFirst(ownerId))
+  def mediaFirst(): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFirst())
 
-  def mediaPrevious(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaPrevious(nearKey, ownerId))
+  def mediaPrevious(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaPrevious(nearKey))
 
-  def mediaNext(nearKey: MediaAccessKey, ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaNext(nearKey, ownerId))
+  def mediaNext(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaNext(nearKey))
 
-  def mediaLast(ownerId: Option[OwnerId]): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaLast(ownerId))
+  def mediaLast(): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaLast())
 
   def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGet(key))
 
@@ -149,6 +155,11 @@ object MediaService {
   def stateGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[State]]          = ZIO.serviceWithZIO(_.stateGet(originalId))
   def stateDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]                = ZIO.serviceWithZIO(_.stateDelete(originalId))
   def stateUpsert(originalId: OriginalId, state: State): ZIO[MediaService, ServiceIssue, State] = ZIO.serviceWithZIO(_.stateUpsert(originalId, state))
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def classifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalClassifications] = ZIO.serviceWithZIO(_.classifications(originalId))
+  def faces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalFaces]                     = ZIO.serviceWithZIO(_.faces(originalId))
+  def objects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalDetectedObjects]         = ZIO.serviceWithZIO(_.objects(originalId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())
