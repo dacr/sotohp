@@ -1,14 +1,15 @@
 package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.model.{Original, OriginalId}
-import fr.janalyse.sotohp.processor.model.{FaceId, OriginalFaces}
+import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, OriginalFaces}
 import io.scalaland.chimney.Transformer
 import wvlet.airframe.ulid.ULID
 import zio.lmdb.json.LMDBCodecJson
 
 case class DaoDetectedFace(
   faceId: FaceId,
-  box: DaoBoundingBox
+  box: DaoBoundingBox,
+  path: DetectedFacePath
 ) derives LMDBCodecJson
 
 case class DaoOriginalFaces(

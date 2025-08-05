@@ -36,6 +36,11 @@ package object dao {
     (trace: List[JsonError], in: RetractReader) => OriginalPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
   )
 
+  given JsonCodec[DetectedFacePath] = new JsonCodec(
+    (a: DetectedFacePath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => DetectedFacePath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  )
+
   given JsonCodec[NormalizedPath] = new JsonCodec(
     (a: NormalizedPath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
     (trace: List[JsonError], in: RetractReader) => NormalizedPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))

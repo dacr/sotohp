@@ -33,6 +33,20 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+  opaque type DetectedFacePath = Path
+  object DetectedFacePath {
+    def apply(path: Path): DetectedFacePath = path
+
+    extension (path: DetectedFacePath) {
+      def parent: Path      = path.getParent
+      def file: File        = path.toFile
+      def path: Path        = path
+      def fileName: String  = path.getFileName.toString
+      def extension: String = path.getFileName.toString.split("\\.").last
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   opaque type XAxis = Double
 
   object XAxis {

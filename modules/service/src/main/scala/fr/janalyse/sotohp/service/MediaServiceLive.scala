@@ -212,6 +212,7 @@ class MediaServiceLive private (
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoFacesToFaces))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
+                  //.tap(stored => Console.printLine(s"Stored : $stored").orDie)
       result <- computeFaces(originalId).when(stored.isEmpty)
     } yield stored.orElse(result)
   }

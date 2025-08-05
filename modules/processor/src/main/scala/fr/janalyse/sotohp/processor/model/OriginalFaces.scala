@@ -1,9 +1,11 @@
 package fr.janalyse.sotohp.processor.model
 
 import fr.janalyse.sotohp.model.Original
+
 case class DetectedFace(
   faceId: FaceId,
-  box: BoundingBox
+  box: BoundingBox,
+  path: DetectedFacePath
 )
 
 case class OriginalFaces(
