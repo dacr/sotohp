@@ -6,7 +6,6 @@ import java.nio.file.Path
 import javax.imageio.{IIOImage, ImageIO, ImageWriteParam}
 import scala.jdk.CollectionConverters.*
 import scala.math.*
-import scala.util.Using
 
 case object BasicImaging {
 
@@ -114,19 +113,26 @@ case object BasicImaging {
 
     foundImageWriter match {
       case Some(writer) =>
-        val params = writer.getDefaultWriteParam
+        val params       = writer.getDefaultWriteParam
         if (compressionLevel.isDefined) {
           params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT)
           params.setCompressionQuality(compressionLevel.get.toFloat)
         }
-        Using(ImageIO.createImageOutputStream(output.toFile)) { outputStream =>
+        val outputStream = ImageIO.createImageOutputStream(output.toFile)
+        try { // Not using `Using` because of an error propagation issue
           writer.setOutput(outputStream)
           val outputImage = IIOImage(image, null, null)
           writer.write(null, outputImage, params)
           writer.dispose()
+        } catch {
+          case error: Exception =>
+            output.toFile.delete()
+            throw new RuntimeException(s"Error while saving face image to $output", error)
+        } finally {
+          outputStream.close()
         }
 
-      case None => throw RuntimeException(s"Unsupported output image format : $output")  // TODO enhance error support
+      case None => throw RuntimeException(s"Unsupported output image format : $output") // TODO enhance error support
     }
   }
 
@@ -136,13 +142,13 @@ case object BasicImaging {
     targetMaxSize: Int,
     rotateDegrees: Option[Double] = None,
     compressionLevel: Option[Double] = None
-  ): (width:Int, height:Int) = {
+  ): (width: Int, height: Int) = {
     val originalImage = load(input)
-    val ratio        = targetMaxSize.toDouble / math.max(originalImage.getWidth, originalImage.getHeight)
-    val targetWidth  = (originalImage.getWidth() * ratio).toInt
-    val targetHeight = (originalImage.getHeight() * ratio).toInt
-    val resizedImage = resize(originalImage, targetWidth, targetHeight)
-    val finalImage   =
+    val ratio         = targetMaxSize.toDouble / math.max(originalImage.getWidth, originalImage.getHeight)
+    val targetWidth   = (originalImage.getWidth() * ratio).toInt
+    val targetHeight  = (originalImage.getHeight() * ratio).toInt
+    val resizedImage  = resize(originalImage, targetWidth, targetHeight)
+    val finalImage    =
       if (rotateDegrees.exists(_ != 0d))
         rotate(resizedImage, rotateDegrees.get)
       else resizedImage

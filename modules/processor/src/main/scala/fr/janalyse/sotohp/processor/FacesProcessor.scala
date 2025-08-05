@@ -51,8 +51,13 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
 
     ZIO
       .attempt(originalImage.getSubimage(fixedX, fixedY, fixedWidth, fixedHeight))
-      .flatMap(buff => ZIO.attemptBlocking(BasicImaging.save(face.path.path, buff)))
       .mapError(err => FacesDetectionIssue(s"Couldn't extract face from image [$fixedX, $fixedY, $fixedWidth, $fixedHeight]", err))
+      .flatMap(buff =>
+        ZIO
+          .attempt(BasicImaging.save(face.path.path, buff))
+          .mapError(err => FacesDetectionIssue(s"Couldn't save selected face from image [$fixedX, $fixedY, $fixedWidth, $fixedHeight]", err))
+          .logError("Faces caching issue")
+      )
   }
 
   private def doDetectFaces(original: Original, path: Path): IO[FacesDetectionIssue, List[DetectedFace]] = {
@@ -67,7 +72,13 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                                      .asScala
                                      .toList
                                      .asInstanceOf[List[DetectedObjects.DetectedObject]]
-                                     .filter(_.getProbability >= 0.7d)
+                                     .filter(_.getProbability >= 0.7d) // TODO hardcoded config
+                                     .filter { ob =>
+                                       val bounds           = ob.getBoundingBox.getBounds
+                                       val widthInOriginal  = original.dimension.map(_.width.value).getOrElse(0) * bounds.getWidth
+                                       val heightInOriginal = original.dimension.map(_.height.value).getOrElse(0) * bounds.getHeight
+                                       (heightInOriginal >= 32 && widthInOriginal >= 32) // TODO hardcoded config
+                                     }
                                  }
                                  .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
       detectedFaces         <- ZIO.foreach(detectedObjects)(ob => {
@@ -94,7 +105,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                                  .attemptBlocking(BasicImaging.load(original.mediaPath.path))
                                  .mapError(th => FacesDetectionIssue("Unable to load original image", th))
       _                     <- ZIO.foreachDiscard(detectedFaces)(face => cacheFaceImage(face, originalBufferedImage))
-    } yield detectedFaces
+    } yield detectedFaces.filter(_.path.path.toFile.exists()) // filtering because already encounter saving issue - such as invalid colorspace errors
   }
 
   /** Extracts faces detected in the image represented by the provided original instance.
