@@ -25,18 +25,18 @@ type LMDBIssues = StorageUserError | StorageSystemError
 class MediaServiceLive private (
   lmdb: LMDB,
   // ------------------------
-  originals: LMDBCollection[OriginalId, DaoOriginal],
-  states: LMDBCollection[OriginalId, DaoState],
-  events: LMDBCollection[EventId, DaoEvent],
-  medias: LMDBCollection[MediaAccessKey, DaoMedia],
-  owners: LMDBCollection[OwnerId, DaoOwner],
-  stores: LMDBCollection[StoreId, DaoStore],
-  keywordRules: LMDBCollection[StoreId, DaoKeywordRules],
-  classifications: LMDBCollection[OriginalId, DaoOriginalClassifications],
-  faces: LMDBCollection[OriginalId, DaoOriginalFaces],
-  objects: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
-  miniatures: LMDBCollection[OriginalId, DaoOriginalMiniatures],
-  normalized: LMDBCollection[OriginalId, DaoOriginalNormalized],
+  originalColl: LMDBCollection[OriginalId, DaoOriginal],
+  stateColl: LMDBCollection[OriginalId, DaoState],
+  eventColl: LMDBCollection[EventId, DaoEvent],
+  mediaColl: LMDBCollection[MediaAccessKey, DaoMedia],
+  ownerColl: LMDBCollection[OwnerId, DaoOwner],
+  storesColl: LMDBCollection[StoreId, DaoStore],
+  keywordRulesColl: LMDBCollection[StoreId, DaoKeywordRules],
+  classificationsColl: LMDBCollection[OriginalId, DaoOriginalClassifications],
+  facesColl: LMDBCollection[OriginalId, DaoOriginalFaces],
+  objectsColl: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
+  miniaturesColl: LMDBCollection[OriginalId, DaoOriginalMiniatures],
+  normalizedColl: LMDBCollection[OriginalId, DaoOriginalNormalized],
   // ------------------------
   classificationProcessorEffect: IO[ClassificationIssue, ClassificationProcessor],
   facesProcessorEffect: IO[FacesDetectionIssue, FacesProcessor],
@@ -58,7 +58,7 @@ class MediaServiceLive private (
   }
 
   override def mediaList(): Stream[ServiceStreamIssue, Media] = {
-    medias
+    mediaColl
       .stream()
       .mapZIO(daoMedia2Media)
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect medias : $err"))
@@ -69,7 +69,7 @@ class MediaServiceLive private (
   override def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media] = ???
 
   override def mediaFirst(): IO[ServiceIssue, Option[Media]] = {
-    medias
+    mediaColl
       .head()
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -77,7 +77,7 @@ class MediaServiceLive private (
   }
 
   override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
-    medias
+    mediaColl
       .previous(nearKey)
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -85,7 +85,7 @@ class MediaServiceLive private (
   }
 
   override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
-    medias
+    mediaColl
       .next(nearKey)
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -93,7 +93,7 @@ class MediaServiceLive private (
   }
 
   override def mediaLast(): IO[ServiceIssue, Option[Media]] = {
-    medias
+    mediaColl
       .last()
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -101,7 +101,7 @@ class MediaServiceLive private (
   }
 
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
-    medias
+    mediaColl
       .fetch(key)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
       .flatMap(maybeDaoMedia => ZIO.foreach(maybeDaoMedia)(daoMedia2Media))
@@ -121,25 +121,25 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
   def stateList(): Stream[ServiceStreamIssue, State]                             = {
-    states
+    stateColl
       .stream()
       .map(daoState => daoState.transformInto[State])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect states : $err"))
   }
   def stateGet(originalId: OriginalId): IO[ServiceIssue, Option[State]]          = {
-    states
+    stateColl
       .fetch(originalId)
       .map(maybeDaoState => maybeDaoState.map(_.transformInto[State]))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch state : $err"))
   }
   def stateDelete(originalId: OriginalId): IO[ServiceIssue, Unit]                = {
-    states
+    stateColl
       .delete(originalId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete state : $err"))
       .unit
   }
   def stateUpsert(originalId: OriginalId, state: State): IO[ServiceIssue, State] = {
-    states
+    stateColl
       .upsert(originalId, _ => state.transformInto[DaoState])
       .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update state : $err"))
       .as(state)
@@ -164,7 +164,7 @@ class MediaServiceLive private (
       computed  <- processor
                      .classify(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original classifications : $err"))
-      _         <- classifications
+      _         <- classificationsColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalClassifications].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed classifications : $err"))
     } yield computed
@@ -172,7 +172,7 @@ class MediaServiceLive private (
 
   override def classifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]] = {
     for {
-      stored <- classifications
+      stored <- classificationsColl
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoClassificationsToClassifications))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch classification from database: $err"))
@@ -200,7 +200,7 @@ class MediaServiceLive private (
       computed  <- processor
                      .extractFaces(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces : $err"))
-      _         <- faces
+      _         <- facesColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalFaces].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
     } yield computed
@@ -208,11 +208,11 @@ class MediaServiceLive private (
 
   override def faces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]] = {
     for {
-      stored <- faces
+      stored <- facesColl
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoFacesToFaces))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
-                  //.tap(stored => Console.printLine(s"Stored : $stored").orDie)
+      // .tap(stored => Console.printLine(s"Stored : $stored").orDie)
       result <- computeFaces(originalId).when(stored.isEmpty)
     } yield stored.orElse(result)
   }
@@ -237,7 +237,7 @@ class MediaServiceLive private (
       computed  <- processor
                      .extractObjects(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected objects : $err"))
-      _         <- objects
+      _         <- objectsColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalDetectedObjects].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed detected objects : $err"))
     } yield computed
@@ -245,7 +245,7 @@ class MediaServiceLive private (
 
   override def objects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]] = {
     for {
-      stored <- objects
+      stored <- objectsColl
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoDetectedObjectsToDetectedObjects))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch objects from database: $err"))
@@ -271,7 +271,7 @@ class MediaServiceLive private (
       computed <- NormalizeProcessor
                     .normalize(original)
                     .mapError(err => ServiceInternalIssue(s"Unable to normalize original : $err"))
-      _        <- normalized
+      _        <- normalizedColl
                     .upsertOverwrite(originalId, computed.into[DaoOriginalNormalized].transform)
                     .mapError(err => ServiceDatabaseIssue(s"Unable to store computed normalized original : $err"))
     } yield computed
@@ -279,7 +279,7 @@ class MediaServiceLive private (
 
   override def normalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]] = {
     for {
-      stored <- normalized
+      stored <- normalizedColl
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoNormalizedToNormalized))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch normalized original from database: $err"))
@@ -304,7 +304,7 @@ class MediaServiceLive private (
       computed <- MiniaturizeProcessor
                     .miniaturize(original)
                     .mapError(err => ServiceInternalIssue(s"Unable to find original miniatures : $err"))
-      _        <- miniatures
+      _        <- miniaturesColl
                     .upsertOverwrite(originalId, computed.into[DaoOriginalMiniatures].transform)
                     .mapError(err => ServiceDatabaseIssue(s"Unable to store computed miniatures : $err"))
     } yield computed
@@ -312,7 +312,7 @@ class MediaServiceLive private (
 
   override def miniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]] = {
     for {
-      stored <- miniatures
+      stored <- miniaturesColl
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoMiniaturesToMiniatures))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch normalized original from database: $err"))
@@ -329,29 +329,29 @@ class MediaServiceLive private (
   }
 
   override def originalList(): Stream[ServiceStreamIssue, Original] = {
-    originals
+    originalColl
       .stream()
       .mapZIO(daoOriginal2Original)
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect originals : $err"))
   }
 
   override def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]] = for {
-    maybeDaoOriginal <- originals.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
+    maybeDaoOriginal <- originalColl.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
     maybeOriginal    <- ZIO.foreach(maybeDaoOriginal)(daoOriginal2Original)
   } yield maybeOriginal
 
   override def originalExists(originalId: OriginalId): IO[ServiceIssue, Boolean] =
-    originals.contains(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't lookup original : $err"))
+    originalColl.contains(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't lookup original : $err"))
 
   override def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = {
-    originals
+    originalColl
       .delete(originalId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete original : $err"))
       .unit
   }
 
   override def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original] = {
-    originals
+    originalColl
       .upsert(providedOriginal.id, previous => providedOriginal.into[DaoOriginal].transform)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update original : $err"))
       .as(providedOriginal)
@@ -374,19 +374,19 @@ class MediaServiceLive private (
   }
 
   override def eventList(): Stream[ServiceStreamIssue, Event] = {
-    events
+    eventColl
       .stream()
       .mapZIO(daoEvent2Event)
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect events : $err"))
   }
 
   override def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]] = for {
-    maybeDaoEvent <- events.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
+    maybeDaoEvent <- eventColl.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
     maybeEvent    <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
   } yield maybeEvent
 
   override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = {
-    events
+    eventColl
       .delete(eventId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
       .unit
@@ -396,7 +396,7 @@ class MediaServiceLive private (
     for {
       eventId <- Random.nextUUID.map(EventId.apply)
       event    = Event(eventId, attachment, name, description, keywords)
-      _       <- events
+      _       <- eventColl
                    .upsert(eventId, _ => event.into[DaoEvent].transform)
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
     } yield event
@@ -404,7 +404,7 @@ class MediaServiceLive private (
 
   override def eventUpdate(eventId: EventId, attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = {
     for {
-      maybeDaoEvent <- events
+      maybeDaoEvent <- eventColl
                          .update(eventId, _.copy(attachment = attachment.transformInto[Option[DaoEventAttachment]], name = name, description = description, keywords = keywords))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
       event         <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
@@ -415,19 +415,19 @@ class MediaServiceLive private (
   // -------------------------------------------------------------------------------------------------------------------
 
   override def ownerList(): Stream[ServiceIssue, Owner] = {
-    owners
+    ownerColl
       .stream()
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect owners : $err"), daoOwner => daoOwner.transformInto[Owner])
   }
 
   override def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]] = {
-    owners
+    ownerColl
       .fetch(ownerId)
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch owner : $err"), maybeDaoOwner => maybeDaoOwner.map(_.transformInto[Owner]))
   }
 
   override def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit] = {
-    owners
+    ownerColl
       .delete(ownerId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete owner : $err"))
       .unit
@@ -440,7 +440,7 @@ class MediaServiceLive private (
                    .orElse(ZIO.attempt(OwnerId(ULID.newULID)))
                    .mapError(err => ServiceInternalIssue(s"Unable to create an owner identifier : $err"))
       owner    = Owner(ownerId, firstName, lastName, birthDate)
-      _       <- owners
+      _       <- ownerColl
                    .upsert(owner.id, _ => owner.transformInto[DaoOwner])
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create owner : $err"))
     } yield owner
@@ -448,7 +448,7 @@ class MediaServiceLive private (
 
   override def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Option[Owner]] = {
     for {
-      maybeDaoOwner <- owners
+      maybeDaoOwner <- ownerColl
                          .update(ownerId, _.copy(firstName = firstName, lastName = lastName, birthDate = birthDate))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
       maybeOwner     = maybeDaoOwner.map(_.transformInto[Owner])
@@ -458,20 +458,20 @@ class MediaServiceLive private (
   // -------------------------------------------------------------------------------------------------------------------
 
   override def storeList(): Stream[ServiceIssue, Store] = {
-    stores
+    storesColl
       .stream()
       .map(daoStore => daoStore.transformInto[Store])
       .mapError(err => ServiceDatabaseIssue(s"Couldn't collect stores : $err"))
   }
 
   override def storeGet(storeId: StoreId): IO[ServiceIssue, Option[Store]] = {
-    stores
+    storesColl
       .fetch(storeId)
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch store : $err"), maybeDaoStore => maybeDaoStore.map(_.transformInto[Store]))
   }
 
   override def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit] = {
-    stores
+    storesColl
       .delete(storeId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete store : $err"))
       .unit
@@ -484,7 +484,7 @@ class MediaServiceLive private (
                    .orElse(ZIO.attempt(StoreId(UUID.randomUUID())))
                    .mapError(err => ServiceInternalIssue(s"Unable to create a store identifier : $err"))
       store    = Store(storeId, ownerId, baseDirectory, includeMask, ignoreMask)
-      _       <- stores
+      _       <- storesColl
                    .upsert(store.id, _ => store.transformInto[DaoStore])
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create store : $err"))
     } yield store
@@ -492,7 +492,7 @@ class MediaServiceLive private (
 
   override def storeUpdate(storeId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Option[Store]] = {
     for {
-      maybeDaoStore <- stores
+      maybeDaoStore <- storesColl
                          .update(storeId, _.copy(includeMask = includeMask, ignoreMask = ignoreMask))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update store : $err"))
       maybeStore     = maybeDaoStore.map(_.transformInto[Store])
@@ -540,7 +540,7 @@ class MediaServiceLive private (
 
   private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
     // TODO first basic and naive implementation - not good for complexity
-    events
+    eventColl
       .collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"), _.headOption)
       .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
@@ -576,7 +576,7 @@ class MediaServiceLive private (
                             shootDateTime = None,
                             location = None
                           )
-                          medias
+                          mediaColl
                             .upsert(input.state.mediaAccessKey, _ => daoMedia)
                             .flatMap(daoMedia2Media)
                             .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
@@ -668,7 +668,7 @@ class MediaServiceLive private (
   }
 
   override def keywordRulesList(): IO[ServiceIssue, Chunk[KeywordRules]] = {
-    keywordRules
+    keywordRulesColl
       .stream()
       .mapZIO(r => ZIO.attempt(r.transformInto[KeywordRules]))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't collect keyword rules : $err"))
@@ -676,21 +676,21 @@ class MediaServiceLive private (
   }
 
   override def keywordRulesGet(storeId: StoreId): IO[ServiceIssue, Option[KeywordRules]] = {
-    keywordRules
+    keywordRulesColl
       .fetch(storeId)
       .flatMap(r => ZIO.attempt(r.map(_.transformInto[KeywordRules])))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get keyword rules : $err"))
   }
 
   override def keywordRulesUpsert(storeId: StoreId, rules: KeywordRules): IO[ServiceIssue, Unit] = {
-    keywordRules
+    keywordRulesColl
       .upsert(storeId, _ => rules.transformInto[DaoKeywordRules])
       .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update keyword rules : $err"))
       .unit
   }
 
   override def keywordRulesDelete(storeId: StoreId): IO[ServiceIssue, Unit] = {
-    keywordRules
+    keywordRulesColl
       .delete(storeId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete keyword rule : $err"))
       .unit

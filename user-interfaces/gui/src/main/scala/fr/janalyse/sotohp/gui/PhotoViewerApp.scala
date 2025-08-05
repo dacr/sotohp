@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.gui
 
-import fr.janalyse.sotohp.model.Location
+import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.MediaService
 import javafx.scene.input.{KeyCode, TransferMode}
 import zio.*
@@ -17,6 +17,8 @@ import scalafx.application.Platform
 import scalafx.scene.image.Image
 import scalafx.Includes.jfxRegion2sfx
 import scalafx.scene.input.{Clipboard, ClipboardContent, DataFormat}
+
+import java.nio.file.Path
 
 enum UserAction {
   case First
@@ -187,7 +189,7 @@ object PhotoViewerApp extends ZIOAppDefault {
     } yield ()
   }
 
-  val bootstrapWithTestSample = {
+  val bootstrapForTest = {
     import fr.janalyse.sotohp.model.*
     import java.nio.file.Path
     import wvlet.airframe.ulid.ULID
@@ -201,12 +203,42 @@ object PhotoViewerApp extends ZIOAppDefault {
     } yield ()
   }
 
-  val photoViewApp = for {
-    _  <- bootstrapWithTestSample.whenZIO(System.env("PHOTOS_TEST_ENV").map(_.isDefined))
-    fx <- ZIO.succeed(FxApp())
-    _  <- ZIO.attemptBlocking(fx.main(Array.empty)).fork
-    _  <- fxBridge(fx)
-  } yield ()
+  val bootstrapForQuickUsage = {
+    for {
+      ownerId        <- System.env("PHOTOS_OWNER_ID")
+      ownerFirstName <- System.env("PHOTOS_OWNER_FIRST_NAME")
+      ownerLastName  <- System.env("PHOTOS_OWNER_LAST_NAME")
+      storeId        <- System.env("PHOTOS_STORE_ID")
+      searchRoot     <- System.env("PHOTOS_SEARCH_ROOT").some
+      includeMask    <- System.env("PHOTOS_SEARCH_INCLUDE_MASK")
+      ignoreMask     <- System.env("PHOTOS_SEARCH_IGNORE_MASK")
+      owner          <- MediaService.ownerCreate(
+                          providedOwnerId = ownerId.map(OwnerId.fromString),
+                          firstName = FirstName(ownerFirstName.getOrElse("john")),
+                          lastName = LastName(ownerLastName.getOrElse("Doe")),
+                          birthDate = None
+                        )
+      _              <- MediaService.storeCreate(
+                          providedStoreId = storeId.map(StoreId.fromString),
+                          ownerId = owner.id,
+                          baseDirectory = BaseDirectoryPath(Path.of(searchRoot)),
+                          includeMask = includeMask.map(IncludeMask.fromString),
+                          ignoreMask = ignoreMask.map(IgnoreMask.fromString)
+                        )
+      _              <- MediaService.synchronize()
+    } yield ()
+  }
+
+  val photoViewApp = {
+    for {
+      isTestEnv <- System.env("PHOTOS_TEST_ENV").map(_.filter(_.trim.toLowerCase == "true").isDefined)
+      _         <- bootstrapForTest.when(isTestEnv)
+      _         <- bootstrapForQuickUsage.when(!isTestEnv)
+      fx        <- ZIO.succeed(FxApp())
+      _         <- ZIO.attemptBlocking(fx.main(Array.empty)).fork
+      _         <- fxBridge(fx)
+    } yield ()
+  }
 
   val configProvider = Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
 

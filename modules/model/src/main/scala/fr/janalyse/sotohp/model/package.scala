@@ -18,7 +18,9 @@ package object model {
   opaque type OwnerId = ULID
 
   object OwnerId {
-    def apply(id: ULID): OwnerId = id
+    def apply(id: ULID): OwnerId        = id
+    @deprecated
+    def fromString(id: String): OwnerId = OwnerId(ULID(id)) // TODO unsafe
 
     extension (ownerId: OwnerId) {
       def asString: String = ownerId.toString
@@ -285,7 +287,9 @@ package object model {
   opaque type StoreId = UUID
 
   object StoreId {
-    def apply(id: UUID): StoreId = id
+    def apply(id: UUID): StoreId        = id
+    @deprecated
+    def fromString(id: String): StoreId = StoreId(UUID.fromString(id)) // TODO unsafe
 
     extension (storeId: StoreId) {
       def asString: String = storeId.toString
@@ -296,7 +300,9 @@ package object model {
   opaque type IncludeMask = Regex
 
   object IncludeMask {
-    def apply(regex: Regex): IncludeMask = regex
+    def apply(regex: Regex): IncludeMask      = regex
+    @deprecated
+    def fromString(mask: String): IncludeMask = apply(mask.r) // TODO unsafe
 
     extension (includeMask: IncludeMask) {
       def isIncluded(path: String): Boolean = includeMask.findFirstIn(path).isDefined
@@ -308,7 +314,9 @@ package object model {
   opaque type IgnoreMask = Regex
 
   object IgnoreMask {
-    def apply(regex: Regex): IgnoreMask = regex
+    def apply(regex: Regex): IgnoreMask      = regex
+    @deprecated
+    def fromString(mask: String): IgnoreMask = mask.r
 
     extension (ignoreMaskRegex: IgnoreMask) {
       def isIgnored(path: String): Boolean = ignoreMaskRegex.findFirstIn(path).isDefined
