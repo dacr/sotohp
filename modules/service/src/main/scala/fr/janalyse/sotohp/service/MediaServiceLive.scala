@@ -177,7 +177,7 @@ class MediaServiceLive private (
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoClassificationsToClassifications))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch classification from database: $err"))
       result <- computeClassifications(originalId).when(stored.isEmpty)
-    } yield result
+    } yield stored.orElse(result)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -213,7 +213,7 @@ class MediaServiceLive private (
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoFacesToFaces))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
       result <- computeFaces(originalId).when(stored.isEmpty)
-    } yield result
+    } yield stored.orElse(result)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -249,7 +249,7 @@ class MediaServiceLive private (
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoDetectedObjectsToDetectedObjects))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch objects from database: $err"))
       result <- computedDetectedObjects(originalId).when(stored.isEmpty)
-    } yield result
+    } yield stored.orElse(result)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -283,8 +283,7 @@ class MediaServiceLive private (
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoNormalizedToNormalized))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch normalized original from database: $err"))
       result <- computeNormalized(originalId).when(stored.isEmpty)
-    } yield result
-
+    } yield stored.orElse(result)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -317,7 +316,7 @@ class MediaServiceLive private (
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoMiniaturesToMiniatures))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch normalized original from database: $err"))
       result <- computeMiniatures(originalId).when(stored.isEmpty)
-    } yield result
+    } yield stored.orElse(result)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
