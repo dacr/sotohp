@@ -2,8 +2,9 @@ package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.{ClassificationProcessor, FacesProcessor, NormalizeProcessor, ObjectsDetectionProcessor}
-import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalNormalized}
+import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
+import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID
@@ -23,13 +24,23 @@ type LMDBIssues = StorageUserError | StorageSystemError
 
 class MediaServiceLive private (
   lmdb: LMDB,
+  // ------------------------
   originals: LMDBCollection[OriginalId, DaoOriginal],
   states: LMDBCollection[OriginalId, DaoState],
   events: LMDBCollection[EventId, DaoEvent],
   medias: LMDBCollection[MediaAccessKey, DaoMedia],
   owners: LMDBCollection[OwnerId, DaoOwner],
   stores: LMDBCollection[StoreId, DaoStore],
-  keywordRules: LMDBCollection[StoreId, DaoKeywordRules]
+  keywordRules: LMDBCollection[StoreId, DaoKeywordRules],
+  classifications: LMDBCollection[OriginalId, DaoOriginalClassifications],
+  faces: LMDBCollection[OriginalId, DaoOriginalFaces],
+  objects: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
+  miniatures: LMDBCollection[OriginalId, DaoOriginalMiniatures],
+  normalized: LMDBCollection[OriginalId, DaoOriginalNormalized],
+  // ------------------------
+  classificationProcessorEffect: IO[ClassificationIssue, ClassificationProcessor],
+  facesProcessorEffect: IO[FacesDetectionIssue, FacesProcessor],
+  objectsProcessorEffect: IO[ObjectsDetectionIssue, ObjectsDetectionProcessor]
 ) extends MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -135,52 +146,181 @@ class MediaServiceLive private (
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  def classifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications] = {
-    // TODO temporary implementation - very low performance
+  def daoClassificationsToClassifications(input: DaoOriginalClassifications): IO[ServiceIssue, OriginalClassifications] = {
     for {
-      original        <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
-      classifications <- ZIO
-                           .acquireReleaseWith(ClassificationProcessor.allocate())(processor => ZIO.succeed(processor.close())) { processor =>
-                             processor
-                               .classify(original)
-                           }
-                           .mapError(err => ServiceInternalIssue(s"Unable to get original classifications : $err"))
-    } yield classifications
+      original <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      result    = input
+                    .into[OriginalClassifications]
+                    .withFieldConst(_.original, original)
+                    .transform
+    } yield result
   }
 
-  def faces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces] = {
+  def computeClassifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications] = {
     for {
-      original <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
-      faces    <- ZIO
-                    .acquireReleaseWith(FacesProcessor.allocate())(processor => ZIO.succeed(processor.close())) { processor =>
-                      processor.extractFaces(original)
-                    }
-                    .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces : $err"))
-    } yield faces
+      original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      processor <- classificationProcessorEffect
+                     .mapError(err => ServiceInternalIssue(s"Unable to get original classifications processor: $err"))
+      computed  <- processor
+                     .classify(original)
+                     .mapError(err => ServiceInternalIssue(s"Unable to extract original classifications : $err"))
+      _         <- classifications
+                     .upsertOverwrite(originalId, computed.into[DaoOriginalClassifications].transform)
+                     .mapError(err => ServiceDatabaseIssue(s"Unable to store computed classifications : $err"))
+    } yield computed
   }
 
-  def objects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects] = {
+  override def classifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]] = {
     for {
-      original <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
-      objects  <- ZIO
-                    .acquireReleaseWith(ObjectsDetectionProcessor.allocate())(processor => ZIO.succeed(processor.close())) { processor =>
-                      processor.extractObjects(original)
-                    }
-                    .mapError(err => ServiceInternalIssue(s"Unable to get original detected objects : $err"))
-    } yield objects
-  }
-
-  def normalized(originalId: OriginalId): IO[ServiceIssue, OriginalNormalized] = {
-    for {
-      original   <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
-      normalized <- NormalizeProcessor
-                      .normalize(original)
-                      .mapError(err => ServiceInternalIssue(s"Unable to normalize original : $err"))
-    } yield normalized
+      stored <- classifications
+                  .fetch(originalId)
+                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoClassificationsToClassifications))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch classification from database: $err"))
+      result <- computeClassifications(originalId).when(stored.isEmpty)
+    } yield result
   }
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  def daoFacesToFaces(input: DaoOriginalFaces): IO[ServiceIssue, OriginalFaces] = {
+    for {
+      original <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      result    = input
+                    .into[OriginalFaces]
+                    .withFieldConst(_.original, original)
+                    .transform
+    } yield result
+  }
+
+  def computeFaces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces] = {
+    for {
+      original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      processor <- facesProcessorEffect
+                     .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces processor : $err"))
+      computed  <- processor
+                     .extractFaces(original)
+                     .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces : $err"))
+      _         <- faces
+                     .upsertOverwrite(originalId, computed.into[DaoOriginalFaces].transform)
+                     .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
+    } yield computed
+  }
+
+  override def faces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]] = {
+    for {
+      stored <- faces
+                  .fetch(originalId)
+                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoFacesToFaces))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
+      result <- computeFaces(originalId).when(stored.isEmpty)
+    } yield result
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def daoDetectedObjectsToDetectedObjects(input: DaoOriginalDetectedObjects): IO[ServiceIssue, OriginalDetectedObjects] = {
+    for {
+      original <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      result    = input
+                    .into[OriginalDetectedObjects]
+                    .withFieldConst(_.original, original)
+                    .transform
+    } yield result
+  }
+
+  def computedDetectedObjects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects] = {
+    for {
+      original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      processor <- objectsProcessorEffect
+                     .mapError(err => ServiceInternalIssue(s"Unable to get original detected objects processor : $err"))
+      computed  <- processor
+                     .extractObjects(original)
+                     .mapError(err => ServiceInternalIssue(s"Unable to extract original detected objects : $err"))
+      _         <- objects
+                     .upsertOverwrite(originalId, computed.into[DaoOriginalDetectedObjects].transform)
+                     .mapError(err => ServiceDatabaseIssue(s"Unable to store computed detected objects : $err"))
+    } yield computed
+  }
+
+  override def objects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]] = {
+    for {
+      stored <- objects
+                  .fetch(originalId)
+                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoDetectedObjectsToDetectedObjects))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch objects from database: $err"))
+      result <- computedDetectedObjects(originalId).when(stored.isEmpty)
+    } yield result
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def daoNormalizedToNormalized(input: DaoOriginalNormalized): IO[ServiceIssue, OriginalNormalized] = {
+    for {
+      original <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      result    = input
+                    .into[OriginalNormalized]
+                    .withFieldConst(_.original, original)
+                    .transform
+    } yield result
+  }
+
+  def computeNormalized(originalId: OriginalId): IO[ServiceIssue, OriginalNormalized] = {
+    for {
+      original <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      computed <- NormalizeProcessor
+                    .normalize(original)
+                    .mapError(err => ServiceInternalIssue(s"Unable to normalize original : $err"))
+      _        <- normalized
+                    .upsertOverwrite(originalId, computed.into[DaoOriginalNormalized].transform)
+                    .mapError(err => ServiceDatabaseIssue(s"Unable to store computed normalized original : $err"))
+    } yield computed
+  }
+
+  override def normalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]] = {
+    for {
+      stored <- normalized
+                  .fetch(originalId)
+                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoNormalizedToNormalized))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch normalized original from database: $err"))
+      result <- computeNormalized(originalId).when(stored.isEmpty)
+    } yield result
+
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def daoMiniaturesToMiniatures(input: DaoOriginalMiniatures): IO[ServiceIssue, OriginalMiniatures] = {
+    for {
+      original <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      result    = input
+                    .into[OriginalMiniatures]
+                    .withFieldConst(_.original, original)
+                    .transform
+    } yield result
+  }
+
+  def computeMiniatures(originalId: OriginalId): IO[ServiceIssue, OriginalMiniatures] = {
+    for {
+      original <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      computed <- MiniaturizeProcessor
+                    .miniaturize(original)
+                    .mapError(err => ServiceInternalIssue(s"Unable to find original miniatures : $err"))
+      _        <- miniatures
+                    .upsertOverwrite(originalId, computed.into[DaoOriginalMiniatures].transform)
+                    .mapError(err => ServiceDatabaseIssue(s"Unable to store computed miniatures : $err"))
+    } yield computed
+  }
+
+  override def miniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]] = {
+    for {
+      stored <- miniatures
+                  .fetch(originalId)
+                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoMiniaturesToMiniatures))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch normalized original from database: $err"))
+      result <- computeMiniatures(originalId).when(stored.isEmpty)
+    } yield result
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   def daoOriginal2Original(daoOriginal: DaoOriginal): IO[ServiceIssue, Original] = {
     for {
       store   <- storeGet(daoOriginal.storeId).someOrFail(ServiceDatabaseIssue(s"Couldn't find store for original : ${daoOriginal.storeId}"))
@@ -621,33 +761,70 @@ object MediaServiceLive {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  private val originalsCollectionName    = "originals"
-  private val statesCollectionName       = "states"
-  private val eventsCollectionName       = "events"
-  private val mediasCollectionName       = "medias"
-  private val ownersCollectionName       = "owners"
-  private val storesCollectionName       = "stores"
-  private val keywordRulesCollectionName = "keywordRules"
-  private val allCollections             = List(
+  private val originalsCollectionName       = "originals"
+  private val statesCollectionName          = "states"
+  private val eventsCollectionName          = "events"
+  private val mediasCollectionName          = "medias"
+  private val ownersCollectionName          = "owners"
+  private val storesCollectionName          = "stores"
+  private val keywordRulesCollectionName    = "keywordRules"
+  private val classificationsCollectionName = "classifications"
+  private val facesCollectionName           = "faces"
+  private val objectsCollectionName         = "objects"
+  private val miniaturesCollectionName      = "miniatures"
+  private val normalizedCollectionName      = "normalized"
+  private val allCollections                = List(
     originalsCollectionName,
     statesCollectionName,
     eventsCollectionName,
     mediasCollectionName,
     ownersCollectionName,
     storesCollectionName,
-    keywordRulesCollectionName
+    keywordRulesCollectionName,
+    classificationsCollectionName,
+    facesCollectionName,
+    objectsCollectionName,
+    miniaturesCollectionName,
+    normalizedCollectionName
   )
 
-  def setup(lmdb: LMDB): IO[LMDBIssues, MediaService] = for {
-    _                <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
-    originalsColl    <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
-    statesColl       <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
-    eventsColl       <- lmdb.collectionGet[EventId, DaoEvent](eventsCollectionName)
-    mediasColl       <- lmdb.collectionGet[MediaAccessKey, DaoMedia](mediasCollectionName)
-    ownersColl       <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
-    storesColl       <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
-    keywordRulesColl <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
-  } yield new MediaServiceLive(lmdb, originalsColl, statesColl, eventsColl, mediasColl, ownersColl, storesColl, keywordRulesColl)
+  def setup(lmdb: LMDB): IO[LMDBIssues | CoreIssue, MediaService] = for {
+    _                             <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
+    originalsColl                 <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
+    statesColl                    <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
+    eventsColl                    <- lmdb.collectionGet[EventId, DaoEvent](eventsCollectionName)
+    mediasColl                    <- lmdb.collectionGet[MediaAccessKey, DaoMedia](mediasCollectionName)
+    ownersColl                    <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
+    storesColl                    <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
+    keywordRulesColl              <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
+    classificationsCollectionColl <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
+    facesCollectionColl           <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
+    objectsCollectionColl         <- lmdb.collectionGet[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName)
+    miniaturesCollectionColl      <- lmdb.collectionGet[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName)
+    normalizedCollectionColl      <- lmdb.collectionGet[OriginalId, DaoOriginalNormalized](normalizedCollectionName)
+    classificationProcessor       <- ClassificationProcessor.allocate().memoize
+    facesProcessor                <- FacesProcessor.allocate().memoize
+    objectsProcessor              <- ObjectsDetectionProcessor.allocate().memoize
+  } yield new MediaServiceLive(
+    lmdb,
+    // ------------------------
+    originalsColl,
+    statesColl,
+    eventsColl,
+    mediasColl,
+    ownersColl,
+    storesColl,
+    keywordRulesColl,
+    classificationsCollectionColl,
+    facesCollectionColl,
+    objectsCollectionColl,
+    miniaturesCollectionColl,
+    normalizedCollectionColl,
+    // ------------------------
+    classificationProcessor,
+    facesProcessor,
+    objectsProcessor
+  )
 
   // -------------------------------------------------------------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.processor.model.*
 import wvlet.airframe.ulid.ULID
 import zio.json.internal.{RetractReader, Write}
 import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder, JsonError}
@@ -35,6 +36,11 @@ package object dao {
     (trace: List[JsonError], in: RetractReader) => OriginalPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
   )
 
+  given JsonCodec[NormalizedPath] = new JsonCodec(
+    (a: NormalizedPath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => NormalizedPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  )
+
   given JsonCodec[EventMediaDirectory] = new JsonCodec(
     (a: EventMediaDirectory, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
     (trace: List[JsonError], in: RetractReader) => EventMediaDirectory(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
@@ -43,6 +49,11 @@ package object dao {
   given JsonCodec[OwnerId] = new JsonCodec(
     (a: OwnerId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
     (trace: List[JsonError], in: RetractReader) => OwnerId(ULID(JsonDecoder.string.unsafeDecode(trace, in)))
+  )
+
+  given JsonCodec[FaceId] = new JsonCodec(
+    (a: FaceId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => FaceId(ULID(JsonDecoder.string.unsafeDecode(trace, in)))
   )
 
   given JsonCodec[MediaAccessKey] = new JsonCodec(

@@ -1,9 +1,10 @@
 package fr.janalyse.sotohp.service
 
+import fr.janalyse.sotohp.core.CoreIssue
 import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalNormalized}
+import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
 import fr.janalyse.sotohp.service.model.KeywordRules
 import zio.lmdb.LMDB
 
@@ -40,10 +41,11 @@ trait MediaService {
   def stateUpsert(originalId: OriginalId, state: State): IO[ServiceIssue, State]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def classifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications]
-  def faces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces]
-  def objects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects]
-  def normalized(originalId: OriginalId): IO[ServiceIssue, OriginalNormalized]
+  def classifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]]
+  def faces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]]
+  def objects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]]
+  def normalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
+  def miniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): Stream[ServiceStreamIssue, Original]
@@ -121,7 +123,7 @@ trait MediaService {
 
 object MediaService {
 
-  val live: ZLayer[LMDB, LMDBIssues, MediaService] = ZLayer.fromZIO(
+  val live: ZLayer[LMDB, LMDBIssues|CoreIssue, MediaService] = ZLayer.fromZIO(
     for {
       lmdb             <- ZIO.service[LMDB]
       mediaServiceLive <- MediaServiceLive.setup(lmdb)
@@ -159,10 +161,11 @@ object MediaService {
   def stateUpsert(originalId: OriginalId, state: State): ZIO[MediaService, ServiceIssue, State] = ZIO.serviceWithZIO(_.stateUpsert(originalId, state))
 
   // -------------------------------------------------------------------------------------------------------------------
-  def classifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalClassifications] = ZIO.serviceWithZIO(_.classifications(originalId))
-  def faces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalFaces]                     = ZIO.serviceWithZIO(_.faces(originalId))
-  def objects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalDetectedObjects]         = ZIO.serviceWithZIO(_.objects(originalId))
-  def normalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalNormalized]           = ZIO.serviceWithZIO(_.normalized(originalId))
+  def classifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalClassifications]] = ZIO.serviceWithZIO(_.classifications(originalId))
+  def faces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaces]]                     = ZIO.serviceWithZIO(_.faces(originalId))
+  def objects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.objects(originalId))
+  def normalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.normalized(originalId))
+  def miniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.miniatures(originalId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())
