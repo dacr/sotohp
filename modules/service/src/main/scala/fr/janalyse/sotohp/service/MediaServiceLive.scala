@@ -162,7 +162,7 @@ class MediaServiceLive private (
       processor <- classificationProcessorEffect
                      .mapError(err => ServiceInternalIssue(s"Unable to get original classifications processor: $err"))
       computed  <- processor
-                     .classify(original)
+                     .classify(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original classifications : $err"))
       _         <- classifications
                      .upsertOverwrite(originalId, computed.into[DaoOriginalClassifications].transform)
@@ -198,7 +198,7 @@ class MediaServiceLive private (
       processor <- facesProcessorEffect
                      .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces processor : $err"))
       computed  <- processor
-                     .extractFaces(original)
+                     .extractFaces(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces : $err"))
       _         <- faces
                      .upsertOverwrite(originalId, computed.into[DaoOriginalFaces].transform)
@@ -234,7 +234,7 @@ class MediaServiceLive private (
       processor <- objectsProcessorEffect
                      .mapError(err => ServiceInternalIssue(s"Unable to get original detected objects processor : $err"))
       computed  <- processor
-                     .extractObjects(original)
+                     .extractObjects(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected objects : $err"))
       _         <- objects
                      .upsertOverwrite(originalId, computed.into[DaoOriginalDetectedObjects].transform)
