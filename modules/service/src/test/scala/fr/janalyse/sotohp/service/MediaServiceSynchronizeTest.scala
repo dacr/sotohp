@@ -23,8 +23,8 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
                             store.id,
                             KeywordRules(
                               ignoring = Set("la", "dans", "le", "et", "en"),
-                              mappings = Map(),
-                              rewritings = List.empty
+                              mappings = Nil,
+                              rewritings = Nil
                             )
                           )
         _              <- MediaService.synchronize() // ------ FIRST SYNC

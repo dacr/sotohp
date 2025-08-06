@@ -3,8 +3,10 @@ package fr.janalyse.sotohp.gui
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
+import fr.janalyse.sotohp.service.model.KeywordRules
 import javafx.scene.input.{KeyCode, TransferMode}
 import zio.*
+import zio.json.*
 import zio.lmdb.LMDB
 import zio.stream.ZStream
 import zio.config.typesafe.TypesafeConfigProvider
@@ -219,13 +221,20 @@ object PhotoViewerApp extends ZIOAppDefault {
                           lastName = LastName(ownerLastName.getOrElse("Doe")),
                           birthDate = None
                         )
-      _              <- MediaService.storeCreate(
+      store          <- MediaService.storeCreate(
                           providedStoreId = storeId.map(StoreId.fromString),
                           ownerId = owner.id,
                           baseDirectory = BaseDirectoryPath(Path.of(searchRoot)),
                           includeMask = includeMask.map(IncludeMask.fromString),
                           ignoreMask = ignoreMask.map(IgnoreMask.fromString)
                         )
+      rulesJson      <- System.env("PHOTOS_SEARCH_KEYWORD_RULES")
+      rulesEither    <- ZIO.from(rulesJson.map(_.fromJson[KeywordRules]))
+      rules          <- ZIO
+                          .fromEither(rulesEither)
+                          .logError("Failed to parse keyword rules")
+                          .option
+      _              <- ZIO.foreachDiscard(rules)(MediaService.keywordRulesUpsert(store.id, _))
       _              <- MediaService.synchronize()
     } yield ()
   }

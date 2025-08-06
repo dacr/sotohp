@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.service.model.{KeywordRules, Rewriting}
+import fr.janalyse.sotohp.service.model.{KeywordRules, Mapping, Rewriting}
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.LMDB
@@ -110,7 +110,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
       for {
         owner        <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
         store        <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
-        rules         = KeywordRules(ignoring = Set.empty, mappings = Map.empty, rewritings = Nil)
+        rules         = KeywordRules(ignoring = Set.empty, mappings = Nil, rewritings = Nil)
         _            <- MediaService.keywordRulesUpsert(store.id, rules)
         rulesFetched <- MediaService.keywordRulesGet(store.id).some
         _            <- MediaService.keywordRulesUpsert(store.id, rules.copy(ignoring = Set("with")))
@@ -127,7 +127,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
         store       <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
         _           <- MediaService.keywordRulesUpsert(
                          store.id,
-                         KeywordRules(ignoring = Set("with", "i", "am"), mappings = Map("nigght" -> "night"), rewritings = Rewriting("(42)(thing)".r, "$2$1") :: Nil)
+                         KeywordRules(ignoring = Set("with", "i", "am"), mappings = Mapping("nigght","night")::Nil, rewritings = Rewriting("(42)(thing)", "$2$1") :: Nil)
                        )
         result1 <- MediaService.keywordSentenceToKeywords(store.id, "I am with nigght 42thing")
       } yield assertTrue(

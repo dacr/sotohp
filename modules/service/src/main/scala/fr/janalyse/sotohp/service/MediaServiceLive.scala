@@ -619,33 +619,34 @@ class MediaServiceLive private (
   private def camelToKebabCase(that: String): String = camelTokenize(that).map(_.toLowerCase).mkString("-")
 
   @tailrec
-  private def keywordApplyRewritings(rewritings: List[Rewriting], input: String): String = {
+  private def keywordApplyRewritings(input: String, rewritings: List[Rewriting]): String = {
     rewritings match {
-      case Nil                                     => input
-      case Rewriting(regex, replacement) :: remain => keywordApplyRewritings(remain, regex.replaceAllIn(input, replacement))
+      case Nil                                               => input
+      // TODO rewriting.regex is not safe
+      case (rewriting @ Rewriting(_, replacement)) :: remain => keywordApplyRewritings(rewriting.pattern.replaceAllIn(input, replacement), remain)
     }
   }
 
-  def extractKeywords(sentence: String, rules: KeywordRules): Set[String] = {
-    keywordApplyRewritings(rules.rewritings, sentence)
+  def extractKeywords(sentence: String, rules: Option[KeywordRules]): Set[String] = {
+    keywordApplyRewritings(sentence, rules.map(_.rewritings).getOrElse(Nil))
       .split("[- /,']+")
       .toList
-      .filter(_.size > 0)
+      .filter(_.nonEmpty)
       // .filterNot(_.contains("'"))
       .flatMap(key => camelToKebabCase(key).split("-")) // TODO add dedicated option to rules ?
-      .map(token => rules.mappings.get(token.toLowerCase).getOrElse(token))
+      .map(token => rules.flatMap(_.mappings.find(_.from == token.toLowerCase).map(_.to)).getOrElse(token))
       .flatMap(_.split("[- ]+"))
-      .filter(_.trim.size > 0)
+      .filter(_.trim.nonEmpty)
       .filterNot(_.matches("^[-0-9]+$"))                // TODO add option to rules to ignore standalone numbers
       .map(_.toLowerCase)
-      .filterNot(key => rules.ignoring.contains(key))
+      .filter(key => rules.isEmpty || !rules.get.ignoring.contains(key))
       .toSet
   }
 
   override def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]] = {
     for {
       mayBeRules <- keywordRulesGet(storeId)
-      keywords    = mayBeRules.map(rules => extractKeywords(sentence, rules)).getOrElse(Set.empty)
+      keywords    = extractKeywords(sentence, mayBeRules)
       // TODO add automatic keywords for year and month ?
     } yield keywords.map(Keyword.apply)
   }
