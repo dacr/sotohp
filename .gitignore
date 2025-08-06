@@ -31,3 +31,6 @@ originals-*
 cluster*/
 .sotohp/
 .lmdb/
+
+# user config related
+david-keyword-rules.json
