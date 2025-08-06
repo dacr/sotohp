@@ -4,6 +4,7 @@ import fr.janalyse.sotohp.core.CoreIssue
 import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
 import fr.janalyse.sotohp.service.model.KeywordRules
 import zio.lmdb.LMDB
@@ -123,10 +124,11 @@ trait MediaService {
 
 object MediaService {
 
-  val live: ZLayer[LMDB, LMDBIssues|CoreIssue, MediaService] = ZLayer.fromZIO(
+  val live: ZLayer[LMDB & SearchService, LMDBIssues | CoreIssue, MediaService] = ZLayer.fromZIO(
     for {
       lmdb             <- ZIO.service[LMDB]
-      mediaServiceLive <- MediaServiceLive.setup(lmdb)
+      searchService    <- ZIO.service[SearchService]
+      mediaServiceLive <- MediaServiceLive.setup(lmdb, searchService)
     } yield mediaServiceLive
   )
 

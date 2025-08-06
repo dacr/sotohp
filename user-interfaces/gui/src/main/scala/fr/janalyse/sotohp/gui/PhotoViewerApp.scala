@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.gui
 
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import javafx.scene.input.{KeyCode, TransferMode}
 import zio.*
@@ -231,12 +232,13 @@ object PhotoViewerApp extends ZIOAppDefault {
 
   val photoViewApp = {
     for {
-      isTestEnv <- System.env("PHOTOS_TEST_ENV").map(_.filter(_.trim.toLowerCase == "true").isDefined)
-      _         <- bootstrapForTest.when(isTestEnv)
-      _         <- bootstrapForQuickUsage.when(!isTestEnv)
-      fx        <- ZIO.succeed(FxApp())
-      _         <- ZIO.attemptBlocking(fx.main(Array.empty)).fork
-      _         <- fxBridge(fx)
+      isTestEnv    <- System.env("PHOTOS_TEST_ENV").map(_.filter(_.trim.toLowerCase == "true").isDefined)
+      isFirstStart <- MediaService.storeList().runCount.map(_ == 0)
+      _            <- bootstrapForTest.when(isFirstStart && isTestEnv)
+      _            <- bootstrapForQuickUsage.when(isFirstStart && !isTestEnv)
+      fx           <- ZIO.succeed(FxApp())
+      _            <- ZIO.attemptBlocking(fx.main(Array.empty)).fork
+      _            <- fxBridge(fx)
     } yield ()
   }
 
@@ -244,6 +246,7 @@ object PhotoViewerApp extends ZIOAppDefault {
 
   override def run = photoViewApp.provide(
     configProvider >>> LMDB.live,
+    configProvider >>> SearchService.live,
     MediaService.live,
     Scope.default,
     configProvider

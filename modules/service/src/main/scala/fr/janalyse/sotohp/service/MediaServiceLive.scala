@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.core.CoreIssue
 import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
+import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID
@@ -24,6 +25,7 @@ type LMDBIssues = StorageUserError | StorageSystemError
 
 class MediaServiceLive private (
   lmdb: LMDB,
+  search: SearchService,
   // ------------------------
   originalColl: LMDBCollection[OriginalId, DaoOriginal],
   stateColl: LMDBCollection[OriginalId, DaoState],
@@ -584,9 +586,14 @@ class MediaServiceLive private (
     } yield (currentMedia, input.state)
   }
 
-  private def synchronizeSearchEngine(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    // TODO to implement
-    ZIO.succeed(input)
+  private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[(media: Media, state: State)]] = {
+    for {
+      now       <- Clock.currentDateTime.map(LastSynchronized.apply)
+      published <- search
+                     .publish(inputs.map(_.media))
+                     .mapError(err => ServiceInternalIssue(s"Unable to publish media to search engine : $err"))
+      _         <- ZIO.foreach(inputs)(input => stateUpsert(input.media.original.id, input.state.copy(mediaLastSynchronized = Some(now))))
+    } yield inputs // TODO no transaction take care
   }
 
   override def synchronize(): IO[ServiceIssue, Unit] = {
@@ -599,6 +606,7 @@ class MediaServiceLive private (
       .mapZIO(synchronizeState)
       .mapZIO(synchronizeMedia)
       .filter(_.state.mediaLastSynchronized.isEmpty)
+      .grouped(100)
       .mapZIO(synchronizeSearchEngine)
       .runDrain
       .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
@@ -788,7 +796,7 @@ object MediaServiceLive {
     normalizedCollectionName
   )
 
-  def setup(lmdb: LMDB): IO[LMDBIssues | CoreIssue, MediaService] = for {
+  def setup(lmdb: LMDB, search: SearchService): IO[LMDBIssues | CoreIssue, MediaService] = for {
     _                             <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
     originalsColl                 <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
     statesColl                    <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
@@ -807,6 +815,7 @@ object MediaServiceLive {
     objectsProcessor              <- ObjectsDetectionProcessor.allocate().memoize
   } yield new MediaServiceLive(
     lmdb,
+    search,
     // ------------------------
     originalsColl,
     statesColl,
