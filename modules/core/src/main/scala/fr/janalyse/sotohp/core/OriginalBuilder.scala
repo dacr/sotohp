@@ -98,10 +98,10 @@ object OriginalBuilder {
   def extractShootDateTime(metadata: DrewMetadata): Option[ShootDateTime] = {
     val result = Try {
       for {
-        exif              <- extractExif(metadata)
-        if exif.containsTag(ExifDirectoryBase.TAG_DATETIME)
+        exif              <- extractExifSub(metadata)
+        if exif.containsTag(ExifDirectoryBase.TAG_DATETIME_ORIGINAL)
         exifSubIFD         = Option(metadata.getFirstDirectoryOfType(classOf[ExifSubIFDDirectory]))
-        shootDateTimeRaw  <- Option(exif.getString(ExifDirectoryBase.TAG_DATETIME))
+        shootDateTimeRaw  <- Option(exif.getString(ExifDirectoryBase.TAG_DATETIME_ORIGINAL))
         shootZoneOffsetRaw = exifSubIFD
                                .flatMap(dir => Option(dir.getString(ExifDirectoryBase.TAG_TIME_ZONE_ORIGINAL)))
                                .getOrElse("+00:00")
