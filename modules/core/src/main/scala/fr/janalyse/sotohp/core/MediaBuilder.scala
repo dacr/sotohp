@@ -24,12 +24,14 @@ object MediaBuilder {
 
   def buildDefaultMediaAccessKey(original: Original): MediaAccessKey = {
     val timestamp = computeMediaTimestamp(original)
-    val ulid      = ULID.ofMillis(timestamp.toInstant.toEpochMilli)
+    // TODO Migrate to something else as ULID are constrained to start from epoch ! 1947:07:01 15:00:00 +00:00 => -710154000000 for epoch millis !
+    val epoch     = if (timestamp.getYear >= 1970) Try(timestamp.toInstant.toEpochMilli).toOption.getOrElse(0L) else 0L
+    val ulid      = ULID.ofMillis(epoch)
     MediaAccessKey(original.store.ownerId, ulid)
   }
 
   private def computeMediaTimestamp(original: Original): OffsetDateTime = {
-    val sdt = original.cameraShootDateTime.filter(_.year >= 1990) // TODO - Add rule/config to control shootDataTime validity !
+    val sdt = original.cameraShootDateTime
     sdt match {
       case Some(shootDateTime) => shootDateTime.offsetDateTime
       case _                   => original.fileLastModified.offsetDateTime
