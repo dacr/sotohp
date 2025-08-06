@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.model.{KeywordRules, Rewriting}
 import wvlet.airframe.ulid.ULID
 import zio.*
@@ -137,7 +138,10 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
     (suiteStores + suiteOwners + suiteEvents + suiteKeywords)
-      .provideShared(LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live, Scope.default)
+      .provideShared(
+        LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live,
+        configProvider >>> SearchService.live,
+        Scope.default)
       @@ TestAspect.sequential
 
 }

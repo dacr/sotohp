@@ -6,4 +6,5 @@ import zio.test.{TestEnvironment, ZIOSpecDefault, testEnvironment}
 import zio.{Runtime, ZLayer}
 
 abstract class BaseSpecDefault extends ZIOSpecDefault {
+  val configProvider = Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
 }

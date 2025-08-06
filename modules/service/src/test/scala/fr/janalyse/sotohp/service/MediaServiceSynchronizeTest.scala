@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.model.KeywordRules
 import wvlet.airframe.ulid.ULID
 import zio.*
@@ -68,6 +69,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
     (suiteSynchronization)
       .provideShared(
         LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live,
+        configProvider >>> SearchService.live,
         Scope.default
       )
       @@ TestAspect.sequential
