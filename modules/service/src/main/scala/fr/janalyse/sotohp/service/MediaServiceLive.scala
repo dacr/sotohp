@@ -159,17 +159,18 @@ class MediaServiceLive private (
   }
 
   def computeClassifications(originalId: OriginalId): IO[ServiceIssue, OriginalClassifications] = {
-    for {
+    val logic = for {
       original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
       processor <- classificationProcessorEffect
                      .mapError(err => ServiceInternalIssue(s"Unable to get original classifications processor: $err"))
       computed  <- processor
-                     .classify(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
+                     .classify(original)
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original classifications : $err"))
       _         <- classificationsColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalClassifications].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed classifications : $err"))
     } yield computed
+    logic.uninterruptible
   }
 
   override def classifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]] = {
@@ -195,17 +196,18 @@ class MediaServiceLive private (
   }
 
   def computeFaces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces] = {
-    for {
+    val logic = for {
       original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
       processor <- facesProcessorEffect
                      .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces processor : $err"))
       computed  <- processor
-                     .extractFaces(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
+                     .extractFaces(original)
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces : $err"))
       _         <- facesColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalFaces].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
     } yield computed
+    logic.uninterruptible
   }
 
   override def faces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]] = {
@@ -232,17 +234,18 @@ class MediaServiceLive private (
   }
 
   def computedDetectedObjects(originalId: OriginalId): IO[ServiceIssue, OriginalDetectedObjects] = {
-    for {
+    val logic = for {
       original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
       processor <- objectsProcessorEffect
                      .mapError(err => ServiceInternalIssue(s"Unable to get original detected objects processor : $err"))
       computed  <- processor
-                     .extractObjects(original) // TODO NOT THREAD SAFE SHARED PREDICTOR
+                     .extractObjects(original)
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected objects : $err"))
       _         <- objectsColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalDetectedObjects].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed detected objects : $err"))
     } yield computed
+    logic.uninterruptible
   }
 
   override def objects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]] = {
