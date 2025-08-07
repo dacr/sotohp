@@ -97,10 +97,12 @@ object ClassificationProcessor {
   lazy val imageClassificationModel = ModelZoo.loadModel(imageClassificationCriteria)
 
   def allocate(): IO[ClassificationIssue, ClassificationProcessor] = {
-    ZIO
-      .attemptBlocking(
-        ClassificationProcessor(imageClassificationModel.newPredictor() /* not thread safe !*/ )
-      )
-      .mapError(ClassificationIssue("Unable to allocate classification processor", _))
+    for {
+      semaphore <- Semaphore.make(1)
+      logic      = ZIO
+                     .attemptBlocking(ClassificationProcessor(imageClassificationModel.newPredictor() /* not thread safe !*/ ))
+                     .mapError(ClassificationIssue("Unable to allocate classification processor", _))
+      result    <- semaphore.withPermit(logic)
+    } yield result
   }
 }

@@ -140,23 +140,29 @@ object FacesProcessor {
   val steps           = Array(8, 16, 32)
   lazy val translator = FaceDetectionTranslator(confThresh, nmsThresh, variance, topK, scales, steps)
 
-  def allocate(): IO[FacesDetectionIssue, FacesProcessor] =
-    ZIO
-      .attempt {
-        val facesCriteria: Criteria[Image, DetectedObjects] =
-          Criteria
-            .builder()
-            .setTypes(classOf[Image], classOf[DetectedObjects])
-            .optModelUrls("https://resources.djl.ai/test-models/pytorch/retinaface.zip")
-            .optModelName("retinaface") // specify model file prefix
-            .optTranslator(translator)
-            // .optProgress(new ProgressBar())
-            .optEngine("PyTorch")       // Use PyTorch engine
-            .build()
+  def allocate(): IO[FacesDetectionIssue, FacesProcessor] = {
+    for {
+      semaphore <- Semaphore.make(1)
+      logic      = ZIO
+                     .attemptBlocking {
+                       val facesCriteria: Criteria[Image, DetectedObjects] =
+                         Criteria
+                           .builder()
+                           .setTypes(classOf[Image], classOf[DetectedObjects])
+                           .optModelUrls("https://resources.djl.ai/test-models/pytorch/retinaface.zip")
+                           .optModelName("retinaface") // specify model file prefix
+                           .optTranslator(translator)
+                           // .optProgress(new ProgressBar())
+                           .optEngine("PyTorch")
+                           // Use PyTorch engine
+                           .build()
 
-        val facesModel: ZooModel[Image, DetectedObjects] = facesCriteria.loadModel()
-        val facesPredictor                               = facesModel.newPredictor() // not thread safe !
-        FacesProcessor(facesPredictor)
-      }
-      .mapError(err => FacesDetectionIssue("Unable to allocate faces processor", err))
+                       val facesModel: ZooModel[Image, DetectedObjects] = facesCriteria.loadModel()
+                       val facesPredictor                               = facesModel.newPredictor() // not thread safe !
+                       FacesProcessor(facesPredictor)
+                     }
+                     .mapError(err => FacesDetectionIssue("Unable to allocate faces processor", err))
+      result    <- semaphore.withPermit(logic)
+    } yield result
+  }
 }

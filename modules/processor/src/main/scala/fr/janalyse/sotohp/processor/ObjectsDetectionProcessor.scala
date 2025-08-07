@@ -93,11 +93,16 @@ object ObjectsDetectionProcessor {
 
   lazy val objectDetectionsModel = ModelZoo.loadModel(objectDetectionsCriteria)
 
-  def allocate(): IO[ObjectsDetectionIssue, ObjectsDetectionProcessor] =
-    ZIO
-      .attempt {
-        val objectsDetectionPredictor = objectDetectionsModel.newPredictor() // not thread safe !
-        ObjectsDetectionProcessor(objectsDetectionPredictor)
-      }
-      .mapError(err => ObjectsDetectionIssue("Unable to allocate objects detection processor", err))
+  def allocate(): IO[ObjectsDetectionIssue, ObjectsDetectionProcessor] = {
+    for {
+      semaphore <- Semaphore.make(1)
+      logic      = ZIO
+                     .attemptBlocking {
+                       val objectsDetectionPredictor = objectDetectionsModel.newPredictor() // not thread safe !
+                       ObjectsDetectionProcessor(objectsDetectionPredictor)
+                     }
+                     .mapError(err => ObjectsDetectionIssue("Unable to allocate objects detection processor", err))
+      result    <- semaphore.withPermit(logic)
+    } yield result
+  }
 }

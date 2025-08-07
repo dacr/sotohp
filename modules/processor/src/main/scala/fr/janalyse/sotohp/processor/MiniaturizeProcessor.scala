@@ -20,7 +20,7 @@ object MiniaturizeProcessor extends Processor {
     for {
       config       <- MiniaturizerConfig.config
       newDimension <- ZIO
-                        .attempt(
+                        .attemptBlocking(
                           BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.quality))
                         )
                         .mapError(th => MiniaturizeIssue("Couldn't generate miniature photo", th))
