@@ -13,7 +13,7 @@ val versions = new {
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.4"
   val ziojson    = "0.7.44"
-  val ziologging = "2.5.0"
+  val ziologging = "2.5.1"
   val ziolmdb    = "2.1.1"
   val uuidgen    = "5.1.0"
   val elastic4s  = "8.18.1"
@@ -22,6 +22,8 @@ val versions = new {
   // val javafx     = "21"
   val djl        = "0.33.0"
   val chimney    = "1.8.2"
+  val tapir      = "1.11.41"
+  val logback    = "1.5.18"
 }
 
 lazy val deepJavaLearningLibs = Seq(
@@ -153,8 +155,7 @@ lazy val moduleService =
 //lazy val userInterfacesCLI =
 //  project
 //    .in(file("user-interfaces/cli"))
-//    .settings(sharedSettings)
-//    .dependsOn(moduleCore/*, moduleProcessor*/, moduleSearch)
+//    .dependsOn(moduleService)
 //    .settings(
 //      sharedSettings,
 //      name := "sotohp-cli",
@@ -177,12 +178,10 @@ lazy val moduleService =
 lazy val userInterfacesGUI =
   project
     .in(file("user-interfaces/gui"))
-    .settings(sharedSettings)
     .dependsOn(moduleService)
     .settings(
       sharedSettings,
       name := "sotohp-gui",
-      fork := true,
       // See default.nix to setup the right environment
       // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
       // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
@@ -194,31 +193,30 @@ lazy val userInterfacesGUI =
       )
     )
 
-//
-//lazy val webapi =
-//  project
-//    .in("modules" / "webapi")
-//    .dependsOn(core)
-//    .enablePlugins(JavaServerAppPackaging)
-//    .settings(
-//      sharedSettings,
-//      Universal / packageName := "sotohp",
-//      Universal / javaOptions := Seq( // -- Required for LMDB with recent JVM
-//        "--add-opens",
-//        "java.base/java.nio=ALL-UNNAMED",
-//        "--add-opens",
-//        "java.base/sun.nio.ch=ALL-UNNAMED"
-//      ),
-//      libraryDependencies ++= Seq(
-//        "dev.zio"                     %% "zio-logging"             % versions.ziologging,
-//        "dev.zio"                     %% "zio-logging-slf4j"       % versions.ziologging,
-//        "com.softwaremill.sttp.tapir" %% "tapir-zio"               % versions.tapir,
-//        "com.softwaremill.sttp.tapir" %% "tapir-zio-http-server"   % versions.tapir,
-//        "com.softwaremill.sttp.tapir" %% "tapir-json-zio"          % versions.tapir,
-//        "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % versions.tapir,
-//        "ch.qos.logback"               % "logback-classic"         % versions.logback
-//      )
-//    )
+lazy val api =
+  project
+    .in(file("user-interfaces/api"))
+    .dependsOn(moduleService)
+    .enablePlugins(JavaServerAppPackaging)
+    .settings(
+      sharedSettings,
+      Universal / packageName := "sotohp",
+      Universal / javaOptions := Seq( // -- Required for LMDB with recent JVM
+        "--add-opens",
+        "java.base/java.nio=ALL-UNNAMED",
+        "--add-opens",
+        "java.base/sun.nio.ch=ALL-UNNAMED"
+      ),
+      libraryDependencies ++= Seq(
+        "dev.zio"                     %% "zio-logging"             % versions.ziologging,
+        "dev.zio"                     %% "zio-logging-slf4j"       % versions.ziologging,
+        "com.softwaremill.sttp.tapir" %% "tapir-zio"               % versions.tapir,
+        "com.softwaremill.sttp.tapir" %% "tapir-zio-http-server"   % versions.tapir,
+        "com.softwaremill.sttp.tapir" %% "tapir-json-zio"          % versions.tapir,
+        "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % versions.tapir,
+        "ch.qos.logback"               % "logback-classic"         % versions.logback
+      )
+    )
 
 ThisBuild / homepage   := Some(url("https://github.com/dacr/sotohp"))
 ThisBuild / scmInfo    := Some(ScmInfo(url(s"https://github.com/dacr/sotohp.git"), s"git@github.com:dacr/sotohp.git"))

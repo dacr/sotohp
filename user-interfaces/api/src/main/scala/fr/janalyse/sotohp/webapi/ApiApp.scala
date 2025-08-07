@@ -1,31 +1,45 @@
 package fr.janalyse.sotohp.webapi
 
+import com.typesafe.config.ConfigFactory
+import fr.janalyse.sotohp.search.SearchService
 import zio.*
 import sttp.apispec.openapi.Info
-import sttp.model.StatusCode
+import sttp.model.{Header, StatusCode}
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.zio.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import sttp.tapir.ztapir.{oneOfVariant, *}
 import zio.logging.backend.SLF4J
-import zio.logging.{LogFormat, removeDefaultLoggers}
+import zio.logging.LogFormat
 import zio.{LogLevel, System, ZIOAppDefault}
-import fr.janalyse.sotohp.core.store.PersistenceService
+import fr.janalyse.sotohp.service.MediaService
 import fr.janalyse.sotohp.webapi.protocol.*
+import sttp.model.headers.CacheDirective
+import sttp.tapir.files.staticFilesGetServerEndpoint
+import zio.Runtime.removeDefaultLoggers
+import zio.config.typesafe.TypesafeConfigProvider
+import zio.http.Server
+import zio.lmdb.LMDB
 
-object WebApiApp extends ZIOAppDefault {
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.FiniteDuration
 
-  type WebApiEnv = PersistenceService
+object ApiApp extends ZIOAppDefault {
+
+  type ApiEnv = MediaService
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  lazy val loggingLayer = removeDefaultLoggers >>> SLF4J.slf4j(
-    LogLevel.Debug,
-    format = LogFormat.colored
-  )
-
-  override val bootstrap = loggingLayer
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
+    val loggingLayer        = removeDefaultLoggers >>> SLF4J.slf4j(format = LogFormat.colored)
+    val configProviderLayer = {
+      val config   = ConfigFactory.load()
+      val provider = TypesafeConfigProvider.fromTypesafeConfig(config).kebabCase
+      Runtime.setConfigProvider(provider)
+    }
+    loggingLayer ++ configProviderLayer
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
   val systemEndpoint = endpoint.in("api").in("system").tag("System")
@@ -39,7 +53,7 @@ object WebApiApp extends ZIOAppDefault {
   val serviceStatusLogic = ZIO.succeed(ServiceStatus(alive = true))
   val serviceInfoLogic   = ZIO.succeed(
     ServiceInfo(
-      authors = List("@BriossantC", "@crodav"),
+      authors = List("@crodav"),
       version = "0.1",
       message = "Enjoy your photos/videos",
       photosCount = 0,
@@ -56,7 +70,7 @@ object WebApiApp extends ZIOAppDefault {
       .get
       .in("status")
       .out(jsonBody[ServiceStatus])
-      .zServerLogic[WebApiEnv](_ => serviceStatusLogic)
+      .zServerLogic[ApiEnv](_ => serviceStatusLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -69,10 +83,10 @@ object WebApiApp extends ZIOAppDefault {
       .in("info")
       .out(jsonBody[ServiceInfo])
       .errorOut(oneOf(statusForServiceInternalError))
-      .zServerLogic[WebApiEnv](_ => serviceInfoLogic)
+      .zServerLogic[ApiEnv](_ => serviceInfoLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
-  val apiRoutes = List(
+  val apiRoutes: List[ZServerEndpoint[ApiEnv, Any]] = List(
     serviceStatusEndpoint,
     serviceInfoEndpoint
   )
@@ -84,14 +98,37 @@ object WebApiApp extends ZIOAppDefault {
         Info(title = "SOTOHP API", version = "1.0", description = Some("Photos management software by @crodav"))
       )
 
+  val staticHeaders = List(
+    Header.cacheControl(
+      CacheDirective.MaxAge(FiniteDuration(15, TimeUnit.MINUTES))
+    )
+  )
+
+  def buildFrontRoutes: IO[Exception, List[ZServerEndpoint[ApiEnv, Any]]] = for {
+    config                      <- ApiConfig.config
+    clientResources             <- System.envOrElse("ZWORDS_CLIENT_RESOURCES_PATH", "static-user-interfaces")
+    clientSideResourcesEndPoints = staticFilesGetServerEndpoint(emptyInput)(clientResources, extraHeaders = staticHeaders).widen[ApiEnv]
+    clientSideRoutes             = List(clientSideResourcesEndPoints)
+  } yield clientSideRoutes
+
   def server = for {
-    _               <- ZIO.log("SOTOHP starting...")
-    clientResources <- System.env("SOTOHP_CLIENT_RESOURCES_PATH")
-    clientSideRoutes = clientResources.map(cr => filesGetServerEndpoint(emptyInput)(cr).widen[WebApiEnv])
-    httpApp          = ZioHttpInterpreter().toHttp(apiRoutes ++ apiDocRoutes ++ clientSideRoutes).provideSomeLayer(loggingLayer)
-    zservice        <- zhttp.service.Server.start(8090, httpApp)
+    frontRoutes <- buildFrontRoutes
+    allRoutes    = apiRoutes ++ apiDocRoutes ++ frontRoutes
+    httpApp      = ZioHttpInterpreter().toHttp(allRoutes)
+    _           <- ZIO.logInfo("Starting service")
+    zservice    <- Server.serve(httpApp)
   } yield zservice
 
-  override def run = server.provide(PersistenceService.live)
-
+  override def run = {
+    for {
+      config <- ApiConfig.config
+      _      <- server.provide(
+                  LMDB.live,
+                  MediaService.live,
+                  SearchService.live,
+                  Server.defaultWithPort(config.listeningPort),
+                  Scope.default
+                )
+    } yield ()
+  }
 }
