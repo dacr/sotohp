@@ -1,12 +1,23 @@
 package fr.janalyse.sotohp.webapi
 
+import fr.janalyse.sotohp.core.ConfigInvalid
+import zio.*
+import zio.config.*
 import zio.config.magnolia.*
-import zio.{Config, ZIO}
 
 case class ApiConfig(
-  listeningPort: Int
-) derives Config
+  listeningPort: Int,
+  clientResourcesPath: String
+)
 
 object ApiConfig {
-  val config = ZIO.config[ApiConfig]
+  val derivedConfig =
+    deriveConfig[ApiConfig]
+      .mapKey(toKebabCase)
+      .nested("sotohp", "web-api")
+
+  val config =
+    ZIO
+      .config(derivedConfig)
+      .mapError(err => ConfigInvalid("Couldn't build ApiConfig", err))
 }

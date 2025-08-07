@@ -106,8 +106,7 @@ object ApiApp extends ZIOAppDefault {
 
   def buildFrontRoutes: IO[Exception, List[ZServerEndpoint[ApiEnv, Any]]] = for {
     config                      <- ApiConfig.config
-    clientResources             <- System.envOrElse("ZWORDS_CLIENT_RESOURCES_PATH", "static-user-interfaces")
-    clientSideResourcesEndPoints = staticFilesGetServerEndpoint(emptyInput)(clientResources, extraHeaders = staticHeaders).widen[ApiEnv]
+    clientSideResourcesEndPoints = staticFilesGetServerEndpoint(emptyInput)(config.clientResourcesPath, extraHeaders = staticHeaders).widen[ApiEnv]
     clientSideRoutes             = List(clientSideResourcesEndPoints)
   } yield clientSideRoutes
 
