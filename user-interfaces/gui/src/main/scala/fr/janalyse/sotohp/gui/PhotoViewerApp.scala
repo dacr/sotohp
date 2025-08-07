@@ -202,7 +202,7 @@ object PhotoViewerApp extends ZIOAppDefault {
     for {
       owner <- MediaService.ownerCreate(Some(ownerId), FirstName("John"), LastName("Doe"), None)
       _     <- MediaService.storeCreate(Some(storeId), owner.id, BaseDirectoryPath(Path.of("samples")), None, None)
-      _     <- MediaService.synchronize()
+      // _     <- MediaService.synchronize()
     } yield ()
   }
 
@@ -235,7 +235,7 @@ object PhotoViewerApp extends ZIOAppDefault {
                           .logError("Failed to parse keyword rules")
                           .option
       _              <- ZIO.foreachDiscard(rules)(MediaService.keywordRulesUpsert(store.id, _))
-      _              <- MediaService.synchronize()
+      // _              <- MediaService.synchronize()
     } yield ()
   }
 
@@ -244,10 +244,12 @@ object PhotoViewerApp extends ZIOAppDefault {
       isTestEnv    <- System.env("PHOTOS_TEST_ENV").map(_.filter(_.trim.toLowerCase == "true").isDefined)
       isFirstStart <- MediaService.storeList().runCount.map(_ == 0)
       _            <- bootstrapForTest.when(isFirstStart && isTestEnv)
-      _            <- bootstrapForQuickUsage.when(isFirstStart && !isTestEnv)
+      //      _            <- bootstrapForQuickUsage.when(isFirstStart && !isTestEnv)
+      //      syncFiber    <- MediaService.synchronize()//.fork // temporary call
       fx           <- ZIO.succeed(FxApp())
       _            <- ZIO.attemptBlocking(fx.main(Array.empty)).fork
       _            <- fxBridge(fx)
+      // _            <- syncFiber.join
     } yield ()
   }
 
