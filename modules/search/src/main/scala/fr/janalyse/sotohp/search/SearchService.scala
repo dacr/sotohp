@@ -1,7 +1,8 @@
 package fr.janalyse.sotohp.search
 
 import zio.*
-import fr.janalyse.sotohp.model.{State, Media, MediaAccessKey}
+import fr.janalyse.sotohp.model.{Media, MediaAccessKey, State}
+import fr.janalyse.sotohp.search.model.MediaBag
 import fr.janalyse.sotohp.search.sao.SaoMedia
 
 import java.time.OffsetDateTime
@@ -9,13 +10,13 @@ import java.time.OffsetDateTime
 case class SearchServiceIssue(message: String, throwables: Seq[Throwable])
 
 trait SearchService {
-  def publish(medias: Chunk[Media]): IO[SearchServiceIssue, Chunk[Media]]
+  def publish(medias: Chunk[MediaBag]): IO[SearchServiceIssue, Chunk[MediaBag]]
   def unpublish(media: Media): IO[SearchServiceIssue, Unit]
 }
 
 object SearchService {
-  def publish(medias: Chunk[Media]): ZIO[SearchService, SearchServiceIssue, Chunk[Media]] = ZIO.serviceWithZIO(_.publish(medias))
-  def unpublish(media: Media): ZIO[SearchService, SearchServiceIssue, Unit]               = ZIO.serviceWithZIO(_.unpublish(media))
+  def publish(medias: Chunk[MediaBag]): ZIO[SearchService, SearchServiceIssue, Chunk[MediaBag]] = ZIO.serviceWithZIO(_.publish(medias))
+  def unpublish(media: Media): ZIO[SearchService, SearchServiceIssue, Unit]                     = ZIO.serviceWithZIO(_.unpublish(media))
 
   val live = ZLayer.fromZIO(
     for {
@@ -31,13 +32,13 @@ object SearchService {
 }
 
 class SearchServiceLive(elasticOperations: ElasticOperations, config: SearchServiceConfig) extends SearchService {
-  def publish(medias: Chunk[Media]): IO[SearchServiceIssue, Chunk[Media]] = {
+  override def publish(bags: Chunk[MediaBag]): IO[SearchServiceIssue, Chunk[MediaBag]] = {
     elasticOperations
-      .upsert(config.indexPrefix, medias.map(media => SaoMedia.fromMedia(media)))(_.timestamp, _.id)
+      .upsert(config.indexPrefix, bags.map(bag => SaoMedia.fromMedia(bag)))(_.timestamp, _.id)
       .when(config.enabled)
       .logError("couldn't upsert some or all photos from the given chunk of photos")
       .mapError(errs => SearchServiceIssue(s"Couldn't upsert", errs))
-      .map(_ => medias)
+      .as(bags)
   }
 
   override def unpublish(media: Media): IO[SearchServiceIssue, Unit] = {

@@ -6,6 +6,7 @@ import fr.janalyse.sotohp.core.CoreIssue
 import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
 import fr.janalyse.sotohp.search.SearchService
+import fr.janalyse.sotohp.search.model.MediaBag
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID
@@ -589,30 +590,64 @@ class MediaServiceLive private (
     } yield (currentMedia, input.state)
   }
 
-  private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[(media: Media, state: State)]] = {
+  private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
+    for {
+      _                    <- normalized(input.media.original.id)      // required to optimize AI work so not launched in background
+      fiberMiniatures      <- miniatures(input.media.original.id)      // .fork
+      fiberFaces           <- faces(input.media.original.id)           // .fork
+      fiberClassifications <- classifications(input.media.original.id) // .fork
+      fiberObjects         <- objects(input.media.original.id)         // .fork
+
+//      _ <- fiberFaces.join.mapError(err => ServiceInternalIssue(s"Unable to compute faces : $err"))
+//      _ <- fiberClassifications.join.mapError(err => ServiceInternalIssue(s"Unable to compute classifications : $err"))
+//      _ <- fiberObjects.join.mapError(err => ServiceInternalIssue(s"Unable to compute objects : $err"))
+//      _ <- fiberMiniatures.join.mapError(err => ServiceInternalIssue(s"Unable to compute miniatures : $err"))
+    } yield input
+  }
+
+  private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[MediaBag]] = {
     for {
       now       <- Clock.currentDateTime.map(LastSynchronized.apply)
+      bag       <- ZIO.foreach(inputs) { input =>
+                     for {
+                       classifications <- classifications(input.media.original.id)
+                       objects         <- objects(input.media.original.id)
+                       miniatures      <- miniatures(input.media.original.id)
+                       faces           <- faces(input.media.original.id)
+                       normalized      <- normalized(input.media.original.id)
+                     } yield MediaBag(
+                       media = input.media,
+                       state = input.state,
+                       processedClassifications = classifications,
+                       processedObjects = objects,
+                       processedFaces = faces,
+                       processedMiniatures = miniatures,
+                       processedNormalized = normalized
+                     )
+                   }
       published <- search
-                     .publish(inputs.map(_.media))
+                     .publish(bag)
                      .mapError(err => ServiceInternalIssue(s"Unable to publish media to search engine : $err"))
       _         <- ZIO.foreach(inputs)(input => stateUpsert(input.media.original.id, input.state.copy(mediaLastSynchronized = Some(now))))
-    } yield inputs // TODO no transaction take care
+    } yield bag // TODO no transaction take care
   }
 
   override def synchronize(): IO[ServiceIssue, Unit] = {
-    storeList()
-      .mapZIO(store => ZIO.from(FileSystemSearch.originalsStreamFromSearchRoot(store)))
-      .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
-      .right
-      .mapZIO(synchronizeOriginal)
-      .mapZIO(synchronizeArtifacts)
-      .mapZIO(synchronizeState)
-      .mapZIO(synchronizeMedia)
-      .filter(_.state.mediaLastSynchronized.isEmpty)
-      .grouped(100)
-      .mapZIO(synchronizeSearchEngine)
-      .runDrain
-      .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
+    ZIO.log("Synchronizing...") *>
+      storeList()
+        .mapZIO(store => ZIO.from(FileSystemSearch.originalsStreamFromSearchRoot(store)))
+        .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
+        .right
+        .mapZIO(synchronizeOriginal)
+        .mapZIO(synchronizeArtifacts)
+        .mapZIO(synchronizeState)
+        .mapZIO(synchronizeMedia)
+        .mapZIO(synchronizeProcessors)
+        .filter(_.state.mediaLastSynchronized.isEmpty)
+        .grouped(25)
+        .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
+        .runDrain
+        .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
   }
 
   // -------------------------------------------------------------------------------------------------------------------

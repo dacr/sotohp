@@ -107,20 +107,6 @@ lazy val moduleCore =
       )
     )
 
-lazy val moduleSearch =
-  project
-    .in(file("modules/search"))
-    .dependsOn(moduleCore)
-    .settings(
-      sharedSettings,
-      name := "sotohp-search",
-      libraryDependencies ++= Seq(
-        "nl.gn0s1s" %% "elastic4s-effect-zio"    % versions.elastic4s,
-        "nl.gn0s1s" %% "elastic4s-client-esjava" % versions.elastic4s,
-        "nl.gn0s1s" %% "elastic4s-json-zio"      % versions.elastic4s
-      )
-    )
-
 lazy val moduleProcessor =
   project
     .in(file("modules/processor"))
@@ -135,6 +121,20 @@ lazy val moduleProcessor =
         // "org.apache.commons" % "commons-imaging" % "1.0.0-alpha6" // https://commons.apache.org/proper/commons-imaging/
       ),
       libraryDependencies ++= deepJavaLearningLibs
+    )
+
+lazy val moduleSearch =
+  project
+    .in(file("modules/search"))
+    .dependsOn(moduleCore, moduleProcessor)
+    .settings(
+      sharedSettings,
+      name := "sotohp-search",
+      libraryDependencies ++= Seq(
+        "nl.gn0s1s" %% "elastic4s-effect-zio"    % versions.elastic4s,
+        "nl.gn0s1s" %% "elastic4s-client-esjava" % versions.elastic4s,
+        "nl.gn0s1s" %% "elastic4s-json-zio"      % versions.elastic4s
+      )
     )
 
 lazy val moduleService =
