@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package fr.janalyse.sotohp.webapi.protocol
+package fr.janalyse.sotohp.api.protocol
 
 import zio.json.{DeriveJsonCodec, JsonCodec, jsonDiscriminator}
 
-sealed trait ServiceIssue
+sealed trait ApiIssue
 
-object ServiceIssue {
-  given JsonCodec[ServiceIssue] = DeriveJsonCodec.gen
+object ApiIssue {
+  given JsonCodec[ApiIssue] = DeriveJsonCodec.gen
 }
 
-case class ServiceInternalError() extends ServiceIssue
-object ServiceInternalError {
-  given JsonCodec[ServiceInternalError] = DeriveJsonCodec.gen
+case class ApiInternalError() extends ApiIssue
+object ApiInternalError {
+  given JsonCodec[ApiInternalError] = DeriveJsonCodec.gen
 }

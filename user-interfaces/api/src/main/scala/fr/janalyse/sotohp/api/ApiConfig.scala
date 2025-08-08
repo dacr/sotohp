@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.webapi
+package fr.janalyse.sotohp.api
 
 import fr.janalyse.sotohp.core.ConfigInvalid
 import zio.*

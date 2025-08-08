@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.webapi
+package fr.janalyse.sotohp.api
 
 import com.typesafe.config.ConfigFactory
 import fr.janalyse.sotohp.search.SearchService
@@ -9,12 +9,12 @@ import sttp.tapir.generic.auto.*
 import sttp.tapir.json.zio.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
-import sttp.tapir.ztapir.{oneOfVariant, *}
+import sttp.tapir.ztapir.*
 import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
 import zio.{LogLevel, System, ZIOAppDefault}
 import fr.janalyse.sotohp.service.MediaService
-import fr.janalyse.sotohp.webapi.protocol.*
+import fr.janalyse.sotohp.api.protocol.*
 import sttp.model.headers.CacheDirective
 import sttp.tapir.files.staticFilesGetServerEndpoint
 import zio.Runtime.removeDefaultLoggers
@@ -47,12 +47,12 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   val userAgent = header[Option[String]]("User-Agent").schema(_.hidden(true))
 
-  val statusForServiceInternalError = oneOfVariant(StatusCode.InternalServerError, jsonBody[ServiceInternalError].description("Something went wrong with the backend"))
+  val statusForServiceInternalError = oneOfVariant(StatusCode.InternalServerError, jsonBody[ApiInternalError].description("Something went wrong with the backend"))
 
   // -------------------------------------------------------------------------------------------------------------------
-  val serviceStatusLogic = ZIO.succeed(ServiceStatus(alive = true))
+  val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
   val serviceInfoLogic   = ZIO.succeed(
-    ServiceInfo(
+    ApiInfo(
       authors = List("@crodav"),
       version = "0.1",
       message = "Enjoy your photos/videos",
@@ -69,7 +69,7 @@ object ApiApp extends ZIOAppDefault {
       .description("Returns the service status, can also be used as a health check end point for monitoring purposes")
       .get
       .in("status")
-      .out(jsonBody[ServiceStatus])
+      .out(jsonBody[ApiStatus])
       .zServerLogic[ApiEnv](_ => serviceStatusLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -81,7 +81,7 @@ object ApiApp extends ZIOAppDefault {
       .description("Returns service global information such as release information, authors and global statistics")
       .get
       .in("info")
-      .out(jsonBody[ServiceInfo])
+      .out(jsonBody[ApiInfo])
       .errorOut(oneOf(statusForServiceInternalError))
       .zServerLogic[ApiEnv](_ => serviceInfoLogic)
 
