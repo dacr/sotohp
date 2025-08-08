@@ -1,8 +1,7 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.core.{FileSystemSearch, MediaBuilder, OriginalBuilder}
+import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, HashOperations, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.core.CoreIssue
 import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
 import fr.janalyse.sotohp.search.SearchService
@@ -534,11 +533,14 @@ class MediaServiceLive private (
       currentState <- stateGet(original.id)
       now          <- Clock.currentDateTime
       updatedState  = currentState
-                        .map(_.copy(originalLastChecked = LastChecked(now)))
+                        .map(state => state.copy(
+                          originalLastChecked = LastChecked(now),
+                          originalHash = state.originalHash.orElse(HashOperations.fileDigest(original.mediaPath.path).toOption.map(OriginalHash.apply))
+                        ))
                         .getOrElse(
                           State(
                             originalId = original.id,
-                            originalHash = None,
+                            originalHash = HashOperations.fileDigest(original.mediaPath.path).toOption.map(OriginalHash.apply),
                             originalAddedOn = AddedOn(now),
                             originalLastChecked = LastChecked(now),
                             mediaAccessKey = MediaBuilder.buildDefaultMediaAccessKey(original),

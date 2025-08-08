@@ -21,6 +21,7 @@ case class SaoMedia(
   // ----------------- ORIGINAL FILE INFO -----------------
   fileSize: Long,
   filePath: String,
+  fileHash: Option[String],
   // ----------------- USER DATA -----------------
   event: Option[String],     // the default attached event
   keywords: List[String],
@@ -70,6 +71,7 @@ object SaoMedia {
       // ----------------- ORIGINAL FILE INFO -----------------
       fileSize = media.original.fileSize.value,
       filePath = media.original.mediaPath.path.toString,
+      fileHash = bag.state.originalHash.map(_.code),
       // ----------------- USER DATA -----------------
       event = event,
       keywords = keywords.map(_.text).toList,
