@@ -253,13 +253,14 @@ object PhotoViewerApp extends ZIOAppDefault {
     } yield ()
   }
 
-  val configProvider = Runtime.setConfigProvider(TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load()))
+  val configProvider      = TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load())
+  val configProviderLayer = Runtime.setConfigProvider(configProvider)
 
   override def run = photoViewApp.provide(
-    configProvider >>> LMDB.live,
-    configProvider >>> SearchService.live,
+    configProviderLayer >>> LMDB.live,
+    configProviderLayer >>> SearchService.live,
     MediaService.live,
     Scope.default,
-    configProvider
+    configProviderLayer
   )
 }
