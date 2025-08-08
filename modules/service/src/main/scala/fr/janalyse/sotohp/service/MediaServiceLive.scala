@@ -514,16 +514,6 @@ class MediaServiceLive private (
     } yield original
   }
 
-  /** Generate if needed original related artifacts (miniatures & normalized original)
-    * @param original
-    * @return
-    *   given original
-    */
-  private def synchronizeArtifacts(original: Original): IO[ServiceIssue, Original] = {
-    // TODO
-    ZIO.succeed(original)
-  }
-
   private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
     for {
       currentState <- stateGet(original.id)
@@ -639,7 +629,6 @@ class MediaServiceLive private (
         .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
         .right
         .mapZIO(synchronizeOriginal)
-        .mapZIO(synchronizeArtifacts)
         .mapZIO(synchronizeState)
         .mapZIO(synchronizeMedia)
         .mapZIO(synchronizeProcessors)
