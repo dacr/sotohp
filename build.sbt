@@ -162,14 +162,14 @@ lazy val cli =
       fork := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
-        "dev.zio"             %% "zio"                       % versions.zio,
-        "dev.zio"             %% "zio-config"                % versions.zioconfig,
-        "dev.zio"             %% "zio-config-typesafe"       % versions.zioconfig,
-        "dev.zio"             %% "zio-config-magnolia"       % versions.zioconfig,
-        "dev.zio"             %% "zio-logging"               % versions.ziologging, // Temporary
-        "dev.zio"             %% "zio-logging-slf4j2-bridge" % versions.ziologging, // Temporary
-        // "ch.qos.logback" % "logback-classic"     % "1.4.11" // Temporary
-        "com.github.haifengl" %% "smile-scala"               % "4.3.0"              // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
+        "dev.zio"             %% "zio"                 % versions.zio,
+        "dev.zio"             %% "zio-config"          % versions.zioconfig,
+        "dev.zio"             %% "zio-config-typesafe" % versions.zioconfig,
+        "dev.zio"             %% "zio-config-magnolia" % versions.zioconfig,
+        "dev.zio"             %% "zio-logging"         % versions.ziologging,
+        "dev.zio"             %% "zio-logging-slf4j"   % versions.ziologging,
+        "ch.qos.logback"       % "logback-classic"     % versions.logback,
+        "com.github.haifengl" %% "smile-scala"         % "4.3.0" // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
       )
       // dependency conflict between smile and elastic4s with jackson-databind
       // dependencyOverrides += "com.fasterxml.jackson.dataformat" % "jackson-dataformat-xml" % "2.14.3" // temporary downgraded
@@ -210,11 +210,11 @@ lazy val api =
       libraryDependencies ++= Seq(
         "dev.zio"                     %% "zio-logging"             % versions.ziologging,
         "dev.zio"                     %% "zio-logging-slf4j"       % versions.ziologging,
+        "ch.qos.logback"               % "logback-classic"         % versions.logback,
         "com.softwaremill.sttp.tapir" %% "tapir-zio"               % versions.tapir,
         "com.softwaremill.sttp.tapir" %% "tapir-zio-http-server"   % versions.tapir,
         "com.softwaremill.sttp.tapir" %% "tapir-json-zio"          % versions.tapir,
-        "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % versions.tapir,
-        "ch.qos.logback"               % "logback-classic"         % versions.logback
+        "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % versions.tapir
       )
     )
 

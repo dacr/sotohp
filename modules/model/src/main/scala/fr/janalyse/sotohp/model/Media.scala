@@ -17,4 +17,6 @@ case class Media(
     shootDateTime
       .map(_.offsetDateTime)
       .getOrElse(original.timestamp)
+
+  def isDeductedLocation: Boolean = location.isDefined
 }
