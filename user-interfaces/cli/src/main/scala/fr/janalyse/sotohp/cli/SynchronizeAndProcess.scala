@@ -29,7 +29,7 @@ object SynchronizeAndProcess extends CommonsCLI {
       _     <- MediaService.synchronize()
       count <- MediaService.originalCount()
       _     <- ZIO.logInfo(s"$count photos synchronized")
-      //_     <- Statistics.logic
+      _     <- Statistics.logic
     } yield ()
   }
 }
