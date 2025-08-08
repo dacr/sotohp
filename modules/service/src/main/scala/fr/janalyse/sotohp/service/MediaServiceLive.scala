@@ -341,6 +341,12 @@ class MediaServiceLive private (
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect originals : $err"))
   }
 
+  override def originalCount(): IO[ServiceIssue, Long] = for {
+    count <- originalColl
+               .size()
+               .mapError(err => ServiceDatabaseIssue(s"Couldn't count originals : $err"))
+  } yield count
+
   override def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]] = for {
     maybeDaoOriginal <- originalColl.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
     maybeOriginal    <- ZIO.foreach(maybeDaoOriginal)(daoOriginal2Original)

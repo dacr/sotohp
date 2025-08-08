@@ -50,6 +50,7 @@ trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): Stream[ServiceStreamIssue, Original]
+  def originalCount(): IO[ServiceIssue, Long]
   def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]]
   def originalExists(originalId: OriginalId): IO[ServiceIssue, Boolean]
   def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit]
@@ -171,6 +172,7 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())
+  def originalCount(): ZIO[MediaService, ServiceIssue, Long]                                 = ZIO.serviceWithZIO(_.originalCount())
   def originalGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Original]] = ZIO.serviceWithZIO(_.originalGet(originalId))
   def originalExists(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Boolean]       = ZIO.serviceWithZIO(_.originalExists(originalId))
   def originalDelete(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]          = ZIO.serviceWithZIO(_.originalDelete(originalId))

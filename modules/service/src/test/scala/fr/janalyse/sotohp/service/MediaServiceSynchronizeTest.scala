@@ -29,6 +29,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
                           )
         _              <- MediaService.synchronize() // ------ FIRST SYNC
         originals      <- MediaService.originalList().runCollect
+        count          <- MediaService.originalCount()
         events         <- MediaService.eventList().runCollect
         states         <- MediaService.stateList().runCollect
         medias         <- MediaService.mediaList().runCollect
@@ -41,6 +42,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         keywords       <- MediaService.keywordList(store.id)
       } yield assertTrue(
         originals.size == 13,
+        count == originals.size,
         originals.forall(_.cameraShootDateTime.isDefined),
         originals.forall(_.cameraName.isDefined),
         originals.exists(_.artistInfo.isDefined), // available only if it has been configured on the camera
