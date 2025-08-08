@@ -110,6 +110,15 @@ class MediaServiceLive private (
       .flatMap(maybeDaoMedia => ZIO.foreach(maybeDaoMedia)(daoMedia2Media))
   }
 
+  override def mediaGetAt(index: Long): IO[ServiceIssue, Option[Media]] = {
+    mediaColl
+      .fetchAt(index)
+      .provideEnvironment(ZEnvironment(lmdb))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch random issue media : $err"))
+      .map(result => result.map((key, media) => media))
+      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+  }
+
   override def mediaUpdate(
     key: MediaAccessKey,
     updatedMedia: Media

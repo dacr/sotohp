@@ -27,3 +27,8 @@ case class ApiInternalError(message: String) extends ApiIssue
 object ApiInternalError {
   given JsonCodec[ApiInternalError] = DeriveJsonCodec.gen
 }
+
+case class ApiResourceNotFound(message: String) extends ApiIssue
+object ApiResourceNotFound {
+  given JsonCodec[ApiResourceNotFound] = DeriveJsonCodec.gen
+}

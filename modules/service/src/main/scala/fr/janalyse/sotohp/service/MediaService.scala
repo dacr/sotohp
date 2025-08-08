@@ -24,6 +24,7 @@ trait MediaService {
   def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
   def mediaLast(): IO[ServiceIssue, Option[Media]]
   def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]]
+  def mediaGetAt(index: Long): IO[ServiceIssue, Option[Media]]
 
   def mediaUpdate(
     key: MediaAccessKey, // current media key
@@ -151,6 +152,8 @@ object MediaService {
 
   def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGet(key))
 
+  def mediaGetAt(index: Long): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGetAt(index))
+  
   def mediaUpdate(
     key: MediaAccessKey,
     updatedMedia: Media

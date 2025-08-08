@@ -40,28 +40,27 @@ object ApiApp extends ZIOAppDefault {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  val systemEndpoint = endpoint.in("api").in("system").tag("System")
-
-  // -------------------------------------------------------------------------------------------------------------------
   val userAgent = header[Option[String]]("User-Agent").schema(_.hidden(true))
 
-  val statusForServiceInternalError = oneOfVariant(StatusCode.InternalServerError, jsonBody[ApiInternalError].description("Something went wrong with the backend"))
+  val statusForApiInternalError    = oneOfVariant(StatusCode.InternalServerError, jsonBody[ApiInternalError].description("Something went wrong with the backend"))
+  val statusForApiResourceNotFound = oneOfVariant(StatusCode.NotFound, jsonBody[ApiResourceNotFound].description("Couldn't find the request resource"))
+
+  // -------------------------------------------------------------------------------------------------------------------
+  val systemEndpoint = endpoint.in("api").in("system").tag("System")
+  val mediaEndpoint  = endpoint.in("api").in("media").tag("Media")
+
+  // -------------------------------------------------------------------------------------------------------------------
+  val mediaRandomLogic = for {
+    count           <- MediaService.originalCount()
+    index           <- Random.nextLongBounded(count)
+    media           <- MediaService.mediaGetAt(index).some // TODO Remember mediaGetAt is not performance optimal due to the nature of lmdb
+    imageBytesStream = MediaService.mediaNormalizedRead(media.accessKey)
+  } yield imageBytesStream
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   // -------------------------------------------------------------------------------------------------------------------
   val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
-  val serviceInfoLogic   = for {
-    originalsCount <- MediaService
-                        .originalCount()
-                        .logError
-                        .mapError(err => ApiInternalError("Couldn't get originals count"))
-  } yield ApiInfo(
-    authors = List("@crodav"),
-    version = "0.1",
-    message = "Enjoy your photos/videos",
-    originalsCount = originalsCount
-  )
-
-  // -------------------------------------------------------------------------------------------------------------------
 
   val serviceStatusEndpoint =
     systemEndpoint
@@ -74,6 +73,17 @@ object ApiApp extends ZIOAppDefault {
       .zServerLogic[ApiEnv](_ => serviceStatusLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
+  val serviceInfoLogic = for {
+    originalsCount <- MediaService
+                        .originalCount()
+                        .logError
+                        .mapError(err => ApiInternalError("Couldn't get originals count"))
+  } yield ApiInfo(
+    authors = List("@crodav"),
+    version = "0.1",
+    message = "Enjoy your photos/videos",
+    originalsCount = originalsCount
+  )
 
   val serviceInfoEndpoint =
     systemEndpoint
@@ -83,7 +93,7 @@ object ApiApp extends ZIOAppDefault {
       .get
       .in("info")
       .out(jsonBody[ApiInfo])
-      .errorOut(oneOf(statusForServiceInternalError))
+      .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ => serviceInfoLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
