@@ -23,7 +23,7 @@ object ApiIssue {
   given JsonCodec[ApiIssue] = DeriveJsonCodec.gen
 }
 
-case class ApiInternalError() extends ApiIssue
+case class ApiInternalError(message: String) extends ApiIssue
 object ApiInternalError {
   given JsonCodec[ApiInternalError] = DeriveJsonCodec.gen
 }

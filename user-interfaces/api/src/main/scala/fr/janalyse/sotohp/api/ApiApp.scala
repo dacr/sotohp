@@ -31,13 +31,11 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  val configProvider      = TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load())
+  val configProviderLayer = Runtime.setConfigProvider(configProvider)
+
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
-    val loggingLayer        = removeDefaultLoggers >>> SLF4J.slf4j(format = LogFormat.colored)
-    val configProviderLayer = {
-      val config   = ConfigFactory.load()
-      val provider = TypesafeConfigProvider.fromTypesafeConfig(config).kebabCase
-      Runtime.setConfigProvider(provider)
-    }
+    val loggingLayer = removeDefaultLoggers >>> SLF4J.slf4j(format = LogFormat.colored)
     loggingLayer ++ configProviderLayer
   }
 
@@ -51,15 +49,18 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
   val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
-  val serviceInfoLogic   = ZIO.succeed(
-    ApiInfo(
-      authors = List("@crodav"),
-      version = "0.1",
-      message = "Enjoy your photos/videos",
-      photosCount = 0,
-      videosCount = 0
-    )
+  val serviceInfoLogic   = for {
+    originalsCount <- MediaService
+                        .originalCount()
+                        .logError
+                        .mapError(err => ApiInternalError("Couldn't get originals count"))
+  } yield ApiInfo(
+    authors = List("@crodav"),
+    version = "0.1",
+    message = "Enjoy your photos/videos",
+    originalsCount = originalsCount
   )
+
   // -------------------------------------------------------------------------------------------------------------------
 
   val serviceStatusEndpoint =

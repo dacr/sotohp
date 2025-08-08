@@ -6,8 +6,7 @@ case class ApiInfo(
   authors: List[String],
   version: String,
   message: String,
-  photosCount: Long,
-  videosCount: Long
+  originalsCount: Long
 )
 
 object ApiInfo {
