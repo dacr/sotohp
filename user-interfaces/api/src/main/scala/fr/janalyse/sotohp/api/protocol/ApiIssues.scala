@@ -17,18 +17,18 @@ package fr.janalyse.sotohp.api.protocol
 
 import zio.json.{DeriveJsonCodec, JsonCodec, jsonDiscriminator}
 
-sealed trait ApiIssue
+sealed trait ApiIssue extends Exception
 
 object ApiIssue {
   given JsonCodec[ApiIssue] = DeriveJsonCodec.gen
 }
 
-case class ApiInternalError(message: String) extends ApiIssue
+case class ApiInternalError(message: String) extends Exception(message) with ApiIssue
 object ApiInternalError {
   given JsonCodec[ApiInternalError] = DeriveJsonCodec.gen
 }
 
-case class ApiResourceNotFound(message: String) extends ApiIssue
+case class ApiResourceNotFound(message: String) extends Exception(message) with ApiIssue
 object ApiResourceNotFound {
   given JsonCodec[ApiResourceNotFound] = DeriveJsonCodec.gen
 }

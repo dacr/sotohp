@@ -4,7 +4,7 @@ import com.typesafe.config.ConfigFactory
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
 import sttp.apispec.openapi.Info
-import sttp.model.{Header, StatusCode}
+import sttp.model.{Header, MediaType, StatusCode}
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.zio.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
@@ -13,9 +13,11 @@ import sttp.tapir.ztapir.*
 import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
 import zio.{LogLevel, System, ZIOAppDefault}
-import fr.janalyse.sotohp.service.MediaService
+import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.*
+import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
+import sttp.tapir.CodecFormat
 import sttp.tapir.files.staticFilesGetServerEndpoint
 import zio.Runtime.removeDefaultLoggers
 import zio.config.typesafe.TypesafeConfigProvider
@@ -50,12 +52,41 @@ object ApiApp extends ZIOAppDefault {
   val mediaEndpoint  = endpoint.in("api").in("media").tag("Media")
 
   // -------------------------------------------------------------------------------------------------------------------
-  val mediaRandomLogic = for {
-    count           <- MediaService.originalCount()
-    index           <- Random.nextLongBounded(count)
-    media           <- MediaService.mediaGetAt(index).some // TODO Remember mediaGetAt is not performance optimal due to the nature of lmdb
-    imageBytesStream = MediaService.mediaNormalizedRead(media.accessKey)
-  } yield imageBytesStream
+  val mediaRandomLogic = {
+    val logic = for {
+      count           <- MediaService
+                           .originalCount()
+                           .mapError(err => ApiInternalError("Couldn't get originals count"))
+      index           <- Random.nextLongBounded(count)
+      media           <- MediaService
+                           .mediaGetAt(index)
+                           .some // TODO Remember mediaGetAt is not performance optimal due to the nature of lmdb
+                           .mapError(err => ApiInternalError("Couldn't get a random media"))
+      imageBytesStream = MediaService
+                           .mediaNormalizedRead(media.accessKey)
+                           .mapError(err => ApiInternalError("Couldn't read media"))
+    } yield imageBytesStream
+
+    logic
+  }
+
+  val mediaRandomEndpoint =
+    mediaEndpoint
+      .name("Random Media")
+      .summary("Get a randomly chosen media")
+      .get
+      .in("random")
+      .out(header[String]("Content-Type"))
+      .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](_ =>
+        for{
+          byteStream <- mediaRandomLogic
+          ms         <- ZIO.service[MediaService]
+          httpStream  = byteStream
+            .provideEnvironment(ZEnvironment(ms))
+        } yield (MediaType.ImageJpeg.toString, httpStream)
+      )
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -97,7 +128,8 @@ object ApiApp extends ZIOAppDefault {
       .zServerLogic[ApiEnv](_ => serviceInfoLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
-  val apiRoutes: List[ZServerEndpoint[ApiEnv, Any]] = List(
+  val apiRoutes = List(
+    mediaRandomEndpoint,
     serviceStatusEndpoint,
     serviceInfoEndpoint
   )

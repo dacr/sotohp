@@ -124,7 +124,27 @@ class MediaServiceLive private (
   ): IO[ServiceIssue, Option[Media]] = ???
 
   // -------------------------------------------------------------------------------------------------------------------
-  override def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
+  override def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = {
+    val pathEffect: IO[ServiceStreamIssue, java.nio.file.Path] = for {
+      media <- mediaGet(key)
+                 .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
+                 .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
+      onorm <- normalized(media.original.id)
+                 .mapError(err => ServiceStreamInternalIssue(s"Couldn't retrieve normalized info for original ${media.original.id.asString} : $err"))
+                 .someOrFail(ServiceStreamInternalIssue(s"Couldn't get normalized information for original : ${media.original.id.asString}"))
+      norm  <- ZIO.fromOption(onorm.normalized)
+                 .mapError(_ => ServiceStreamInternalIssue(s"Normalized image not available for original : ${media.original.id.asString}"))
+      path   = norm.path.path
+    } yield path
+
+    ZStream.unwrapScoped {
+      pathEffect.map { path =>
+        ZStream
+          .fromInputStreamZIO(ZIO.attemptBlockingIO(new java.io.FileInputStream(path.toFile)))
+          .mapError(th => ServiceStreamInternalIssue(s"Couldn't open/read normalized image file $path : $th"))
+      }
+    }
+  }
 
   override def mediaOriginalRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
 
