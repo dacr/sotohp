@@ -50,6 +50,7 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
   val systemEndpoint = endpoint.in("api").in("system").tag("System")
+  val adminEndpoint  = endpoint.in("api").in("admin").tag("Admin")
   val mediaEndpoint  = endpoint.in("api").in("media").tag("Media")
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -91,6 +92,19 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  val adminSynchronizeEndpoint =
+    adminEndpoint
+      .name("Synchronize")
+      .summary("Synchronize with all stores content")
+      .get
+      .in("synchronize")
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv] { _ =>
+        MediaService
+          .synchronize()
+          .mapError(err => ApiInternalError("Couldn't synchronize"))
+      }
+
   // -------------------------------------------------------------------------------------------------------------------
   val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
 
@@ -131,6 +145,7 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   val apiRoutes = List(
     mediaRandomEndpoint,
+    adminSynchronizeEndpoint,
     serviceStatusEndpoint,
     serviceInfoEndpoint
   )
