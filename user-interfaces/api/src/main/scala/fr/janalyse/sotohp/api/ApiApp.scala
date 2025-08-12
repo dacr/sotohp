@@ -24,6 +24,7 @@ import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
 import zio.lmdb.LMDB
 
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 
@@ -80,11 +81,11 @@ object ApiApp extends ZIOAppDefault {
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ =>
-        for{
+        for {
           byteStream <- mediaRandomLogic
           ms         <- ZIO.service[MediaService]
           httpStream  = byteStream
-            .provideEnvironment(ZEnvironment(ms))
+                          .provideEnvironment(ZEnvironment(ms))
         } yield (MediaType.ImageJpeg.toString, httpStream)
       )
 
@@ -138,7 +139,7 @@ object ApiApp extends ZIOAppDefault {
     SwaggerInterpreter()
       .fromServerEndpoints(
         apiRoutes,
-        Info(title = "SOTOHP API", version = "1.0", description = Some("Photos management software by @crodav"))
+        Info(title = "SOTOHP API", version = "1.0", description = Some("Medias management software by @crodav"))
       )
 
   val staticHeaders = List(
@@ -161,6 +162,17 @@ object ApiApp extends ZIOAppDefault {
     zservice    <- Server.serve(httpApp)
   } yield zservice
 
+  val serverConfigLayer = ZLayer.fromZIO {
+    for {
+      config <- ApiConfig.config
+      port    = config.listeningPort
+      nif     = "0.0.0.0"
+    } yield {
+      Server.Config.default
+        .binding(nif, port)
+    }
+  }
+
   override def run = {
     for {
       config <- ApiConfig.config
@@ -168,7 +180,8 @@ object ApiApp extends ZIOAppDefault {
                   LMDB.live,
                   MediaService.live,
                   SearchService.live,
-                  Server.defaultWithPort(config.listeningPort),
+                  serverConfigLayer,
+                  Server.live,
                   Scope.default
                 )
     } yield ()
