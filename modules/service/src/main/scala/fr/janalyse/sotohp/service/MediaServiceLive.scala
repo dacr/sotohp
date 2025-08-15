@@ -13,6 +13,7 @@ import zio.*
 import zio.lmdb.{LMDB, LMDBCodec, LMDBCollection, LMDBKodec, StorageSystemError, StorageUserError}
 import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
+import zio.ZIOAspect.annotated
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -132,7 +133,8 @@ class MediaServiceLive private (
       onorm <- normalized(media.original.id)
                  .mapError(err => ServiceStreamInternalIssue(s"Couldn't retrieve normalized info for original ${media.original.id.asString} : $err"))
                  .someOrFail(ServiceStreamInternalIssue(s"Couldn't get normalized information for original : ${media.original.id.asString}"))
-      norm  <- ZIO.fromOption(onorm.normalized)
+      norm  <- ZIO
+                 .fromOption(onorm.normalized)
                  .mapError(_ => ServiceStreamInternalIssue(s"Normalized image not available for original : ${media.original.id.asString}"))
       path   = norm.path.path
     } yield path
@@ -542,21 +544,24 @@ class MediaServiceLive private (
   // -------------------------------------------------------------------------------------------------------------------
 
   private def synchronizeOriginal(original: Original): IO[ServiceIssue, Original] = {
-    for {
+    val logic = for {
       available <- originalExists(original.id)
       _         <- originalUpsert(original).when(!available)
     } yield original
+    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.mediaPath.path.toString)
   }
 
   private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
-    for {
+    val logic = for {
       currentState <- stateGet(original.id)
       now          <- Clock.currentDateTime
       updatedState  = currentState
-                        .map(state => state.copy(
-                          originalLastChecked = LastChecked(now),
-                          originalHash = state.originalHash.orElse(HashOperations.fileDigest(original.mediaPath.path).toOption.map(OriginalHash.apply))
-                        ))
+                        .map(state =>
+                          state.copy(
+                            originalLastChecked = LastChecked(now),
+                            originalHash = state.originalHash.orElse(HashOperations.fileDigest(original.mediaPath.path).toOption.map(OriginalHash.apply))
+                          )
+                        )
                         .getOrElse(
                           State(
                             originalId = original.id,
@@ -569,6 +574,7 @@ class MediaServiceLive private (
                         )
       state        <- stateUpsert(original.id, updatedState)
     } yield (original, state)
+    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.mediaPath.path.toString)
   }
 
   private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
@@ -593,7 +599,7 @@ class MediaServiceLive private (
 
   private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val relatedEventAttachment = MediaBuilder.buildEventAttachment(input.original)
-    for {
+    val logic = for {
       mayBeEvent   <- ZIO
                         .foreach(relatedEventAttachment)(attachment => getEventForAttachment(attachment).someOrElseZIO(createDefaultEvent(attachment)))
       currentMedia <- mediaGet(input.state.mediaAccessKey) // already existing media is the source of truth !
@@ -615,10 +621,11 @@ class MediaServiceLive private (
                             .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
                         }
     } yield (currentMedia, input.state)
+    logic @@ annotated("originalId" -> input.original.id.toString, "originalMediaPath" -> input.original.mediaPath.path.toString)
   }
 
   private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    for {
+    val logic = for {
       _                    <- normalized(input.media.original.id)      // required to optimize AI work so not launched in background
       fiberMiniatures      <- miniatures(input.media.original.id)      // .fork
       fiberFaces           <- faces(input.media.original.id)           // .fork
@@ -630,10 +637,11 @@ class MediaServiceLive private (
 //      _ <- fiberObjects.join.mapError(err => ServiceInternalIssue(s"Unable to compute objects : $err"))
 //      _ <- fiberMiniatures.join.mapError(err => ServiceInternalIssue(s"Unable to compute miniatures : $err"))
     } yield input
+    logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.mediaPath.path.toString)
   }
 
   private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[MediaBag]] = {
-    for {
+    val logic = for {
       now       <- Clock.currentDateTime.map(LastSynchronized.apply)
       bag       <- ZIO.foreach(inputs) { input =>
                      for {
@@ -657,6 +665,7 @@ class MediaServiceLive private (
                      .mapError(err => ServiceInternalIssue(s"Unable to publish media to search engine : $err"))
       _         <- ZIO.foreach(inputs)(input => stateUpsert(input.media.original.id, input.state.copy(mediaLastSynchronized = Some(now))))
     } yield bag // TODO no transaction take care
+    logic
   }
 
   override def synchronize(): IO[ServiceIssue, Unit] = {

@@ -95,7 +95,7 @@ object OriginalBuilder {
     OffsetDateTime.parse(s"$spec $timeZoneOffsetSpec", exifDateTimeFormat)
   }
 
-  def extractShootDateTime(metadata: DrewMetadata): Option[ShootDateTime] = {
+  def extractShootDateTime(mediaPath: OriginalPath)(metadata: DrewMetadata): Option[ShootDateTime] = {
     val result = Try {
       for {
         exif              <- extractExifSub(metadata)
@@ -112,7 +112,7 @@ object OriginalBuilder {
       case Success(found) =>
         found.map(ShootDateTime.apply)
       case Failure(err)   =>
-        logger.warn("Couldn't process exif date time format", err)
+        logger.warn(s"Couldn't process exif date time format for $mediaPath", err)
         None
     }
   }
@@ -269,7 +269,7 @@ object OriginalBuilder {
       fileLastModified <- getOriginalFileLastModified(mediaPath)
       kind             <- computeMediaKind(mediaPath)
       drewMetadata      = readDrewMetadata(mediaPath).toOption
-      shootDateTime     = drewMetadata.flatMap(extractShootDateTime)
+      shootDateTime     = drewMetadata.flatMap(extractShootDateTime(mediaPath))
       cameraName        = drewMetadata.flatMap(extractCameraName)
       artistInfo        = drewMetadata.flatMap(extractArtistInfo)
       dimension         = drewMetadata.flatMap(extractDimension)
