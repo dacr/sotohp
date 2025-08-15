@@ -1,13 +1,11 @@
 all:
 
-sync:
-	sbt "; project userInterfacesCLI ; runMain fr.janalyse.sotohp.cli.Synchronize"
-
-process:
-	sbt "; project userInterfacesCLI ; runMain fr.janalyse.sotohp.cli.SynchronizeAndProcess"
-
-stats:
-	sbt "; project userInterfacesCLI ; runMain fr.janalyse.sotohp.cli.Statistics"
+api:
+	sbt "; project api; runMain fr.janalyse.sotohp.api.ApiApp"
 
 viewer:
-	sbt "; project userInterfacesGUI ; runMain fr.janalyse.sotohp.gui.PhotoViewerApp"
+	sbt "; project gui ; runMain fr.janalyse.sotohp.gui.PhotoViewerApp"
+
+stats:
+	sbt "; project cli ; runMain fr.janalyse.sotohp.cli.Statistics"
+

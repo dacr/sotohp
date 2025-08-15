@@ -185,6 +185,7 @@ lazy val gui =
       // See default.nix to setup the right environment
       // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", "/etc/jfx21/modules_libs/", "--add-modules", "javafx.controls"),
       // no longer needed // javaOptions ++= lmdbJavaOptions ++ Seq("--module-path", sys.env.getOrElse("OPENJFX_LIBRARY_PATH", ""), "--add-modules", "javafx.controls"),
+      fork := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         // "org.openjfx"  % "javafx-graphics" % versions.javafx classifier osName,
@@ -201,12 +202,8 @@ lazy val api =
     .settings(
       sharedSettings,
       Universal / packageName := "sotohp",
-      Universal / javaOptions := Seq( // -- Required for LMDB with recent JVM
-        "--add-opens",
-        "java.base/java.nio=ALL-UNNAMED",
-        "--add-opens",
-        "java.base/sun.nio.ch=ALL-UNNAMED"
-      ),
+      fork := true,
+      javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         "dev.zio"                     %% "zio-logging"             % versions.ziologging,
         "dev.zio"                     %% "zio-logging-slf4j"       % versions.ziologging,
