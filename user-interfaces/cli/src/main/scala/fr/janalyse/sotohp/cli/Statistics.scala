@@ -61,7 +61,7 @@ object Statistics extends CommonsCLI {
     } yield {
       val updatedCount                     = stats.count + 1
       val updatedGeolocalizedCount         = stats.geoLocalizedCount + (if (place.isDefined) 1 else 0)
-      val updatedDeductedGeoLocalizedCount = stats.deductedGeoLocalizedCount + (if (media.isDeductedLocation) 1 else 0)
+      val updatedDeductedGeoLocalizedCount = stats.deductedGeoLocalizedCount + (if (media.deductedLocation.isDefined) 1 else 0)
       val updatedNormalizedFailureCount    = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
       val updatedFacesCount                = stats.facesCount + faces.map(_.faces.size).getOrElse(0)
       val updatedMissingCount              = stats.missingCount + (if (originalFound) 0 else 1)
