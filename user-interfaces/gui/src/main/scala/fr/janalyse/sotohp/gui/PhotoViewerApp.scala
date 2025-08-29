@@ -15,13 +15,14 @@ import scalafx.scene.Scene
 import scalafx.scene.control.Label
 import scalafx.scene.control.Hyperlink
 import scalafx.scene.control.Button
-import scalafx.scene.layout.{HBox, Region, VBox, Priority}
+import scalafx.scene.layout.{HBox, Region, VBox, Priority, StackPane}
 import scalafx.application.Platform
 import scalafx.scene.image.Image
 import scalafx.Includes.jfxRegion2sfx
 import scalafx.scene.input.{Clipboard, ClipboardContent, DataFormat}
 
 import java.nio.file.Path
+import java.io.ByteArrayInputStream
 
 enum UserAction {
   case First
@@ -56,9 +57,13 @@ object PhotoViewerApp extends ZIOAppDefault {
     lazy val faces        = Button("☺") // WHITE SMILING FACE
     lazy val rotateLeft   = Button("↺") // ANTICLOCKWISE OPEN CIRCLE ARROW
     lazy val rotateRight  = Button("↻") // CLOCKWISE OPEN CIRCLE ARROW
+    lazy val mosaicToggle = Button("▦") // SQUARE FOUR CORNERS (mosaic toggle)
     lazy val display      = PhotoDisplay()
+    lazy val mosaic       = MosaicDisplay()
     lazy val displaySFX   = jfxRegion2sfx(display)
-    lazy val buttons      = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight)
+    lazy val mosaicSFX    = jfxRegion2sfx(mosaic)
+    lazy val stack        = new StackPane { children = Seq(displaySFX, mosaicSFX) }
+    lazy val buttons      = HBox(first, previous, next, last, zoom, faces, rotateLeft, rotateRight, mosaicToggle)
     lazy val infos        = HBox(5d, infoHasGPS, infoDateTime, infoEvent)
     lazy val controls     = VBox(buttons, infos)
 
@@ -67,7 +72,7 @@ object PhotoViewerApp extends ZIOAppDefault {
         title = "SOTOHP Viewer"
         scene = new Scene {
           content = VBox(
-            displaySFX,
+            stack,
             controls
           )
           onKeyPressed = key =>
@@ -95,9 +100,25 @@ object PhotoViewerApp extends ZIOAppDefault {
           zoomReset.onAction = event => display.zoomReset()
         }
       }
-      VBox.setVgrow(displaySFX, Priority.Always)
-      displaySFX.prefWidth <== stage.width
-      displaySFX.prefHeight <== (stage.height - controls.height)
+      VBox.setVgrow(stack, Priority.Always)
+      stack.prefWidth <== stage.width
+      stack.prefHeight <== (stage.height - controls.height)
+      mosaicSFX.visible = false
+      mosaicSFX.managed = false
+      displaySFX.visible = true
+      displaySFX.managed = true
+    }
+    def switchToMosaic(): Unit = {
+      mosaicSFX.visible = true
+      mosaicSFX.managed = true
+      displaySFX.visible = false
+      displaySFX.managed = false
+    }
+    def switchToSingle(): Unit = {
+      mosaicSFX.visible = false
+      mosaicSFX.managed = false
+      displaySFX.visible = true
+      displaySFX.managed = true
     }
     def show(photo: PhotoToShow): Unit = {
       infoDateTime.text = photo.shootDateTime.map(_.toString).getOrElse(noShootDateTimeText)
@@ -130,71 +151,177 @@ object PhotoViewerApp extends ZIOAppDefault {
 
   val fxBridge = (fxApp: FxApp) => {
     for {
-      userActionHub   <- Hub.unbounded[UserAction]
-      photoHub        <- Hub.unbounded[PhotoToShow]
-      currentPhotoRef <- Ref.make(Option.empty[PhotoToShow])
-      toFirstPhoto     = MediaService
-                           .mediaFirst()
-                           .some
-                           .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
-                           .flatMap(photo => photoHub.offer(photo))
-      toLastPhoto      = MediaService
-                           .mediaLast()
-                           .some
-                           .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
-                           .flatMap(photo => photoHub.offer(photo))
-      toPreviousPhoto  = currentPhotoRef.get.flatMap(current =>
-                           MediaService
-                             .mediaPrevious(current.get.media.accessKey)
+      userActionHub     <- Hub.unbounded[UserAction]
+      photoHub          <- Hub.unbounded[PhotoToShow]
+      currentPhotoRef   <- Ref.make(Option.empty[PhotoToShow])
+      mosaicLoadedRef   <- Ref.make(false)
+      mosaicVisibleRef  <- Ref.make(false)
+      toFirstPhoto       = MediaService
+                             .mediaFirst()
                              .some
                              .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
                              .flatMap(photo => photoHub.offer(photo))
-                             .orElse(toFirstPhoto)
-                         )
-      toNextPhoto      = currentPhotoRef.get.flatMap(current =>
-                           MediaService
-                             .mediaNext(current.get.media.accessKey)
+      toLastPhoto        = MediaService
+                             .mediaLast()
                              .some
                              .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
                              .flatMap(photo => photoHub.offer(photo))
-                             .orElse(toLastPhoto)
-                         )
-      _               <- ZStream
-                           .fromHub(userActionHub)
-                           .runForeach {
-                             case UserAction.First    => toFirstPhoto
-                             case UserAction.Previous => toPreviousPhoto
-                             case UserAction.Next     => toNextPhoto
-                             case UserAction.Last     => toLastPhoto
+      toPreviousPhoto    = currentPhotoRef.get.flatMap(current =>
+                             MediaService
+                               .mediaPrevious(current.get.media.accessKey)
+                               .some
+                               .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
+                               .flatMap(photo => photoHub.offer(photo))
+                               .orElse(toFirstPhoto)
+                           )
+      toNextPhoto        = currentPhotoRef.get.flatMap(current =>
+                             MediaService
+                               .mediaNext(current.get.media.accessKey)
+                               .some
+                               .flatMap(photo => PhotoToShow.fromLazyPhoto(photo))
+                               .flatMap(photo => photoHub.offer(photo))
+                               .orElse(toLastPhoto)
+                           )
+      loadedCountRef    <- Ref.make(0)
+      lastLoadedKeyRef  <- Ref.make(Option.empty[MediaAccessKey])
+      loadSem           <- Semaphore.make(1)
+      ensureLoaded      <- ZIO.succeed { (desired: Int) =>
+                             loadSem.withPermit {
+                               def loop(maybeKey: Option[MediaAccessKey]): ZIO[MediaService, Any, Unit] =
+                                 for {
+                                   count <- loadedCountRef.get
+                                   _     <- if (count >= desired) ZIO.unit
+                                            else {
+                                              for {
+                                                maybeMedia <- maybeKey match
+                                                               case None    => MediaService.mediaFirst()
+                                                               case Some(k) => MediaService.mediaNext(k)
+                                                _ <- ZIO.foreachDiscard(maybeMedia) { media =>
+                                                       val key = media.accessKey
+                                                       for {
+                                                         res   <- MediaService.mediaMiniatureRead(key).runCollect.either
+                                                         added <- res.fold(
+                                                                    _ => ZIO.succeed(false),
+                                                                    bytes => {
+                                                                      val arr = bytes.toArray
+                                                                      ZIO
+                                                                        .attempt {
+                                                                          if (arr.nonEmpty) {
+                                                                            val image = new javafx.scene.image.Image(new ByteArrayInputStream(arr), 180, 180, true, true)
+                                                                            val ok    = image != null && image.getWidth > 0 && !image.isError
+                                                                            if (ok) Platform.runLater(fxApp.mosaic.addTile(key, image))
+                                                                            ok
+                                                                          } else false
+                                                                        }
+                                                                        .catchAll(_ => ZIO.succeed(false))
+                                                                    }
+                                                                  )
+                                                         _     <- lastLoadedKeyRef.set(Some(key))
+                                                         _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
+                                                         _     <- loop(Some(key))
+                                                       } yield ()
+                                                     }
+                                              } yield ()
+                                            }
+                                 } yield ()
+                               for {
+                                 start <- lastLoadedKeyRef.get
+                                 _     <- loop(start)
+                               } yield ()
+                             }
                            }
-                           .fork
-      _               <- ZStream
-                           .fromHub(photoHub)
-                           .runForeach(currentPhoto => currentPhotoRef.update(_ => Some(currentPhoto)))
-                           .fork
-      _               <- ZStream
-                           .async(callback => fxApp.first.onAction = (event => callback(userActionHub.offer(UserAction.First).as(Chunk.unit))))
-                           .runDrain
-                           .fork
-      _               <- ZStream
-                           .async(callback => fxApp.previous.onAction = (event => callback(userActionHub.offer(UserAction.Previous).as(Chunk.unit))))
-                           .runDrain
-                           .fork
-      _               <- ZStream
-                           .async(callback => fxApp.next.onAction = (event => callback(userActionHub.offer(UserAction.Next).as(Chunk.unit))))
-                           .runDrain
-                           .fork
-      _               <- ZStream
-                           .async(callback => fxApp.last.onAction = (event => callback(userActionHub.offer(UserAction.Last).as(Chunk.unit))))
-                           .runDrain
-                           .fork
-      ui              <- ZStream
-                           .fromHub(photoHub)
-                           .runForeach(photo => ZIO.attemptBlocking(Platform.runLater(fxApp.show(photo))))
-                           .fork
-      _               <- toFirstPhoto
+      setupMosaicLazy   <- ZIO.succeed {
+                             for {
+                               already <- mosaicLoadedRef.get
+                               _       <- (for {
+                                             _ <- ZIO.attempt(Platform.runLater(fxApp.mosaic.clearTiles())).logError("Can't clear the mosaic").ignore
+                                             _ <- loadedCountRef.set(0)
+                                             _ <- lastLoadedKeyRef.set(None)
+                                             _ <- ZStream
+                                                    .async[MediaService, Throwable, Unit] { callback =>
+                                                      fxApp.mosaic.onNeedMore = (desired: Int) => callback(ensureLoaded(desired).logError("not loaded").ignore.as(Chunk.unit))
+                                                    }
+                                                    .runDrain
+                                                    .forkDaemon
+                                             _ <- ZIO.attempt(Platform.runLater(fxApp.mosaic.triggerNeedMore())).logError("Can't not load more").ignore
+                                             _ <- mosaicLoadedRef.set(true)
+                                           } yield ()).when(!already)
+                             } yield ()
+                           }
+      _                 <- ZStream
+                             .fromHub(userActionHub)
+                             .runForeach {
+                               case UserAction.First    => toFirstPhoto
+                               case UserAction.Previous => toPreviousPhoto
+                               case UserAction.Next     => toNextPhoto
+                               case UserAction.Last     => toLastPhoto
+                             }
+                             .fork
+      _                 <- ZStream
+                             .fromHub(photoHub)
+                             .runForeach(currentPhoto => currentPhotoRef.update(_ => Some(currentPhoto)))
+                             .fork
+      _                 <- ZStream
+                             .async(callback => fxApp.first.onAction = (_ => callback(userActionHub.offer(UserAction.First).as(Chunk.unit))))
+                             .runDrain
+                             .fork
+      _                 <- ZStream
+                             .async(callback => fxApp.previous.onAction = (_ => callback(userActionHub.offer(UserAction.Previous).as(Chunk.unit))))
+                             .runDrain
+                             .fork
+      _                 <- ZStream
+                             .async(callback => fxApp.next.onAction = (_ => callback(userActionHub.offer(UserAction.Next).as(Chunk.unit))))
+                             .runDrain
+                             .fork
+      _                 <- ZStream
+                             .async(callback => fxApp.last.onAction = (_ => callback(userActionHub.offer(UserAction.Last).as(Chunk.unit))))
+                             .runDrain
+                             .fork
+      // Mosaic toggle handler
+      _                 <- ZStream
+                             .async[MediaService, Throwable, Unit] { callback =>
+                               fxApp.mosaicToggle.onAction = (_ => callback({
+                                 val eff = for {
+                                   visible <- mosaicVisibleRef.get
+                                   _       <- if (visible) {
+                                                 ZIO.attempt(Platform.runLater(fxApp.switchToSingle())).ignore *>
+                                                 mosaicVisibleRef.set(false)
+                                               } else {
+                                                 ZIO.attempt(Platform.runLater(fxApp.switchToMosaic())).ignore *>
+                                                 mosaicVisibleRef.set(true) *>
+                                                 setupMosaicLazy.forkDaemon.unit *>
+                                                 ZIO.attempt(Platform.runLater(fxApp.mosaic.triggerNeedMore())).logError("Couldn't trigger need more").ignore *>
+                                                 // Fallback: ensure at least one tile loads immediately
+                                                 ensureLoaded(1).forkDaemon.unit
+                                               }
+                                 } yield ()
+                                 eff.ignore.as(Chunk.unit)
+                               }))
+                             }
+                             .runDrain
+                             .fork
+      // Mosaic selection handler: open clicked photo and switch back to single view
+      _                 <- ZStream
+                             .async[MediaService, Throwable, Unit] { callback =>
+                               fxApp.mosaic.onSelect = (key => callback({
+                                 val eff = for {
+                                   maybe  <- MediaService.mediaGet(key)
+                                   _      <- ZIO.foreachDiscard(maybe)(m => PhotoToShow.fromLazyPhoto(m).flatMap(photoHub.offer))
+                                   _      <- ZIO.attemptBlocking(Platform.runLater(fxApp.switchToSingle()))
+                                   _      <- mosaicVisibleRef.set(false)
+                                 } yield ()
+                                 eff.logError("mosaic selection handler").ignore.as(Chunk.unit)
+                               }))
+                             }
+                             .runDrain
+                             .fork
+      ui                <- ZStream
+                             .fromHub(photoHub)
+                             .runForeach(photo => ZIO.attemptBlocking(Platform.runLater(fxApp.show(photo))))
+                             .fork
+      _                 <- toFirstPhoto
       // _               <- toNextPhoto.repeat(Schedule.fixed(2.seconds)).fork // run a default slideshow
-      _               <- ui.join
+      _                 <- ui.join
     } yield ()
   }
 

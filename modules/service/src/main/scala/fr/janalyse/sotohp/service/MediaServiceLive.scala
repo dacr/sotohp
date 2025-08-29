@@ -148,9 +148,55 @@ class MediaServiceLive private (
     }
   }
 
-  override def mediaOriginalRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
+  override def mediaOriginalRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = {
+    val pathEffect: IO[ServiceStreamIssue, java.nio.file.Path] = for {
+      media <- mediaGet(key)
+                 .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
+                 .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
+      path   = media.original.mediaPath.path
+    } yield path
 
-  override def mediaMiniatureRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = ???
+    ZStream.unwrapScoped {
+      pathEffect.map { path =>
+        ZStream
+          .fromInputStreamZIO(ZIO.attemptBlockingIO(new java.io.FileInputStream(path.toFile)))
+          .mapError(th => ServiceStreamInternalIssue(s"Couldn't open/read original image file $path : $th"))
+      }
+    }
+  }
+
+  override def mediaMiniatureRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = {
+    import fr.janalyse.sotohp.processor.MiniaturizeProcessor
+    import fr.janalyse.sotohp.processor.config.MiniaturizerConfig
+
+    ZStream.unwrapScoped {
+      val streamEff: IO[ServiceStreamIssue, ZStream[Any, ServiceStreamIssue, Byte]] = (for {
+        media      <- mediaGet(key)
+                        .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
+                        .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
+        // ensure miniatures info is computed/stored (best effort)
+        _          <- miniatures(media.original.id).either
+        sizes      <- MiniaturizerConfig.config.map(_.referenceSizes).mapError(err => ServiceStreamInternalIssue(err.toString))
+        size        = sizes.maxOption.getOrElse(256)
+        path       <- MiniaturizeProcessor
+                        .getOriginalMiniatureFilePath(media.original, size)
+                        .mapError(err => ServiceStreamInternalIssue(s"Couldn't compute miniature path: $err"))
+        exists     <- ZIO.attempt(path.toFile.exists()).mapError(th => ServiceStreamInternalIssue(s"Couldn't check file existence $path : $th"))
+        stream     <- if (exists) {
+                         ZIO.succeed(
+                           ZStream
+                             .fromInputStreamZIO(ZIO.attemptBlockingIO(new java.io.FileInputStream(path.toFile)))
+                             .mapError(th => ServiceStreamInternalIssue(s"Couldn't open/read miniature image file $path : $th"))
+                         )
+                       } else {
+                         // fallback to normalized then original
+                         ZIO.succeed(mediaNormalizedRead(key))
+                       }
+      } yield stream)
+
+      streamEff.orElseSucceed(mediaOriginalRead(key))
+    }
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
   def stateList(): Stream[ServiceStreamIssue, State]                             = {
