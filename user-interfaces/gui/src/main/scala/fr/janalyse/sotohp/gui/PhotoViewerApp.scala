@@ -342,6 +342,7 @@ object PhotoViewerApp extends ZIOAppDefault {
                                              _ <- ZStream
                                                     .async[MediaService, Throwable, Unit] { callback =>
                                                       fxApp.mosaic.onNeedMore = (desired: Int) => callback(ensureLoaded(desired).logError("not loaded").ignore.as(Chunk.unit))
+                                                      fxApp.mosaic.onTilesRemoved = (n: Int) => callback(loadedCountRef.update(c => Math.max(0, c - n)).ignore.as(Chunk.unit))
                                                     }
                                                     .runDrain
                                                     .forkDaemon

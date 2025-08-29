@@ -29,6 +29,8 @@ class MosaicDisplay extends Pane {
   var onSelect: MediaAccessKey => Unit = _ => ()
   // Lazy loading callback (request more tiles up to desired total)
   var onNeedMore: Int => Unit          = _ => ()
+  // Callback when the control recycles (removes) tiles; n = number of tiles removed from the top
+  var onTilesRemoved: Int => Unit      = _ => ()
 
   // Track last requested count to avoid spamming onNeedMore
   private var lastAsked: Int = 0
@@ -96,15 +98,46 @@ class MosaicDisplay extends Pane {
     }
   }
 
-  // React to viewport resizes and scrolling
-  scroll.viewportBoundsProperty().addListener((_, _, _) => requestIfNeeded())
-  scroll.vvalueProperty().addListener((_, _, _) => requestIfNeeded())
-  // Also react when this control gets resized or becomes visible
-  this.widthProperty().addListener((_, _, _) => requestIfNeeded())
-  this.heightProperty().addListener((_, _, _) => requestIfNeeded())
-  this.visibleProperty().addListener((_, _, _) => requestIfNeeded())
+  private def nearBottom(): Boolean = {
+    val vpH         = scroll.getViewportBounds.getHeight
+    val contentH    = Math.max(flow.getLayoutBounds.getHeight, 0.0)
+    val scrollableH = Math.max(0.0, contentH - vpH)
+    if (scrollableH <= 0.0) false
+    else {
+      val scrollTop  = scroll.getVvalue * scrollableH
+      val remaining  = scrollableH - scrollTop
+      remaining <= (tileSize + tilePadding) // within one row from bottom
+    }
+  }
 
-  def triggerNeedMore(): Unit = requestIfNeeded()
+  private def maybeRecycleAtBottom(): Unit = {
+    if (!nearBottom()) return
+    val cols = columnsForViewport()
+    if (cols <= 0) return
+    val current = tilesCount()
+    if (current <= cols) return
+    // Remove exactly one row from the top
+    try {
+      flow.getChildren.remove(0, Math.min(cols, current))
+      lastAsked = Math.max(0, lastAsked - cols)
+      onTilesRemoved(Math.min(cols, current))
+      // Keep the viewport at bottom and request enough to build a new line
+      scroll.setVvalue(1.0)
+      onNeedMore(tilesCount() + cols)
+    } catch {
+      case _: Throwable => ()
+    }
+  }
+
+  // React to viewport resizes and scrolling
+  scroll.viewportBoundsProperty().addListener((_, _, _) => { requestIfNeeded(); maybeRecycleAtBottom() })
+  scroll.vvalueProperty().addListener((_, _, _) => { requestIfNeeded(); maybeRecycleAtBottom() })
+  // Also react when this control gets resized or becomes visible
+  this.widthProperty().addListener((_, _, _) => { requestIfNeeded(); maybeRecycleAtBottom() })
+  this.heightProperty().addListener((_, _, _) => { requestIfNeeded(); maybeRecycleAtBottom() })
+  this.visibleProperty().addListener((_, _, _) => { requestIfNeeded(); maybeRecycleAtBottom() })
+
+  def triggerNeedMore(): Unit = { requestIfNeeded(); maybeRecycleAtBottom() }
 
   def clearTiles(): Unit = {
     flow.getChildren.clear()
