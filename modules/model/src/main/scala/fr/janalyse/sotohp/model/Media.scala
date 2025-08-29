@@ -9,14 +9,15 @@ case class Media(
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],
-  orientation: Option[Orientation],     // override original's orientation
-  shootDateTime: Option[ShootDateTime], // override original's cameraShotDateTime
-  location: Option[Location]            // replace the original's location (user-defined or deducted location)
+  orientation: Option[Orientation],      // override original's orientation
+  shootDateTime: Option[ShootDateTime],  // override original's cameraShotDateTime
+  userDefinedLocation: Option[Location], // replace the original's location (user-defined or deducted location)
+  deductedLocation: Option[Location]
 ) {
   def timestamp: OffsetDateTime =
     shootDateTime
       .map(_.offsetDateTime)
       .getOrElse(original.timestamp)
 
-  def isDeductedLocation: Boolean = location.isDefined
+  def location: Option[Location] = userDefinedLocation.orElse(deductedLocation).orElse(original.location)
 }

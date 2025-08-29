@@ -28,7 +28,7 @@ object PhotoToShow {
     classifications <- MediaService.classifications(media.original.id).map(_.map(_.classifications))
     objects         <- MediaService.objects(media.original.id).map(_.map(_.objects))
     faces           <- MediaService.faces(media.original.id).map(_.map(_.faces))
-    place            = media.location.orElse(media.original.location)
+    place            = media.location
     shootDateTime    = media.shootDateTime.orElse(media.original.cameraShootDateTime)
     orientation      = media.orientation.orElse(media.original.orientation)
     description      = media.description

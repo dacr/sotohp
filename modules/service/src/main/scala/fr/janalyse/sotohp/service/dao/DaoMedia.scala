@@ -11,9 +11,10 @@ case class DaoMedia(
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],
-  orientation: Option[Orientation],     // override original's orientation
-  shootDateTime: Option[ShootDateTime], // override original's cameraShotDateTime
-  location: Option[DaoLocation]         // replace the original's location (user-defined or deducted location)
+  orientation: Option[Orientation],         // override original's orientation
+  shootDateTime: Option[ShootDateTime],     // override original's cameraShotDateTime
+  userDefinedLocation: Option[DaoLocation], // replace the original's location (user-defined or deducted location)
+  deductedLocation: Option[DaoLocation]
 ) derives LMDBCodecJson
 
 object DaoMedia {

@@ -599,7 +599,7 @@ class MediaServiceLive private (
 
   private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val relatedEventAttachment = MediaBuilder.buildEventAttachment(input.original)
-    val logic = for {
+    val logic                  = for {
       mayBeEvent   <- ZIO
                         .foreach(relatedEventAttachment)(attachment => getEventForAttachment(attachment).someOrElseZIO(createDefaultEvent(attachment)))
       currentMedia <- mediaGet(input.state.mediaAccessKey) // already existing media is the source of truth !
@@ -613,7 +613,8 @@ class MediaServiceLive private (
                             keywords = Set.empty,
                             orientation = None,
                             shootDateTime = None,
-                            location = None
+                            userDefinedLocation = None,
+                            deductedLocation = None
                           )
                           mediaColl
                             .upsert(input.state.mediaAccessKey, _ => daoMedia)
@@ -626,18 +627,27 @@ class MediaServiceLive private (
 
   private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val logic = for {
-      _                    <- normalized(input.media.original.id)      // required to optimize AI work so not launched in background
-      fiberMiniatures      <- miniatures(input.media.original.id)      // .fork
-      fiberFaces           <- faces(input.media.original.id)           // .fork
-      fiberClassifications <- classifications(input.media.original.id) // .fork
-      fiberObjects         <- objects(input.media.original.id)         // .fork
-
-//      _ <- fiberFaces.join.mapError(err => ServiceInternalIssue(s"Unable to compute faces : $err"))
-//      _ <- fiberClassifications.join.mapError(err => ServiceInternalIssue(s"Unable to compute classifications : $err"))
-//      _ <- fiberObjects.join.mapError(err => ServiceInternalIssue(s"Unable to compute objects : $err"))
-//      _ <- fiberMiniatures.join.mapError(err => ServiceInternalIssue(s"Unable to compute miniatures : $err"))
+      _                    <- normalized(input.media.original.id) // required to optimize AI work so not launched in background
+      fiberMiniatures      <- miniatures(input.media.original.id)
+      fiberFaces           <- faces(input.media.original.id)
+      fiberClassifications <- classifications(input.media.original.id)
+      fiberObjects         <- objects(input.media.original.id)
     } yield input
     logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.mediaPath.path.toString)
+  }
+
+  private def locationInduction(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
+    if (input.media.original.location.isDefined || input.media.location.isDefined) ZIO.succeed(input)
+    else {
+//      for {
+//        // TODO and add distance check in repeats
+//        previousMedia <- mediaPrevious(input.media.accessKey).repeatUntil(mayBeMedia => mayBeMedia.exists(_.original.location.isDefined))
+//        nextMedia <- mediaNext(input.media.accessKey).repeatUntil(mayBeMedia => mayBeMedia.exists(_.original.location.isDefined))
+//
+//      } yield ()
+      ZIO.succeed(input)
+    }
+
   }
 
   private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[MediaBag]] = {
@@ -678,6 +688,7 @@ class MediaServiceLive private (
         .mapZIO(synchronizeState)
         .mapZIO(synchronizeMedia)
         .mapZIO(synchronizeProcessors)
+        .mapZIO(locationInduction)
         .filter(_.state.mediaLastSynchronized.isEmpty)
         .grouped(25)
         .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)

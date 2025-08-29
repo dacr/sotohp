@@ -92,7 +92,8 @@ object MediaBuilder {
       keywords = Set.empty,
       orientation = None,
       shootDateTime = None,
-      location = None
+      userDefinedLocation = None,
+      deductedLocation = None
     )
   }
 
