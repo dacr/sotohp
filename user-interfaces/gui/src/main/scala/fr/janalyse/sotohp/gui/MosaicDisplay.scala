@@ -63,6 +63,20 @@ class MosaicDisplay extends Pane {
     iv
   }
 
+  private def disposeNode(node: javafx.scene.Node): Unit = node match {
+    case iv: ImageView =>
+      try {
+        iv.setOnMouseClicked(null)
+        iv.setClip(null)
+        val img = iv.getImage
+        iv.setImage(null)
+        // img resources will be GC'ed; no explicit dispose in JavaFX Image
+      } catch {
+        case _: Throwable => ()
+      }
+    case _ => ()
+  }
+
   def tilesCount(): Int = flow.getChildren.size
 
   private def columnsForViewport(): Int = {
@@ -116,11 +130,18 @@ class MosaicDisplay extends Pane {
     if (cols <= 0) return
     val current = tilesCount()
     if (current <= cols) return
-    // Remove exactly one row from the top
+    // Remove exactly one row from the top with explicit disposal
     try {
-      flow.getChildren.remove(0, Math.min(cols, current))
-      lastAsked = Math.max(0, lastAsked - cols)
-      onTilesRemoved(Math.min(cols, current))
+      val toRemove = Math.min(cols, current)
+      var i        = 0
+      while (i < toRemove) {
+        val node = flow.getChildren.get(0)
+        disposeNode(node)
+        flow.getChildren.remove(0)
+        i += 1
+      }
+      lastAsked = Math.max(0, lastAsked - toRemove)
+      onTilesRemoved(toRemove)
       // Keep the viewport at bottom and request enough to build a new line
       scroll.setVvalue(1.0)
       onNeedMore(tilesCount() + cols)
@@ -140,7 +161,13 @@ class MosaicDisplay extends Pane {
   def triggerNeedMore(): Unit = { requestIfNeeded(); maybeRecycleAtBottom() }
 
   def clearTiles(): Unit = {
-    flow.getChildren.clear()
+    try {
+      val it = flow.getChildren.iterator()
+      while (it.hasNext) disposeNode(it.next())
+      flow.getChildren.clear()
+    } catch {
+      case _: Throwable => flow.getChildren.clear()
+    }
     lastAsked = 0
   }
 
