@@ -15,7 +15,7 @@ import scalafx.scene.Scene
 import scalafx.scene.control.Label
 import scalafx.scene.control.Hyperlink
 import scalafx.scene.control.Button
-import scalafx.scene.layout.{HBox, Region, VBox}
+import scalafx.scene.layout.{HBox, Region, VBox, Priority}
 import scalafx.application.Platform
 import scalafx.scene.image.Image
 import scalafx.Includes.jfxRegion2sfx
@@ -95,8 +95,9 @@ object PhotoViewerApp extends ZIOAppDefault {
           zoomReset.onAction = event => display.zoomReset()
         }
       }
-      displaySFX.maxWidth <== stage.width
-      displaySFX.maxHeight <== (stage.height - buttons.height * 2.5) // TODO
+      VBox.setVgrow(displaySFX, Priority.Always)
+      displaySFX.prefWidth <== stage.width
+      displaySFX.prefHeight <== (stage.height - controls.height)
     }
     def show(photo: PhotoToShow): Unit = {
       infoDateTime.text = photo.shootDateTime.map(_.toString).getOrElse(noShootDateTimeText)
@@ -110,6 +111,7 @@ object PhotoViewerApp extends ZIOAppDefault {
       infoEvent.text = photo.event
         .map(_.name.text)
         .getOrElse(noEventText)
+        .appendedAll(s" (${photo.media.original.dimension.map(d => d.width.toString+"x"+d.height.toString)})")
         .appendedAll(s" (${photo.media.accessKey.asString})") // TODO temporary added for debug purposes
       infoEvent.onMouseClicked = event => {
         val clipboard = Clipboard.systemClipboard

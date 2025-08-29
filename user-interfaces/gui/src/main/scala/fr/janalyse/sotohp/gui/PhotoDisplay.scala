@@ -36,7 +36,8 @@ class PhotoDisplay extends Region {
   private val arrowStepPixels: Double     = 40d
 
   private var currentCanvas: Option[Canvas] = {
-    val canvas = new Canvas(3 * 1920, 3 * 1080)
+    // Start with a tiny canvas; we'll size it to the viewport in layoutChildren()
+    val canvas = new Canvas(1, 1)
     getChildren.add(canvas)
     setBackground(Background.fill(Color.BLACK))
     // Register mouse handlers for middle-button panning
@@ -67,6 +68,14 @@ class PhotoDisplay extends Region {
     Some(canvas)
   }
 
+  // Redraw when the region is resized (canvas buffer is reset when size changes)
+  this.widthProperty().addListener((_, _, _) => {
+    if (currentImage.isDefined) { clear(); displayPhoto() }
+  })
+  this.heightProperty().addListener((_, _, _) => {
+    if (currentImage.isDefined) { clear(); displayPhoto() }
+  })
+
   def isZoomed() = zoomLevel > zoomLevelDefault
 
   def clear(): Unit = currentCanvas.foreach { canvas =>
@@ -88,10 +97,12 @@ class PhotoDisplay extends Region {
       this.rotationDegrees = rotationDegrees
       this.currentImage = Some(image)
       currentCanvas.foreach { canvas =>
-        this.imageX = canvas.getWidth() / 2 - image.getWidth / 2
-        this.imageY = canvas.getHeight() / 2 - image.getHeight / 2
-        this.centerX = imageX + image.getWidth / 2
-        this.centerY = imageY + image.getHeight / 2
+        // Initialize center in image coordinate space (image center)
+        this.centerX = image.getWidth / 2
+        this.centerY = image.getHeight / 2
+        // Top-left of image in image coordinates
+        this.imageX = centerX - image.getWidth / 2
+        this.imageY = centerY - image.getHeight / 2
         displayPhoto()
       }
     }
@@ -125,11 +136,12 @@ class PhotoDisplay extends Region {
       lastRatio = ratio
       val viewHalfW  = (getWidth / ratio) / 2.0
       val viewHalfH  = (getHeight / ratio) / 2.0
-      val ccx        = canvas.getWidth / 2.0
-      val ccy        = canvas.getHeight / 2.0
-      val theta      = Math.toRadians(rotationDegrees.toDouble)
+      // Clamp around image center in image coordinates
       val w          = img.getWidth
       val h          = img.getHeight
+      val ccx        = w / 2.0
+      val ccy        = h / 2.0
+      val theta      = Math.toRadians(rotationDegrees.toDouble)
       val halfWb     = 0.5 * (Math.abs(w * Math.cos(theta)) + Math.abs(h * Math.sin(theta)))
       val halfHb     = 0.5 * (Math.abs(w * Math.sin(theta)) + Math.abs(h * Math.cos(theta)))
       val allowHalfX = Math.max(0.0, halfWb - viewHalfW)
@@ -160,8 +172,16 @@ class PhotoDisplay extends Region {
 
   private def panByScreen(dxView: Double, dyView: Double): Unit = {
     val r = currentRatio()
-    // Move image following mouse direction
-    panByCanvas(dxView / r, dyView / r)
+    // Convert view-space delta to image-space: unscale then apply inverse rotation
+    val dxScaled = dxView / r
+    val dyScaled = dyView / r
+    val theta    = Math.toRadians(-rotationDegrees.toDouble)
+    val cosT     = Math.cos(theta)
+    val sinT     = Math.sin(theta)
+    val dxImg    = dxScaled * cosT - dyScaled * sinT
+    val dyImg    = dxScaled * sinT + dyScaled * cosT
+    // Move image following mouse/view direction
+    panByCanvas(-dxImg, -dyImg)
   }
 
   def panLeft(): Unit  = panByScreen(-arrowStepPixels, 0)
@@ -177,10 +197,14 @@ class PhotoDisplay extends Region {
         currentCanvas.foreach { canvas =>
           val gc = canvas.getGraphicsContext2D
           gc.save()
-          gc.translate(centerX, centerY)
+          val ratio = computeRatio(image)
+          val viewCx = canvas.getWidth / 2.0
+          val viewCy = canvas.getHeight / 2.0
+          gc.translate(viewCx, viewCy)
+          gc.scale(ratio, ratio)
           gc.rotate(rotationDegrees)
           gc.translate(-centerX, -centerY)
-          gc.drawImage(image, imageX, imageY, image.getWidth, image.getHeight)
+          gc.drawImage(image, 0, 0, image.getWidth, image.getHeight)
           if (showFaces) {
             photo.foundFaces.foreach { photoFaces =>
               photoFaces.foreach { face =>
@@ -188,8 +212,8 @@ class PhotoDisplay extends Region {
                 gc.setLineWidth(2d)
                 gc.setStroke(Color.BLUE)
                 gc.strokeRect(
-                  imageX + x.value * image.getWidth,
-                  imageY + y.value * image.getHeight,
+                  x.value * image.getWidth,
+                  y.value * image.getHeight,
                   w.value * image.getWidth,
                   h.value * image.getHeight
                 )
@@ -254,8 +278,11 @@ class PhotoDisplay extends Region {
       val h     = getHeight - getInsets.getBottom - y
       val ratio = computeRatio(image)
       lastRatio = ratio
-      canvas.setScaleX(ratio)
-      canvas.setScaleY(ratio)
+      // Use a viewport-sized canvas; no node scaling
+      canvas.setScaleX(1.0)
+      canvas.setScaleY(1.0)
+      canvas.setWidth(w)
+      canvas.setHeight(h)
       positionInArea(canvas, x, y, w, h, -1, HPos.CENTER, VPos.CENTER)
       // ensure pan is clamped when viewport size changes
       clampToBounds()
