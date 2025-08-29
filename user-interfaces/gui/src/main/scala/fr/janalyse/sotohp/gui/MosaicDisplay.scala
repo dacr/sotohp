@@ -115,4 +115,9 @@ class MosaicDisplay extends Pane {
     val iv = buildImageView(Tile(key, image))
     flow.getChildren.add(iv)
   }
+
+  def addTileFirst(key: MediaAccessKey, image: Image): Unit = {
+    val iv = buildImageView(Tile(key, image))
+    flow.getChildren.add(0, iv)
+  }
 }

@@ -20,6 +20,7 @@ import scalafx.application.Platform
 import scalafx.scene.image.Image
 import scalafx.Includes.jfxRegion2sfx
 import scalafx.scene.input.{Clipboard, ClipboardContent, DataFormat}
+import javafx.scene.input.{MouseButton, MouseEvent}
 
 import java.nio.file.Path
 import java.io.ByteArrayInputStream
@@ -29,6 +30,11 @@ enum UserAction {
   case Previous
   case Next
   case Last
+}
+
+enum MosaicMode {
+  case StartFromCurrent
+  case EndWithCurrent
 }
 
 object PhotoViewerApp extends ZIOAppDefault {
@@ -183,67 +189,162 @@ object PhotoViewerApp extends ZIOAppDefault {
                                .orElse(toLastPhoto)
                            )
       loadedCountRef    <- Ref.make(0)
-      lastLoadedKeyRef  <- Ref.make(Option.empty[MediaAccessKey])
+      seedKeyRef        <- Ref.make(Option.empty[MediaAccessKey])
+      seedAddedRef      <- Ref.make(false)
+      mosaicModeRef     <- Ref.make[MosaicMode](MosaicMode.StartFromCurrent)
+      nextCursorRef     <- Ref.make(Option.empty[MediaAccessKey])
+      prevCursorRef     <- Ref.make(Option.empty[MediaAccessKey])
       loadSem           <- Semaphore.make(1)
+      // Decode and add image helper function value
+      valAddImageEff    <- ZIO.succeed { (key: MediaAccessKey, prepend: Boolean) =>
+        for {
+          res   <- MediaService.mediaMiniatureRead(key).runCollect.either
+          added <- res.fold(
+                     _ => ZIO.succeed(false),
+                     bytes => {
+                       val arr = bytes.toArray
+                       ZIO
+                         .attempt {
+                           if (arr.nonEmpty) {
+                             val image = new javafx.scene.image.Image(new ByteArrayInputStream(arr), 180, 180, true, true)
+                             val ok    = image != null && image.getWidth > 0 && !image.isError
+                             if (ok) {
+                               if (prepend) Platform.runLater(fxApp.mosaic.addTileFirst(key, image))
+                               else Platform.runLater(fxApp.mosaic.addTile(key, image))
+                             }
+                             ok
+                           } else false
+                         }
+                         .catchAll(_ => ZIO.succeed(false))
+                     }
+                   )
+        } yield added
+      }
       ensureLoaded      <- ZIO.succeed { (desired: Int) =>
                              loadSem.withPermit {
-                               def loop(maybeKey: Option[MediaAccessKey]): ZIO[MediaService, Any, Unit] =
+                               def step(): ZIO[MediaService, Any, Unit] = {
                                  for {
-                                   count <- loadedCountRef.get
-                                   _     <- if (count >= desired) ZIO.unit
-                                            else {
-                                              for {
-                                                maybeMedia <- maybeKey match
-                                                               case None    => MediaService.mediaFirst()
-                                                               case Some(k) => MediaService.mediaNext(k)
-                                                _ <- ZIO.foreachDiscard(maybeMedia) { media =>
-                                                       val key = media.accessKey
-                                                       for {
-                                                         res   <- MediaService.mediaMiniatureRead(key).runCollect.either
-                                                         added <- res.fold(
-                                                                    _ => ZIO.succeed(false),
-                                                                    bytes => {
-                                                                      val arr = bytes.toArray
-                                                                      ZIO
-                                                                        .attempt {
-                                                                          if (arr.nonEmpty) {
-                                                                            val image = new javafx.scene.image.Image(new ByteArrayInputStream(arr), 180, 180, true, true)
-                                                                            val ok    = image != null && image.getWidth > 0 && !image.isError
-                                                                            if (ok) Platform.runLater(fxApp.mosaic.addTile(key, image))
-                                                                            ok
-                                                                          } else false
-                                                                        }
-                                                                        .catchAll(_ => ZIO.succeed(false))
-                                                                    }
-                                                                  )
-                                                         _     <- lastLoadedKeyRef.set(Some(key))
-                                                         _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
-                                                         _     <- loop(Some(key))
-                                                       } yield ()
-                                                     }
-                                              } yield ()
-                                            }
+                                   count     <- loadedCountRef.get
+                                   mode      <- mosaicModeRef.get
+                                   seedOpt   <- seedKeyRef.get
+                                   seedAdded <- seedAddedRef.get
+                                   _         <- if (count >= desired) ZIO.unit
+                                                else {
+                                                  mode match {
+                                                    case MosaicMode.StartFromCurrent =>
+                                                      seedOpt match {
+                                                        case None => ZIO.unit // nothing to do
+                                                        case Some(seed) =>
+                                                          if (!seedAdded) {
+                                                            for {
+                                                              added <- valAddImageEff(seed, false)
+                                                              _     <- seedAddedRef.set(true)
+                                                              _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
+                                                              _     <- nextCursorRef.set(Some(seed))
+                                                              _     <- prevCursorRef.set(Some(seed))
+                                                              _     <- step()
+                                                            } yield ()
+                                                          } else {
+                                                            for {
+                                                              curNext <- nextCursorRef.get
+                                                              maybe   <- curNext match {
+                                                                            case None    => MediaService.mediaFirst() // fallback
+                                                                            case Some(k) => MediaService.mediaNext(k)
+                                                                          }
+                                                              _ <- ZIO.foreachDiscard(maybe) { media =>
+                                                                     val key = media.accessKey
+                                                                     for {
+                                                                       added <- valAddImageEff(key, false)
+                                                                       _     <- nextCursorRef.set(Some(key))
+                                                                       _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
+                                                                       _     <- step()
+                                                                     } yield ()
+                                                                   }
+                                                            } yield ()
+                                                          }
+                                                      }
+                                                    case MosaicMode.EndWithCurrent =>
+                                                      seedOpt match {
+                                                        case None => ZIO.unit
+                                                        case Some(seed) =>
+                                                          if (!seedAdded) {
+                                                            val remainingBeforeSeed = Math.max(0, desired - count - 1)
+                                                            if (remainingBeforeSeed > 0) {
+                                                              for {
+                                                                curPrev <- prevCursorRef.get.map(_.orElse(Some(seed)))
+                                                                maybe   <- curPrev match {
+                                                                              case None        => ZIO.succeed(None)
+                                                                              case Some(start) => MediaService.mediaPrevious(start)
+                                                                            }
+                                                                progressed <- maybe match {
+                                                                                case None => ZIO.succeed(false)
+                                                                                case Some(media) =>
+                                                                                  val key = media.accessKey
+                                                                                  for {
+                                                                                    added <- valAddImageEff(key, true)
+                                                                                    _     <- prevCursorRef.set(Some(key))
+                                                                                    _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
+                                                                                  } yield added
+                                                                              }
+                                                                _ <- if (progressed) step()
+                                                                     else {
+                                                                       // no more previous, append seed now
+                                                                       for {
+                                                                         added <- valAddImageEff(seed, false)
+                                                                         _     <- seedAddedRef.set(true)
+                                                                         _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
+                                                                         _     <- nextCursorRef.set(Some(seed))
+                                                                         _     <- step()
+                                                                       } yield ()
+                                                                     }
+                                                              } yield ()
+                                                            } else {
+                                                              // time to add the seed as the last tile
+                                                              for {
+                                                                added <- valAddImageEff(seed, false)
+                                                                _     <- seedAddedRef.set(true)
+                                                                _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
+                                                                _     <- nextCursorRef.set(Some(seed))
+                                                                _     <- step()
+                                                              } yield ()
+                                                            }
+                                                          } else {
+                                                            // seed already appended at end -> continue forward
+                                                            for {
+                                                              curNext <- nextCursorRef.get
+                                                              maybe   <- curNext match {
+                                                                            case None    => MediaService.mediaFirst()
+                                                                            case Some(k) => MediaService.mediaNext(k)
+                                                                          }
+                                                              _ <- ZIO.foreachDiscard(maybe) { media =>
+                                                                     val key = media.accessKey
+                                                                     for {
+                                                                       added <- valAddImageEff(key, false)
+                                                                       _     <- nextCursorRef.set(Some(key))
+                                                                       _     <- ZIO.when(added)(loadedCountRef.update(_ + 1))
+                                                                       _     <- step()
+                                                                     } yield ()
+                                                                   }
+                                                            } yield ()
+                                                          }
+                                                      }
+                                                  }
+                                                }
                                  } yield ()
-                               for {
-                                 start <- lastLoadedKeyRef.get
-                                 _     <- loop(start)
-                               } yield ()
+                               }
+                               step()
                              }
                            }
-      setupMosaicLazy   <- ZIO.succeed {
+      setupMosaicLazy   <- ZIO.succeed { 
                              for {
                                already <- mosaicLoadedRef.get
                                _       <- (for {
-                                             _ <- ZIO.attempt(Platform.runLater(fxApp.mosaic.clearTiles())).logError("Can't clear the mosaic").ignore
-                                             _ <- loadedCountRef.set(0)
-                                             _ <- lastLoadedKeyRef.set(None)
                                              _ <- ZStream
                                                     .async[MediaService, Throwable, Unit] { callback =>
                                                       fxApp.mosaic.onNeedMore = (desired: Int) => callback(ensureLoaded(desired).logError("not loaded").ignore.as(Chunk.unit))
                                                     }
                                                     .runDrain
                                                     .forkDaemon
-                                             _ <- ZIO.attempt(Platform.runLater(fxApp.mosaic.triggerNeedMore())).logError("Can't not load more").ignore
                                              _ <- mosaicLoadedRef.set(true)
                                            } yield ()).when(!already)
                              } yield ()
@@ -277,22 +378,40 @@ object PhotoViewerApp extends ZIOAppDefault {
                              .async(callback => fxApp.last.onAction = (_ => callback(userActionHub.offer(UserAction.Last).as(Chunk.unit))))
                              .runDrain
                              .fork
-      // Mosaic toggle handler
+      // Mosaic toggle handler (left-click: start from current, right-click: end with current)
       _                 <- ZStream
                              .async[MediaService, Throwable, Unit] { callback =>
-                               fxApp.mosaicToggle.onAction = (_ => callback({
+                               fxApp.mosaicToggle.onMouseClicked = ((e: MouseEvent) => callback({
                                  val eff = for {
                                    visible <- mosaicVisibleRef.get
                                    _       <- if (visible) {
                                                  ZIO.attempt(Platform.runLater(fxApp.switchToSingle())).ignore *>
                                                  mosaicVisibleRef.set(false)
                                                } else {
-                                                 ZIO.attempt(Platform.runLater(fxApp.switchToMosaic())).ignore *>
-                                                 mosaicVisibleRef.set(true) *>
-                                                 setupMosaicLazy.forkDaemon.unit *>
-                                                 ZIO.attempt(Platform.runLater(fxApp.mosaic.triggerNeedMore())).logError("Couldn't trigger need more").ignore *>
-                                                 // Fallback: ensure at least one tile loads immediately
-                                                 ensureLoaded(1).forkDaemon.unit
+                                                 val mode = if (e.getButton == MouseButton.SECONDARY) MosaicMode.EndWithCurrent else MosaicMode.StartFromCurrent
+                                                 val computeSeed: ZIO[MediaService, Any, Option[MediaAccessKey]] = for {
+                                                   cur <- currentPhotoRef.get
+                                                   seed <- cur match
+                                                             case Some(p) => ZIO.succeed(Some(p.media.accessKey))
+                                                             case None    => mode match
+                                                                              case MosaicMode.StartFromCurrent => MediaService.mediaFirst().map(_.map(_.accessKey))
+                                                                              case MosaicMode.EndWithCurrent   => MediaService.mediaLast().map(_.map(_.accessKey))
+                                                 } yield seed
+                                                 for {
+                                                   _    <- mosaicModeRef.set(mode)
+                                                   seed <- computeSeed
+                                                   _    <- seedKeyRef.set(seed)
+                                                   _    <- loadedCountRef.set(0)
+                                                   _    <- seedAddedRef.set(false)
+                                                   _    <- nextCursorRef.set(None)
+                                                   _    <- prevCursorRef.set(None)
+                                                   _    <- ZIO.attempt(Platform.runLater(fxApp.mosaic.clearTiles())).ignore
+                                                   _    <- setupMosaicLazy.forkDaemon.unit
+                                                   _    <- ZIO.attempt(Platform.runLater(fxApp.switchToMosaic())).ignore
+                                                   _    <- mosaicVisibleRef.set(true)
+                                                   _    <- ZIO.attempt(Platform.runLater(fxApp.mosaic.triggerNeedMore())).ignore
+                                                   _    <- ensureLoaded(1).forkDaemon.unit
+                                                 } yield ()
                                                }
                                  } yield ()
                                  eff.ignore.as(Chunk.unit)
