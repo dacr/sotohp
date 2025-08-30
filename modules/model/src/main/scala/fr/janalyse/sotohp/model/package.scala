@@ -24,6 +24,7 @@ package object model {
 
     extension (ownerId: OwnerId) {
       def asString: String = ownerId.toString
+      def asULID: ULID = ownerId
     }
   }
 

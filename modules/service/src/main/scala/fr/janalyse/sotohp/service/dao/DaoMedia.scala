@@ -18,7 +18,7 @@ case class DaoMedia(
 ) derives LMDBCodecJson
 
 object DaoMedia {
-  given Transformer[Media, DaoMedia] =
+  given transformer:Transformer[Media, DaoMedia] =
     Transformer
       .define[Media, DaoMedia]
       .withFieldComputed(_.events, _.events.map(_.id).toSet)

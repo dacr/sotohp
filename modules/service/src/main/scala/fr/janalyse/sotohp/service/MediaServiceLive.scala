@@ -122,7 +122,13 @@ class MediaServiceLive private (
   override def mediaUpdate(
     key: MediaAccessKey,
     updatedMedia: Media
-  ): IO[ServiceIssue, Option[Media]] = ???
+  ): IO[ServiceIssue, Option[Media]] = {
+    mediaColl
+      .update(key, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer) ) // to solve ambiguity with auto-derived transformer
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
+      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+    // TODO resync published
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
   override def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte] = {
@@ -171,27 +177,27 @@ class MediaServiceLive private (
 
     ZStream.unwrapScoped {
       val streamEff: IO[ServiceStreamIssue, ZStream[Any, ServiceStreamIssue, Byte]] = (for {
-        media      <- mediaGet(key)
-                        .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
-                        .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
+        media  <- mediaGet(key)
+                    .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
+                    .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
         // ensure miniatures info is computed/stored (best effort)
-        _          <- miniatures(media.original.id).either
-        sizes      <- MiniaturizerConfig.config.map(_.referenceSizes).mapError(err => ServiceStreamInternalIssue(err.toString))
-        size        = sizes.maxOption.getOrElse(256)
-        path       <- MiniaturizeProcessor
-                        .getOriginalMiniatureFilePath(media.original, size)
-                        .mapError(err => ServiceStreamInternalIssue(s"Couldn't compute miniature path: $err"))
-        exists     <- ZIO.attempt(path.toFile.exists()).mapError(th => ServiceStreamInternalIssue(s"Couldn't check file existence $path : $th"))
-        stream     <- if (exists) {
-                         ZIO.succeed(
-                           ZStream
-                             .fromInputStreamZIO(ZIO.attemptBlockingIO(new java.io.FileInputStream(path.toFile)))
-                             .mapError(th => ServiceStreamInternalIssue(s"Couldn't open/read miniature image file $path : $th"))
-                         )
-                       } else {
-                         // fallback to normalized then original
-                         ZIO.succeed(mediaNormalizedRead(key))
-                       }
+        _      <- miniatures(media.original.id).either
+        sizes  <- MiniaturizerConfig.config.map(_.referenceSizes).mapError(err => ServiceStreamInternalIssue(err.toString))
+        size    = sizes.maxOption.getOrElse(256)
+        path   <- MiniaturizeProcessor
+                    .getOriginalMiniatureFilePath(media.original, size)
+                    .mapError(err => ServiceStreamInternalIssue(s"Couldn't compute miniature path: $err"))
+        exists <- ZIO.attempt(path.toFile.exists()).mapError(th => ServiceStreamInternalIssue(s"Couldn't check file existence $path : $th"))
+        stream <- if (exists) {
+                    ZIO.succeed(
+                      ZStream
+                        .fromInputStreamZIO(ZIO.attemptBlockingIO(new java.io.FileInputStream(path.toFile)))
+                        .mapError(th => ServiceStreamInternalIssue(s"Couldn't open/read miniature image file $path : $th"))
+                    )
+                  } else {
+                    // fallback to normalized then original
+                    ZIO.succeed(mediaNormalizedRead(key))
+                  }
       } yield stream)
 
       streamEff.orElseSucceed(mediaOriginalRead(key))
@@ -682,18 +688,55 @@ class MediaServiceLive private (
     logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.mediaPath.path.toString)
   }
 
-  private def locationInduction(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    if (input.media.original.location.isDefined || input.media.location.isDefined) ZIO.succeed(input)
-    else {
-//      for {
-//        // TODO and add distance check in repeats
-//        previousMedia <- mediaPrevious(input.media.accessKey).repeatUntil(mayBeMedia => mayBeMedia.exists(_.original.location.isDefined))
-//        nextMedia <- mediaNext(input.media.accessKey).repeatUntil(mayBeMedia => mayBeMedia.exists(_.original.location.isDefined))
-//
-//      } yield ()
-      ZIO.succeed(input)
+  // TODO generic utility function
+  def zstreamGenerator[R, E, A](first: ZIO[R, E, Option[A]])(next: A => ZIO[R, E, Option[A]]): ZStream[R, E, A] =
+    ZStream.fromZIO(first).flatMap {
+      case None        => ZStream.empty
+      case Some(start) => ZStream.paginateZIO(start)(a => next(a).map(n => (a, n)))
     }
 
+  // may need several executions to fully be able to induce locations
+  private def locationInduction(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
+    if (input.media.original.hasLocation || input.media.deductedLocation.isDefined) ZIO.succeed(input)
+    else {
+      def acceptable(current: Media): Boolean = {
+        val sameUser       = current.original.store.ownerId.asULID == input.media.original.store.ownerId
+        val elapsedSeconds = Math.abs(current.timestamp.toEpochSecond - input.media.timestamp.toEpochSecond)
+        (elapsedSeconds < 2 * 3600) && sameUser
+      }
+
+      def prevCandidates =
+        zstreamGenerator(mediaPrevious(input.media.accessKey))(prev => mediaPrevious(prev.accessKey))
+          .takeWhile(acceptable)
+          .filter(_.original.hasLocation)
+
+      def nextCandidates =
+        zstreamGenerator(mediaNext(input.media.accessKey))(next => mediaNext(next.accessKey))
+          .takeWhile(acceptable)
+          .filter(_.original.hasLocation)
+
+      for {
+        firstPrev    <- prevCandidates.runHead
+        firstNext    <- nextCandidates.runHead
+        validDistance = firstPrev
+                          .flatMap(_.original.location)
+                          .flatMap(fp => firstNext.flatMap(_.original.location).map(fn => fp.distanceTo(fn)))
+                          .exists(_ < 500) // meters // TODO add config parameter
+        inductedLocationInMiddle  = if (validDistance)
+                                      firstPrev.flatMap(_.original.location)
+                                    else None
+        inductedLocationFirstShot = if (
+                                      firstPrev.isEmpty
+                                      && firstNext.isDefined
+                                      && firstNext.exists(fn => fn.timestamp.toEpochSecond - input.media.timestamp.toEpochSecond < 30 * 60) // 30 minutes // TODO add config parameter
+                                    )
+                                      firstNext.flatMap(_.original.location)
+                                    else None
+        inductedLocation          = inductedLocationFirstShot.orElse(inductedLocationInMiddle)
+        updatedMedia              = input.media.copy(deductedLocation = inductedLocation)
+        _                        <- mediaUpdate(input.media.accessKey, updatedMedia).when(inductedLocation.isDefined)
+      } yield (updatedMedia, input.state)
+    }
   }
 
   private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[MediaBag]] = {

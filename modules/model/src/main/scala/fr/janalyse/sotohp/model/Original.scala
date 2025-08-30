@@ -26,5 +26,6 @@ case class Original(
     cameraShootDateTime
       .map(_.offsetDateTime)
       .getOrElse(fileLastModified.offsetDateTime)
-
+  def hasLocation: Boolean =
+    location.isDefined
 }
