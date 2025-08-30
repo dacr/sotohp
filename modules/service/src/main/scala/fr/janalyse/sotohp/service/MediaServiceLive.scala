@@ -702,7 +702,7 @@ class MediaServiceLive private (
       def acceptable(current: Media): Boolean = {
         val sameUser       = current.original.store.ownerId.asULID == input.media.original.store.ownerId
         val elapsedSeconds = Math.abs(current.timestamp.toEpochSecond - input.media.timestamp.toEpochSecond)
-        (elapsedSeconds < 2 * 3600) && sameUser
+        (elapsedSeconds < 3 * 3600) && sameUser
       }
 
       def prevCandidates =
@@ -721,7 +721,7 @@ class MediaServiceLive private (
         validDistance = firstPrev
                           .flatMap(_.original.location)
                           .flatMap(fp => firstNext.flatMap(_.original.location).map(fn => fp.distanceTo(fn)))
-                          .exists(_ < 500) // meters // TODO add config parameter
+                          .exists(_ < 750) // meters // TODO add config parameter
         inductedLocationInMiddle  = if (validDistance)
                                       firstPrev.flatMap(_.original.location)
                                     else None
