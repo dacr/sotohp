@@ -56,7 +56,7 @@ object SaoMedia {
         .map(_.name.text)
 
     val keywords           = media.keywords ++ media.events.flatMap(_.keywords)
-    val location           = media.location.orElse(media.original.location)
+    val location           = media.location
     val hasProcessingIssue = (
       bag.processedObjects.exists(_.status.successful == false) ||
         bag.processedFaces.exists(_.status.successful == false) ||
@@ -87,7 +87,7 @@ object SaoMedia {
       // ----------------- GPS -----------------
       place = location.map(place => SaoGeoPoint(lat = place.latitude.doubleValue, lon = place.longitude.doubleValue)),
       placeAltitude = location.flatMap(_.altitude.map(_.value)),
-      placeDeducted = if (location.isDefined) Some(media.location.isDefined) else None,
+      placeDeducted = if (media.userDefinedLocation.isEmpty && media.deductedLocation.isDefined) Some(true) else None,
       // ----------------- AI -----------------
       classifications = bag.processedClassifications.map(_.classifications.map(_.name)).getOrElse(Nil),
       detectedObjects = bag.processedObjects.map(_.objects.map(_.name)).getOrElse(Nil),
