@@ -24,7 +24,7 @@ case class Statistics(
   modifiedCount: Int = 0,
   missingShootingDate: Int = 0,
   invalidShootingDateCount: Int = 0,
-  eventsCount: Map[Option[Event], Int] = Map.empty, // TODO potentially high memory usage
+  eventsCount: Map[Option[EventName], Int] = Map.empty, // TODO potentially high memory usage
   oldestDigitalShootingDate: Option[OffsetDateTime] = None,
   newestDigitalShootingDate: Option[OffsetDateTime] = None
 )
@@ -72,17 +72,18 @@ object Statistics extends CommonsCLI {
       })
       val updatedMissingShootingDateCount  = stats.missingShootingDate + (if (shootingDate.isEmpty) 1 else 0)
       val updatedInvalidShootingDateCount  = stats.invalidShootingDateCount + (if (shootingDate.exists(_.getYear < shootingDateMinimumValidYear)) 1 else 0)
-      val updatedEventsCount               = stats.eventsCount ++ (events match {
+
+      val updatedEventsCount = stats.eventsCount ++ (events match {
         case Nil         =>
           (stats.eventsCount.get(None) match {
             case None        => None -> 1
             case Some(count) => None -> (count + 1)
-          })::Nil
+          }) :: Nil
         case foundEvents =>
           foundEvents.map(event =>
-            (stats.eventsCount.get(Some(event)) match {
-              case None        => Some(event) -> 1
-              case Some(count) => Some(event) -> (count + 1)
+            (stats.eventsCount.get(Some(event.name)) match {
+              case None        => Some(event.name) -> 1
+              case Some(count) => Some(event.name) -> (count + 1)
             })
           )
       })
@@ -118,8 +119,9 @@ object Statistics extends CommonsCLI {
 
   private def reportStats(stats: Statistics) = {
     import stats.*
-    val duplicatedCount                               = stats.duplicated.count((_, count) => count > 1)
-    val eventCount                                    = eventsCount.count((k, v) => k.isDefined)
+    val duplicatedCount = stats.duplicated.count((_, count) => count > 1)
+    val eventCount      = eventsCount.count((k, v) => k.isDefined)
+
     val (digitalShootingMonths, digitalShootingYears) = (oldestDigitalShootingDate, newestDigitalShootingDate) match {
       case (Some(oldest), Some(newest)) => (MONTHS.between(oldest, newest), YEARS.between(oldest, newest))
       case _                            => (0, 0)
@@ -128,7 +130,7 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :$RESET")
       _ <- Console.printLine(s"${GREEN}- $count photos$RESET")
       _ <- Console.printLine(s"${GREEN}- $eventCount events")
-      _ <- Console.printLine(s"${GREEN}- $digitalShootingMonths months of digital photography ($digitalShootingYears years)$RESET")
+      _ <- Console.printLine(s"${GREEN}- $digitalShootingMonths months of digital/numerized photography ($digitalShootingYears years)$RESET")
       _ <- Console.printLine(s"${GREEN}  - ${oldestDigitalShootingDate.get} -> ${newestDigitalShootingDate.get}$RESET").when(oldestDigitalShootingDate.isDefined && newestDigitalShootingDate.isDefined)
       _ <- Console.printLine(s"${GREEN}- $facesCount people faces$RESET")
       _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount - deductedGeoLocalizedCount} without GPS infos)$RESET")
