@@ -696,6 +696,7 @@ class MediaServiceLive private (
     }
 
   // may need several executions to fully be able to induce locations
+  // TODO of course too slow (but simpler than keeping a buffer window : for all 114795 photos, 17m30s with induction 10m41s without )
   private def locationInduction(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     if (input.media.original.hasLocation || input.media.deductedLocation.isDefined) ZIO.succeed(input)
     else {
