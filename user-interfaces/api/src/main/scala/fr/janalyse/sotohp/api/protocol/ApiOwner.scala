@@ -14,5 +14,5 @@ case class ApiOwner(
 
 object ApiOwner {
   given JsonCodec[ApiOwner] = DeriveJsonCodec.gen
-  given Schema[ApiOwner]    = Schema.derived[ApiOwner].name(Schema.SName("Owner"))
+  given apiOwnerSchema:Schema[ApiOwner]    = Schema.derived[ApiOwner].name(Schema.SName("Owner"))
 }

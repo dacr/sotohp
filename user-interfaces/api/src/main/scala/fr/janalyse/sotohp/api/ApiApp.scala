@@ -34,10 +34,18 @@ import scala.concurrent.duration.FiniteDuration
 import io.scalaland.chimney.dsl.*
 import zio.stream.{ZPipeline, ZStream}
 
+import java.nio.charset.StandardCharsets
+
 object ApiApp extends ZIOAppDefault {
 
   type ApiEnv = MediaService
 
+  // -------------------------------------------------------------------------------------------------------------------
+
+  case object NdJson extends CodecFormat {
+    override val mediaType: MediaType = MediaType.parse("application/x-ndjson").toOption.get
+    override def toString: String = "ndjson"
+  }
   // -------------------------------------------------------------------------------------------------------------------
 
   val configProvider      = TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load())
@@ -106,7 +114,11 @@ object ApiApp extends ZIOAppDefault {
       .name("List owners")
       .summary("Stream all defined owners")
       .get
-      .out(streamBinaryBody(ZioStreams)(CodecFormat.Json())) // TODO how to provide information about the fact we want NDJSON output of ApiOwner ?
+      .out(
+        streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Owner JSON object per line)")
+          //.schema(summon[Schema[List[ApiOwner]]])
+      ) // TODO how to provide information about the fact we want NDJSON output of ApiOwner ?
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ =>
         for {
@@ -149,6 +161,36 @@ object ApiApp extends ZIOAppDefault {
           .flatMap(id => storeGetLogic(id))
       )
 
+
+
+  val storeListLogic: ZStream[MediaService, Throwable, ApiStore] = {
+    MediaService
+      .storeList()
+      .map(store => store.transformInto[ApiStore])
+      .mapError(err => ApiInternalError("Couldn't list stores"))
+  }
+
+  val storeListEndpoint =
+    storeEndpoint
+      .name("List stores")
+      .summary("Stream all defined stores")
+      .get
+      .out(
+        streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Store JSON object per line)")
+        //.schema(summon[Schema[List[ApiStore]]])
+      ) // TODO how to provide information about the fact we want NDJSON output of ApiStore ?
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](_ =>
+        for {
+          ms        <- ZIO.service[MediaService]
+          byteStream = storeListLogic
+            .map(_.toJson)
+            .intersperse("\n")
+            .via(ZPipeline.utf8Encode)
+            .provideEnvironment(ZEnvironment(ms))
+        } yield byteStream
+      )
   // -------------------------------------------------------------------------------------------------------------------
 
   def mediaGetLogic(accessKey: MediaAccessKey): ZIO[ApiEnv, ApiIssue, ApiMedia] = {
@@ -274,11 +316,11 @@ object ApiApp extends ZIOAppDefault {
     mediaRandomEndpoint,
     mediaGetEndpoint,
     // -------------------------
-    ownerGetEndpoint,
     ownerListEndpoint,
+    ownerGetEndpoint,
     // -------------------------
+    storeListEndpoint,
     storeGetEndpoint,
-    // storeListEndpoint,
     // -------------------------
     adminSynchronizeEndpoint,
     // -------------------------
