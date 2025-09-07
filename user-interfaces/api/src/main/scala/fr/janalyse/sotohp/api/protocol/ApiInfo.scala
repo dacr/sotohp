@@ -1,5 +1,7 @@
 package fr.janalyse.sotohp.api.protocol
 
+import sttp.tapir.Schema
+import sttp.tapir.Schema.annotations.encodedName
 import zio.json.*
 
 case class ApiInfo(
@@ -7,4 +9,10 @@ case class ApiInfo(
   version: String,
   message: String,
   originalsCount: Long
-) derives JsonCodec
+)
+
+object ApiInfo {
+  given JsonCodec[ApiInfo] = DeriveJsonCodec.gen
+  given Schema[ApiInfo]    = Schema.derived[ApiInfo].name(Schema.SName("Info"))
+}
+

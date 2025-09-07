@@ -15,6 +15,7 @@
  */
 package fr.janalyse.sotohp.api.protocol
 
+import sttp.tapir.Schema
 import zio.json.{DeriveJsonCodec, JsonCodec, jsonDiscriminator}
 
 sealed trait ApiIssue extends Exception
@@ -23,18 +24,20 @@ object ApiIssue {
   given JsonCodec[ApiIssue] = DeriveJsonCodec.gen
 }
 
-
-case class ApiInternalIdentifier(message: String) extends Exception(message) with ApiIssue
-object ApiInternalIdentifier {
-  given JsonCodec[ApiInternalIdentifier] = DeriveJsonCodec.gen
+case class ApiInvalidIdentifier(message: String) extends Exception(message) with ApiIssue
+object ApiInvalidIdentifier {
+  given JsonCodec[ApiInvalidIdentifier] = DeriveJsonCodec.gen
+  given Schema[ApiInvalidIdentifier]    = Schema.derived[ApiInvalidIdentifier].name(Schema.SName("ErrorInvalidIdentifier"))
 }
 
 case class ApiInternalError(message: String) extends Exception(message) with ApiIssue
 object ApiInternalError {
   given JsonCodec[ApiInternalError] = DeriveJsonCodec.gen
+  given Schema[ApiInternalError]    = Schema.derived[ApiInternalError].name(Schema.SName("ErrorInternal"))
 }
 
 case class ApiResourceNotFound(message: String) extends Exception(message) with ApiIssue
 object ApiResourceNotFound {
   given JsonCodec[ApiResourceNotFound] = DeriveJsonCodec.gen
+  given Schema[ApiResourceNotFound]    = Schema.derived[ApiResourceNotFound].name(Schema.SName("ErrorResourceNotFound"))
 }

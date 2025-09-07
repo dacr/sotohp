@@ -51,7 +51,7 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   val userAgent = header[Option[String]]("User-Agent").schema(_.hidden(true))
 
-  val statusForApiInvalidIdentifier = oneOfVariant(StatusCode.BadRequest, jsonBody[ApiInternalIdentifier].description("Invalid identifier provided"))
+  val statusForApiInvalidIdentifier = oneOfVariant(StatusCode.BadRequest, jsonBody[ApiInvalidIdentifier].description("Invalid identifier provided"))
   val statusForApiInternalError     = oneOfVariant(StatusCode.InternalServerError, jsonBody[ApiInternalError].description("Something went wrong with the backend"))
   val statusForApiResourceNotFound  = oneOfVariant(StatusCode.NotFound, jsonBody[ApiResourceNotFound].description("Couldn't find the request resource"))
 
@@ -85,7 +85,7 @@ object ApiApp extends ZIOAppDefault {
       .zServerLogic[ApiEnv](rawKey =>
         ZIO
           .attempt(MediaAccessKey(rawKey))
-          .mapError(err => ApiInternalIdentifier("Invalid media access key"))
+          .mapError(err => ApiInvalidIdentifier("Invalid media access key"))
           .flatMap(key => mediaGetLogic(key))
       )
 
