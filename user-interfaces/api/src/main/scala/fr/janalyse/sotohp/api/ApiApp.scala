@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.api
 import com.typesafe.config.ConfigFactory
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
+import zio.json.*
 import sttp.apispec.openapi.Info
 import sttp.model.{Header, MediaType, StatusCode}
 import sttp.tapir.generic.auto.*
@@ -14,11 +15,11 @@ import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
 import zio.{LogLevel, System, ZIOAppDefault}
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
-import fr.janalyse.sotohp.api.protocol.{given, *}
+import fr.janalyse.sotohp.api.protocol.{*, given}
 import fr.janalyse.sotohp.model.*
 import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
-import sttp.tapir.CodecFormat
+import sttp.tapir.{CodecFormat, Schema}
 import sttp.tapir.files.staticFilesGetServerEndpoint
 import zio.Runtime.removeDefaultLoggers
 import zio.ZIOAspect.annotated
@@ -31,6 +32,7 @@ import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 import io.scalaland.chimney.dsl.*
+import zio.stream.{ZPipeline, ZStream}
 
 object ApiApp extends ZIOAppDefault {
 
@@ -59,6 +61,93 @@ object ApiApp extends ZIOAppDefault {
   val systemEndpoint = endpoint.in("api").in("system").tag("System")
   val adminEndpoint  = endpoint.in("api").in("admin").tag("Admin")
   val mediaEndpoint  = endpoint.in("api").in("media").tag("Media")
+  val storeEndpoint  = endpoint.in("api").in("store").tag("Store")
+  val ownerEndpoint  = endpoint.in("api").in("owner").tag("Owner")
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def ownerGetLogic(ownerId: OwnerId): ZIO[ApiEnv, ApiIssue, ApiOwner] = {
+    val logic = for {
+      owner   <- MediaService
+                   .ownerGet(ownerId)
+                   .logError("Couldn't get owner")
+                   .mapError(err => ApiInternalError("Couldn't get owner"))
+                   .someOrFail(ApiResourceNotFound("Couldn't find owner"))
+      taoOwner = owner.transformInto[ApiOwner]
+    } yield taoOwner
+
+    logic
+  }
+
+  val ownerGetEndpoint =
+    ownerEndpoint
+      .name("Get owner")
+      .summary("Get all owner information for the given owner identifier")
+      .get
+      .in(path[String]("ownerId"))
+      .out(jsonBody[ApiOwner])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv](rawId =>
+        ZIO
+          .attempt(OwnerId.fromString(rawId))
+          .mapError(err => ApiInvalidIdentifier("Invalid owner identifier"))
+          .flatMap(key => ownerGetLogic(key))
+      )
+
+  val ownerListLogic: ZStream[MediaService, Throwable, ApiOwner] = {
+    MediaService
+      .ownerList()
+      .map(owner => owner.transformInto[ApiOwner])
+      .mapError(err => ApiInternalError("Couldn't list owners"))
+  }
+
+  val ownerListEndpoint =
+    ownerEndpoint
+      .name("List owners")
+      .summary("Stream all defined owners")
+      .get
+      .out(streamBinaryBody(ZioStreams)(CodecFormat.Json())) // TODO how to provide information about the fact we want NDJSON output of ApiOwner ?
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](_ =>
+        for {
+          ms        <- ZIO.service[MediaService]
+          byteStream = ownerListLogic
+                         .map(_.toJson)
+                         .intersperse("\n")
+                         .via(ZPipeline.utf8Encode)
+                         .provideEnvironment(ZEnvironment(ms))
+        } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def storeGetLogic(storeId: StoreId): ZIO[ApiEnv, ApiIssue, ApiStore] = {
+    val logic = for {
+      store   <- MediaService
+                   .storeGet(storeId)
+                   .logError("Couldn't get store")
+                   .mapError(err => ApiInternalError("Couldn't get store"))
+                   .someOrFail(ApiResourceNotFound("Couldn't find store"))
+      taoStore = store.transformInto[ApiStore]
+    } yield taoStore
+
+    logic
+  }
+
+  val storeGetEndpoint =
+    storeEndpoint
+      .name("Get store")
+      .summary("Get all store information for the given store identifier")
+      .get
+      .in(path[String]("storeId"))
+      .out(jsonBody[ApiStore])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv](rawId =>
+        ZIO
+          .attempt(StoreId.fromString(rawId))
+          .mapError(err => ApiInvalidIdentifier("Invalid store identifier"))
+          .flatMap(id => storeGetLogic(id))
+      )
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -66,10 +155,11 @@ object ApiApp extends ZIOAppDefault {
     val logic = for {
       media   <- MediaService
                    .mediaGet(accessKey)
+                   .logError("Couldn't get media")
                    .mapError(err => ApiInternalError("Couldn't get media"))
                    .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      apiMedia = media.transformInto[ApiMedia]
-    } yield apiMedia
+      taoMedia = media.transformInto[ApiMedia]
+    } yield taoMedia
 
     logic
   }
@@ -122,8 +212,7 @@ object ApiApp extends ZIOAppDefault {
         for {
           (media, byteStream) <- mediaRandomLogic
           ms                  <- ZIO.service[MediaService]
-          httpStream           = byteStream
-                                   .provideEnvironment(ZEnvironment(ms))
+          httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
         } yield (MediaType.ImageJpeg.toString, media.accessKey.asString, httpStream)
       )
 
@@ -181,9 +270,18 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
   val apiRoutes = List(
+    // -------------------------
     mediaRandomEndpoint,
     mediaGetEndpoint,
+    // -------------------------
+    ownerGetEndpoint,
+    ownerListEndpoint,
+    // -------------------------
+    storeGetEndpoint,
+    // storeListEndpoint,
+    // -------------------------
     adminSynchronizeEndpoint,
+    // -------------------------
     serviceStatusEndpoint,
     serviceInfoEndpoint
   )

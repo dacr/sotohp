@@ -18,13 +18,14 @@ package object model {
   opaque type OwnerId = ULID
 
   object OwnerId {
-    def apply(id: ULID): OwnerId        = id
-    @deprecated
-    def fromString(id: String): OwnerId = OwnerId(ULID(id)) // TODO unsafe
+    def apply(id: ULID): OwnerId = id
+
+    @deprecated // TODO refactor to return a Try
+    def fromString(id: String): OwnerId = OwnerId(ULID(id))
 
     extension (ownerId: OwnerId) {
       def asString: String = ownerId.toString
-      def asULID: ULID = ownerId
+      def asULID: ULID     = ownerId
     }
   }
 
@@ -38,6 +39,7 @@ package object model {
 
     def apply(ownerId: OwnerId, ulid: ULID): MediaAccessKey = (ownerId, ulid)
 
+    @deprecated // TODO rename to fromString and return a Try
     def apply(input: String): MediaAccessKey = {
       if (input.length < (ulidSize + 1)) throw new IllegalArgumentException(s"given MediaAccessKey input ($input) is invalid")
       else {
@@ -451,8 +453,8 @@ package object model {
   case class ExposureTime(numerator: Long, denominator: Long)
   object ExposureTime {
     extension (exposureTime: ExposureTime) {
-      def selected: Double  = exposureTime.numerator.toDouble / exposureTime.denominator.toDouble
-      def sexy: String      = "%d/%d s".formatLocal(Locale.US, exposureTime.numerator, exposureTime.denominator)
+      def selected: Double = exposureTime.numerator.toDouble / exposureTime.denominator.toDouble
+      def sexy: String     = "%d/%d s".formatLocal(Locale.US, exposureTime.numerator, exposureTime.denominator)
     }
   }
 
