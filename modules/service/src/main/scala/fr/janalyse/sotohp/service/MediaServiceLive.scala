@@ -6,6 +6,7 @@ import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcesso
 import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.search.model.MediaBag
+import json.*
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
 import wvlet.airframe.ulid.ULID

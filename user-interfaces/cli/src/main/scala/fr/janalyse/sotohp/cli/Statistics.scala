@@ -34,10 +34,11 @@ object Statistics extends CommonsCLI {
   override def run =
     logic
       .provide(
-        LMDB.live,
+        configProviderLayer >>> LMDB.live,
+        configProviderLayer >>> SearchService.live,
         MediaService.live,
-        SearchService.live,
-        Scope.default
+        Scope.default,
+        configProviderLayer
       )
 
   val shootingDateMinimumValidYear        = 1826 // https://en.wikipedia.org/wiki/History_of_photography

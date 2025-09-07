@@ -1,13 +1,12 @@
-package fr.janalyse.sotohp.service.dao
+package fr.janalyse.sotohp.api.protocol
 
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.service
 import zio.json.JsonCodec
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{given, *}
 
-case class DaoLocation(
+case class ApiLocation(
   latitude: LatitudeDecimalDegrees,
   longitude: LongitudeDecimalDegrees,
   altitude: Option[AltitudeMeanSeaLevel]
-) derives LMDBCodecJson
+) derives JsonCodec

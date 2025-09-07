@@ -14,5 +14,4 @@ abstract class CommonsCLI extends ZIOAppDefault {
     val loggingLayer = removeDefaultLoggers >>> SLF4J.slf4j(format = LogFormat.colored)
     loggingLayer ++ configProviderLayer
   }
-
 }

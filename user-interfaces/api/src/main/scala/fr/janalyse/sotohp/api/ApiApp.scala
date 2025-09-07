@@ -14,19 +14,23 @@ import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
 import zio.{LogLevel, System, ZIOAppDefault}
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
-import fr.janalyse.sotohp.api.protocol.*
+import fr.janalyse.sotohp.api.protocol.{given, *}
+import fr.janalyse.sotohp.model.*
 import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
 import sttp.tapir.CodecFormat
 import sttp.tapir.files.staticFilesGetServerEndpoint
 import zio.Runtime.removeDefaultLoggers
+import zio.ZIOAspect.annotated
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
+import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.lmdb.LMDB
 
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
+import io.scalaland.chimney.dsl.*
 
 object ApiApp extends ZIOAppDefault {
 
@@ -38,15 +42,18 @@ object ApiApp extends ZIOAppDefault {
   val configProviderLayer = Runtime.setConfigProvider(configProvider)
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
-    val loggingLayer = removeDefaultLoggers >>> SLF4J.slf4j(format = LogFormat.colored)
-    loggingLayer ++ configProviderLayer
+    // val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
+    val fmt     = LogFormat.annotations |-| LogFormat.line
+    val logging = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
+    logging ++ configProviderLayer
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   val userAgent = header[Option[String]]("User-Agent").schema(_.hidden(true))
 
-  val statusForApiInternalError    = oneOfVariant(StatusCode.InternalServerError, jsonBody[ApiInternalError].description("Something went wrong with the backend"))
-  val statusForApiResourceNotFound = oneOfVariant(StatusCode.NotFound, jsonBody[ApiResourceNotFound].description("Couldn't find the request resource"))
+  val statusForApiInvalidIdentifier = oneOfVariant(StatusCode.BadRequest, jsonBody[ApiInternalIdentifier].description("Invalid identifier provided"))
+  val statusForApiInternalError     = oneOfVariant(StatusCode.InternalServerError, jsonBody[ApiInternalError].description("Something went wrong with the backend"))
+  val statusForApiResourceNotFound  = oneOfVariant(StatusCode.NotFound, jsonBody[ApiResourceNotFound].description("Couldn't find the request resource"))
 
   // -------------------------------------------------------------------------------------------------------------------
   val systemEndpoint = endpoint.in("api").in("system").tag("System")
@@ -54,11 +61,40 @@ object ApiApp extends ZIOAppDefault {
   val mediaEndpoint  = endpoint.in("api").in("media").tag("Media")
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  def mediaGetLogic(accessKey: MediaAccessKey): ZIO[ApiEnv, ApiIssue, ApiMedia] = {
+    val logic = for {
+      media   <- MediaService
+                   .mediaGet(accessKey)
+                   .mapError(err => ApiInternalError("Couldn't get media"))
+                   .someOrFail(ApiResourceNotFound("Couldn't find media"))
+      apiMedia = media.transformInto[ApiMedia]
+    } yield apiMedia
+
+    logic
+  }
+
+  val mediaGetEndpoint =
+    mediaEndpoint
+      .name("Get media")
+      .summary("Get all media information for the given media access key")
+      .get
+      .in(path[String]("mediaAccessKey"))
+      .out(jsonBody[ApiMedia])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv](rawKey =>
+        ZIO
+          .attempt(MediaAccessKey(rawKey))
+          .mapError(err => ApiInternalIdentifier("Invalid media access key"))
+          .flatMap(key => mediaGetLogic(key))
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
   val mediaRandomLogic = {
     val logic = for {
       count           <- MediaService
                            .originalCount()
-                           .mapError(err => ApiInternalError("Couldn't get originals count"))
+                           .mapError(err => ApiInternalError("Couldn't get medias count"))
       index           <- Random.nextLongBounded(count)
       media           <- MediaService
                            .mediaGetAt(index)
@@ -67,7 +103,7 @@ object ApiApp extends ZIOAppDefault {
       imageBytesStream = MediaService
                            .mediaNormalizedRead(media.accessKey)
                            .mapError(err => ApiInternalError("Couldn't read media"))
-    } yield imageBytesStream
+    } yield (media, imageBytesStream)
 
     logic
   }
@@ -79,15 +115,16 @@ object ApiApp extends ZIOAppDefault {
       .get
       .in("random")
       .out(header[String]("Content-Type"))
+      .out(header[String]("Media-Access-Key"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ =>
         for {
-          byteStream <- mediaRandomLogic
-          ms         <- ZIO.service[MediaService]
-          httpStream  = byteStream
-                          .provideEnvironment(ZEnvironment(ms))
-        } yield (MediaType.ImageJpeg.toString, httpStream)
+          (media, byteStream) <- mediaRandomLogic
+          ms                  <- ZIO.service[MediaService]
+          httpStream           = byteStream
+                                   .provideEnvironment(ZEnvironment(ms))
+        } yield (MediaType.ImageJpeg.toString, media.accessKey.asString, httpStream)
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -145,6 +182,7 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   val apiRoutes = List(
     mediaRandomEndpoint,
+    mediaGetEndpoint,
     adminSynchronizeEndpoint,
     serviceStatusEndpoint,
     serviceInfoEndpoint

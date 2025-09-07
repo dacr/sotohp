@@ -2,8 +2,10 @@ package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.model.{Dimension, Original, OriginalId}
 import fr.janalyse.sotohp.processor.model.OriginalMiniatures
+import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
+import fr.janalyse.sotohp.service.json.{given,*}
 
 case class DaoOriginalMiniature(
   size: Int,

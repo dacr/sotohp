@@ -448,12 +448,9 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type ExposureTime = (numerator: Long, denominator: Long)
+  case class ExposureTime(numerator: Long, denominator: Long)
   object ExposureTime {
-    def apply(numerator: Long, denominator: Long): ExposureTime = (numerator, denominator)
     extension (exposureTime: ExposureTime) {
-      def numerator: Long   = exposureTime.numerator
-      def denominator: Long = exposureTime.denominator
       def selected: Double  = exposureTime.numerator.toDouble / exposureTime.denominator.toDouble
       def sexy: String      = "%d/%d s".formatLocal(Locale.US, exposureTime.numerator, exposureTime.denominator)
     }

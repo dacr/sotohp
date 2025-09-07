@@ -169,7 +169,7 @@ object OriginalBuilder {
     for {
       exif <- extractExifSub(metadata)
       if exif.containsTag(tagName)
-      iso  <- Option(exif.getDouble(tagName))
+      iso  <- Try(exif.getDouble(tagName)).toEither.toOption // TODO enhance to log any issue
     } yield ISO(iso)
   }
 

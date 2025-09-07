@@ -1,11 +1,13 @@
 package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.model.StoreId
+import fr.janalyse.sotohp.service
 import fr.janalyse.sotohp.service.model.Rewriting
 import zio.lmdb.json.LMDBCodecJson
 import io.scalaland.chimney.Transformer
 
 import scala.util.matching.compat.Regex
+import fr.janalyse.sotohp.service.json.{given,*}
 
 case class DaoRewriting(
   regex: String,

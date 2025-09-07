@@ -7,8 +7,4 @@ case class ApiInfo(
   version: String,
   message: String,
   originalsCount: Long
-)
-
-object ApiInfo {
-  given JsonCodec[ApiInfo] = DeriveJsonCodec.gen
-}
+) derives JsonCodec

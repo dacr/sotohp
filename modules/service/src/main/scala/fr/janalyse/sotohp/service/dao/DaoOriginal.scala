@@ -1,9 +1,11 @@
 package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.json.JsonCodec
 import zio.lmdb.json.LMDBCodecJson
+import fr.janalyse.sotohp.service.json.{given,*}
 
 case class DaoOriginal(
   id: OriginalId,
@@ -19,7 +21,7 @@ case class DaoOriginal(
   orientation: Option[Orientation],
   location: Option[DaoLocation],
   aperture: Option[Aperture],
-  exposureTime: Option[ExposureTime],
+  exposureTime: Option[DaoExposureTime],
   iso: Option[ISO],
   focalLength: Option[FocalLength]
 ) derives LMDBCodecJson

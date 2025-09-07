@@ -9,7 +9,7 @@ ThisBuild / scalaVersion := "3.7.2"
 publishArtifact := false // no artifact for "root" project
 
 val versions = new {
-  val zio        = "2.1.20"
+  val zio        = "2.1.21"
 //  val zionio     = "2.0.1"
   val zioconfig  = "4.0.4"
   val ziojson    = "0.7.44"
@@ -20,7 +20,7 @@ val versions = new {
   val metadata   = "2.19.0"
   val ulid       = "2025.1.14"
   // val javafx     = "21"
-  val djl        = "0.33.0"
+  val djl        = "0.34.0"
   val chimney    = "1.8.2"
   val tapir      = "1.11.41"
   val logback    = "1.5.18"
@@ -167,7 +167,7 @@ lazy val cli =
         "dev.zio"             %% "zio-config-typesafe" % versions.zioconfig,
         "dev.zio"             %% "zio-config-magnolia" % versions.zioconfig,
         "dev.zio"             %% "zio-logging"         % versions.ziologging,
-        "dev.zio"             %% "zio-logging-slf4j"   % versions.ziologging,
+        "dev.zio"             %% "zio-logging-slf4j2"  % versions.ziologging,
         "ch.qos.logback"       % "logback-classic"     % versions.logback,
         "com.github.haifengl" %% "smile-scala"         % "4.3.0" // Temporary for quick&dirty evaluation of the DBSCAN clustering algo
       )
@@ -202,11 +202,11 @@ lazy val api =
     .settings(
       sharedSettings,
       Universal / packageName := "sotohp",
-      fork := true,
+      fork                    := true,
       javaOptions ++= lmdbJavaOptions,
       libraryDependencies ++= Seq(
         "dev.zio"                     %% "zio-logging"             % versions.ziologging,
-        "dev.zio"                     %% "zio-logging-slf4j"       % versions.ziologging,
+        "dev.zio"                     %% "zio-logging-slf4j2"      % versions.ziologging,
         "ch.qos.logback"               % "logback-classic"         % versions.logback,
         "com.softwaremill.sttp.tapir" %% "tapir-zio"               % versions.tapir,
         "com.softwaremill.sttp.tapir" %% "tapir-zio-http-server"   % versions.tapir,
