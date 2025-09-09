@@ -20,7 +20,6 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
         eventUpdated <- MediaService
                           .eventUpdate(
                             eventId = eventCreated.id,
-                            attachment = None,
                             name = EventName("updated-event"),
                             description = Some(EventDescription("hello")),
                             keywords = Set.empty
