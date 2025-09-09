@@ -47,6 +47,7 @@ object ApiApp extends ZIOAppDefault {
     override val mediaType: MediaType = MediaType.parse("application/x-ndjson").toOption.get
     override def toString: String     = "ndjson"
   }
+
   // -------------------------------------------------------------------------------------------------------------------
 
   val configProvider      = TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load())
@@ -403,6 +404,38 @@ object ApiApp extends ZIOAppDefault {
       .mapError(err => ApiInternalError("Couldn't list events"))
   }
 
+  def eventDeleteLogic(eventId: EventId): ZIO[ApiEnv, ApiIssue, Unit] = {
+    val logic = for {
+      event <- MediaService
+                 .eventGet(eventId)
+                 .logError("Couldn't get event")
+                 .mapError(_ => ApiInternalError("Couldn't get event"))
+                 .someOrFail(ApiResourceNotFound("Couldn't find event"))
+      _     <- ZIO
+                 .fail(ApiInvalidIdentifier("Event can't be deleted because it has an attachment"))
+                 .when(event.attachment.nonEmpty)
+      _     <- MediaService
+                 .eventDelete(eventId)
+                 .logError("Couldn't delete event")
+                 .mapError(_ => ApiInternalError("Couldn't delete event"))
+    } yield ()
+    logic
+  }
+
+  val eventDeleteEndpoint =
+    eventEndpoint
+      .name("Delete event")
+      .summary("Delete the event for the given event identifier")
+      .delete
+      .in(path[String]("eventId"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv](rawEventId =>
+        ZIO
+          .attempt(EventId(java.util.UUID.fromString(rawEventId)))
+          .mapError(_ => ApiInvalidIdentifier("Invalid event identifier"))
+          .flatMap(eventId => eventDeleteLogic(eventId))
+      )
+
   val eventListEndpoint =
     eventEndpoint
       .name("List events")
@@ -467,6 +500,11 @@ object ApiApp extends ZIOAppDefault {
     mediaRandomEndpoint,
     mediaGetEndpoint,
     // -------------------------
+    eventListEndpoint,
+    eventGetEndpoint,
+    eventUpdateEndpoint,
+    eventDeleteEndpoint,
+    // -------------------------
     ownerListEndpoint,
     ownerGetEndpoint,
     ownerUpdateEndpoint,
@@ -474,10 +512,6 @@ object ApiApp extends ZIOAppDefault {
     storeListEndpoint,
     storeGetEndpoint,
     storeUpdateEndpoint,
-    // -------------------------
-    eventListEndpoint,
-    eventGetEndpoint,
-    eventUpdateEndpoint,
     // -------------------------
     adminSynchronizeEndpoint,
     // -------------------------
