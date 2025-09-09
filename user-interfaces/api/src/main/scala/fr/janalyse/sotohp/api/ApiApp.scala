@@ -29,6 +29,7 @@ import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.lmdb.LMDB
 
 import java.net.InetAddress
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 import io.scalaland.chimney.dsl.*
@@ -71,6 +72,7 @@ object ApiApp extends ZIOAppDefault {
   val mediaEndpoint  = endpoint.in("api").in("media").tag("Media")
   val storeEndpoint  = endpoint.in("api").in("store").tag("Store")
   val ownerEndpoint  = endpoint.in("api").in("owner").tag("Owner")
+  val eventEndpoint  = endpoint.in("api").in("event").tag("Event")
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -334,6 +336,95 @@ object ApiApp extends ZIOAppDefault {
       }
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  def eventGetLogic(eventId: EventId): ZIO[ApiEnv, ApiIssue, ApiEvent] = {
+    val logic = for {
+      event   <- MediaService
+                   .eventGet(eventId)
+                   .logError("Couldn't get event")
+                   .mapError(err => ApiInternalError("Couldn't get event"))
+                   .someOrFail(ApiResourceNotFound("Couldn't find event"))
+      taoEvent = event.transformInto[ApiEvent]
+    } yield taoEvent
+
+    logic
+  }
+
+  val eventGetEndpoint =
+    eventEndpoint
+      .name("Get event")
+      .summary("Get all event information for the given event identifier")
+      .get
+      .in(path[String]("eventId"))
+      .out(jsonBody[ApiEvent])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv](rawId =>
+        ZIO
+          .attempt(EventId(java.util.UUID.fromString(rawId)))
+          .mapError(err => ApiInvalidIdentifier("Invalid event identifier"))
+          .flatMap(id => eventGetLogic(id))
+      )
+
+  def eventUpdateLogic(eventId: EventId, toUpdate: ApiEventUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
+    val logic = for {
+      _ <- MediaService
+             .eventGet(eventId)
+             .logError("Couldn't get event")
+             .mapError(err => ApiInternalError("Couldn't get event"))
+             .someOrFail(ApiResourceNotFound("Couldn't find event"))
+      _ <- MediaService
+             .eventUpdate(eventId, name = toUpdate.name, description = toUpdate.description, keywords = toUpdate.keywords)
+             .logError("Couldn't update event")
+             .mapError(err => ApiInternalError("Couldn't update event"))
+    } yield ()
+
+    logic
+  }
+
+  val eventUpdateEndpoint =
+    eventEndpoint
+      .name("Update event")
+      .summary("Update event configuration for the given event identifier")
+      .put
+      .in(path[String]("eventId"))
+      .in(jsonBody[ApiEventUpdate])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv]((rawEventId, toUpdate) =>
+        ZIO
+          .attempt(EventId(java.util.UUID.fromString(rawEventId)))
+          .mapError(err => ApiInvalidIdentifier("Invalid event identifier"))
+          .flatMap(eventId => eventUpdateLogic(eventId, toUpdate))
+      )
+
+  val eventListLogic: ZStream[MediaService, Throwable, ApiEvent] = {
+    MediaService
+      .eventList()
+      .map(event => event.transformInto[ApiEvent])
+      .mapError(err => ApiInternalError("Couldn't list events"))
+  }
+
+  val eventListEndpoint =
+    eventEndpoint
+      .name("List events")
+      .summary("Stream all defined events")
+      .get
+      .out(
+        streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Event JSON object per line)")
+      )
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](_ =>
+        for {
+          ms        <- ZIO.service[MediaService]
+          byteStream = eventListLogic
+                         .map(_.toJson)
+                         .intersperse("\n")
+                         .via(ZPipeline.utf8Encode)
+                         .provideEnvironment(ZEnvironment(ms))
+        } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
   val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
 
   val serviceStatusEndpoint =
@@ -383,6 +474,10 @@ object ApiApp extends ZIOAppDefault {
     storeListEndpoint,
     storeGetEndpoint,
     storeUpdateEndpoint,
+    // -------------------------
+    eventListEndpoint,
+    eventGetEndpoint,
+    eventUpdateEndpoint,
     // -------------------------
     adminSynchronizeEndpoint,
     // -------------------------
