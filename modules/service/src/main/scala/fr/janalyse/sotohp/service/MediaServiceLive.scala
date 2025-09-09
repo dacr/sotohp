@@ -497,10 +497,10 @@ class MediaServiceLive private (
     } yield event
   }
 
-  override def eventUpdate(eventId: EventId, attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = {
+  override def eventUpdate(eventId: EventId, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = {
     for {
       maybeDaoEvent <- eventColl
-                         .update(eventId, _.copy(attachment = attachment.transformInto[Option[DaoEventAttachment]], name = name, description = description, keywords = keywords))
+                         .update(eventId, _.copy(name = name, description = description, keywords = keywords))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
       event         <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
     } yield event
@@ -846,7 +846,7 @@ class MediaServiceLive private (
       .map(media => media.copy(keywords = media.keywords.filterNot(_.text == keyword.text)))
       .flatMap(media => ZStream.fromIterable(media.events))
       .map(event => event.copy(keywords = event.keywords.filterNot(_.text == keyword.text)))
-      .tap(event => eventUpdate(event.id, attachment = event.attachment, name = event.name, description = event.description, keywords = event.keywords))
+      .tap(event => eventUpdate(event.id, name = event.name, description = event.description, keywords = event.keywords))
       .runDrain
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete keyword : $err"))
   }

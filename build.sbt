@@ -201,6 +201,7 @@ lazy val api =
     .enablePlugins(JavaServerAppPackaging)
     .settings(
       sharedSettings,
+      name := "sotohp-api",
       Universal / packageName := "sotohp",
       fork                    := true,
       javaOptions ++= lmdbJavaOptions,
