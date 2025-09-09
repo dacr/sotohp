@@ -44,7 +44,7 @@ object ApiApp extends ZIOAppDefault {
 
   case object NdJson extends CodecFormat {
     override val mediaType: MediaType = MediaType.parse("application/x-ndjson").toOption.get
-    override def toString: String = "ndjson"
+    override def toString: String     = "ndjson"
   }
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -102,6 +102,37 @@ object ApiApp extends ZIOAppDefault {
           .flatMap(key => ownerGetLogic(key))
       )
 
+  def ownerUpdateLogic(ownerId: OwnerId, toUpdate: ApiOwnerUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
+    val logic = for {
+      owner <- MediaService
+                 .ownerGet(ownerId)
+                 .logError("Couldn't get owner")
+                 .mapError(err => ApiInternalError("Couldn't get owner"))
+                 .someOrFail(ApiResourceNotFound("Couldn't find owner"))
+      _     <- MediaService
+                 .ownerUpdate(ownerId, firstName = toUpdate.firstName, lastName = toUpdate.lastName, birthDate = toUpdate.birthDate)
+                 .logError("Couldn't update owner")
+                 .mapError(err => ApiInternalError("Couldn't update owner"))
+    } yield ()
+
+    logic
+  }
+
+  val ownerUpdateEndpoint =
+    ownerEndpoint
+      .name("Update owner")
+      .summary("Update owner configuration for the given owner identifier")
+      .put
+      .in(path[String]("ownerId"))
+      .in(jsonBody[ApiOwnerUpdate]) // TODO security and regex fields
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv]((rawOwnerId, toUpdate) =>
+        ZIO
+          .attempt(OwnerId.fromString(rawOwnerId))
+          .mapError(err => ApiInvalidIdentifier("Invalid owner identifier"))
+          .flatMap(ownerId => ownerUpdateLogic(ownerId, toUpdate))
+      )
+
   val ownerListLogic: ZStream[MediaService, Throwable, ApiOwner] = {
     MediaService
       .ownerList()
@@ -117,7 +148,7 @@ object ApiApp extends ZIOAppDefault {
       .out(
         streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Owner JSON object per line)")
-          //.schema(summon[Schema[List[ApiOwner]]])
+          // .schema(summon[Schema[List[ApiOwner]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiOwner ?
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ =>
@@ -161,7 +192,36 @@ object ApiApp extends ZIOAppDefault {
           .flatMap(id => storeGetLogic(id))
       )
 
+  def storeUpdateLogic(storeId: StoreId, toUpdate: ApiStoreUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
+    val logic = for {
+      store <- MediaService
+                 .storeGet(storeId)
+                 .logError("Couldn't get store")
+                 .mapError(err => ApiInternalError("Couldn't get store"))
+                 .someOrFail(ApiResourceNotFound("Couldn't find store"))
+      _     <- MediaService
+                 .storeUpdate(storeId, includeMask = toUpdate.includeMask, ignoreMask = toUpdate.ignoreMask)
+                 .logError("Couldn't update store")
+                 .mapError(err => ApiInternalError("Couldn't update store"))
+    } yield ()
 
+    logic
+  }
+
+  val storeUpdateEndpoint =
+    storeEndpoint
+      .name("Update store")
+      .summary("Update store configuration for the given store identifier")
+      .put
+      .in(path[String]("storeId"))
+      .in(jsonBody[ApiStoreUpdate]) // TODO security and regex fields
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv]((rawStoreId, toUpdate) =>
+        ZIO
+          .attempt(StoreId.fromString(rawStoreId))
+          .mapError(err => ApiInvalidIdentifier("Invalid store identifier"))
+          .flatMap(storeId => storeUpdateLogic(storeId, toUpdate))
+      )
 
   val storeListLogic: ZStream[MediaService, Throwable, ApiStore] = {
     MediaService
@@ -178,17 +238,17 @@ object ApiApp extends ZIOAppDefault {
       .out(
         streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Store JSON object per line)")
-        //.schema(summon[Schema[List[ApiStore]]])
+          // .schema(summon[Schema[List[ApiStore]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiStore ?
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ =>
         for {
           ms        <- ZIO.service[MediaService]
           byteStream = storeListLogic
-            .map(_.toJson)
-            .intersperse("\n")
-            .via(ZPipeline.utf8Encode)
-            .provideEnvironment(ZEnvironment(ms))
+                         .map(_.toJson)
+                         .intersperse("\n")
+                         .via(ZPipeline.utf8Encode)
+                         .provideEnvironment(ZEnvironment(ms))
         } yield byteStream
       )
   // -------------------------------------------------------------------------------------------------------------------
@@ -318,9 +378,11 @@ object ApiApp extends ZIOAppDefault {
     // -------------------------
     ownerListEndpoint,
     ownerGetEndpoint,
+    ownerUpdateEndpoint,
     // -------------------------
     storeListEndpoint,
     storeGetEndpoint,
+    storeUpdateEndpoint,
     // -------------------------
     adminSynchronizeEndpoint,
     // -------------------------
