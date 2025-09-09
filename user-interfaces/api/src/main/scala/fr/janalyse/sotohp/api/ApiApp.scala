@@ -458,6 +458,34 @@ object ApiApp extends ZIOAppDefault {
       )
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  def eventCreateLogic(toCreate: ApiEventCreate): ZIO[ApiEnv, ApiInternalError, ApiEvent] = {
+    val logic = for {
+      created <- MediaService
+                   .eventCreate(
+                     attachment = None, // user-defined event, no attachment
+                     name = toCreate.name,
+                     description = toCreate.description,
+                     keywords = toCreate.keywords
+                   )
+                   .logError("Couldn't create event")
+                   .orElseFail(ApiInternalError("Couldn't create event"))
+      api      = created.transformInto[ApiEvent]
+    } yield api
+    logic
+  }
+
+  val eventCreateEndpoint =
+    eventEndpoint
+      .name("Create event")
+      .summary("Create a user-defined event")
+      .post
+      .in(jsonBody[ApiEventCreate])
+      .out(jsonBody[ApiEvent])
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](toCreate => eventCreateLogic(toCreate))
+
+  // -------------------------------------------------------------------------------------------------------------------
   val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
 
   val serviceStatusEndpoint =
@@ -500,6 +528,7 @@ object ApiApp extends ZIOAppDefault {
     mediaRandomEndpoint,
     mediaGetEndpoint,
     // -------------------------
+    eventCreateEndpoint,
     eventListEndpoint,
     eventGetEndpoint,
     eventUpdateEndpoint,
