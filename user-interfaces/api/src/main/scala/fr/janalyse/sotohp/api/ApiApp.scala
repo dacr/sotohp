@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.api
 
 import com.typesafe.config.ConfigFactory
+
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
 import zio.json.*
@@ -13,7 +14,6 @@ import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import sttp.tapir.ztapir.*
 import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
-import zio.{LogLevel, System, ZIOAppDefault}
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.{*, given}
 import fr.janalyse.sotohp.model.*
@@ -21,15 +21,10 @@ import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
 import sttp.tapir.{CodecFormat, Schema}
 import sttp.tapir.files.staticFilesGetServerEndpoint
-import zio.Runtime.removeDefaultLoggers
-import zio.ZIOAspect.annotated
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
-import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.lmdb.LMDB
 
-import java.net.InetAddress
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 import io.scalaland.chimney.dsl.*
@@ -409,7 +404,7 @@ object ApiApp extends ZIOAppDefault {
       event <- MediaService
                  .eventGet(eventId)
                  .logError("Couldn't get event")
-                 .mapError(_ => ApiInternalError("Couldn't get event"))
+                 .orElseFail(ApiInternalError("Couldn't get event"))
                  .someOrFail(ApiResourceNotFound("Couldn't find event"))
       _     <- ZIO
                  .fail(ApiInvalidIdentifier("Event can't be deleted because it has an attachment"))
@@ -417,7 +412,7 @@ object ApiApp extends ZIOAppDefault {
       _     <- MediaService
                  .eventDelete(eventId)
                  .logError("Couldn't delete event")
-                 .mapError(_ => ApiInternalError("Couldn't delete event"))
+                 .orElseFail(ApiInternalError("Couldn't delete event"))
     } yield ()
     logic
   }
@@ -432,7 +427,7 @@ object ApiApp extends ZIOAppDefault {
       .zServerLogic[ApiEnv](rawEventId =>
         ZIO
           .attempt(EventId(java.util.UUID.fromString(rawEventId)))
-          .mapError(_ => ApiInvalidIdentifier("Invalid event identifier"))
+          .orElseFail(ApiInvalidIdentifier("Invalid event identifier"))
           .flatMap(eventId => eventDeleteLogic(eventId))
       )
 
