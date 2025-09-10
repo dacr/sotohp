@@ -14,4 +14,6 @@
 - use typescript programming language with the angular framework
   - all backend features are served by the OpenAPI backed provided by `user-interfaces/api`
   - download the OpenAPI spec from `http://127.0.0.1:8080/docs/docs.yaml` using `curl`
+- ONLY LOOK TO THE API SPECS TO DESIGN THE FRONT END USER INTERFACE
+  - ignore all the scala code
 - use the global makefile to build the front end user interface sources
