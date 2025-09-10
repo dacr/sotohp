@@ -10,6 +10,7 @@
 ## coding choices
 
 - all the source files are in the `frontend-user-interface` folder`
+- front end user interface paths is prefixed with `/ui`
 - build the front end user interface sources into the `frontend-user-interface-dist` folder
 - use typescript programming language with the angular framework
   - all backend features are served by the OpenAPI backed provided by `user-interfaces/api`

@@ -1,0 +1,44 @@
+:root{
+  --bg: #0b0f14;
+  --fg: #e8eef7;
+  --muted: #9bb0c9;
+  --accent: #5fb3f3;
+  --accent2: #7bd389;
+  --card: #131a22;
+  --border: #1f2a36;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  background: var(--bg);
+  color: var(--fg);
+}
+.topbar{
+  position:sticky; top:0; z-index:10;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 10px 16px; background: #0e141b; border-bottom:1px solid var(--border);
+}
+.brand{display:flex; align-items:center; gap:10px}
+.logo{width:28px; height:28px}
+.title{font-weight:600}
+.nav a{color:var(--fg); text-decoration:none; margin:0 8px; padding:6px 10px; border-radius:6px}
+.nav a:hover{background:#101823}
+.container{max-width:1100px; margin: 16px auto; padding: 0 16px}
+.card{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:16px;}
+.grid{display:grid; gap:16px}
+.grid.two{grid-template-columns: 1fr 1fr}
+.grid.three{grid-template-columns: repeat(3, 1fr)}
+.section-title{margin:0 0 12px 0; font-size:20px}
+.footer{padding: 16px; text-align:center; color:var(--muted); border-top:1px solid var(--border)}
+.btn{background:var(--accent); color:#03101f; border:0; padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer}
+.btn.secondary{background:#203245; color:var(--fg)}
+.input{background:#0c1219; color:var(--fg); border:1px solid var(--border); padding:8px 10px; border-radius:8px; width:100%}
+.table{width:100%; border-collapse: collapse}
+.table th, .table td{border-bottom:1px solid var(--border); padding:8px; text-align:left}
+.image-wrap{display:flex; justify-content:center; align-items:center; min-height:60vh;}
+.image-wrap img{max-width:100%; max-height:75vh; border-radius:8px; border:1px solid var(--border)}
+.meta{color:var(--muted); font-size: 12px; margin-top:8px}
+.form-row{display:flex; gap:8px; margin:8px 0}
+.badge{display:inline-block; padding:2px 6px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:12px}

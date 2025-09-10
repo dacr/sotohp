@@ -1,0 +1,761 @@
+openapi: 3.1.0
+info:
+  title: SOTOHP API
+  version: '1.0'
+  description: Medias management software by @crodav
+paths:
+  /api/media/random:
+    get:
+      tags:
+      - Media
+      summary: Get a randomly chosen media
+      operationId: Random Media
+      responses:
+        '200':
+          description: ''
+          headers:
+            Content-Type:
+              required: true
+              schema:
+                type: string
+            Media-Access-Key:
+              required: true
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/media/{mediaAccessKey}:
+    get:
+      tags:
+      - Media
+      summary: Get all media information for the given media access key
+      operationId: Get media
+      parameters:
+      - name: mediaAccessKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/event:
+    get:
+      tags:
+      - Event
+      summary: Stream all defined events
+      operationId: List events
+      responses:
+        '200':
+          description: NDJSON (one Event JSON object per line)
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    post:
+      tags:
+      - Event
+      summary: Create a user-defined event
+      operationId: Create event
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreate'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: 'Invalid value for: body'
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/event/{eventId}:
+    get:
+      tags:
+      - Event
+      summary: Get all event information for the given event identifier
+      operationId: Get event
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    put:
+      tags:
+      - Event
+      summary: Update event configuration for the given event identifier
+      operationId: Update event
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventUpdate'
+        required: true
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    delete:
+      tags:
+      - Event
+      summary: Delete the event for the given event identifier
+      operationId: Delete event
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/owner:
+    get:
+      tags:
+      - Owner
+      summary: Stream all defined owners
+      operationId: List owners
+      responses:
+        '200':
+          description: NDJSON (one Owner JSON object per line)
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/Owner'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/owner/{ownerId}:
+    get:
+      tags:
+      - Owner
+      summary: Get all owner information for the given owner identifier
+      operationId: Get owner
+      parameters:
+      - name: ownerId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Owner'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    put:
+      tags:
+      - Owner
+      summary: Update owner configuration for the given owner identifier
+      operationId: Update owner
+      parameters:
+      - name: ownerId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerUpdate'
+        required: true
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/store:
+    get:
+      tags:
+      - Store
+      summary: Stream all defined stores
+      operationId: List stores
+      responses:
+        '200':
+          description: NDJSON (one Store JSON object per line)
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/Store'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/store/{storeId}:
+    get:
+      tags:
+      - Store
+      summary: Get all store information for the given store identifier
+      operationId: Get store
+      parameters:
+      - name: storeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Store'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    put:
+      tags:
+      - Store
+      summary: Update store configuration for the given store identifier
+      operationId: Update store
+      parameters:
+      - name: storeId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreUpdate'
+        required: true
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/admin/synchronize:
+    get:
+      tags:
+      - Admin
+      summary: Synchronize with all stores content
+      operationId: Synchronize
+      responses:
+        '200':
+          description: ''
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/system/status:
+    get:
+      tags:
+      - System
+      summary: Get the service status
+      description: Returns the service status, can also be used as a health check
+        end point for monitoring purposes
+      operationId: Service status
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+  /api/system/info:
+    get:
+      tags:
+      - System
+      summary: Get information and some global statistics
+      description: Returns service global information such as release information,
+        authors and global statistics
+      operationId: Service global information
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Info'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+components:
+  schemas:
+    Dimension:
+      title: Dimension
+      type: object
+      required:
+      - width
+      - height
+      properties:
+        width:
+          type: integer
+          format: int32
+        height:
+          type: integer
+          format: int32
+    ErrorInternal:
+      title: ErrorInternal
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
+    ErrorInvalidIdentifier:
+      title: ErrorInvalidIdentifier
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
+    ErrorResourceNotFound:
+      title: ErrorResourceNotFound
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
+    Event:
+      title: Event
+      type: object
+      required:
+      - id
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        keywords:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    EventCreate:
+      title: EventCreate
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        keywords:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    EventUpdate:
+      title: EventUpdate
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        keywords:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    ExposureTime:
+      title: ExposureTime
+      type: object
+      required:
+      - numerator
+      - denominator
+      properties:
+        numerator:
+          type: integer
+          format: int64
+        denominator:
+          type: integer
+          format: int64
+    Info:
+      title: Info
+      type: object
+      required:
+      - version
+      - message
+      - originalsCount
+      properties:
+        authors:
+          type: array
+          items:
+            type: string
+        version:
+          type: string
+        message:
+          type: string
+        originalsCount:
+          type: integer
+          format: int64
+    Location:
+      title: Location
+      type: object
+      required:
+      - latitude
+      - longitude
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        altitude:
+          type: number
+          format: double
+    Media:
+      title: Media
+      type: object
+      required:
+      - accessKey
+      - original
+      - starred
+      properties:
+        accessKey:
+          type: string
+        original:
+          $ref: '#/components/schemas/Original'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        description:
+          type: string
+        starred:
+          type: boolean
+        keywords:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        orientation:
+          $ref: '#/components/schemas/Orientation'
+        shootDateTime:
+          type: string
+          format: date-time
+        userDefinedLocation:
+          $ref: '#/components/schemas/Location'
+        deductedLocation:
+          $ref: '#/components/schemas/Location'
+    MediaKind:
+      title: MediaKind
+      type: string
+      enum:
+      - Photo
+      - Video
+    Orientation:
+      title: Orientation
+      type: string
+      enum:
+      - Horizontal
+      - MirrorHorizontal
+      - MirrorHorizontalAndRotate270ClockWise
+      - MirrorHorizontalAndRotate90ClockWise
+      - MirrorVertical
+      - Rotate180
+      - Rotate270ClockWise
+      - Rotate90ClockWise
+    Original:
+      title: Original
+      type: object
+      required:
+      - id
+      - storeId
+      - kind
+      properties:
+        id:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/MediaKind'
+        cameraShootDateTime:
+          type: string
+          format: date-time
+        cameraName:
+          type: string
+        artistInfo:
+          type: string
+        dimension:
+          $ref: '#/components/schemas/Dimension'
+        orientation:
+          $ref: '#/components/schemas/Orientation'
+        location:
+          $ref: '#/components/schemas/Location'
+        aperture:
+          type: number
+          format: double
+        exposureTime:
+          $ref: '#/components/schemas/ExposureTime'
+        iso:
+          type: number
+          format: double
+        focalLength:
+          type: number
+          format: double
+    Owner:
+      title: Owner
+      type: object
+      required:
+      - id
+      - firstName
+      - lastName
+      properties:
+        id:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        birthDate:
+          type: string
+          format: date-time
+    OwnerUpdate:
+      title: OwnerUpdate
+      type: object
+      required:
+      - firstName
+      - lastName
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        birthDate:
+          type: string
+          format: date-time
+    Status:
+      title: Status
+      type: object
+      required:
+      - alive
+      properties:
+        alive:
+          type: boolean
+    Store:
+      title: Store
+      type: object
+      required:
+      - id
+      - ownerId
+      - baseDirectory
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+        baseDirectory:
+          type: string
+        includeMask:
+          type: string
+        ignoreMask:
+          type: string
+    StoreUpdate:
+      title: StoreUpdate
+      type: object
+      properties:
+        includeMask:
+          type: string
+        ignoreMask:
+          type: string
