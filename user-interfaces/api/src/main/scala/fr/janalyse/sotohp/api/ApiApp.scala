@@ -1,12 +1,11 @@
 package fr.janalyse.sotohp.api
 
 import com.typesafe.config.ConfigFactory
-
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
 import zio.json.*
 import sttp.apispec.openapi.Info
-import sttp.model.{Header, MediaType, StatusCode}
+import sttp.model.{Header, HeaderNames, MediaType, StatusCode}
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.zio.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
@@ -19,7 +18,7 @@ import fr.janalyse.sotohp.api.protocol.{*, given}
 import fr.janalyse.sotohp.model.*
 import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
-import sttp.tapir.{CodecFormat, Schema}
+import sttp.tapir.{CodecFormat, EndpointInput, Schema}
 import sttp.tapir.files.staticFilesGetServerEndpoint
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
@@ -31,6 +30,7 @@ import io.scalaland.chimney.dsl.*
 import zio.stream.{ZPipeline, ZStream}
 
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
 
 object ApiApp extends ZIOAppDefault {
 
@@ -144,9 +144,8 @@ object ApiApp extends ZIOAppDefault {
       .summary("Stream all defined owners")
       .get
       .out(
-        streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
+        streamBody(ZioStreams)(ApiOwner.apiOwnerSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Owner JSON object per line)")
-          // .schema(summon[Schema[List[ApiOwner]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiOwner ?
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ =>
@@ -234,7 +233,7 @@ object ApiApp extends ZIOAppDefault {
       .summary("Stream all defined stores")
       .get
       .out(
-        streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
+        streamBody(ZioStreams)(ApiStore.apiStoreSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Store JSON object per line)")
           // .schema(summon[Schema[List[ApiStore]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiStore ?
@@ -437,7 +436,7 @@ object ApiApp extends ZIOAppDefault {
       .summary("Stream all defined events")
       .get
       .out(
-        streamTextBody(ZioStreams)(NdJson, Some(StandardCharsets.UTF_8))
+        streamBody(ZioStreams)(ApiEvent.apiEventSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Event JSON object per line)")
       )
       .errorOut(oneOf(statusForApiInternalError))
@@ -556,11 +555,44 @@ object ApiApp extends ZIOAppDefault {
     )
   )
 
+  def htmlUserInterfaceRedirect(uiBaseDir: String): ZServerEndpoint[ApiEnv, Any] = {
+    endpoint.get
+      .in("")
+      .out(statusCode(StatusCode.TemporaryRedirect))
+      .out(header(HeaderNames.Location, s"/ui/index.html"))
+      .serverLogicSuccess(_ => ZIO.succeed(()))
+  }
+
+  def htmlStaticAssets(uiBaseDir: String): List[ZServerEndpoint[ApiEnv, Any]] = {
+    List(
+      staticFilesGetServerEndpoint("ui" / "assets")(s"$uiBaseDir/assets").widen[ApiEnv],
+      staticFilesGetServerEndpoint("ui" / "favicon.svg")(s"$uiBaseDir/favicon.svg").widen[ApiEnv],
+      staticFilesGetServerEndpoint("ui" / "index.html")(s"$uiBaseDir/index.html").widen[ApiEnv]
+    )
+  }
+
+  def htmlRouteFallback(uiBaseDir: String): ZServerEndpoint[ApiEnv, Any] = {
+    endpoint.get
+      .in("ui")
+      .in(paths)
+      .out(htmlBodyUtf8)
+      .serverLogicSuccess { _ =>
+        for { // TODO add caching
+          filePath <- ZIO.attempt(Path.of(uiBaseDir, "index.html"))
+          bytes    <- ZIO.attemptBlocking(Files.readAllBytes(filePath))
+          content  <- ZIO.attempt(new String(bytes, "UTF-8"))
+        } yield content
+      }
+      .widen[ApiEnv]
+  }
+
   def buildFrontRoutes: IO[Exception, List[ZServerEndpoint[ApiEnv, Any]]] = for {
-    config                      <- ApiConfig.config
-    clientSideResourcesEndPoints = staticFilesGetServerEndpoint(emptyInput)(config.clientResourcesPath, extraHeaders = staticHeaders).widen[ApiEnv]
-    clientSideRoutes             = List(clientSideResourcesEndPoints)
-  } yield clientSideRoutes
+    uiBaseDir <- ApiConfig.config.map(_.clientResourcesPath)
+  } yield {
+    htmlStaticAssets(uiBaseDir)
+      :+ htmlRouteFallback(uiBaseDir)
+      :+ htmlUserInterfaceRedirect(uiBaseDir)
+  }
 
   def server = for {
     frontRoutes <- buildFrontRoutes

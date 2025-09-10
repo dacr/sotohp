@@ -15,5 +15,5 @@ case class ApiStore(
 
 object ApiStore {
   given JsonCodec[ApiStore] = DeriveJsonCodec.gen
-  given Schema[ApiStore]    = Schema.derived[ApiStore].name(Schema.SName("Store"))
+  given apiStoreSchema:Schema[ApiStore]    = Schema.derived[ApiStore].name(Schema.SName("Store"))
 }

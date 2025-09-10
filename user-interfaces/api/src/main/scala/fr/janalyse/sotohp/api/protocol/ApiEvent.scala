@@ -15,5 +15,5 @@ case class ApiEvent(
 
 object ApiEvent {
   given JsonCodec[ApiEvent] = DeriveJsonCodec.gen
-  given Schema[ApiEvent]    = Schema.derived[ApiEvent].name(Schema.SName("Event"))
+  given apiEventSchema:Schema[ApiEvent]    = Schema.derived[ApiEvent].name(Schema.SName("Event"))
 }
