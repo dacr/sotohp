@@ -280,7 +280,45 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def mediaListLogic(filterHasLocation:Option[Boolean]): ZStream[MediaService, Throwable, ApiMedia] = {
+  def mediaGetNormalizedLogic(accessKey: MediaAccessKey): ZIO[ApiEnv, ApiIssue, (Media, ZStream[ApiEnv, ApiInternalError, Byte])] = {
+    val logic = for {
+      media           <- MediaService
+                           .mediaGet(accessKey)
+                           .logError("Couldn't get media")
+                           .mapError(err => ApiInternalError("Couldn't get media"))
+                           .someOrFail(ApiResourceNotFound("Couldn't find media"))
+      imageBytesStream = MediaService
+                           .mediaNormalizedRead(media.accessKey)
+                           .mapError(err => ApiInternalError("Couldn't read media"))
+    } yield (media, imageBytesStream)
+
+    logic
+  }
+
+  val mediaGetNormalizedEndpoint =
+    mediaEndpoint
+      .name("Get media normalized image")
+      .summary("Get media normalized image content")
+      .get
+      .in(path[String]("mediaAccessKey"))
+      .in("normalized")
+      .out(header[String]("Content-Type"))
+      .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidIdentifier))
+      .zServerLogic[ApiEnv](rawKey =>
+        for {
+          mediaKey            <- ZIO
+                                   .attempt(MediaAccessKey(rawKey))
+                                   .mapError(err => ApiInvalidIdentifier("Invalid media access key"))
+          (media, byteStream) <- mediaGetNormalizedLogic(mediaKey)
+          ms                  <- ZIO.service[MediaService]
+          httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
+        } yield (MediaType.ImageJpeg.toString, httpStream)
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def mediaListLogic(filterHasLocation: Option[Boolean]): ZStream[MediaService, Throwable, ApiMedia] = {
     MediaService
       .mediaList()
       .filter(media => filterHasLocation.isEmpty || media.location.isDefined == filterHasLocation.get)
@@ -297,17 +335,17 @@ object ApiApp extends ZIOAppDefault {
       .out(
         streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Store JSON object per line)")
-        // .schema(summon[Schema[List[ApiMedia]]])
+          // .schema(summon[Schema[List[ApiMedia]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiMedia ?
       .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv]( (filterHasLocation) =>
+      .zServerLogic[ApiEnv]((filterHasLocation) =>
         for {
           ms        <- ZIO.service[MediaService]
           byteStream = mediaListLogic(filterHasLocation)
-            .map(_.toJson)
-            .intersperse("\n")
-            .via(ZPipeline.utf8Encode)
-            .provideEnvironment(ZEnvironment(ms))
+                         .map(_.toJson)
+                         .intersperse("\n")
+                         .via(ZPipeline.utf8Encode)
+                         .provideEnvironment(ZEnvironment(ms))
         } yield byteStream
       )
 
@@ -555,6 +593,7 @@ object ApiApp extends ZIOAppDefault {
     mediaRandomEndpoint,
     mediaListEndpoint,
     mediaGetEndpoint,
+    mediaGetNormalizedEndpoint,
     // -------------------------
     eventCreateEndpoint,
     eventListEndpoint,
