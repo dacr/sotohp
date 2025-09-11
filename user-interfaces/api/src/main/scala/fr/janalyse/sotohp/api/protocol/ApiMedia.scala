@@ -1,7 +1,9 @@
 package fr.janalyse.sotohp.api.protocol
 
-import fr.janalyse.sotohp.model.{Event, Keyword, Location, MediaAccessKey, MediaDescription, Orientation, Original, ShootDateTime, Starred}
+import fr.janalyse.sotohp.model.{Event, Keyword, Location, Media, MediaAccessKey, MediaDescription, Orientation, Original, ShootDateTime, Starred}
 import fr.janalyse.sotohp.service.json.{*, given}
+import io.scalaland.chimney.*
+import io.scalaland.chimney.dsl.*
 import sttp.tapir.Schema
 import sttp.tapir.Schema.annotations.encodedName
 import zio.json.*
@@ -16,10 +18,18 @@ case class ApiMedia(
   orientation: Option[Orientation],         // override original's orientation
   shootDateTime: Option[ShootDateTime],     // override original's cameraShotDateTime
   userDefinedLocation: Option[ApiLocation], // replace the original's location (user-defined or deducted location)
-  deductedLocation: Option[ApiLocation] // location deducted from near-by (time, space) localized photos
+  deductedLocation: Option[ApiLocation],    // location deducted from near-by (time, space) localized photos
+  location: Option[ApiLocation]             // effective location (userDefinedLocation orElse original.location orElse deductedLocation)
 )
 
 object ApiMedia {
-  given JsonCodec[ApiMedia] = DeriveJsonCodec.gen
-  given Schema[ApiMedia]    = Schema.derived[ApiMedia].name(Schema.SName("Media"))
+  given JsonCodec[ApiMedia]              = DeriveJsonCodec.gen
+  given apiMediaSchema: Schema[ApiMedia] = Schema.derived[ApiMedia].name(Schema.SName("Media"))
+
+  given transformer: Transformer[Media, ApiMedia] =
+    Transformer
+      .define[Media, ApiMedia]
+      .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+      .buildTransformer
+
 }

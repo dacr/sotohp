@@ -257,7 +257,7 @@ object ApiApp extends ZIOAppDefault {
                    .logError("Couldn't get media")
                    .mapError(err => ApiInternalError("Couldn't get media"))
                    .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      taoMedia = media.transformInto[ApiMedia]
+      taoMedia = media.transformInto[ApiMedia](using ApiMedia.transformer)
     } yield taoMedia
 
     logic
@@ -276,6 +276,37 @@ object ApiApp extends ZIOAppDefault {
           .attempt(MediaAccessKey(rawKey))
           .mapError(err => ApiInvalidIdentifier("Invalid media access key"))
           .flatMap(key => mediaGetLogic(key))
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  val mediaListLogic: ZStream[MediaService, Throwable, ApiMedia] = {
+    MediaService
+      .mediaList()
+      .map(media => media.transformInto[ApiMedia](using ApiMedia.transformer))
+      .mapError(err => ApiInternalError("Couldn't list medias"))
+  }
+
+  val mediaListEndpoint =
+    mediaEndpoint
+      .name("List medias")
+      .summary("Stream all defined medias")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Store JSON object per line)")
+        // .schema(summon[Schema[List[ApiMedia]]])
+      ) // TODO how to provide information about the fact we want NDJSON output of ApiMedia ?
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](_ =>
+        for {
+          ms        <- ZIO.service[MediaService]
+          byteStream = mediaListLogic
+            .map(_.toJson)
+            .intersperse("\n")
+            .via(ZPipeline.utf8Encode)
+            .provideEnvironment(ZEnvironment(ms))
+        } yield byteStream
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -520,6 +551,7 @@ object ApiApp extends ZIOAppDefault {
   val apiRoutes = List(
     // -------------------------
     mediaRandomEndpoint,
+    mediaListEndpoint,
     mediaGetEndpoint,
     // -------------------------
     eventCreateEndpoint,
