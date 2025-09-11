@@ -442,8 +442,10 @@ async function mapPage() {
     const desc = m.description || '';
     const title = escapeHtml([firstEvent, dt].filter(Boolean).join(' — '));
     const body = escapeHtml(String(desc));
-    const key = escapeHtml(m.accessKey || '');
-    const popup = `<div><div style="font-weight:600">${title || 'Media'}</div><div class="meta">${body}</div><div class="meta">Key: ${key}</div></div>`;
+    const rawKey = m.accessKey || '';
+    const key = escapeHtml(rawKey);
+    const imgTag = rawKey ? `<div style="margin-top:6px"><img class="map-thumb" src="${API_BASE + '/api/media/' + encodeURIComponent(rawKey) + '/normalized'}" alt="Media preview" loading="lazy"></div>` : '';
+    const popup = `<div><div style="font-weight:600">${title || 'Media'}</div><div class="meta">${body}</div><div class="meta">Key: ${key}</div>${imgTag}</div>`;
     const marker = L.marker(ll).bindPopup(popup);
     markers.push(marker);
     bounds.extend(ll);
