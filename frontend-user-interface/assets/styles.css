@@ -42,3 +42,4 @@ body{
 .meta{color:var(--muted); font-size: 12px; margin-top:8px}
 .form-row{display:flex; gap:8px; margin:8px 0}
 .badge{display:inline-block; padding:2px 6px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:12px}
+.map-wrap{height:70vh; border:1px solid var(--border); border-radius:10px; overflow:hidden}

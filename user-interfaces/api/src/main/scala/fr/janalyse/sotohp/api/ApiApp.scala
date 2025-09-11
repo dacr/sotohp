@@ -280,9 +280,10 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  val mediaListLogic: ZStream[MediaService, Throwable, ApiMedia] = {
+  def mediaListLogic(filterHasLocation:Option[Boolean]): ZStream[MediaService, Throwable, ApiMedia] = {
     MediaService
       .mediaList()
+      .filter(media => filterHasLocation.isEmpty || media.location.isDefined == filterHasLocation.get)
       .map(media => media.transformInto[ApiMedia](using ApiMedia.transformer))
       .mapError(err => ApiInternalError("Couldn't list medias"))
   }
@@ -291,6 +292,7 @@ object ApiApp extends ZIOAppDefault {
     mediaEndpoint
       .name("List medias")
       .summary("Stream all defined medias")
+      .in(query[Option[Boolean]]("filterHasLocation"))
       .get
       .out(
         streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
@@ -298,10 +300,10 @@ object ApiApp extends ZIOAppDefault {
         // .schema(summon[Schema[List[ApiMedia]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiMedia ?
       .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](_ =>
+      .zServerLogic[ApiEnv]( (filterHasLocation) =>
         for {
           ms        <- ZIO.service[MediaService]
-          byteStream = mediaListLogic
+          byteStream = mediaListLogic(filterHasLocation)
             .map(_.toJson)
             .intersperse("\n")
             .via(ZPipeline.utf8Encode)

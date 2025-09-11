@@ -389,6 +389,81 @@ function wireEventActions() {
   });
 }
 
+// ---------------- Map (OpenStreetMap) ----------------
+async function mapPage() {
+  setRoot(h(`
+    <section class="card">
+      <h2 class="section-title">GeoMap</h2>
+      <p class="meta">Shows all medias with a known location.</p>
+      <div id="map" class="map-wrap"></div>
+    </section>
+  `));
+  if (typeof L === 'undefined') {
+    const el = document.getElementById('map');
+    el.textContent = 'Map library failed to load';
+    return;
+  }
+  const map = L.map('map');
+  const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+  map.setView([0, 0], 2);
+
+  // Use clustering with chunked loading to handle many points efficiently
+  const cluster = L.markerClusterGroup({
+    chunkedLoading: true,
+    chunkInterval: 100,
+    chunkDelay: 50,
+    maxClusterRadius: 60,
+    disableClusteringAtZoom: 17,
+    spiderfyOnMaxZoom: false,
+    showCoverageOnHover: false
+  });
+  map.addLayer(cluster);
+
+  const items = await ndjson(API_BASE + '/api/media?filterHasLocation=true').catch(() => []);
+  const bounds = L.latLngBounds();
+  const markers = [];
+
+  function latlngOf(loc) {
+    if (!loc) return null;
+    const lat = Number(loc.latitude);
+    const lon = Number(loc.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return [lat, lon];
+  }
+
+  for (const m of items) {
+    const ll = latlngOf(m.location || m.userDefinedLocation || (m.original && m.original.location));
+    if (!ll) continue;
+    const firstEvent = Array.isArray(m.events) && m.events.length ? (m.events[0].name || '') : '';
+    const dt = m.shootDateTime || (m.original && m.original.cameraShootDateTime) || '';
+    const desc = m.description || '';
+    const title = escapeHtml([firstEvent, dt].filter(Boolean).join(' — '));
+    const body = escapeHtml(String(desc));
+    const key = escapeHtml(m.accessKey || '');
+    const popup = `<div><div style="font-weight:600">${title || 'Media'}</div><div class="meta">${body}</div><div class="meta">Key: ${key}</div></div>`;
+    const marker = L.marker(ll).bindPopup(popup);
+    markers.push(marker);
+    bounds.extend(ll);
+  }
+
+  const added = markers.length;
+  if (added > 0) {
+    cluster.addLayers(markers);
+    map.fitBounds(bounds.pad(0.1));
+  } else {
+    // No markers: center nicely on Europe-ish
+    map.setView([20, 0], 2);
+    const el = document.createElement('div');
+    el.className = 'meta';
+    el.style.marginTop = '8px';
+    el.textContent = 'No located media found.';
+    document.querySelector('.card').appendChild(el);
+  }
+}
+
 // ---------------- Admin ----------------
 function adminPage() {
   setRoot(h(`
@@ -423,6 +498,7 @@ function render() {
   const p = routePath();
   clearInterval(randomTimer);
   if (p === '/') return viewerPage();
+  if (p.startsWith('/map')) return mapPage();
   if (p.startsWith('/owners')) return ownersPage();
   if (p.startsWith('/stores')) return storesPage();
   if (p.startsWith('/events')) return eventsPage();

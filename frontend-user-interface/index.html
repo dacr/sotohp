@@ -7,6 +7,11 @@
   <base href="/ui/">
   <link rel="icon" type="image/svg+xml" href="/ui/favicon.svg">
   <link rel="stylesheet" href="/ui/assets/styles.css">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <!-- MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 </head>
 <body>
   <header class="topbar">
@@ -16,6 +21,7 @@
     </div>
     <nav class="nav">
       <a href="/ui/" data-link>Viewer</a>
+      <a href="/ui/map" data-link>GeoMap</a>
       <a href="/ui/owners" data-link>Owners</a>
       <a href="/ui/stores" data-link>Stores</a>
       <a href="/ui/events" data-link>Events</a>
@@ -27,6 +33,10 @@
 
   <footer class="footer">SotoHP — Frontend UI</footer>
 
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- MarkerCluster JS -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script type="module" src="/ui/assets/app.js"></script>
 </body>
 </html>
