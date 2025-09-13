@@ -45,6 +45,7 @@ class ApiClient {
 const api = new ApiClient('');
 let currentMedia = null;
 let slideshowTimer = null;
+let slideshowPlaying = false;
 
 function $(sel) { return document.querySelector(sel); }
 function setActiveTab(name) {
@@ -93,12 +94,48 @@ function initViewerControls() {
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });
+
+  // Slideshow helpers using setTimeout so new settings are applied at each tick
+  function stopSlideshow() {
+    slideshowPlaying = false;
+    if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
+    const btn = $('#btn-play'); if (btn) btn.textContent = '▶️';
+  }
+  function scheduleNextTick() {
+    if (!slideshowPlaying) return;
+    const sel = $('#slideshow-delay').value || '20-next';
+    const [secsStr, mode] = sel.split('-');
+    const delay = (parseInt(secsStr, 10) || 20) * 1000;
+    slideshowTimer = setTimeout(async () => {
+      try {
+        if (mode === 'random') {
+          await loadMedia('random');
+        } else {
+          if (currentMedia) {
+            await loadMedia('next', currentMedia.accessKey);
+          } else {
+            await loadMedia('first');
+          }
+        }
+      } finally {
+        if (slideshowPlaying) scheduleNextTick();
+      }
+    }, delay);
+  }
+
   $('#btn-play').addEventListener('click', () => {
     const btn = $('#btn-play');
-    if (slideshowTimer) { clearInterval(slideshowTimer); slideshowTimer = null; btn.textContent = '▶️ Play'; return }
-    const delay = parseInt($('#slideshow-delay').value, 10) || 3000;
-    btn.textContent = '⏸️ Pause';
-    slideshowTimer = setInterval(() => { if (currentMedia) loadMedia('next', currentMedia.accessKey); else loadMedia('random'); }, delay);
+    if (slideshowPlaying) { stopSlideshow(); return; }
+    slideshowPlaying = true; btn.textContent = '⏸️';
+    // Start waiting according to current selection, then advance
+    scheduleNextTick();
+  });
+
+  // If the user changes the delay/mode while playing, apply immediately
+  $('#slideshow-delay').addEventListener('change', () => {
+    if (!slideshowPlaying) return;
+    if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
+    scheduleNextTick();
   });
 }
 

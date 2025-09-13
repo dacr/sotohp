@@ -31,32 +31,35 @@
           <img id="main-image" alt="media"/>
         </div>
         <div class="sidebar">
+          <div class="controls">
+            <div class="row">
+              <button id="btn-first" title="First">⏮️</button>
+              <button id="btn-prev" title="Previous">◀️</button>
+              <button id="btn-next" title="Next">▶️</button>
+              <button id="btn-last" title="Last">⏭️</button>
+            </div>
+            <div class="row">
+              <button id="btn-fullscreen" title="Fullscreen">⛶</button>
+              <button id="btn-random" title="Random">🎲</button>
+              <button id="btn-play" title="Play/Pause">▶️</button>
+              <select id="slideshow-delay">
+                <option value="5-next">5s next</option>
+                <option value="5-random">5s random</option>
+                <option value="10-next">10s next</option>
+                <option value="10-random">10s random</option>
+                <option value="20-next" selected>20s next</option>
+                <option value="20-random">20s random</option>
+                <option value="30-next">30s next</option>
+                <option value="30-random">30s random</option>
+              </select>
+            </div>
+          </div>
           <div class="info">
             <div><strong>Date:</strong> <span id="info-date">-</span></div>
             <div><strong>Event:</strong> <span id="info-event">-</span></div>
             <div><strong>Starred:</strong> <span id="info-starred">-</span></div>
             <div><strong>Has Location:</strong> <span id="info-hasloc">-</span></div>
             <div><strong>Keywords:</strong> <span id="info-keywords">-</span></div>
-          </div>
-          <div class="controls">
-            <div class="row">
-              <button id="btn-first" title="First">⏮️ First</button>
-              <button id="btn-prev" title="Previous">◀️ Prev</button>
-              <button id="btn-next" title="Next">Next ▶️</button>
-              <button id="btn-last" title="Last">⏭️ Last</button>
-            </div>
-            <div class="row">
-              <button id="btn-random" title="Random">🎲 Random</button>
-              <button id="btn-play" title="Play/Pause">▶️ Play</button>
-              <label for="delay">Delay:</label>
-              <select id="slideshow-delay">
-                <option value="1500">1.5s</option>
-                <option value="3000" selected>3s</option>
-                <option value="5000">5s</option>
-                <option value="8000">8s</option>
-              </select>
-              <button id="btn-fullscreen" title="Fullscreen">⛶ Fullscreen</button>
-            </div>
           </div>
         </div>
       </div>
