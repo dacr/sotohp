@@ -4,29 +4,75 @@ info:
   version: '1.0'
   description: Medias management software by @crodav
 paths:
-  /api/media/random:
+  /api/medias:
     get:
       tags:
       - Media
-      summary: Get a randomly chosen media
-      operationId: Random Media
+      summary: Stream all defined medias
+      operationId: List medias
+      parameters:
+      - name: filterHasLocation
+        in: query
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: NDJSON (one Store JSON object per line)
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/Media'
+        '400':
+          description: 'Invalid value for: query parameter filterHasLocation'
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/media:
+    get:
+      tags:
+      - Media
+      summary: Get information from a random, first, last, previous of, or next to
+        media
+      operationId: Get media information
+      parameters:
+      - name: select
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/MediaSelector'
+      - name: referenceMediaAccessKey
+        in: query
+        description: previous or next require to provide a reference media
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: ''
-          headers:
-            Content-Type:
-              required: true
-              schema:
-                type: string
-            Media-Access-Key:
-              required: true
-              schema:
-                type: string
           content:
-            application/octet-stream:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Media'
+        '400':
+          description: 'Invalid value for: query parameter select'
+          content:
+            text/plain:
               schema:
                 type: string
-                format: binary
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
         '500':
           description: Something went wrong with the backend
           content:
@@ -57,7 +103,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -70,7 +116,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
-  /api/event:
+  /api/media/{mediaAccessKey}/normalized:
+    get:
+      tags:
+      - Media
+      summary: Get media normalized image content
+      operationId: Get media normalized image
+      parameters:
+      - name: mediaAccessKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          headers:
+            Content-Type:
+              required: true
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/events:
     get:
       tags:
       - Event
@@ -89,6 +178,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/event:
     post:
       tags:
       - Event
@@ -143,7 +233,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -181,7 +271,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -213,7 +303,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -226,7 +316,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
-  /api/owner:
+  /api/owners:
     get:
       tags:
       - Owner
@@ -269,7 +359,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -307,7 +397,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -320,7 +410,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
-  /api/store:
+  /api/stores:
     get:
       tags:
       - Store
@@ -363,7 +453,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -401,7 +491,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorInvalidIdentifier'
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -467,6 +557,14 @@ paths:
                 $ref: '#/components/schemas/ErrorInternal'
 components:
   schemas:
+    ApiInvalidOrMissingInput:
+      title: ApiInvalidOrMissingInput
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
     Dimension:
       title: Dimension
       type: object
@@ -482,14 +580,6 @@ components:
           format: int32
     ErrorInternal:
       title: ErrorInternal
-      type: object
-      required:
-      - message
-      properties:
-        message:
-          type: string
-    ErrorInvalidIdentifier:
-      title: ErrorInvalidIdentifier
       type: object
       required:
       - message
@@ -635,12 +725,23 @@ components:
           $ref: '#/components/schemas/Location'
         deductedLocation:
           $ref: '#/components/schemas/Location'
+        location:
+          $ref: '#/components/schemas/Location'
     MediaKind:
       title: MediaKind
       type: string
       enum:
       - Photo
       - Video
+    MediaSelector:
+      title: MediaSelector
+      type: string
+      enum:
+      - first
+      - last
+      - next
+      - previous
+      - random
     Orientation:
       title: Orientation
       type: string

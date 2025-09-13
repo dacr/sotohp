@@ -10,6 +10,7 @@ nohup.out
 *.iml
 *.tmp
 null
+node_modules/
 
 # direnv
 .envrc

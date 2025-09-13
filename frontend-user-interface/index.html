@@ -2,41 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>SotoHP UI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <base href="/ui/">
-  <link rel="icon" type="image/svg+xml" href="/ui/favicon.svg">
-  <link rel="stylesheet" href="/ui/assets/styles.css">
-  <!-- Leaflet CSS -->
+  <title>SotoHP UI</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <!-- MarkerCluster CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <img src="/ui/assets/logo.svg" alt="SotoHP" class="logo"/>
-      <span class="title">SotoHP</span>
-    </div>
-    <nav class="nav">
-      <a href="/ui/" data-link>Viewer</a>
-      <a href="/ui/map" data-link>GeoMap</a>
-      <a href="/ui/owners" data-link>Owners</a>
-      <a href="/ui/stores" data-link>Stores</a>
-      <a href="/ui/events" data-link>Events</a>
-      <a href="/ui/admin" data-link>Admin</a>
+  <header>
+    <h1>SotoHP</h1>
+    <nav class="tabs">
+      <button data-tab="viewer" class="active">Image</button>
+      <button data-tab="world">World</button>
+      <button data-tab="events">Events</button>
+      <button data-tab="owners">Owners</button>
+      <button data-tab="stores">Stores</button>
+      <button data-tab="settings">Settings</button>
     </nav>
   </header>
 
-  <main id="app-root" class="container"></main>
+  <main>
+    <!-- Image Viewer Tab -->
+    <section id="tab-viewer" class="tab active">
+      <div class="viewer">
+        <div class="image-container">
+          <img id="main-image" alt="media"/>
+        </div>
+        <div class="sidebar">
+          <div class="info">
+            <div><strong>Date:</strong> <span id="info-date">-</span></div>
+            <div><strong>Event:</strong> <span id="info-event">-</span></div>
+            <div><strong>Starred:</strong> <span id="info-starred">-</span></div>
+            <div><strong>Has Location:</strong> <span id="info-hasloc">-</span></div>
+            <div><strong>Keywords:</strong> <span id="info-keywords">-</span></div>
+          </div>
+          <div class="controls">
+            <div class="row">
+              <button id="btn-first" title="First">⏮️ First</button>
+              <button id="btn-prev" title="Previous">◀️ Prev</button>
+              <button id="btn-next" title="Next">Next ▶️</button>
+              <button id="btn-last" title="Last">⏭️ Last</button>
+            </div>
+            <div class="row">
+              <button id="btn-random" title="Random">🎲 Random</button>
+              <button id="btn-play" title="Play/Pause">▶️ Play</button>
+              <label for="delay">Delay:</label>
+              <select id="slideshow-delay">
+                <option value="1500">1.5s</option>
+                <option value="3000" selected>3s</option>
+                <option value="5000">5s</option>
+                <option value="8000">8s</option>
+              </select>
+              <button id="btn-fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <footer class="footer">SotoHP — Frontend UI</footer>
+    <!-- World Tab -->
+    <section id="tab-world" class="tab">
+      <div id="map"></div>
+      <div id="map-status" class="status"></div>
+    </section>
 
-  <!-- Leaflet JS -->
+    <!-- Events Tab -->
+    <section id="tab-events" class="tab">
+      <div class="list-actions">
+        <button id="refresh-events">↻ Refresh</button>
+        <form id="event-create-form">
+          <input type="text" id="event-name" placeholder="New event name" required>
+          <button type="submit">＋ Create</button>
+        </form>
+      </div>
+      <ul id="events-list" class="list"></ul>
+    </section>
+
+    <!-- Owners Tab -->
+    <section id="tab-owners" class="tab">
+      <div class="list-actions">
+        <button id="refresh-owners">↻ Refresh</button>
+      </div>
+      <ul id="owners-list" class="list"></ul>
+    </section>
+
+    <!-- Stores Tab -->
+    <section id="tab-stores" class="tab">
+      <div class="list-actions">
+        <button id="refresh-stores">↻ Refresh</button>
+        <form id="store-create-form">
+          <input type="text" id="store-name" placeholder="New store name" required>
+          <select id="store-owner" required></select>
+          <button type="submit">＋ Create</button>
+        </form>
+      </div>
+      <ul id="stores-list" class="list"></ul>
+    </section>
+
+    <!-- Settings Tab -->
+    <section id="tab-settings" class="tab">
+      <button id="btn-sync">Synchronize all stores</button>
+      <div id="sync-status" class="status"></div>
+    </section>
+  </main>
+
+  <!-- Vendor libraries -->
+  <script src="https://unpkg.com/axios@1.7.7/dist/axios.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <!-- MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script type="module" src="/ui/assets/app.js"></script>
+  <!-- App -->
+  <script type="module" src="assets/js/app.js"></script>
 </body>
 </html>

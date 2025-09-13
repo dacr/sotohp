@@ -1,0 +1,42 @@
+/* Basic reset */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; color: #1f2937; }
+body { display: flex; flex-direction: column; }
+
+header { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; }
+header h1 { margin: 0; font-size: 1.1rem; letter-spacing: 0.03em; }
+
+.tabs { display: flex; gap: 0.5rem; }
+.tabs button { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 0.4rem 0.7rem; border-radius: 6px; cursor: pointer; }
+.tabs button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+main { flex: 1; position: relative; }
+.tab { display: none; height: calc(100vh - 70px); }
+.tab.active { display: block; }
+
+/* Viewer */
+.viewer { display: grid; grid-template-columns: 1fr 300px; gap: 0.75rem; height: 100%; padding: 0.75rem; }
+.image-container { background: #111827; border-radius: 8px; position: relative; overflow: hidden; }
+.image-container img { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; }
+.sidebar { display: flex; flex-direction: column; gap: 0.75rem; }
+.info { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.5rem; background: #fafafa; }
+.controls { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.controls .row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.controls button, .list-actions button { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 0.4rem 0.6rem; border-radius: 6px; cursor: pointer; }
+.controls button:hover, .list-actions button:hover { background: #e5e7eb; }
+
+/* Map */
+#map { height: calc(100% - 30px); margin: 0.75rem; border-radius: 8px; border: 1px solid #e5e7eb; }
+.status { padding: 0.5rem 1rem; color: #111827; }
+
+/* Lists */
+.list-actions { display: flex; gap: 0.5rem; align-items: center; padding: 0.75rem; }
+.list { list-style: none; padding: 0.5rem 0.75rem; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.5rem; }
+.list li { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.5rem; background: #fff; }
+.list li h4 { margin: 0 0 0.25rem 0; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .viewer { grid-template-columns: 1fr; }
+  .sidebar { order: -1; }
+}

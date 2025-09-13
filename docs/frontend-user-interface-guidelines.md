@@ -18,10 +18,13 @@
       - the photo itself in a reduced format 
   - events management tab
     - list events
+    - wire other operations available in the API
   - owners management tab
     - list owners
+    - wire other operations available in the API
   - stores management tab
     - list stores
+    - wire other operations available in the API
     - when creating a new store, choose the owner between already available owners
   - settings tab
     - add a synchronize button to force the synchronization of all defined stores
