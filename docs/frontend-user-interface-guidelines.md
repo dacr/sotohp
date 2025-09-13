@@ -25,6 +25,7 @@
     - when creating a new store, choose the owner between already available owners
   - settings tab
     - add a synchronize button to force the synchronization of all defined stores
+- create a square favicon.svg inspired by the photos mosaic thematic
 
 ## coding choices
 
