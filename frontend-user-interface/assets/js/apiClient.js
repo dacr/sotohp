@@ -1,0 +1,89 @@
+import axios from 'axios';
+export class ApiClient {
+    constructor(baseURL = '') {
+        this.http = axios.create({ baseURL });
+    }
+    async getMedia(select, referenceMediaAccessKey) {
+        const res = await this.http.get('/api/media', {
+            params: { select, referenceMediaAccessKey }
+        });
+        return res.data;
+    }
+    async getMediaByKey(mediaAccessKey) {
+        const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}`);
+        return res.data;
+    }
+    mediaNormalizedUrl(mediaAccessKey) {
+        return `/api/media/${encodeURIComponent(mediaAccessKey)}/normalized`;
+    }
+    async listEvents() {
+        return await this.fetchNdjson('/api/events');
+    }
+    async createEvent(name) {
+        const res = await this.http.post('/api/event', { name });
+        return res.data;
+    }
+    async listOwners() {
+        return await this.fetchNdjson('/api/owners');
+    }
+    async listStores() {
+        return await this.fetchNdjson('/api/stores');
+    }
+    async synchronize() {
+        await this.http.get('/api/admin/synchronize');
+    }
+    async mediasWithLocations(onItem) {
+        await this.fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem);
+    }
+    async fetchNdjson(url) {
+        // Fallback non-streaming NDJSON reader
+        const res = await this.http.get(url, { responseType: 'text' });
+        const items = [];
+        const lines = res.data.split(/\r?\n/);
+        for (const line of lines) {
+            if (!line.trim())
+                continue;
+            try {
+                items.push(JSON.parse(line));
+            }
+            catch { }
+        }
+        return items;
+    }
+    async fetchNdjsonStream(url, onItem) {
+        if (!('fetch' in window)) {
+            const all = await this.fetchNdjson(url);
+            all.forEach(onItem);
+            return;
+        }
+        const res = await fetch(url);
+        const reader = res.body?.getReader();
+        if (!reader)
+            return;
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+                break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buffer.indexOf('\n')) >= 0) {
+                const line = buffer.slice(0, idx);
+                buffer = buffer.slice(idx + 1);
+                if (line.trim().length === 0)
+                    continue;
+                try {
+                    onItem(JSON.parse(line));
+                }
+                catch { }
+            }
+        }
+        if (buffer.trim().length > 0) {
+            try {
+                onItem(JSON.parse(buffer));
+            }
+            catch { }
+        }
+    }
+}
