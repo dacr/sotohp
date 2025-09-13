@@ -76,12 +76,21 @@ function showMedia(media) {
   const img = $('#main-image');
   img.src = api.mediaNormalizedUrl(media.accessKey) + `?t=${Date.now()}`; // cache bust
   const date = media.shootDateTime || media.original?.cameraShootDateTime || '-';
-  $('#info-date').textContent = date ? new Date(date).toLocaleString() : '-';
-  $('#info-event').textContent = (media.events && media.events.length > 0) ? media.events[0].name : '-';
+  const dateStr = date ? new Date(date).toLocaleString() : '-';
+  const eventName = (media.events && media.events.length > 0) ? media.events[0].name : '-';
+  $('#info-date').textContent = dateStr;
+  $('#info-event').textContent = eventName;
   $('#info-starred').textContent = media.starred ? '★ Yes' : 'No';
   const hasLoc = !!(media.location || media.userDefinedLocation || media.deductedLocation);
   $('#info-hasloc').textContent = hasLoc ? 'Yes' : 'No';
   $('#info-keywords').textContent = (media.keywords && media.keywords.length) ? media.keywords.join(', ') : '-';
+  // Update fullscreen overlay content
+  const ov = document.getElementById('fs-overlay');
+  if (ov) {
+    const star = media.starred ? '★ ' : '';
+    const loc = hasLoc ? ' 📍' : '';
+    ov.innerHTML = `<div class="title">${star}${eventName}${loc}</div><div class="sub">${dateStr}</div>`;
+  }
 }
 
 function initViewerControls() {
@@ -91,6 +100,11 @@ function initViewerControls() {
   $('#btn-prev').addEventListener('click', () => currentMedia && loadMedia('previous', currentMedia.accessKey));
   $('#btn-next').addEventListener('click', () => currentMedia && loadMedia('next', currentMedia.accessKey));
   $('#btn-fullscreen').addEventListener('click', () => {
+    const cont = document.querySelector('.image-container');
+    if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
+  });
+  // Toggle fullscreen on double click on the image/container
+  (document.querySelector('.image-container'))?.addEventListener('dblclick', () => {
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });
@@ -246,6 +260,15 @@ function initSettings() {
 function init() {
   initTabs();
   initViewerControls();
+  // Ensure fullscreen overlay exists inside image container
+  const cont = document.querySelector('.image-container');
+  if (cont && !document.getElementById('fs-overlay')) {
+    const ov = document.createElement('div');
+    ov.id = 'fs-overlay';
+    ov.className = 'fs-overlay';
+    ov.innerHTML = '';
+    cont.appendChild(ov);
+  }
   initEventsTab();
   initStoresTab();
   initSettings();
