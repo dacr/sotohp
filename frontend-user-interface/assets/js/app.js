@@ -93,15 +93,32 @@ function showMedia(media) {
   $('#info-event').textContent = eventName;
   $('#info-starred').textContent = media.starred ? '⭐ Yes' : '☆ No';
   const hasLoc = !!(media.location || media.userDefinedLocation || media.deductedLocation);
-  $('#info-hasloc').textContent = hasLoc ? 'Yes' : 'No';
+  // Show colored location pin like fullscreen overlay
+  const pinSvgInfo = (color) => `\
+<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="${color}" style="vertical-align:-0.15em;margin-right:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
+  let pinColor = '#ef4444';
+  let locLabel = 'No';
+  if (media.location) { pinColor = '#10b981'; locLabel = 'Known'; }
+  else if (media.userDefinedLocation || media.deductedLocation) { pinColor = '#f59e0b'; locLabel = 'Estimated'; }
+  $('#info-hasloc').innerHTML = `${pinSvgInfo(pinColor)} ${locLabel}`;
   $('#info-keywords').textContent = (media.keywords && media.keywords.length) ? media.keywords.join(', ') : '-';
   // Update fullscreen overlay content
   const ov = document.getElementById('fs-overlay');
   if (ov) {
     const star = media.starred ? '⭐ ' : '☆ ';
-    const loc = hasLoc ? ' 📍' : '';
+    // Choose a colored pin depending on location source
+    const pinSvg = (color) => `\
+<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="${color}" style="vertical-align:-0.15em;margin-left:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
+    let pin = '';
+    if (media.location) {
+      pin = pinSvg('#10b981'); // green for known location
+    } else if (media.userDefinedLocation || media.deductedLocation) {
+      pin = pinSvg('#f59e0b'); // orange for user-defined or deducted
+    } else {
+      pin = pinSvg('#ef4444'); // red for unknown
+    }
     // In fullscreen, only show the event information (no timestamp)
-    ov.innerHTML = `<div class="title">${star}${eventName}${loc}</div>`;
+    ov.innerHTML = `<div class="title">${star}${eventName} ${pin}</div>`;
   }
 }
 
@@ -162,6 +179,28 @@ function initViewerControls() {
     if (!slideshowPlaying) return;
     if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
     scheduleNextTick();
+  });
+
+  // Keyboard navigation for Image tab
+  document.addEventListener('keydown', (e) => {
+    const viewerActive = document.getElementById('tab-viewer')?.classList.contains('active');
+    if (!viewerActive) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    let handled = false;
+    switch (e.key) {
+      case 'Home':
+        loadMedia('first'); handled = true; break;
+      case 'End':
+        loadMedia('last'); handled = true; break;
+      case 'PageDown':
+        if (currentMedia) loadMedia('next', currentMedia.accessKey); else loadMedia('first');
+        handled = true; break;
+      case 'PageUp':
+        if (currentMedia) loadMedia('previous', currentMedia.accessKey); else loadMedia('last');
+        handled = true; break;
+    }
+    if (handled) { e.preventDefault(); e.stopPropagation(); }
   });
 }
 
