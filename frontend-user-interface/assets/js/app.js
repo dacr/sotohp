@@ -52,7 +52,18 @@ function setActiveTab(name) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('main .tab').forEach(s => s.classList.toggle('active', s.id === `tab-${name}`));
   location.hash = `#${name}`;
-  if (name === 'world') ensureMap();
+  if (name === 'world') {
+    ensureMap();
+    // Force Leaflet to recalculate dimensions when tab becomes visible
+    setTimeout(() => { if (map) { map.invalidateSize(true); } }, 0);
+    // If for any reason no markers are present and we're not loading, try to (re)load data
+    setTimeout(() => {
+      try {
+        const hasMarkers = !!(cluster && typeof cluster.getLayers === 'function' && cluster.getLayers().length > 0);
+        if (!hasMarkers && !mapLoading) loadMapData({ clear: false });
+      } catch {}
+    }, 50);
+  }
   if (name === 'events') loadEvents();
   if (name === 'owners') loadOwners();
   if (name === 'stores') loadStores();
@@ -154,7 +165,7 @@ function initViewerControls() {
 }
 
 // Leaflet map
-let map = null; let cluster = null; let mapLoaded = false;
+let map = null; let cluster = null; let mapLoaded = false; let mapLoading = false; const mapAddedKeys = new Set();
 function ensureMap() {
   if (mapLoaded) return;
   mapLoaded = true;
@@ -162,10 +173,27 @@ function ensureMap() {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
   cluster = L.markerClusterGroup();
   map.addLayer(cluster);
+  // Ensure correct sizing shortly after creation and on window resize
+  setTimeout(() => { try { map.invalidateSize(true); } catch {} }, 0);
+  window.addEventListener('resize', () => { try { if (map) map.invalidateSize(true); } catch {} });
+  // Wire refresh button
+  const refreshBtn = document.getElementById('refresh-map');
+  if (refreshBtn) refreshBtn.addEventListener('click', () => loadMapData({ clear: false }));
+  // Initial load
+  loadMapData({ clear: false });
+}
+
+function loadMapData({ clear = false } = {}) {
+  if (!map) return;
+  if (mapLoading) { $('#map-status').textContent = 'Already loading…'; return; }
+  if (clear) { cluster.clearLayers(); mapAddedKeys.clear(); }
   $('#map-status').textContent = 'Loading medias with location…';
-  let count = 0;
+  mapLoading = true;
+  let received = 0;
   api.mediasWithLocations(m => {
     const loc = m.location || m.userDefinedLocation || m.deductedLocation; if (!loc) return;
+    if (mapAddedKeys.has(m.accessKey)) return; // keep existing data, avoid duplicates
+    mapAddedKeys.add(m.accessKey);
     const marker = L.marker([loc.latitude, loc.longitude]);
     const thumbUrl = api.mediaNormalizedUrl(m.accessKey);
     const date = m.shootDateTime || m.original?.cameraShootDateTime || '';
@@ -184,8 +212,8 @@ function ensureMap() {
       if (b) b.onclick = () => { setActiveTab('viewer'); showMedia(m); };
     });
     cluster.addLayer(marker);
-    count += 1; if (count % 200 === 0) $('#map-status').textContent = `Loaded ${count}…`;
-  }).then(() => { $('#map-status').textContent = 'Done'; }).catch(() => { $('#map-status').textContent = 'Failed to load medias'; });
+    received += 1; if (received % 200 === 0) $('#map-status').textContent = `Loaded ${mapAddedKeys.size} markers…`;
+  }).then(() => { mapLoading = false; $('#map-status').textContent = `Done. Markers: ${mapAddedKeys.size}`; }).catch(() => { mapLoading = false; $('#map-status').textContent = `Load interrupted. Markers: ${mapAddedKeys.size}`; });
 }
 
 // Events
