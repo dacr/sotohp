@@ -27,5 +27,5 @@ case class Original(
       .map(_.offsetDateTime)
       .getOrElse(fileLastModified.offsetDateTime)
   def hasLocation: Boolean =
-    location.isDefined
+    location.isDefined && location.exists(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d) // TODO fix location data
 }

@@ -24,10 +24,10 @@ object ApiIssue {
   given JsonCodec[ApiIssue] = DeriveJsonCodec.gen
 }
 
-case class ApiInvalidIdentifier(message: String) extends Exception(message) with ApiIssue
-object ApiInvalidIdentifier {
-  given JsonCodec[ApiInvalidIdentifier] = DeriveJsonCodec.gen
-  given Schema[ApiInvalidIdentifier]    = Schema.derived[ApiInvalidIdentifier].name(Schema.SName("ErrorInvalidIdentifier"))
+case class ApiInvalidOrMissingInput(message: String) extends Exception(message) with ApiIssue
+object ApiInvalidOrMissingInput {
+  given JsonCodec[ApiInvalidOrMissingInput] = DeriveJsonCodec.gen
+  given Schema[ApiInvalidOrMissingInput]    = Schema.derived[ApiInvalidOrMissingInput].name(Schema.SName("ApiInvalidOrMissingInput"))
 }
 
 case class ApiInternalError(message: String) extends Exception(message) with ApiIssue
