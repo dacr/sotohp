@@ -38,9 +38,9 @@ main { flex: 1; position: relative; }
 /* Fullscreen overlay for image info */
 .fs-overlay { position: absolute; top: 8px; left: 8px; max-width: 70%; background: rgba(0,0,0,0.55); color: #fff; padding: 6px 8px; border-radius: 6px; font-size: 12px; line-height: 1.3; display: none; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
 .fs-overlay .title { font-weight: 600; }
-.image-container:fullscreen .fs-overlay { display: block; }
+.image-container:fullscreen .fs-overlay { display: block; font-size: 24px; }
 /* Safari/WebKit prefixes for fullscreen */
-.image-container:-webkit-full-screen .fs-overlay { display: block; }
+.image-container:-webkit-full-screen .fs-overlay { display: block; font-size: 24px; }
 
 /* Responsive */
 @media (max-width: 900px) {

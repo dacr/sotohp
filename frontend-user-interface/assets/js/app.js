@@ -91,16 +91,17 @@ function showMedia(media) {
   const eventName = (media.events && media.events.length > 0) ? media.events[0].name : '-';
   $('#info-date').textContent = dateStr;
   $('#info-event').textContent = eventName;
-  $('#info-starred').textContent = media.starred ? '★ Yes' : 'No';
+  $('#info-starred').textContent = media.starred ? '⭐ Yes' : '☆ No';
   const hasLoc = !!(media.location || media.userDefinedLocation || media.deductedLocation);
   $('#info-hasloc').textContent = hasLoc ? 'Yes' : 'No';
   $('#info-keywords').textContent = (media.keywords && media.keywords.length) ? media.keywords.join(', ') : '-';
   // Update fullscreen overlay content
   const ov = document.getElementById('fs-overlay');
   if (ov) {
-    const star = media.starred ? '★ ' : '';
+    const star = media.starred ? '⭐ ' : '☆ ';
     const loc = hasLoc ? ' 📍' : '';
-    ov.innerHTML = `<div class="title">${star}${eventName}${loc}</div><div class="sub">${dateStr}</div>`;
+    // In fullscreen, only show the event information (no timestamp)
+    ov.innerHTML = `<div class="title">${star}${eventName}${loc}</div>`;
   }
 }
 
@@ -198,15 +199,15 @@ function loadMapData({ clear = false } = {}) {
     const thumbUrl = api.mediaNormalizedUrl(m.accessKey);
     const date = m.shootDateTime || m.original?.cameraShootDateTime || '';
     const eventName = (m.events && m.events.length > 0) ? m.events[0].name : '';
-    const starred = m.starred ? '★' : '';
+    const starred = m.starred ? '⭐' : '☆';
     marker.bindPopup(`
-      <div style="min-width:200px">
-        <div style="font-weight:600">${eventName} ${starred}</div>
-        <div style="font-size:12px;color:#555">${date ? new Date(date).toLocaleString() : ''}</div>
-        <img src="${thumbUrl}" alt="media" style="width:100%;height:auto;border-radius:6px;margin-top:6px"/>
-        <button id="goto-${m.accessKey}" style="margin-top:6px">Open</button>
-      </div>
-    `);
+        <div style="min-width:200px">
+          <div style="font-weight:600">${eventName} ${starred}</div>
+          <div style="font-size:12px;color:#555">${date ? new Date(date).toLocaleString() : ''}</div>
+          <img src="${thumbUrl}" alt="media" style="width:100%;height:auto;border-radius:6px;margin-top:6px"/>
+          <button id="goto-${m.accessKey}" style="margin-top:6px">Open</button>
+        </div>
+      `);
     marker.on('popupopen', () => {
       const b = document.getElementById(`goto-${m.accessKey}`);
       if (b) b.onclick = () => { setActiveTab('viewer'); showMedia(m); };
