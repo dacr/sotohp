@@ -22,6 +22,9 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
                             eventId = eventCreated.id,
                             name = EventName("updated-event"),
                             description = Some(EventDescription("hello")),
+                            location = None,
+                            timestamp = None,
+                            originalId = None,
                             keywords = Set.empty
                           )
                           .some

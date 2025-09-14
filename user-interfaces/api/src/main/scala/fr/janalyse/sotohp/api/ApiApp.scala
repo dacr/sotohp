@@ -478,15 +478,23 @@ object ApiApp extends ZIOAppDefault {
 
   def eventUpdateLogic(eventId: EventId, toUpdate: ApiEventUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
     val logic = for {
-      _ <- MediaService
-             .eventGet(eventId)
-             .logError("Couldn't get event")
-             .mapError(err => ApiInternalError("Couldn't get event"))
-             .someOrFail(ApiResourceNotFound("Couldn't find event"))
-      _ <- MediaService
-             .eventUpdate(eventId, name = toUpdate.name, description = toUpdate.description, keywords = toUpdate.keywords)
-             .logError("Couldn't update event")
-             .mapError(err => ApiInternalError("Couldn't update event"))
+      event <- MediaService
+                 .eventGet(eventId)
+                 .logError("Couldn't get event")
+                 .mapError(err => ApiInternalError("Couldn't get event"))
+                 .someOrFail(ApiResourceNotFound("Couldn't find event"))
+      _     <- MediaService
+                 .eventUpdate(
+                   eventId,
+                   name = toUpdate.name,
+                   description = toUpdate.description,
+                   location = event.location,
+                   timestamp = event.timestamp,
+                   originalId = event.originalId,
+                   keywords = toUpdate.keywords
+                 )
+                 .logError("Couldn't update event")
+                 .mapError(err => ApiInternalError("Couldn't update event"))
     } yield ()
 
     logic

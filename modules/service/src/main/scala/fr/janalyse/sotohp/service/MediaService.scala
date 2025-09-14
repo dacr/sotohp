@@ -28,7 +28,7 @@ trait MediaService {
 
   def mediaUpdate(
     key: MediaAccessKey, // current media key
-    updatedMedia: Media  // can contain the new media key to use
+    updatedMedia: Media // can contain the new media key to use
   ): IO[ServiceIssue, Option[Media]]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -71,6 +71,9 @@ trait MediaService {
     eventId: EventId,
     name: EventName,
     description: Option[EventDescription],
+    location: Option[Location],
+    timestamp: Option[ShootDateTime],
+    originalId: Option[OriginalId],
     keywords: Set[Keyword]
   ): IO[ServiceIssue, Option[Event]]
 
@@ -152,7 +155,7 @@ object MediaService {
   def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGet(key))
 
   def mediaGetAt(index: Long): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGetAt(index))
-  
+
   def mediaUpdate(
     key: MediaAccessKey,
     updatedMedia: Media
@@ -199,8 +202,16 @@ object MediaService {
   def eventCreate(attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Event] =
     ZIO.serviceWithZIO(_.eventCreate(attachment, name, description, keywords))
 
-  def eventUpdate(eventId: EventId, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): ZIO[MediaService, ServiceIssue, Option[Event]] =
-    ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, keywords))
+  def eventUpdate(
+    eventId: EventId,
+    name: EventName,
+    description: Option[EventDescription],
+    location: Option[Location],
+    timestamp: Option[ShootDateTime],
+    originalId: Option[OriginalId],
+    keywords: Set[Keyword]
+  ): ZIO[MediaService, ServiceIssue, Option[Event]] =
+    ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, location, timestamp, originalId, keywords))
 
   // -------------------------------------------------------------------------------------------------------------------
 

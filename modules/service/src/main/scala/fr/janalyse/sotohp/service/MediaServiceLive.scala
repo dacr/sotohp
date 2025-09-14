@@ -125,7 +125,7 @@ class MediaServiceLive private (
     updatedMedia: Media
   ): IO[ServiceIssue, Option[Media]] = {
     mediaColl
-      .update(key, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer) ) // to solve ambiguity with auto-derived transformer
+      .update(key, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)) // to solve ambiguity with auto-derived transformer
       .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
     // TODO resync published
@@ -497,10 +497,28 @@ class MediaServiceLive private (
     } yield event
   }
 
-  override def eventUpdate(eventId: EventId, name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Option[Event]] = {
+  override def eventUpdate(
+    eventId: EventId,
+    name: EventName,
+    description: Option[EventDescription],
+    location: Option[Location],
+    timestamp: Option[ShootDateTime],
+    originalId: Option[OriginalId],
+    keywords: Set[Keyword]
+  ): IO[ServiceIssue, Option[Event]] = {
     for {
       maybeDaoEvent <- eventColl
-                         .update(eventId, _.copy(name = name, description = description, keywords = keywords))
+                         .update(
+                           eventId,
+                           _.copy(
+                             name = name,
+                             description = description,
+                             location = location.transformInto[Option[DaoLocation]],
+                             timestamp = timestamp,
+                             originalId = originalId,
+                             keywords = keywords
+                           )
+                         )
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
       event         <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
     } yield event
@@ -718,12 +736,12 @@ class MediaServiceLive private (
           .filter(_.original.hasLocation)
 
       for {
-        firstPrev    <- prevCandidates.runHead
-        firstNext    <- nextCandidates.runHead
-        validDistance = firstPrev
-                          .flatMap(_.original.location)
-                          .flatMap(fp => firstNext.flatMap(_.original.location).map(fn => fp.distanceTo(fn)))
-                          .exists(_ < 750) // meters // TODO add config parameter
+        firstPrev                <- prevCandidates.runHead
+        firstNext                <- nextCandidates.runHead
+        validDistance             = firstPrev
+                                      .flatMap(_.original.location)
+                                      .flatMap(fp => firstNext.flatMap(_.original.location).map(fn => fp.distanceTo(fn)))
+                                      .exists(_ < 750) // meters // TODO add config parameter
         inductedLocationInMiddle  = if (validDistance)
                                       firstPrev.flatMap(_.original.location)
                                     else None
@@ -812,7 +830,7 @@ class MediaServiceLive private (
       .map(token => rules.flatMap(_.mappings.find(_.from == token.toLowerCase).map(_.to)).getOrElse(token))
       .flatMap(_.split("[- ]+"))
       .filter(_.trim.nonEmpty)
-      .filterNot(_.matches("^[-0-9]+$"))                // TODO add option to rules to ignore standalone numbers
+      .filterNot(_.matches("^[-0-9]+$")) // TODO add option to rules to ignore standalone numbers
       .map(_.toLowerCase)
       .filter(key => rules.isEmpty || !rules.get.ignoring.contains(key))
       .toSet
@@ -846,7 +864,17 @@ class MediaServiceLive private (
       .map(media => media.copy(keywords = media.keywords.filterNot(_.text == keyword.text)))
       .flatMap(media => ZStream.fromIterable(media.events))
       .map(event => event.copy(keywords = event.keywords.filterNot(_.text == keyword.text)))
-      .tap(event => eventUpdate(event.id, name = event.name, description = event.description, keywords = event.keywords))
+      .tap(event =>
+        eventUpdate(
+          event.id,
+          name = event.name,
+          description = event.description,
+          location = event.location,
+          timestamp = event.timestamp,
+          originalId = event.originalId,
+          keywords = event.keywords
+        )
+      )
       .runDrain
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete keyword : $err"))
   }
