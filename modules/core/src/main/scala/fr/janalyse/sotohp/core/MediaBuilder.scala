@@ -48,9 +48,9 @@ object MediaBuilder {
     relativeDirectory.map(dir => EventAttachment(store, EventMediaDirectory(dir))).filter(_.eventMediaDirectory.path.toString.nonEmpty)
   }
 
-  def buildDefaultMediaEvent(original: Original): Option[Event] = buildDefaultMediaEvent(original.store, original.mediaPath)
+  def buildDefaultMediaEvent(original: Original): Option[Event] = buildDefaultMediaEvent(original.store, original.mediaPath, Some(original))
 
-  def buildDefaultMediaEvent(store: Store, originalMediaPath: OriginalPath): Option[Event] = {
+  def buildDefaultMediaEvent(store: Store, originalMediaPath: OriginalPath, mayBeOriginal: Option[Original]): Option[Event] = {
     val eventId         = EventId(UUID.randomUUID())
     val eventAttachment = buildEventAttachment(store, originalMediaPath)
     val eventName       = eventAttachment.map(_.eventMediaDirectory.toString)
@@ -63,6 +63,9 @@ object MediaBuilder {
           attachment = eventAttachment,
           name = EventName(name),
           description = None,
+          location = mayBeOriginal.flatMap(_.location),
+          timestamp = mayBeOriginal.flatMap(_.cameraShootDateTime),
+          originalId = mayBeOriginal.map(_.id),
           keywords = Set.empty
         )
       )

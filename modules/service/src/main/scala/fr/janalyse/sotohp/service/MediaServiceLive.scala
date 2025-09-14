@@ -490,7 +490,7 @@ class MediaServiceLive private (
   override def eventCreate(attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Event] = {
     for {
       eventId <- Random.nextUUID.map(EventId.apply)
-      event    = Event(eventId, attachment, name, description, keywords)
+      event    = Event(eventId, attachment, name, description, None, None, None, keywords)
       _       <- eventColl
                    .upsert(eventId, _ => event.into[DaoEvent].transform)
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))

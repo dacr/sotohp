@@ -25,5 +25,8 @@ case class DaoEvent(
   attachment: Option[DaoEventAttachment], // for event based on a relative directory path within a given store
   name: EventName,
   description: Option[EventDescription],
+  location: Option[DaoLocation],          // reference location for this event
+  timestamp: Option[ShootDateTime],    // reference date time for this event,
+  originalId: Option[OriginalId],      // reference/chosen original which will be shown when the event is displayed
   keywords: Set[Keyword]
 ) derives LMDBCodecJson
