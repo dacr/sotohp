@@ -4,31 +4,79 @@
 
 - create a front end user interface for the SotoHP project
     - follow the available features in the OPENAPI REST API specification provided by this project
+- overall look & feel
+    - application title is `Sotohp`
+    - create a SVG square logo inspired by the photos mosaic thematic
+      - to be used as the favicon.svg
+      - put the logo on the left of the application title
 - organize features through tabs
-  - image visualization tab
+- tasks related to tabs to implement
+  - [x] image visualization tab
     - maximize the space for the image
-    - display image information (date, keywords, first event name, starred indicator, hasLocation indicator)
-    - add a set of control buttons (first, previous, next, last, random, play/pause slideshow, delay choices, fullscreen)
-  - world (openstreetmap) zoomable tab
+    - add a set of control buttons (on the right of the screen)
+      - basic buttons (only display icons for all basic buttons, text when the mouse goes over the button) :
+        - first
+        - previous
+        - next
+        - last
+        - random
+        - fullscreen
+        - play/pause (slideshow using the policy described by the choice button)
+      - slideshow choices button : slide show delay choices to control how the slideshow should behave, seconds delay and what to do which is either take the next photo or a random new one
+        - 5s random
+        - 5s next
+        - 10s random
+        - 10s next
+        - 20s random
+        - 20s next
+        - 30s random
+        - 30s next
+    - display image information (on the right of the screen below the buttons)
+      - date
+      - keywords
+      - first event name
+      - starred indicator :
+        - yellow star (⭐) for starred
+        - empty star (☆) for not starred
+      - hasLocation indicator
+        - green pin logo : when the location is known in the Original (true GPS position)
+        - orange pin logo : when the location is deducted or user defined
+        - red pin logo when : when the location is unknown
+    - add mouse/keyboard shortcuts
+      - Mouse behavior on the image
+        - double-click on the image to toggle the full screen mode
+        - single-click on the left zone of the image (1/4) to navigate to the previous image
+        - single-click on the right to of the image (1/4) navigate to the next image
+        - single-click on the "middle" to navigate to a new random image
+      - Support some keyboards to navigate through images :
+        - key `Home` : go to the first image
+        - key `End` : go to the last one
+        - key `PageDown`: go to the next one
+        - key `PageUp`: got to the previous one
+    - when the image is in full screen mode
+      - use a background semi-transparent color for the added text to make it always visible
+      - show the event information on the top left of the image
+      - show the starred and hasLocation indicators
+  - [ ] world (openstreetmap) zoomable tab
     - use zoom-in and zoom-out to see the photo distribution all other the world
     - use a clustered approach as thousands of photos can be displayed
       - filter media that has a known location ignore all others
     - when a photo is selected, popup an information zone with
       - photo information (date, first event name, starred indicator)
-      - the photo itself in a reduced format 
-  - events management tab
+      - the photo itself in a reduced format
+      - a button to switch back to the visualization zone
+  - [ ] events management tab
     - list events
     - wire other operations available in the API
-  - owners management tab
+  - [ ] owners management tab
     - list owners
     - wire other operations available in the API
-  - stores management tab
+  - [ ] stores management tab
     - list stores
     - wire other operations available in the API
     - when creating a new store, choose the owner between already available owners
-  - settings tab
+  - [ ] settings tab
     - add a synchronize button to force the synchronization of all defined stores
-- create a square favicon.svg inspired by the photos mosaic thematic
 
 ## coding choices
 
