@@ -24,6 +24,10 @@ export class ApiClient {
     return `/api/media/${encodeURIComponent(mediaAccessKey)}/normalized`
   }
 
+  mediaMiniatureUrl(mediaAccessKey: string): string {
+    return `/api/media/${encodeURIComponent(mediaAccessKey)}/miniature`
+  }
+
   async listEvents(): Promise<SEvent[]> {
     return await this.fetchNdjson<SEvent>('/api/events')
   }

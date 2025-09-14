@@ -71,8 +71,13 @@
   - [ ] events management tab
     - list events using tiles, hide event id, show the timestamp
       - sorted by the timestamp in reverse order (newest first)
-      - include media miniature inside each event tile (use the new API which allow to get media access key from an originalId)
+      - include media normalized image inside each event tile (use the new API which allow to get media access key from an originalId)
       - when click on a tile, display the event associated originalId/mediaAccessKey in the image viewer 
+      - add a small image zooming effect when mouse goes hover tiles
+        - when leaving a zoomed event, add a quick zoom out effect
+    - take care to performance as it may requires a lot of queries :
+      - Decrease the number of simultaneous requests made to retrieve mediaAccessKey and miniatures from the originalId associated to each event.
+        Right now it generates "ERR_INSUFFICIENT_RESOURCES"
     - wire other operations available in the API
   - [ ] owners management tab
     - list owners

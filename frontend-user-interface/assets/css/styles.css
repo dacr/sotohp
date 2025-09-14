@@ -42,6 +42,11 @@ main { flex: 1; position: relative; }
 /* Safari/WebKit prefixes for fullscreen */
 .image-container:-webkit-full-screen .fs-overlay { display: block; font-size: 24px; }
 
+/* Hover zoom for event thumbnails */
+/* Quick zoom-out when leaving hover, slow progressive zoom-in while hovering */
+.list li .ev-thumb img { transform: scale(1); transition: transform 180ms ease-out; will-change: transform; }
+.list li:hover .ev-thumb img { transform: scale(1.18); transition: transform 1400ms ease-out; }
+
 /* Responsive */
 @media (max-width: 900px) {
   .viewer { grid-template-columns: 1fr; }
