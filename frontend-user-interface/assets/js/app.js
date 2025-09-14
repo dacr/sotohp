@@ -132,8 +132,33 @@ function initViewerControls() {
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });
+  // Click zones on the image to navigate (left 1/4 prev, right 1/4 next, middle random)
+  const imgContainer = document.querySelector('.image-container');
+  let clickTimer = null;
+  imgContainer?.addEventListener('click', (ev) => {
+    // Delay to differentiate from double-click
+    if (clickTimer) clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      clickTimer = null;
+      const rect = imgContainer.getBoundingClientRect();
+      const x = (ev.clientX ?? 0) - rect.left;
+      const ratio = rect.width > 0 ? x / rect.width : 0.5;
+      if (ratio <= 0.25) {
+        // Left quarter → previous
+        if (currentMedia) loadMedia('previous', currentMedia.accessKey); else loadMedia('last');
+      } else if (ratio >= 0.75) {
+        // Right quarter → next
+        if (currentMedia) loadMedia('next', currentMedia.accessKey); else loadMedia('first');
+      } else {
+        // Middle → random
+        loadMedia('random');
+      }
+    }, 220);
+  });
   // Toggle fullscreen on double click on the image/container
-  (document.querySelector('.image-container'))?.addEventListener('dblclick', () => {
+  imgContainer?.addEventListener('dblclick', () => {
+    // Cancel pending single-click action
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });

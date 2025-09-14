@@ -57,7 +57,7 @@
       - use a background semi-transparent color for the added text to make it always visible
       - show the event information on the top left of the image
       - show the starred and hasLocation indicators
-  - [ ] world (openstreetmap) zoomable tab
+  - [x] world (openstreetmap) zoomable tab
     - use zoom-in and zoom-out to see the photo distribution all other the world
     - use a clustered approach as thousands of photos can be displayed
       - filter media that has a known location ignore all others
