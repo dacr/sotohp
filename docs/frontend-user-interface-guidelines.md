@@ -11,7 +11,7 @@
       - put the logo on the left of the application title
 - organize features through tabs
 - tasks related to tabs to implement
-  - [x] image visualization tab
+  - [x] image/media visualization tab named `Viewer`
     - maximize the space for the image
     - add a set of control buttons (on the right of the screen)
       - basic buttons (only display icons for all basic buttons, text when the mouse goes over the button) :
