@@ -78,6 +78,7 @@
     - take care to performance as it may requires a lot of queries :
       - Decrease the number of simultaneous requests made to retrieve mediaAccessKey and miniatures from the originalId associated to each event.
         Right now it generates "ERR_INSUFFICIENT_RESOURCES"
+      - use lazy loading to load only the tiles images are near to be visible on the screen
     - wire other operations available in the API
   - [ ] owners management tab
     - list owners
