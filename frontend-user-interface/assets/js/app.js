@@ -334,10 +334,71 @@ async function loadEvents() {
       return tb - ta;
     });
 
-    // Render base tiles first (no network calls)
-    const tasks = [];
+    // Lazy load state/images per tile when needed
+    const stateCache = new Map(); // originalId -> Promise<State>
+    const limit = 4; // small concurrency for state->image resolution
+    let inFlight = 0;
+    const pending = [];
+    const scheduled = new WeakSet();
+
+    async function resolveAndRender(li, ev) {
+      inFlight++;
+      try {
+        if (!ev.originalId) return;
+        let p = stateCache.get(ev.originalId);
+        if (!p) {
+          p = api.getState(ev.originalId).catch(err => { stateCache.delete(ev.originalId); throw err; });
+          stateCache.set(ev.originalId, p);
+        }
+        const st = await p;
+        if (!st || !st.mediaAccessKey) return;
+        const img = new Image();
+        img.src = api.mediaNormalizedUrl(st.mediaAccessKey);
+        img.alt = ev.name || '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.display = 'block';
+        const ph = li.querySelector('.ev-thumb');
+        if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
+        li.style.cursor = 'pointer';
+        li.onclick = async () => {
+          try { const media = await api.getMediaByKey(st.mediaAccessKey); setActiveTab('viewer'); showMedia(media); } catch {}
+        };
+      } finally {
+        inFlight--;
+        schedule();
+      }
+    }
+
+    function schedule() {
+      while (inFlight < limit && pending.length > 0) {
+        const item = pending.shift();
+        resolveAndRender(item.li, item.ev);
+      }
+    }
+
+    const tabSection = document.getElementById('tab-events');
+    const observer = ('IntersectionObserver' in window)
+      ? new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const li = entry.target;
+              observer.unobserve(li);
+              if (scheduled.has(li)) continue;
+              const ev = li.__event;
+              scheduled.add(li);
+              if (ev && ev.originalId) { pending.push({ li, ev }); schedule(); }
+            }
+          }
+        }, { root: tabSection, rootMargin: '400px 0px', threshold: 0.01 })
+      : null;
+
     for (const ev of events) {
       const li = document.createElement('li');
+      li.__event = ev; // attach ref for observer
       const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '';
       li.innerHTML = `
         <div class="ev-thumb" style="width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;">No preview</div>
@@ -346,42 +407,25 @@ async function loadEvents() {
       `;
       list.appendChild(li);
 
+      // Clicking before image is loaded should still navigate when possible
       if (ev.originalId) {
-        // Create a task to resolve mediaAccessKey and load the miniature
-        tasks.push(async () => {
+        li.style.cursor = 'pointer';
+        li.onclick = async () => {
           try {
-            const st = await api.getState(ev.originalId);
-            if (!st || !st.mediaAccessKey) return;
-            const img = new Image();
-            img.src = api.mediaNormalizedUrl(st.mediaAccessKey);
-            img.alt = ev.name || '';
-            img.loading = 'lazy'; // let the browser defer offscreen images
-            img.decoding = 'async';
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'cover';
-            img.style.display = 'block';
-            const ph = li.querySelector('.ev-thumb');
-            if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
-            li.style.cursor = 'pointer';
-            li.onclick = async () => {
-              try { const media = await api.getMediaByKey(st.mediaAccessKey); setActiveTab('viewer'); showMedia(media); } catch {}
-            };
+            let p = stateCache.get(ev.originalId);
+            if (!p) { p = api.getState(ev.originalId).catch(err => { stateCache.delete(ev.originalId); throw err; }); stateCache.set(ev.originalId, p); }
+            const st = await p; if (!st || !st.mediaAccessKey) return;
+            const media = await api.getMediaByKey(st.mediaAccessKey); setActiveTab('viewer'); showMedia(media);
           } catch {}
-        });
+        };
+      }
+
+      if (observer && ev.originalId) {
+        observer.observe(li);
+      } else if (ev.originalId) {
+        pending.push({ li, ev }); schedule();
       }
     }
-
-    // Run tasks with limited concurrency to reduce simultaneous requests
-    const limit = 6; // tune this if needed
-    let idx = 0;
-    const workers = new Array(Math.min(limit, tasks.length)).fill(0).map(async () => {
-      while (idx < tasks.length) {
-        const myIdx = idx++;
-        await tasks[myIdx]();
-      }
-    });
-    await Promise.all(workers);
   } catch (e) { list.innerHTML = '<li>Failed to load events</li>'; }
 }
 

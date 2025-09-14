@@ -11,7 +11,7 @@ header h1 { margin: 0; font-size: 1.1rem; letter-spacing: 0.03em; }
 .tabs button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
 
 main { flex: 1; position: relative; }
-.tab { display: none; height: calc(100vh - 70px); }
+.tab { display: none; height: calc(100vh - 70px); overflow: auto; }
 .tab.active { display: block; }
 
 /* Viewer */
