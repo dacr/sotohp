@@ -32,6 +32,7 @@ import zio.stream.{ZPipeline, ZStream}
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.util.UUID
 
 object ApiApp extends ZIOAppDefault {
 
@@ -66,10 +67,40 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   val systemEndpoint                          = endpoint.in("api").in("system").tag("System")
   val adminEndpoint                           = endpoint.in("api").in("admin").tag("Admin")
+  def stateEndpoint(plurial: Boolean = false) = endpoint.in("api").in("state" + (if (plurial) "s" else "")).tag("State")
   def mediaEndpoint(plurial: Boolean = false) = endpoint.in("api").in("media" + (if (plurial) "s" else "")).tag("Media")
   def storeEndpoint(plurial: Boolean = false) = endpoint.in("api").in("store" + (if (plurial) "s" else "")).tag("Store")
   def ownerEndpoint(plurial: Boolean = false) = endpoint.in("api").in("owner" + (if (plurial) "s" else "")).tag("Owner")
   def eventEndpoint(plurial: Boolean = false) = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def stateGetLogic(originalId: OriginalId): ZIO[ApiEnv, ApiIssue, ApiState] = {
+    for {
+      state   <- MediaService
+                   .stateGet(originalId)
+                   .logError("Couldn't get state")
+                   .mapError(err => ApiInternalError("Couldn't get state"))
+                   .someOrFail(ApiResourceNotFound("Couldn't find state"))
+      taoState = state.transformInto[ApiState]
+    } yield taoState
+  }
+
+  val stateGetEndpoint =
+    stateEndpoint()
+      .name("Get original state")
+      .summary("Get original/media state information for the given original identifier")
+      .description("Also get the related media access key for the selected original")
+      .get
+      .in(path[UUID]("originalId"))
+      .out(jsonBody[ApiState])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawId =>
+        ZIO
+          .attempt(OriginalId(rawId))
+          .mapError(err => ApiInvalidOrMissingInput("Invalid original identifier"))
+          .flatMap(key => stateGetLogic(key))
+      )
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -281,17 +312,16 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def mediaGetNormalizedLogic(accessKey: MediaAccessKey): ZIO[ApiEnv, ApiIssue, (Media, ZStream[ApiEnv, ApiInternalError, Byte])] = {
+  def mediaGetImageBytesLogic(accessKey: MediaAccessKey, mininiatureOne: Boolean): ZIO[ApiEnv, ApiIssue, (Media, ZStream[ApiEnv, ApiInternalError, Byte])] = {
     val logic = for {
       media           <- MediaService
                            .mediaGet(accessKey)
                            .logError("Couldn't get media")
                            .mapError(err => ApiInternalError("Couldn't get media"))
                            .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      imageBytesStream = MediaService
-                           .mediaNormalizedRead(media.accessKey)
-                           .mapError(err => ApiInternalError("Couldn't read media"))
-    } yield (media, imageBytesStream)
+      imageBytesStream = if (mininiatureOne) MediaService.mediaMiniatureRead(media.accessKey)
+                         else MediaService.mediaNormalizedRead(media.accessKey)
+    } yield (media, imageBytesStream.mapError(err => ApiInternalError("Couldn't read media")))
 
     logic
   }
@@ -311,7 +341,30 @@ object ApiApp extends ZIOAppDefault {
           mediaKey            <- ZIO
                                    .attempt(MediaAccessKey(rawKey))
                                    .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
-          (media, byteStream) <- mediaGetNormalizedLogic(mediaKey)
+          (media, byteStream) <- mediaGetImageBytesLogic(mediaKey, false)
+          ms                  <- ZIO.service[MediaService]
+          httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
+        } yield (MediaType.ImageJpeg.toString, httpStream)
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  val mediaGetMiniatureEndpoint =
+    mediaEndpoint()
+      .name("Get media miniature image")
+      .summary("Get media miniature image content")
+      .get
+      .in(path[String]("mediaAccessKey"))
+      .in("miniature")
+      .out(header[String]("Content-Type"))
+      .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawKey =>
+        for {
+          mediaKey            <- ZIO
+                                   .attempt(MediaAccessKey(rawKey))
+                                   .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+          (media, byteStream) <- mediaGetImageBytesLogic(mediaKey, true)
           ms                  <- ZIO.service[MediaService]
           httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
         } yield (MediaType.ImageJpeg.toString, httpStream)
@@ -647,6 +700,7 @@ object ApiApp extends ZIOAppDefault {
     mediaSelectEndpoint,
     mediaGetEndpoint,
     mediaGetNormalizedEndpoint,
+    mediaGetMiniatureEndpoint,
     // -------------------------
     eventListEndpoint,
     eventCreateEndpoint,
@@ -661,6 +715,8 @@ object ApiApp extends ZIOAppDefault {
     storeListEndpoint,
     storeGetEndpoint,
     storeUpdateEndpoint,
+    // -------------------------
+    stateGetEndpoint,
     // -------------------------
     adminSynchronizeEndpoint,
     // -------------------------

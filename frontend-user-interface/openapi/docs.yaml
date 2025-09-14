@@ -504,6 +504,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/state/{originalId}:
+    get:
+      tags:
+      - State
+      summary: Get original/media state information for the given original identifier
+      description: Also get the related media access key for the selected original
+      operationId: Get original state
+      parameters:
+      - name: originalId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/State'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/admin/synchronize:
     get:
       tags:
@@ -608,6 +647,14 @@ components:
           type: string
         description:
           type: string
+        location:
+          $ref: '#/components/schemas/Location'
+        timestamp:
+          type: string
+          format: date-time
+        originalId:
+          type: string
+          format: uuid
         keywords:
           type: array
           uniqueItems: true
@@ -623,6 +670,14 @@ components:
           type: string
         description:
           type: string
+        location:
+          $ref: '#/components/schemas/Location'
+        timestamp:
+          type: string
+          format: date-time
+        originalId:
+          type: string
+          format: uuid
         keywords:
           type: array
           uniqueItems: true
@@ -638,6 +693,14 @@ components:
           type: string
         description:
           type: string
+        location:
+          $ref: '#/components/schemas/Location'
+        timestamp:
+          type: string
+          format: date-time
+        originalId:
+          type: string
+          format: uuid
         keywords:
           type: array
           uniqueItems: true
@@ -825,6 +888,22 @@ components:
         birthDate:
           type: string
           format: date-time
+    State:
+      title: State
+      type: object
+      required:
+      - originalId
+      - originalAddedOn
+      - mediaAccessKey
+      properties:
+        originalId:
+          type: string
+          format: uuid
+        originalAddedOn:
+          type: string
+          format: date-time
+        mediaAccessKey:
+          type: string
     Status:
       title: Status
       type: object
