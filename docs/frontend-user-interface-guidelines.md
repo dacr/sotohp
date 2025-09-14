@@ -68,7 +68,10 @@
       - the photo itself in a reduced format
       - a button to switch back to the visualization zone
   - [ ] events management tab
-    - list events
+    - list events using tiles, hide event id, show the timestamp
+      - sorted by the timestamp in reverse order (newest first)
+      - include media miniature inside each event tile (use the new API which allow to get media access key from an originalId)
+      - when click on a tile, display the event associated originalId/mediaAccessKey in the image viewer 
     - wire other operations available in the API
   - [ ] owners management tab
     - list owners
