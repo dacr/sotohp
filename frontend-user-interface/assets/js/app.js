@@ -85,6 +85,7 @@ async function loadMedia(select, referenceKey) {
 
 function showMedia(media) {
   currentMedia = media;
+  try { localStorage.setItem('viewer.lastMediaAccessKey', media.accessKey); } catch {}
   const img = $('#main-image');
   img.src = api.mediaNormalizedUrl(media.accessKey) + `?t=${Date.now()}`; // cache bust
   const date = media.shootDateTime || media.original?.cameraShootDateTime || '-';
@@ -438,8 +439,17 @@ function init() {
   initEventsTab();
   initStoresTab();
   initSettings();
-  // Initial media
-  loadMedia('random');
+  // Initial media: restore last viewed image if possible, else random
+  try {
+    const lastKey = localStorage.getItem('viewer.lastMediaAccessKey');
+    if (lastKey) {
+      api.getMediaByKey(lastKey).then(m => showMedia(m)).catch(() => loadMedia('random'));
+    } else {
+      loadMedia('random');
+    }
+  } catch {
+    loadMedia('random');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);

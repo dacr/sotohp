@@ -59,6 +59,7 @@
       - show the starred and hasLocation indicators
     - a Click on the has location indicator when location is known whould switch to the world (openstreetmap) zoomable tab
       - with the zoom level set to the location of the photo
+    - remember the currently displayed image in the viewer on page reload
   - [x] world (openstreetmap) zoomable tab
     - use zoom-in and zoom-out to see the photo distribution all other the world
     - use a clustered approach as thousands of photos can be displayed
