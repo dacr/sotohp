@@ -13,6 +13,7 @@ class ApiClient {
   }
   mediaNormalizedUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/normalized`; }
   async listEvents() { return await this.#fetchNdjson('/api/events'); }
+  async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
   async createEvent(name) { const res = await this.http.post('/api/event', { name }); return res.data; }
   async listOwners() { return await this.#fetchNdjson('/api/owners'); }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
@@ -324,10 +325,44 @@ async function loadEvents() {
   const list = $('#events-list'); list.innerHTML = '';
   try {
     const events = await api.listEvents();
+    // Sort by timestamp desc (newest first)
+    events.sort((a, b) => {
+      const ta = a.timestamp ? Date.parse(a.timestamp) : 0;
+      const tb = b.timestamp ? Date.parse(b.timestamp) : 0;
+      return tb - ta;
+    });
     for (const ev of events) {
       const li = document.createElement('li');
-      li.innerHTML = `<h4>${ev.name}</h4><div style="font-size:12px;color:#555">${ev.id}</div>`;
+      const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '';
+      // Tile content: thumbnail (loaded async), name, timestamp
+      li.innerHTML = `
+        <div class="ev-thumb" style="width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;">No preview</div>
+        <h4 style="margin:0 0 4px 0;">${ev.name || '(no name)'}</h4>
+        <div style="font-size:12px;color:#555">${tsStr}</div>
+      `;
       list.appendChild(li);
+      // Load miniature using new API that maps originalId -> mediaAccessKey
+      if (ev.originalId) {
+        try {
+          api.getState(ev.originalId).then(async (st) => {
+            if (!st || !st.mediaAccessKey) return;
+            const img = new Image();
+            img.src = api.mediaNormalizedUrl(st.mediaAccessKey);
+            img.alt = ev.name || '';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'cover';
+            img.style.display = 'block';
+            const ph = li.querySelector('.ev-thumb');
+            if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
+            // Optional: clicking the tile opens the media in the viewer
+            li.style.cursor = 'pointer';
+            li.onclick = async () => {
+              try { const media = await api.getMediaByKey(st.mediaAccessKey); setActiveTab('viewer'); showMedia(media); } catch {}
+            };
+          }).catch(() => {});
+        } catch {}
+      }
     }
   } catch (e) { list.innerHTML = '<li>Failed to load events</li>'; }
 }

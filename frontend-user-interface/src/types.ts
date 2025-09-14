@@ -40,6 +40,8 @@ export interface Event {
   name: string;
   description?: string;
   keywords?: string[];
+  timestamp?: string;
+  originalId?: string;
 }
 
 export interface Owner {

@@ -28,6 +28,11 @@ export class ApiClient {
     return await this.fetchNdjson<SEvent>('/api/events')
   }
 
+  async getState(originalId: string): Promise<{ originalId: string; originalAddedOn: string; mediaAccessKey: string }> {
+    const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`)
+    return res.data
+  }
+
   async createEvent(name: string): Promise<SEvent> {
     const res = await this.http.post<SEvent>('/api/event', { name })
     return res.data
