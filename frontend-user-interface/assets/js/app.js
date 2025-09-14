@@ -100,7 +100,17 @@ function showMedia(media) {
   let locLabel = 'No';
   if (media.location) { pinColor = '#10b981'; locLabel = 'Known'; }
   else if (media.userDefinedLocation || media.deductedLocation) { pinColor = '#f59e0b'; locLabel = 'Estimated'; }
-  $('#info-hasloc').innerHTML = `${pinSvgInfo(pinColor)} ${locLabel}`;
+  const hasLocEl = document.getElementById('info-hasloc');
+  hasLocEl.innerHTML = `${pinSvgInfo(pinColor)} ${locLabel}`;
+  // Make clickable only when true GPS location is known (green)
+  hasLocEl.style.cursor = 'default';
+  hasLocEl.title = '';
+  hasLocEl.onclick = null;
+  if (media.location) {
+    hasLocEl.style.cursor = 'pointer';
+    hasLocEl.title = 'Show on map';
+    hasLocEl.onclick = () => goToWorldLocation(media.location, media.accessKey);
+  }
   $('#info-keywords').textContent = (media.keywords && media.keywords.length) ? media.keywords.join(', ') : '-';
   // Update fullscreen overlay content
   const ov = document.getElementById('fs-overlay');
@@ -230,7 +240,7 @@ function initViewerControls() {
 }
 
 // Leaflet map
-let map = null; let cluster = null; let mapLoaded = false; let mapLoading = false; const mapAddedKeys = new Set();
+let map = null; let cluster = null; let mapLoaded = false; let mapLoading = false; const mapAddedKeys = new Set(); const mapMarkersByKey = new Map(); let pendingFocusKey = null;
 function ensureMap() {
   if (mapLoaded) return;
   mapLoaded = true;
@@ -246,6 +256,29 @@ function ensureMap() {
   if (refreshBtn) refreshBtn.addEventListener('click', () => loadMapData({ clear: false }));
   // Initial load
   loadMapData({ clear: false });
+}
+
+function goToWorldLocation(loc, accessKey) {
+  try {
+    setActiveTab('world');
+    ensureMap();
+    pendingFocusKey = accessKey || null;
+    setTimeout(() => {
+      try {
+        if (map) { map.setView([loc.latitude, loc.longitude], 16); }
+        if (accessKey && mapMarkersByKey.has(accessKey)) {
+          const marker = mapMarkersByKey.get(accessKey);
+          if (cluster && marker) {
+            cluster.zoomToShowLayer(marker, () => { marker.openPopup(); });
+          } else {
+            marker?.openPopup?.();
+          }
+        } else {
+          if (!mapLoading) loadMapData({ clear: false });
+        }
+      } catch {}
+    }, 0);
+  } catch {}
 }
 
 function loadMapData({ clear = false } = {}) {
@@ -276,7 +309,12 @@ function loadMapData({ clear = false } = {}) {
       const b = document.getElementById(`goto-${m.accessKey}`);
       if (b) b.onclick = () => { setActiveTab('viewer'); showMedia(m); };
     });
+    mapMarkersByKey.set(m.accessKey, marker);
     cluster.addLayer(marker);
+    if (pendingFocusKey && m.accessKey === pendingFocusKey) {
+      try { cluster.zoomToShowLayer(marker, () => { marker.openPopup(); }); } catch {}
+      pendingFocusKey = null;
+    }
     received += 1; if (received % 200 === 0) $('#map-status').textContent = `Loaded ${mapAddedKeys.size} markers…`;
   }).then(() => { mapLoading = false; $('#map-status').textContent = `Done. Markers: ${mapAddedKeys.size}`; }).catch(() => { mapLoading = false; $('#map-status').textContent = `Load interrupted. Markers: ${mapAddedKeys.size}`; });
 }

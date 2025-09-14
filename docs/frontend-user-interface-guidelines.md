@@ -57,6 +57,8 @@
       - use a background semi-transparent color for the added text to make it always visible
       - show the event information on the top left of the image
       - show the starred and hasLocation indicators
+    - a Click on the has location indicator when location is known whould switch to the world (openstreetmap) zoomable tab
+      - with the zoom level set to the location of the photo
   - [x] world (openstreetmap) zoomable tab
     - use zoom-in and zoom-out to see the photo distribution all other the world
     - use a clustered approach as thousands of photos can be displayed
