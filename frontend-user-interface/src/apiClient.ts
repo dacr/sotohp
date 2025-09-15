@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { Media, MediaSelector, Event as SEvent, Owner, Store } from './types'
+import type { Media, MediaSelector, Event as SEvent, Owner, Store, EventUpdate } from './types'
 
 export class ApiClient {
   private http: AxiosInstance
@@ -30,6 +30,10 @@ export class ApiClient {
 
   async listEvents(): Promise<SEvent[]> {
     return await this.fetchNdjson<SEvent>('/api/events')
+  }
+
+  async updateEvent(eventId: string, body: EventUpdate): Promise<void> {
+    await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body)
   }
 
   async getState(originalId: string): Promise<{ originalId: string; originalAddedOn: string; mediaAccessKey: string }> {

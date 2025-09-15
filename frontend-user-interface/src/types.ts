@@ -44,6 +44,15 @@ export interface Event {
   originalId?: string;
 }
 
+export interface EventUpdate {
+  name: string;
+  description?: string;
+  location?: Location;
+  timestamp?: string; // ISO date-time
+  originalId?: string;
+  keywords?: string[];
+}
+
 export interface Owner {
   id: string;
   firstName: string;

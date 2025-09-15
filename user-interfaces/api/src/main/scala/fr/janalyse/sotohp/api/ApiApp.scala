@@ -541,8 +541,8 @@ object ApiApp extends ZIOAppDefault {
                    eventId,
                    name = toUpdate.name,
                    description = toUpdate.description,
-                   location = event.location,
-                   timestamp = event.timestamp,
+                   location = toUpdate.location.transformInto[Option[Location]],
+                   timestamp = toUpdate.timestamp,
                    originalId = event.originalId,
                    keywords = toUpdate.keywords
                  )

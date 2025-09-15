@@ -16,6 +16,7 @@ class ApiClient {
   async listEvents() { return await this.#fetchNdjson('/api/events'); }
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
   async createEvent(name) { const res = await this.http.post('/api/event', { name }); return res.data; }
+  async updateEvent(eventId, body) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body); }
   async listOwners() { return await this.#fetchNdjson('/api/owners'); }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async synchronize() { await this.http.get('/api/admin/synchronize'); }
@@ -323,6 +324,136 @@ function loadMapData({ clear = false } = {}) {
 }
 
 // Events
+// Helpers for Event edit modal
+function toLocalInputValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromLocalInputValue(val) {
+  if (!val) return undefined;
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
+function openEventEditModal(ev) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const nameVal = ev.name || '';
+  const descVal = ev.description || '';
+  const tsVal = toLocalInputValue(ev.timestamp);
+  const overlayHtml = `
+    <div class="modal">
+      <header>
+        <div>Edit event</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>Name</label>
+            <input type="text" id="ev-name" value="${nameVal.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Description</label>
+            <textarea id="ev-desc">${(descVal||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
+            <label style="margin-top:8px">Timestamp</label>
+            <input type="datetime-local" id="ev-ts" value="${tsVal}">
+            <label style="margin-top:8px">Keywords</label>
+            <div class="chips" id="ev-chips"></div>
+          </div>
+          <div>
+            <label>Location</label>
+            <div id="event-edit-map"></div>
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:6px 10px;border-radius:6px;cursor:pointer">Save</button>
+      </footer>
+    </div>`;
+  overlay.innerHTML = overlayHtml;
+  document.body.appendChild(overlay);
+
+  function close() { overlay.remove(); }
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  // Keywords chips
+  const chipsEl = overlay.querySelector('#ev-chips');
+  let keywords = Array.isArray(ev.keywords) ? [...ev.keywords] : [];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Add keyword and press Enter';
+  function renderChips() {
+    chipsEl.innerHTML = '';
+    for (const kw of keywords) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = kw;
+      const rm = document.createElement('button');
+      rm.className = 'remove'; rm.type = 'button'; rm.textContent = '×';
+      rm.addEventListener('click', () => { keywords = keywords.filter(k => k !== kw); renderChips(); });
+      chip.appendChild(rm);
+      chipsEl.appendChild(chip);
+    }
+    chipsEl.appendChild(input);
+  }
+  function addKeywordFromInput() {
+    const val = input.value.trim();
+    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips();
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKeywordFromInput(); }
+    else if (e.key === 'Backspace' && !input.value && keywords.length > 0) { keywords.pop(); renderChips(); }
+  });
+  input.addEventListener('blur', () => { addKeywordFromInput(); });
+  renderChips();
+
+  // Map setup
+  let currentLoc = ev.location ? { ...ev.location } : null;
+  setTimeout(() => {
+    try {
+      const mapDiv = overlay.querySelector('#event-edit-map');
+      const m = L.map(mapDiv).setView(currentLoc ? [currentLoc.latitude, currentLoc.longitude] : [20, 0], currentLoc ? 13 : 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(m);
+      let marker = null;
+      function setMarker(latlng) {
+        if (!marker) { marker = L.marker(latlng, { draggable: true }).addTo(m); marker.on('dragend', () => { const ll = marker.getLatLng(); currentLoc = { latitude: ll.lat, longitude: ll.lng, altitude: currentLoc?.altitude }; }); }
+        else { marker.setLatLng(latlng); }
+        currentLoc = { latitude: latlng.lat, longitude: latlng.lng, altitude: currentLoc?.altitude };
+      }
+      if (currentLoc) setMarker({ lat: currentLoc.latitude, lng: currentLoc.longitude });
+      m.on('click', (e) => setMarker(e.latlng));
+      setTimeout(() => { try { m.invalidateSize(true); } catch {} }, 0);
+    } catch {}
+  }, 0);
+
+  // Save handler
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const name = overlay.querySelector('#ev-name').value.trim();
+    if (!name) { alert('Name is required'); return; }
+    const description = overlay.querySelector('#ev-desc').value.trim();
+    const tsLocal = overlay.querySelector('#ev-ts').value;
+    const timestamp = fromLocalInputValue(tsLocal);
+    const body = { name };
+    if (description) body.description = description;
+    if (timestamp) body.timestamp = timestamp;
+    if (currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number') body.location = currentLoc;
+    if (keywords && keywords.length > 0) body.keywords = keywords;
+    try {
+      await api.updateEvent(ev.id, body);
+      close();
+      await loadEvents();
+    } catch {
+      alert('Failed to save event');
+    }
+  });
+}
+
 async function loadEvents() {
   const list = $('#events-list'); list.innerHTML = '';
   try {
@@ -404,8 +535,11 @@ async function loadEvents() {
         <div class="ev-thumb" style="width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;">No preview</div>
         <h4 style="margin:0 0 4px 0;">${ev.name || '(no name)'}</h4>
         <div style="font-size:12px;color:#555">${tsStr}</div>
+        <button class="ev-edit-btn" title="Edit">✎ Edit</button>
       `;
       list.appendChild(li);
+      const editBtn = li.querySelector('.ev-edit-btn');
+      editBtn?.addEventListener('click', (e) => { e.stopPropagation(); openEventEditModal(ev); });
 
       // Clicking before image is loaded should still navigate when possible
       if (ev.originalId) {

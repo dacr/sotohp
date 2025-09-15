@@ -47,8 +47,35 @@ main { flex: 1; position: relative; }
 .list li .ev-thumb img { transform: scale(1); transition: transform 180ms ease-out; will-change: transform; }
 .list li:hover .ev-thumb img { transform: scale(1.18); transition: transform 1400ms ease-out; }
 
+/* Hover edit button on event tiles */
+.list li { position: relative; }
+.ev-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 4px 8px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.list li:hover .ev-edit-btn { opacity: 1; transform: translateY(0); }
+.ev-edit-btn:hover { background: #1d4ed8; }
+
+/* Modal styles */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal { width: min(900px, 96vw); max-height: 90vh; background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); overflow: hidden; display: flex; flex-direction: column; }
+.modal header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #f3f4f6; border-bottom: 1px solid #e5e7eb; }
+.modal .content { padding: 12px 14px; overflow: auto; }
+.modal footer { display: flex; gap: 8px; justify-content: flex-end; padding: 10px 14px; border-top: 1px solid #e5e7eb; background: #fafafa; }
+.modal .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; }
+.modal input[type="text"], .modal textarea, .modal input[type="datetime-local"] { width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
+.modal textarea { min-height: 70px; resize: vertical; }
+
+/* Keywords chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; font-size: 12px; color: #111827; background: #e0f2fe; }
+.chip .remove { background: transparent; border: none; color: #0c4a6e; cursor: pointer; font-weight: 700; }
+.chips input { flex: 1; min-width: 140px; border: none; outline: none; padding: 4px; }
+
+/* Map container inside modal */
+#event-edit-map { width: 100%; height: 300px; border: 1px solid #e5e7eb; border-radius: 8px; }
+
 /* Responsive */
 @media (max-width: 900px) {
   .viewer { grid-template-columns: 1fr; }
   .sidebar { order: -1; }
+  .modal .row { grid-template-columns: 1fr; }
 }

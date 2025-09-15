@@ -79,6 +79,13 @@
       - Decrease the number of simultaneous requests made to retrieve mediaAccessKey and miniatures from the originalId associated to each event.
         Right now it generates "ERR_INSUFFICIENT_RESOURCES"
       - use lazy loading to load only the tiles images are near to be visible on the screen
+    - on mouse hover an event show a small edit button on the bottom right
+      - popup an edit form when clicked
+        - using regular text fields for `name` and `description`
+        - for the timestamp use a date picker
+        - for keywords use colored labels with `x` buttons to easily remove any keyword, enter some text to change it into a colored label
+        - for the location use a map with a marker to select/update the location
+      - when clicking on the save button close the form and refresh the event list
     - wire other operations available in the API
   - [ ] owners management tab
     - list owners
