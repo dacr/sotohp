@@ -531,10 +531,12 @@ async function loadEvents() {
       const li = document.createElement('li');
       li.__event = ev; // attach ref for observer
       const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '';
+      const pinSvgGreen = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="#10b981" style="vertical-align:-0.15em;margin-right:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
+      const tsWithPin = (ev.location ? pinSvgGreen + ' ' : '') + tsStr;
       li.innerHTML = `
         <div class="ev-thumb" style="width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;">No preview</div>
         <h4 style="margin:0 0 4px 0;">${ev.name || '(no name)'}</h4>
-        <div style="font-size:12px;color:#555">${tsStr}</div>
+        <div style="font-size:12px;color:#555">${tsWithPin}</div>
         <button class="ev-edit-btn" title="Edit">✎ Edit</button>
       `;
       list.appendChild(li);

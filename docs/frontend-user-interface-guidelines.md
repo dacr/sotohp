@@ -75,6 +75,7 @@
       - when click on a tile, display the event associated originalId/mediaAccessKey in the image viewer 
       - add a small image zooming effect when mouse goes hover tiles
         - when leaving a zoomed event, add a quick zoom out effect
+      - add before the timestamp the small green location icon when event location is known, use the same icon has for the viewer tab
     - take care to performance as it may requires a lot of queries :
       - Decrease the number of simultaneous requests made to retrieve mediaAccessKey and miniatures from the originalId associated to each event.
         Right now it generates "ERR_INSUFFICIENT_RESOURCES"

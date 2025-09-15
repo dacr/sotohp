@@ -23,5 +23,6 @@ case class Media(
     userDefinedLocation
       .orElse(deductedLocation)
       .orElse(original.location)
+      .orElse(events.headOption.flatMap(_.location))
       .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d) // TODO fix location data
 }
