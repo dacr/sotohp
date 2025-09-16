@@ -17,6 +17,8 @@ class ApiClient {
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
   async createEvent(name) { const res = await this.http.post('/api/event', { name }); return res.data; }
   async updateEvent(eventId, body) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body); }
+  async updateMedia(mediaAccessKey, body) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}`, body); }
+  async updateMediaStarred(mediaAccessKey, state) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}/starred`, null, { params: { state } }); }
   async listOwners() { return await this.#fetchNdjson('/api/owners'); }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async synchronize() { await this.http.get('/api/admin/synchronize'); }
@@ -134,6 +136,270 @@ function showMedia(media) {
     // In fullscreen, only show the event information (no timestamp)
     ov.innerHTML = `<div class="title">${star}${eventName} ${pin}</div>`;
   }
+  // Update Star toggle button in controls
+  const starBtn = document.getElementById('btn-star');
+  if (starBtn) {
+    starBtn.textContent = media.starred ? '⭐' : '☆';
+    starBtn.title = media.starred ? 'Unstar' : 'Star';
+    starBtn.onclick = async () => {
+      if (!currentMedia) return;
+      const target = !currentMedia.starred;
+      const prev = currentMedia.starred;
+      starBtn.disabled = true;
+      try {
+        // Optimistic UI update
+        currentMedia.starred = target;
+        starBtn.textContent = target ? '⭐' : '☆';
+        document.getElementById('info-starred').textContent = target ? '⭐ Yes' : '☆ No';
+        // Update fullscreen overlay star if present
+        const ov2 = document.getElementById('fs-overlay');
+        if (ov2) {
+          const evName = (currentMedia.events && currentMedia.events.length > 0) ? currentMedia.events[0].name : '-';
+          const pinSvg2 = (color) => `\
+<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="${color}" style="vertical-align:-0.15em;margin-left:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
+          let pin2 = '';
+          if (currentMedia.location) pin2 = pinSvg2('#10b981');
+          else if (currentMedia.userDefinedLocation || currentMedia.deductedLocation) pin2 = pinSvg2('#f59e0b');
+          else pin2 = pinSvg2('#ef4444');
+          ov2.innerHTML = `<div class="title">${target ? '⭐ ' : '☆ '}${evName} ${pin2}</div>`;
+        }
+        await api.updateMediaStarred(currentMedia.accessKey, target);
+      } catch (e) {
+        // Revert on failure
+        currentMedia.starred = prev;
+        starBtn.textContent = prev ? '⭐' : '☆';
+        document.getElementById('info-starred').textContent = prev ? '⭐ Yes' : '☆ No';
+        alert('Failed to update starred');
+      } finally {
+        starBtn.disabled = false;
+      }
+    };
+  }
+}
+
+function openMediaEditModal(media) {
+  if (!media) { alert('No media loaded'); return; }
+  // Prevent multiple modals from being opened simultaneously (e.g., due to duplicate handlers)
+  if (document.querySelector('.modal-overlay')) { return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const descVal = media.description || '';
+  const tsVal = toLocalInputValue(media.shootDateTime || media.original?.cameraShootDateTime);
+  const kwds = Array.isArray(media.keywords) ? [...media.keywords] : [];
+  const overlayHtml = `
+    <div class="modal">
+      <header>
+        <div>Edit media</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>Description</label>
+            <input type="text" id="md-desc" value="${(descVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Shoot date/time</label>
+            <input type="datetime-local" id="md-ts" value="${tsVal||''}">
+            <label style="margin-top:8px">Keywords</label>
+            <div class="chips" id="md-chips"></div>
+          </div>
+          <div>
+            <label>User-defined location</label>
+            <div style="margin:4px 0 6px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
+              <button id="md-copy-loc" type="button" title="Copy from media GPS location if available" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Copy from media location</button>
+              <button id="md-remember-loc" type="button" title="Remember current selected location for later reuse" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Remember selection</button>
+              <button id="md-use-last-loc" type="button" title="Use last selected location" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Use last selection</button>
+              <button id="md-reset-loc" type="button" title="Remove user-defined location" style="background:#fee2e2;border:1px solid #fecaca;padding:4px 8px;border-radius:6px;cursor:pointer">Reset location</button>
+            </div>
+            <div id="media-edit-map"></div>
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:6px 10px;border-radius:6px;cursor:pointer">Save</button>
+      </footer>
+    </div>`;
+  overlay.innerHTML = overlayHtml;
+  document.body.appendChild(overlay);
+
+  // Accessibility and focus management
+  const modalEl = overlay.querySelector('.modal');
+  if (modalEl) {
+    modalEl.setAttribute('role', 'dialog');
+    modalEl.setAttribute('aria-modal', 'true');
+    modalEl.setAttribute('tabindex', '-1');
+  }
+  setTimeout(() => {
+    const first = overlay.querySelector('#md-desc');
+    if (first && typeof first.focus === 'function') first.focus();
+    else if (modalEl && typeof modalEl.focus === 'function') modalEl.focus();
+  }, 0);
+
+  function close() { overlay.remove(); }
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  // Keywords chips
+  const chipsEl = overlay.querySelector('#md-chips');
+  let keywords = [...kwds];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Add keyword and press Enter';
+  function renderChips() {
+    chipsEl.innerHTML = '';
+    for (const kw of keywords) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = kw;
+      const rm = document.createElement('button');
+      rm.className = 'remove'; rm.type = 'button'; rm.textContent = '×';
+      rm.addEventListener('click', () => { keywords = keywords.filter(k => k !== kw); renderChips(); });
+      chip.appendChild(rm);
+      chipsEl.appendChild(chip);
+    }
+    chipsEl.appendChild(input);
+  }
+  function addKeywordFromInput() {
+    const val = input.value.trim();
+    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips();
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKeywordFromInput(); }
+    else if (e.key === 'Backspace' && !input.value && keywords.length > 0) { keywords.pop(); renderChips(); }
+  });
+  input.addEventListener('blur', () => { addKeywordFromInput(); });
+  renderChips();
+
+  // Map setup for userDefinedLocation (do NOT auto-copy from media.location)
+  let currentLoc = media.userDefinedLocation ? { ...media.userDefinedLocation } : null;
+  let m = null; let marker = null; let clearedUserLoc = false;
+  // Persisted last-selected location helpers
+  const mdUseLastBtn = overlay.querySelector('#md-use-last-loc');
+  const mdRememberBtn = overlay.querySelector('#md-remember-loc');
+  function mdReadLastLoc() { try { const j = localStorage.getItem('ui.lastLocation'); if (!j) return null; const o = JSON.parse(j); if (typeof o?.latitude === 'number' && typeof o?.longitude === 'number') return o; } catch {} return null; }
+  function mdSaveLastLoc(loc) { try { if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') localStorage.setItem('ui.lastLocation', JSON.stringify({ latitude: loc.latitude, longitude: loc.longitude, altitude: loc.altitude })); } catch {} }
+  function mdUpdateUseLastBtn() { const has = !!mdReadLastLoc(); if (mdUseLastBtn) { mdUseLastBtn.disabled = !has; mdUseLastBtn.style.opacity = has ? '1' : '0.5'; mdUseLastBtn.style.cursor = has ? 'pointer' : 'not-allowed'; } }
+  function mdUpdateRememberBtn() { const has = !!(currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number'); if (mdRememberBtn) { mdRememberBtn.disabled = !has; mdRememberBtn.style.opacity = has ? '1' : '0.5'; mdRememberBtn.style.cursor = has ? 'pointer' : 'not-allowed'; } }
+  setTimeout(() => {
+    try {
+      const mapDiv = overlay.querySelector('#media-edit-map');
+      if (mapDiv) { try { mapDiv.setAttribute('tabindex', '-1'); } catch {} }
+      m = L.map(mapDiv, { keyboard: false }).setView(currentLoc ? [currentLoc.latitude, currentLoc.longitude] : [20, 0], currentLoc ? 13 : 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(m);
+      const resetBtn = overlay.querySelector('#md-reset-loc');
+      function enableResetBtn(enable) {
+        if (!resetBtn) return;
+        resetBtn.disabled = !enable;
+        resetBtn.style.opacity = enable ? '1' : '0.5';
+        resetBtn.style.cursor = enable ? 'pointer' : 'not-allowed';
+      }
+      function setMarker(latlng) {
+        if (!marker) {
+          marker = L.marker(latlng, { draggable: true }).addTo(m);
+          marker.on('dragend', () => {
+            const ll = marker.getLatLng();
+            currentLoc = { latitude: ll.lat, longitude: ll.lng, altitude: currentLoc?.altitude };
+            clearedUserLoc = false;
+            enableResetBtn(true);
+            mdSaveLastLoc(currentLoc);
+            mdUpdateUseLastBtn();
+            mdUpdateRememberBtn();
+          });
+        } else { marker.setLatLng(latlng); }
+        currentLoc = { latitude: latlng.lat, longitude: latlng.lng, altitude: currentLoc?.altitude };
+        clearedUserLoc = false; enableResetBtn(true);
+        mdSaveLastLoc(currentLoc);
+        mdUpdateUseLastBtn();
+        mdUpdateRememberBtn();
+      }
+      if (currentLoc) setMarker({ lat: currentLoc.latitude, lng: currentLoc.longitude });
+      m.on('click', (e) => setMarker(e.latlng));
+      // Wire reset button
+      if (resetBtn) {
+        enableResetBtn(!!currentLoc);
+        resetBtn.addEventListener('click', () => {
+          try {
+            if (marker && m) { m.removeLayer(marker); }
+          } catch {}
+          marker = null; currentLoc = null; clearedUserLoc = true; enableResetBtn(false);
+          mdUpdateRememberBtn();
+        });
+      }
+      // Wire buttons: Use last selection & Remember selection
+      mdUpdateUseLastBtn();
+      mdUpdateRememberBtn();
+      if (mdUseLastBtn) {
+        mdUseLastBtn.addEventListener('click', () => {
+          const last = mdReadLastLoc();
+          if (!last) return;
+          const latlng = { lat: last.latitude, lng: last.longitude };
+          setMarker(latlng);
+          try { if (m) { m.setView([last.latitude, last.longitude], Math.max(m.getZoom() || 2, 13)); m.getContainer()?.blur?.(); } } catch {}
+          try { overlay.querySelector('button.cancel')?.focus(); } catch {}
+        });
+      }
+      if (mdRememberBtn) {
+        mdRememberBtn.addEventListener('click', () => {
+          if (!currentLoc) return;
+          mdSaveLastLoc(currentLoc);
+          mdUpdateUseLastBtn();
+          // Optional tiny visual feedback could be added later
+        });
+      }
+      setTimeout(() => { try { m.invalidateSize(true); } catch {} }, 0);
+    } catch {}
+  }, 0);
+
+  // Copy from media location button
+  const copyBtn = overlay.querySelector('#md-copy-loc');
+  if (copyBtn) {
+    if (media.location) {
+      copyBtn.disabled = false;
+      copyBtn.style.opacity = '1';
+      copyBtn.style.cursor = 'pointer';
+      copyBtn.addEventListener('click', () => {
+        const loc = media.location;
+        if (!loc) return;
+        currentLoc = { latitude: loc.latitude, longitude: loc.longitude, altitude: loc.altitude };
+        try {
+          if (m) {
+            const latlng = { lat: currentLoc.latitude, lng: currentLoc.longitude };
+            if (!marker) { marker = L.marker(latlng, { draggable: true }).addTo(m); marker.on('dragend', () => { const ll = marker.getLatLng(); currentLoc = { latitude: ll.lat, longitude: ll.lng, altitude: currentLoc?.altitude }; mdSaveLastLoc(currentLoc); mdUpdateUseLastBtn(); }); }
+            else { marker.setLatLng(latlng); }
+            const resetBtn = overlay.querySelector('#md-reset-loc'); if (resetBtn) { resetBtn.disabled = false; resetBtn.style.opacity = '1'; resetBtn.style.cursor = 'pointer'; }
+            clearedUserLoc = false; mdSaveLastLoc(currentLoc); mdUpdateUseLastBtn();
+            m.setView([currentLoc.latitude, currentLoc.longitude], Math.max(m.getZoom() || 2, 13));
+          }
+        } catch {}
+      });
+    } else {
+      copyBtn.disabled = true;
+      copyBtn.style.opacity = '0.5';
+      copyBtn.style.cursor = 'not-allowed';
+      copyBtn.title = 'No media location available';
+    }
+  }
+
+  // Save handler
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const description = overlay.querySelector('#md-desc').value.trim();
+    const tsLocal = overlay.querySelector('#md-ts').value;
+    const shootDateTime = fromLocalInputValue(tsLocal);
+    const body = { starred: !!media.starred };
+    if (description) body.description = description;
+    if (shootDateTime) body.shootDateTime = shootDateTime;
+    body.keywords = Array.isArray(keywords) ? keywords : [];
+    if (clearedUserLoc) body.userDefinedLocation = null; else if (currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number') body.userDefinedLocation = currentLoc;
+    try {
+      await api.updateMedia(media.accessKey, body);
+      close();
+      const updated = await api.getMediaByKey(media.accessKey);
+      showMedia(updated);
+    } catch (e) {
+      alert('Failed to save media');
+    }
+  });
 }
 
 function initViewerControls() {
@@ -142,6 +408,7 @@ function initViewerControls() {
   $('#btn-random').addEventListener('click', () => loadMedia('random'));
   $('#btn-prev').addEventListener('click', () => currentMedia && loadMedia('previous', currentMedia.accessKey));
   $('#btn-next').addEventListener('click', () => currentMedia && loadMedia('next', currentMedia.accessKey));
+  $('#btn-edit').addEventListener('click', () => { if (currentMedia) openMediaEditModal(currentMedia); else alert('No media loaded'); });
   $('#btn-fullscreen').addEventListener('click', () => {
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
@@ -339,7 +606,36 @@ function fromLocalInputValue(val) {
   return d.toISOString();
 }
 
+function refreshEventTile(ev) {
+  try {
+    const list = document.getElementById('events-list');
+    if (!list) return;
+    const li = list.querySelector(`li[data-event-id="${ev.id}"]`);
+    if (!li) return;
+    // Update stored event ref
+    li.__event = ev;
+    // Update title
+    const titleEl = li.querySelector('h4');
+    if (titleEl) titleEl.textContent = ev.name || '(no name)';
+    // Update timestamp + location pin
+    const tsEl = li.querySelector('.ev-ts');
+    if (tsEl) {
+      const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '';
+      const pinSvgGreen = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="#10b981" style="vertical-align:-0.15em;margin-right:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
+      const tsWithPin = (ev.location ? pinSvgGreen + ' ' : '') + tsStr;
+      tsEl.innerHTML = tsWithPin;
+    }
+    // Update edit button handler to use fresh event data
+    const editBtn = li.querySelector('.ev-edit-btn');
+    if (editBtn) {
+      editBtn.onclick = (e) => { e.stopPropagation(); openEventEditModal(ev); };
+    }
+  } catch {}
+}
+
 function openEventEditModal(ev) {
+  // Prevent multiple modals open at the same time
+  if (document.querySelector('.modal-overlay')) { return; }
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const nameVal = ev.name || '';
@@ -365,6 +661,11 @@ function openEventEditModal(ev) {
           </div>
           <div>
             <label>Location</label>
+            <div style="margin:4px 0 6px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
+              <button id="ev-remember-loc" type="button" title="Remember current selected location for later reuse" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Remember selection</button>
+              <button id="ev-use-last-loc" type="button" title="Use last selected location" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Use last selection</button>
+              <button id="ev-reset-loc" type="button" title="Remove event location" style="background:#fee2e2;border:1px solid #fecaca;padding:4px 8px;border-radius:6px;cursor:pointer">Reset location</button>
+            </div>
             <div id="event-edit-map"></div>
           </div>
         </div>
@@ -377,9 +678,22 @@ function openEventEditModal(ev) {
   overlay.innerHTML = overlayHtml;
   document.body.appendChild(overlay);
 
+  // Accessibility and focus management
+  const modalEl = overlay.querySelector('.modal');
+  if (modalEl) {
+    modalEl.setAttribute('role', 'dialog');
+    modalEl.setAttribute('aria-modal', 'true');
+    modalEl.setAttribute('tabindex', '-1');
+  }
+  setTimeout(() => {
+    const first = overlay.querySelector('#ev-name');
+    if (first && typeof first.focus === 'function') first.focus();
+    else if (modalEl && typeof modalEl.focus === 'function') modalEl.focus();
+  }, 0);
+
   function close() { overlay.remove(); }
   overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
   // Keywords chips
@@ -415,19 +729,77 @@ function openEventEditModal(ev) {
 
   // Map setup
   let currentLoc = ev.location ? { ...ev.location } : null;
+  let clearedLoc = false;
+  // Persisted last-selected location helpers
+  const evUseLastBtn = overlay.querySelector('#ev-use-last-loc');
+  const evRememberBtn = overlay.querySelector('#ev-remember-loc');
+  function evReadLastLoc() { try { const j = localStorage.getItem('ui.lastLocation'); if (!j) return null; const o = JSON.parse(j); if (typeof o?.latitude === 'number' && typeof o?.longitude === 'number') return o; } catch {} return null; }
+  function evSaveLastLoc(loc) { try { if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') localStorage.setItem('ui.lastLocation', JSON.stringify({ latitude: loc.latitude, longitude: loc.longitude, altitude: loc.altitude })); } catch {} }
+  function evUpdateUseLastBtn() { const has = !!evReadLastLoc(); if (evUseLastBtn) { evUseLastBtn.disabled = !has; evUseLastBtn.style.opacity = has ? '1' : '0.5'; evUseLastBtn.style.cursor = has ? 'pointer' : 'not-allowed'; } }
+  function evUpdateRememberBtn() { const has = !!(currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number'); if (evRememberBtn) { evRememberBtn.disabled = !has; evRememberBtn.style.opacity = has ? '1' : '0.5'; evRememberBtn.style.cursor = has ? 'pointer' : 'not-allowed'; } }
   setTimeout(() => {
     try {
       const mapDiv = overlay.querySelector('#event-edit-map');
-      const m = L.map(mapDiv).setView(currentLoc ? [currentLoc.latitude, currentLoc.longitude] : [20, 0], currentLoc ? 13 : 2);
+      if (mapDiv) { try { mapDiv.setAttribute('tabindex', '-1'); } catch {} }
+      const m = L.map(mapDiv, { keyboard: false }).setView(currentLoc ? [currentLoc.latitude, currentLoc.longitude] : [20, 0], currentLoc ? 13 : 2);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(m);
+      const resetBtn = overlay.querySelector('#ev-reset-loc');
+      function enableResetBtn(enable) {
+        if (!resetBtn) return;
+        resetBtn.disabled = !enable;
+        resetBtn.style.opacity = enable ? '1' : '0.5';
+        resetBtn.style.cursor = enable ? 'pointer' : 'not-allowed';
+      }
       let marker = null;
       function setMarker(latlng) {
-        if (!marker) { marker = L.marker(latlng, { draggable: true }).addTo(m); marker.on('dragend', () => { const ll = marker.getLatLng(); currentLoc = { latitude: ll.lat, longitude: ll.lng, altitude: currentLoc?.altitude }; }); }
+        if (!marker) {
+          marker = L.marker(latlng, { draggable: true }).addTo(m);
+          marker.on('dragend', () => {
+            const ll = marker.getLatLng();
+            currentLoc = { latitude: ll.lat, longitude: ll.lng, altitude: currentLoc?.altitude };
+            clearedLoc = false; enableResetBtn(true);
+            evSaveLastLoc(currentLoc);
+            evUpdateUseLastBtn();
+            evUpdateRememberBtn();
+          });
+        }
         else { marker.setLatLng(latlng); }
         currentLoc = { latitude: latlng.lat, longitude: latlng.lng, altitude: currentLoc?.altitude };
+        clearedLoc = false; enableResetBtn(true);
+        evSaveLastLoc(currentLoc);
+        evUpdateUseLastBtn();
+        evUpdateRememberBtn();
       }
       if (currentLoc) setMarker({ lat: currentLoc.latitude, lng: currentLoc.longitude });
       m.on('click', (e) => setMarker(e.latlng));
+      if (resetBtn) {
+        enableResetBtn(!!currentLoc);
+        resetBtn.addEventListener('click', () => {
+          try { if (marker) m.removeLayer(marker); } catch {}
+          marker = null; currentLoc = null; clearedLoc = true; enableResetBtn(false);
+          evUpdateRememberBtn();
+        });
+      }
+      // Wire "Use last selection" and "Remember selection" buttons for event
+      evUpdateUseLastBtn();
+      evUpdateRememberBtn();
+      if (evUseLastBtn) {
+        evUseLastBtn.addEventListener('click', () => {
+          const last = evReadLastLoc();
+          if (!last) return;
+          const latlng = { lat: last.latitude, lng: last.longitude };
+          setMarker(latlng);
+          try { m.setView([last.latitude, last.longitude], Math.max(m.getZoom() || 2, 13)); m.getContainer()?.blur?.(); } catch {}
+          try { overlay.querySelector('button.cancel')?.focus(); } catch {}
+        });
+      }
+      if (evRememberBtn) {
+        evRememberBtn.addEventListener('click', () => {
+          if (!currentLoc) return;
+          evSaveLastLoc(currentLoc);
+          evUpdateUseLastBtn();
+        });
+      }
       setTimeout(() => { try { m.invalidateSize(true); } catch {} }, 0);
     } catch {}
   }, 0);
@@ -442,12 +814,19 @@ function openEventEditModal(ev) {
     const body = { name };
     if (description) body.description = description;
     if (timestamp) body.timestamp = timestamp;
-    if (currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number') body.location = currentLoc;
+    if (clearedLoc) body.location = null; else if (currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number') body.location = currentLoc;
     if (keywords && keywords.length > 0) body.keywords = keywords;
     try {
       await api.updateEvent(ev.id, body);
+      // Build an updated event object locally (optimistic refresh)
+      const updatedEv = { ...ev };
+      updatedEv.name = name || ev.name;
+      updatedEv.description = description || undefined;
+      updatedEv.timestamp = timestamp || undefined;
+      if (clearedLoc) updatedEv.location = null; else if (body.location) updatedEv.location = body.location;
+      if (keywords && keywords.length >= 0) updatedEv.keywords = keywords;
       close();
-      await loadEvents();
+      refreshEventTile(updatedEv);
     } catch {
       alert('Failed to save event');
     }
@@ -530,18 +909,19 @@ async function loadEvents() {
     for (const ev of events) {
       const li = document.createElement('li');
       li.__event = ev; // attach ref for observer
+      if (ev.id) li.dataset.eventId = ev.id;
       const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '';
-      const pinSvgGreen = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="#10b981" style="vertical-align:-0.15em;margin-right:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
+      const pinSvgGreen = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1em\" height=\"1em\" viewBox=\"0 0 24 24\" fill=\"#10b981\" style=\"vertical-align:-0.15em;margin-right:6px\"><path d=\"M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z\"/></svg>`;
       const tsWithPin = (ev.location ? pinSvgGreen + ' ' : '') + tsStr;
       li.innerHTML = `
-        <div class="ev-thumb" style="width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;">No preview</div>
-        <h4 style="margin:0 0 4px 0;">${ev.name || '(no name)'}</h4>
-        <div style="font-size:12px;color:#555">${tsWithPin}</div>
-        <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+        <div class=\"ev-thumb\" style=\"width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;\">No preview</div>
+        <h4 style=\"margin:0 0 4px 0;\">${ev.name || '(no name)'}</h4>
+        <div class=\"ev-ts\" style=\"font-size:12px;color:#555\">${tsWithPin}</div>
+        <button class=\"ev-edit-btn\" title=\"Edit\">✎ Edit</button>
       `;
       list.appendChild(li);
       const editBtn = li.querySelector('.ev-edit-btn');
-      editBtn?.addEventListener('click', (e) => { e.stopPropagation(); openEventEditModal(ev); });
+      if (editBtn) { editBtn.onclick = (e) => { e.stopPropagation(); openEventEditModal(ev); }; }
 
       // Clicking before image is loaded should still navigate when possible
       if (ev.originalId) {

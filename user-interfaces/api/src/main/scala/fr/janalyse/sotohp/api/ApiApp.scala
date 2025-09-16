@@ -311,6 +311,79 @@ object ApiApp extends ZIOAppDefault {
       )
 
   // -------------------------------------------------------------------------------------------------------------------
+  def mediaUpdateLogic(accessKey: MediaAccessKey, toUpdate: ApiMediaUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
+    val logic = for {
+      media <- MediaService
+                 .mediaGet(accessKey)
+                 .logError("Couldn't get media")
+                 .mapError(err => ApiInternalError("Couldn't get media"))
+                 .someOrFail(ApiResourceNotFound("Couldn't find media"))
+      _     <- MediaService
+                 .mediaUpdate(
+                   media.accessKey,
+                   media.copy(
+                     description = toUpdate.description,
+                     starred = toUpdate.starred,
+                     keywords = toUpdate.keywords,
+                     shootDateTime = toUpdate.shootDateTime,
+                     userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]]
+                   )
+                 )
+                 .logError("Couldn't update media")
+                 .mapError(err => ApiInternalError("Couldn't update media"))
+    } yield ()
+
+    logic
+  }
+
+  val mediaUpdateEndpoint =
+    mediaEndpoint()
+      .name("Update media")
+      .summary("Update media information for the given media identifier")
+      .put
+      .in(path[String]("mediaAccessKey"))
+      .in(jsonBody[ApiMediaUpdate])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv]((rawKey, toUpdate) =>
+        ZIO
+          .attempt(MediaAccessKey(rawKey))
+          .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+          .flatMap(eventId => mediaUpdateLogic(eventId, toUpdate))
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def mediaUpdateStarredLogic(accessKey: MediaAccessKey, state: Boolean): ZIO[ApiEnv, ApiIssue, Unit] = {
+    val logic = for {
+      media <- MediaService
+                 .mediaGet(accessKey)
+                 .logError("Couldn't get media")
+                 .mapError(err => ApiInternalError("Couldn't get media"))
+                 .someOrFail(ApiResourceNotFound("Couldn't find media"))
+      _     <- MediaService
+                 .mediaUpdate(media.accessKey, media.copy(starred = Starred(state)))
+                 .logError("Couldn't update media")
+                 .mapError(err => ApiInternalError("Couldn't update media"))
+    } yield ()
+
+    logic
+  }
+
+  val mediaUpdateStarredEndpoint =
+    mediaEndpoint()
+      .name("Update media")
+      .summary("Update media starred state for the given media identifier")
+      .put
+      .in(path[String]("mediaAccessKey"))
+      .in("starred")
+      .in(query[Boolean]("state"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv]((rawKey, state) =>
+        ZIO
+          .attempt(MediaAccessKey(rawKey))
+          .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+          .flatMap(eventId => mediaUpdateStarredLogic(eventId, state))
+      )
+  // -------------------------------------------------------------------------------------------------------------------
 
   def mediaGetImageBytesLogic(accessKey: MediaAccessKey, mininiatureOne: Boolean): ZIO[ApiEnv, ApiIssue, (Media, ZStream[ApiEnv, ApiInternalError, Byte])] = {
     val logic = for {
@@ -699,6 +772,8 @@ object ApiApp extends ZIOAppDefault {
     mediaListEndpoint,
     mediaSelectEndpoint,
     mediaGetEndpoint,
+    mediaUpdateEndpoint,
+    mediaUpdateStarredEndpoint,
     mediaGetNormalizedEndpoint,
     mediaGetMiniatureEndpoint,
     // -------------------------

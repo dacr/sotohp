@@ -22,6 +22,16 @@
         - random
         - fullscreen
         - play/pause (slideshow using the policy described by the choice button)
+      - starred toggle button (update the media accordingly) :
+          - use yellow star (⭐) for starred
+          - use empty star (☆) for not starred
+          - (should be placed just before the random button)
+      - edit button which popup an edit form when clicked (update the media accordingly) :
+          - using regular text field for the `description`
+          - for the `shootDateTime` timestamp field use a date picker
+          - for keywords use colored labels with `x` buttons to easily remove any keyword, enter some text to change it into a colored label
+          - for the `userDefinedLocation` use a map with a marker to select/update the location
+          - (should be placed just after the button labelled `last`)
       - slideshow choices button : slide show delay choices to control how the slideshow should behave, seconds delay and what to do which is either take the next photo or a random new one
         - 5s random
         - 5s next
@@ -35,9 +45,6 @@
       - date
       - keywords
       - first event name
-      - starred indicator :
-        - yellow star (⭐) for starred
-        - empty star (☆) for not starred
       - hasLocation indicator
         - green pin logo : when the location is known in the Original (true GPS position)
         - orange pin logo : when the location is deducted or user defined
@@ -86,7 +93,7 @@
         - for the timestamp use a date picker
         - for keywords use colored labels with `x` buttons to easily remove any keyword, enter some text to change it into a colored label
         - for the location use a map with a marker to select/update the location
-      - when clicking on the save button close the form and refresh the event list
+      - when clicking on the save button close the form and the updated event in the list
     - wire other operations available in the API
   - [ ] owners management tab
     - list owners

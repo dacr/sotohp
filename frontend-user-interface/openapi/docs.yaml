@@ -116,6 +116,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+    put:
+      tags:
+      - Media
+      summary: Update media information for the given media identifier
+      operationId: Update media
+      parameters:
+      - name: mediaAccessKey
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Media1'
+        required: true
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/media/{mediaAccessKey}/starred:
+    put:
+      tags:
+      - Media
+      summary: Update media starred state for the given media identifier
+      operationId: Update media
+      parameters:
+      - name: mediaAccessKey
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/media/{mediaAccessKey}/normalized:
     get:
       tags:
@@ -829,6 +905,26 @@ components:
         deductedLocation:
           $ref: '#/components/schemas/Location'
         location:
+          $ref: '#/components/schemas/Location'
+    Media1:
+      title: Media
+      type: object
+      required:
+      - starred
+      properties:
+        description:
+          type: string
+        starred:
+          type: boolean
+        keywords:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        shootDateTime:
+          type: string
+          format: date-time
+        userDefinedLocation:
           $ref: '#/components/schemas/Location'
     MediaKind:
       title: MediaKind
