@@ -53,6 +53,14 @@ main { flex: 1; position: relative; }
 .list li:hover .ev-edit-btn { opacity: 1; transform: translateY(0); }
 .ev-edit-btn:hover { background: #1d4ed8; }
 
+/* Hover edit button on viewer image */
+.img-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.image-container:hover .img-edit-btn { opacity: 1; transform: translateY(0); }
+.img-edit-btn:hover { background: #1d4ed8; }
+/* Hide image edit button in fullscreen mode */
+.image-container:fullscreen .img-edit-btn { display: none !important; }
+.image-container:-webkit-full-screen .img-edit-btn { display: none !important; }
+
 /* Modal styles */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal { width: min(900px, 96vw); max-height: 90vh; background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); overflow: hidden; display: flex; flex-direction: column; }
@@ -66,6 +74,8 @@ main { flex: 1; position: relative; }
 
 /* Keywords chips */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
+/* Inline chips container for info panel (no border/background) */
+.kw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; font-size: 12px; color: #111827; background: #e0f2fe; }
 .chip .remove { background: transparent; border: none; color: #0c4a6e; cursor: pointer; font-weight: 700; }
 .chips input { flex: 1; min-width: 140px; border: none; outline: none; padding: 4px; }
@@ -80,3 +90,6 @@ main { flex: 1; position: relative; }
   .sidebar { order: -1; }
   .modal .row { grid-template-columns: 1fr; }
 }
+
+/* Ensure Play/Pause button doesn't resize when toggling icons */
+#btn-play { width: 2.4rem; display: inline-flex; align-items: center; justify-content: center; }

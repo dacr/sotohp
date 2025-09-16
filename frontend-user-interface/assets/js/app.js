@@ -97,7 +97,7 @@ function showMedia(media) {
   const eventName = (media.events && media.events.length > 0) ? media.events[0].name : '-';
   $('#info-date').textContent = dateStr;
   $('#info-event').textContent = eventName;
-  $('#info-starred').textContent = media.starred ? '⭐ Yes' : '☆ No';
+  const starInfoEl = document.getElementById('info-starred'); if (starInfoEl) starInfoEl.textContent = media.starred ? '⭐ Yes' : '☆ No';
   const hasLoc = !!(media.location || media.userDefinedLocation || media.deductedLocation);
   // Show colored location pin like fullscreen overlay
   const pinSvgInfo = (color) => `\
@@ -117,7 +117,17 @@ function showMedia(media) {
     hasLocEl.title = 'Show on map';
     hasLocEl.onclick = () => goToWorldLocation(media.location, media.accessKey);
   }
-  $('#info-keywords').textContent = (media.keywords && media.keywords.length) ? media.keywords.join(', ') : '-';
+  {
+    const kwEl = document.getElementById('info-keywords');
+    const kws = Array.isArray(media.keywords) ? media.keywords : [];
+    if (kws.length > 0) {
+      const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      const chips = kws.map(k => `<span class="chip">${esc(k)}</span>`).join(' ');
+      kwEl.innerHTML = `<div class="kw-chips">${chips}</div>`;
+    } else {
+      kwEl.textContent = '-';
+    }
+  }
   // Update fullscreen overlay content
   const ov = document.getElementById('fs-overlay');
   if (ov) {
@@ -150,7 +160,7 @@ function showMedia(media) {
         // Optimistic UI update
         currentMedia.starred = target;
         starBtn.textContent = target ? '⭐' : '☆';
-        document.getElementById('info-starred').textContent = target ? '⭐ Yes' : '☆ No';
+        const starInfoEl2 = document.getElementById('info-starred'); if (starInfoEl2) starInfoEl2.textContent = target ? '⭐ Yes' : '☆ No';
         // Update fullscreen overlay star if present
         const ov2 = document.getElementById('fs-overlay');
         if (ov2) {
@@ -408,7 +418,6 @@ function initViewerControls() {
   $('#btn-random').addEventListener('click', () => loadMedia('random'));
   $('#btn-prev').addEventListener('click', () => currentMedia && loadMedia('previous', currentMedia.accessKey));
   $('#btn-next').addEventListener('click', () => currentMedia && loadMedia('next', currentMedia.accessKey));
-  $('#btn-edit').addEventListener('click', () => { if (currentMedia) openMediaEditModal(currentMedia); else alert('No media loaded'); });
   $('#btn-fullscreen').addEventListener('click', () => {
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
@@ -448,7 +457,7 @@ function initViewerControls() {
   function stopSlideshow() {
     slideshowPlaying = false;
     if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
-    const btn = $('#btn-play'); if (btn) btn.textContent = '▶️';
+    const btn = $('#btn-play'); if (btn) btn.textContent = '▷';
   }
   function scheduleNextTick() {
     if (!slideshowPlaying) return;
@@ -475,7 +484,7 @@ function initViewerControls() {
   $('#btn-play').addEventListener('click', () => {
     const btn = $('#btn-play');
     if (slideshowPlaying) { stopSlideshow(); return; }
-    slideshowPlaying = true; btn.textContent = '⏸️';
+    slideshowPlaying = true; btn.textContent = '❚❚';
     // Start waiting according to current selection, then advance
     scheduleNextTick();
   });
@@ -1012,6 +1021,17 @@ function init() {
     ov.className = 'fs-overlay';
     ov.innerHTML = '';
     cont.appendChild(ov);
+  }
+  // Inject hover Edit button on image (bottom-right)
+  if (cont && !document.getElementById('img-edit-btn')) {
+    const btn = document.createElement('button');
+    btn.id = 'img-edit-btn';
+    btn.className = 'img-edit-btn';
+    btn.type = 'button';
+    btn.title = 'Edit media';
+    btn.textContent = '✎ Edit';
+    btn.addEventListener('click', (e) => { e.stopPropagation(); if (currentMedia) openMediaEditModal(currentMedia); else alert('No media loaded'); });
+    cont.appendChild(btn);
   }
   initEventsTab();
   initStoresTab();
