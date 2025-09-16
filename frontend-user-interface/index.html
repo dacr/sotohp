@@ -43,16 +43,18 @@
               <button id="btn-star" title="Toggle starred">☆</button>
               <button id="btn-random" title="Random">🎲</button>
               <button id="btn-play" title="Play/Pause">▷</button>
-              <select id="slideshow-delay">
-                <option value="5-next">5s next</option>
-                <option value="5-random">5s random</option>
-                <option value="10-next">10s next</option>
-                <option value="10-random">10s random</option>
-                <option value="20-next" selected>20s next</option>
-                <option value="20-random">20s random</option>
-                <option value="30-next">30s next</option>
-                <option value="30-random">30s random</option>
-              </select>
+              <div class="ss-group">
+                <div id="ss-duration" class="segmented" role="group" aria-label="Slideshow delay">
+                  <button type="button" data-secs="5" title="5 seconds">5s</button>
+                  <button type="button" data-secs="10" title="10 seconds">10s</button>
+                  <button type="button" data-secs="20" title="20 seconds">20s</button>
+                  <button type="button" data-secs="30" title="30 seconds">30s</button>
+                </div>
+                <div id="ss-mode" class="segmented" role="group" aria-label="Slideshow mode">
+                  <button type="button" data-mode="next" title="Next in order">▶️</button>
+                  <button type="button" data-mode="random" title="Random">🎲</button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="info">

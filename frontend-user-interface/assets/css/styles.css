@@ -93,3 +93,10 @@ main { flex: 1; position: relative; }
 
 /* Ensure Play/Pause button doesn't resize when toggling icons */
 #btn-play { width: 2.4rem; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Segmented controls for slideshow */
+.ss-group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.segmented { display: inline-flex; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+.segmented button { background: transparent; border: none; padding: 0.35rem 0.55rem; cursor: pointer; color: #111827; }
+.segmented button + button { border-left: 1px solid #e5e7eb; }
+.segmented button.active, .segmented button[aria-pressed="true"] { background: #2563eb; color: #fff; }

@@ -461,9 +461,11 @@ function initViewerControls() {
   }
   function scheduleNextTick() {
     if (!slideshowPlaying) return;
-    const sel = $('#slideshow-delay').value || '20-next';
-    const [secsStr, mode] = sel.split('-');
-    const delay = (parseInt(secsStr, 10) || 20) * 1000;
+    const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
+    const secs = parseInt(durActive?.dataset?.secs || '20', 10) || 20;
+    const modeActive = document.querySelector('#ss-mode button.active') || document.querySelector('#ss-mode button[data-mode="next"]');
+    const mode = modeActive?.dataset?.mode || 'next';
+    const delay = secs * 1000;
     slideshowTimer = setTimeout(async () => {
       try {
         if (mode === 'random') {
@@ -489,12 +491,42 @@ function initViewerControls() {
     scheduleNextTick();
   });
 
-  // If the user changes the delay/mode while playing, apply immediately
-  $('#slideshow-delay').addEventListener('change', () => {
+  // Initialize and wire visual slideshow controls (duration and mode)
+  const durGroup = document.getElementById('ss-duration');
+  const modeGroup = document.getElementById('ss-mode');
+  function setActive(group, btn) {
+    if (!group || !btn) return;
+    group.querySelectorAll('button').forEach(b => {
+      const on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  // Restore last choices from localStorage
+  let savedSecs = 20; let savedMode = 'next';
+  try {
+    const s = parseInt(localStorage.getItem('ui.slideshow.secs') || '20', 10); if (!Number.isNaN(s)) savedSecs = s;
+    const m = localStorage.getItem('ui.slideshow.mode'); if (m === 'random' || m === 'next') savedMode = m;
+  } catch {}
+  const initialDurBtn = durGroup?.querySelector(`button[data-secs="${savedSecs}"]`) || durGroup?.querySelector('button[data-secs="20"]');
+  if (durGroup && initialDurBtn) setActive(durGroup, initialDurBtn);
+  const initialModeBtn = modeGroup?.querySelector(`button[data-mode="${savedMode}"]`) || modeGroup?.querySelector('button[data-mode="next"]');
+  if (modeGroup && initialModeBtn) setActive(modeGroup, initialModeBtn);
+  function onConfigChanged() {
+    // Persist
+    try {
+      const da = durGroup?.querySelector('button.active');
+      const ma = modeGroup?.querySelector('button.active');
+      if (da?.dataset?.secs) localStorage.setItem('ui.slideshow.secs', String(parseInt(da.dataset.secs, 10) || 20));
+      if (ma?.dataset?.mode) localStorage.setItem('ui.slideshow.mode', ma.dataset.mode);
+    } catch {}
+    // If playing, reschedule immediately
     if (!slideshowPlaying) return;
     if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
     scheduleNextTick();
-  });
+  }
+  durGroup?.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { setActive(durGroup, b); onConfigChanged(); }));
+  modeGroup?.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { setActive(modeGroup, b); onConfigChanged(); }));
 
   // Keyboard navigation for Image tab
   document.addEventListener('keydown', (e) => {
