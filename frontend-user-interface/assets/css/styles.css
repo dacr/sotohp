@@ -86,9 +86,11 @@ main { flex: 1; position: relative; }
 
 /* Responsive */
 @media (max-width: 900px) {
-  .viewer { grid-template-columns: 1fr; }
+  .viewer { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .sidebar { order: -1; }
   .modal .row { grid-template-columns: 1fr; }
+  /* Ensure the image section grows to fill remaining space */
+  .image-container { min-height: 0; }
 }
 
 /* Ensure Play/Pause button doesn't resize when toggling icons */
