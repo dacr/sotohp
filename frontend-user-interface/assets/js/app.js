@@ -123,7 +123,7 @@ function showMedia(media) {
     if (kws.length > 0) {
       const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
       const chips = kws.map(k => `<span class="chip">${esc(k)}</span>`).join(' ');
-      kwEl.innerHTML = `<div class="kw-chips">${chips}</div>`;
+      kwEl.innerHTML = `<span class="kw-chips">${chips}</span>`;
     } else {
       kwEl.textContent = '-';
     }
