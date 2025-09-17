@@ -20,7 +20,9 @@ class ApiClient {
   async updateMedia(mediaAccessKey, body) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}`, body); }
   async updateMediaStarred(mediaAccessKey, state) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}/starred`, null, { params: { state } }); }
   async listOwners() { return await this.#fetchNdjson('/api/owners'); }
+  async updateOwner(ownerId, body) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}`, body); }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
+  async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
   async synchronize() { await this.http.get('/api/admin/synchronize'); }
   async mediasWithLocations(onItem) { await this.#fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
   async #fetchNdjson(url) {
@@ -999,6 +1001,87 @@ function initEventsTab() {
 }
 
 // Owners
+function refreshOwnerTile(updated) {
+  const list = document.getElementById('owners-list'); if (!list) return;
+  const li = list.querySelector(`li[data-owner-id="${updated.id}"]`);
+  if (!li) return;
+  const birthStr = updated.birthDate ? new Date(updated.birthDate).toLocaleDateString() : '';
+  li.innerHTML = `<h4>${updated.firstName} ${updated.lastName}</h4><div style="font-size:12px;color:#555">id: ${updated.id}${birthStr ? ' • birth: '+birthStr : ''}</div>
+    <button class="ev-edit-btn" title="Edit">✎ Edit</button>`;
+  const editBtn = li.querySelector('.ev-edit-btn');
+  if (editBtn) { editBtn.onclick = (e) => { e.stopPropagation(); openOwnerEditModal(updated); }; }
+}
+
+function openOwnerEditModal(owner) {
+  if (!owner) { alert('No owner'); return; }
+  if (document.querySelector('.modal-overlay')) return;
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  const firstVal = owner.firstName || '';
+  const lastVal = owner.lastName || '';
+  const birthVal = owner.birthDate ? new Date(owner.birthDate) : null;
+  const toDateInput = (d) => {
+    try {
+      if (!d) return '';
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      return `${yyyy}-${mm}-${dd}`;
+    } catch { return ''; }
+  };
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Edit owner</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>First name</label>
+            <input type="text" id="ow-first" value="${(firstVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Last name</label>
+            <input type="text" id="ow-last" value="${(lastVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Birthdate</label>
+            <input type="date" id="ow-birth" value="${toDateInput(birthVal)}">
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#ow-first')||modal).focus(); }, 0);
+
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const firstName = modal.querySelector('#ow-first').value.trim();
+    const lastName = modal.querySelector('#ow-last').value.trim();
+    const birth = modal.querySelector('#ow-birth').value; // yyyy-mm-dd or ''
+    const body = { firstName, lastName };
+    if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
+    try {
+      await api.updateOwner(owner.id, body);
+      close();
+      // refetch to get canonical data
+      const owners = await api.listOwners();
+      const updated = owners.find(x => x.id === owner.id) || { ...owner, firstName, lastName, birthDate: birth || null };
+      refreshOwnerTile(updated);
+      // Invalidate owners map cache used by Stores tab and refresh the owner select options
+      ownersMapCache = null;
+      const ownerSelect = document.getElementById('store-owner');
+      if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
+    } catch (e) {
+      alert('Failed to update owner');
+    }
+  });
+}
+
 async function loadOwners() {
   const list = $('#owners-list'); list.innerHTML = '';
   try {
@@ -1007,23 +1090,114 @@ async function loadOwners() {
     ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
     for (const o of owners) {
       const li = document.createElement('li');
-      li.innerHTML = `<h4>${o.firstName} ${o.lastName}</h4><div style="font-size:12px;color:#555">${o.id}</div>`;
+      li.dataset.ownerId = o.id || '';
+      const birthStr = o.birthDate ? new Date(o.birthDate).toLocaleDateString() : '';
+      li.innerHTML = `<h4>${o.firstName} ${o.lastName}</h4><div style="font-size:12px;color:#555">id: ${o.id}${birthStr ? ' • birth: '+birthStr : ''}</div>
+        <button class="ev-edit-btn" title="Edit">✎ Edit</button>`;
       list.appendChild(li);
+      const editBtn = li.querySelector('.ev-edit-btn');
+      if (editBtn) { editBtn.onclick = (e) => { e.stopPropagation(); openOwnerEditModal(o); }; }
     }
   } catch (e) { list.innerHTML = '<li>Failed to load owners</li>'; }
 }
 
 // Stores
+let ownersMapCache = null; async function getOwnersMap() { if (ownersMapCache) return ownersMapCache; try { const owners = await api.listOwners(); const map = new Map(); for (const o of owners) map.set(o.id, `${o.firstName} ${o.lastName}`); ownersMapCache = map; return map; } catch { ownersMapCache = new Map(); return ownersMapCache; } }
+
 async function loadStores() {
   const list = $('#stores-list'); list.innerHTML = '';
   try {
-    const stores = await api.listStores();
+    const [stores, ownersMap] = await Promise.all([api.listStores(), getOwnersMap()]);
     for (const s of stores) {
       const li = document.createElement('li');
-      li.innerHTML = `<h4>${s.baseDirectory}</h4><div style="font-size:12px;color:#555">id: ${s.id} • owner: ${s.ownerId}</div>`;
+      li.dataset.storeId = s.id || '';
+      const title = `${s.name ? (s.name + ': ') : ''}${s.baseDirectory || ''}`;
+      const ownerName = ownersMap.get(s.ownerId) || s.ownerName || s.ownerId || '';
+      li.innerHTML = `
+        <h4>${title}</h4>
+        <div style="font-size:12px;color:#555">id: ${s.id} • owner: ${ownerName}</div>
+        <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+      `;
       list.appendChild(li);
+      const editBtn = li.querySelector('.ev-edit-btn');
+      if (editBtn) {
+        editBtn.onclick = (e) => { e.stopPropagation(); openStoreEditModal(s); };
+      }
     }
   } catch (e) { list.innerHTML = '<li>Failed to load stores</li>'; }
+}
+
+function refreshStoreTile(updated) {
+  const list = document.getElementById('stores-list'); if (!list) return;
+  const li = list.querySelector(`li[data-store-id="${updated.id}"]`);
+  if (!li) return;
+  getOwnersMap().then(ownersMap => {
+    const title = `${updated.name ? (updated.name + ': ') : ''}${updated.baseDirectory || ''}`;
+    const ownerName = ownersMap.get(updated.ownerId) || updated.ownerName || updated.ownerId || '';
+    li.innerHTML = `
+      <h4>${title}</h4>
+      <div style="font-size:12px;color:#555">id: ${updated.id} • owner: ${ownerName}</div>
+      <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+    `;
+    const editBtn = li.querySelector('.ev-edit-btn');
+    if (editBtn) { editBtn.onclick = (e) => { e.stopPropagation(); openStoreEditModal(updated); }; }
+  });
+}
+
+function openStoreEditModal(store) {
+  if (!store) { alert('No store'); return; }
+  if (document.querySelector('.modal-overlay')) return;
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  const nameVal = store.name || '';
+  const includeVal = store.includeMask || '';
+  const ignoreVal = store.ignoreMask || '';
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Edit store</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>Name</label>
+            <input type="text" id="st-name" value="${(nameVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Include mask</label>
+            <input type="text" id="st-include" value="${(includeVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Ignore mask</label>
+            <input type="text" id="st-ignore" value="${(ignoreVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#st-name')||modal).focus(); }, 0);
+
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const name = modal.querySelector('#st-name').value;
+    const includeMask = modal.querySelector('#st-include').value;
+    const ignoreMask = modal.querySelector('#st-ignore').value;
+    const body = { name, includeMask, ignoreMask };
+    try {
+      await api.updateStore(store.id, body);
+      close();
+      // refetch this store from list to get latest values
+      const stores = await api.listStores();
+      const updated = stores.find(x => x.id === store.id) || { ...store, name, includeMask, ignoreMask };
+      refreshStoreTile(updated);
+    } catch (e) {
+      alert('Failed to update store');
+    }
+  });
 }
 
 function initStoresTab() {
