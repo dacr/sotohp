@@ -21,8 +21,10 @@ class ApiClient {
   async updateMediaStarred(mediaAccessKey, state) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}/starred`, null, { params: { state } }); }
   async listOwners() { return await this.#fetchNdjson('/api/owners'); }
   async updateOwner(ownerId, body) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}`, body); }
+  async createOwner(body) { const res = await this.http.post('/api/owner', body); return res.data; }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
+  async createStore(body) { const res = await this.http.post('/api/store', body); return res.data; }
   async synchronize() { await this.http.get('/api/admin/synchronize'); }
   async mediasWithLocations(onItem) { await this.#fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
   async #fetchNdjson(url) {
@@ -1082,12 +1084,77 @@ function openOwnerEditModal(owner) {
   });
 }
 
+function openOwnerCreateModal() {
+  if (document.querySelector('.modal-overlay')) return;
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Create owner</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>First name</label>
+            <input type="text" id="owc-first" value="">
+            <label style="margin-top:8px">Last name</label>
+            <input type="text" id="owc-last" value="">
+            <label style="margin-top:8px">Birthdate</label>
+            <input type="date" id="owc-birth" value="">
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#owc-first')||modal).focus(); }, 0);
+
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const firstName = modal.querySelector('#owc-first').value.trim();
+    const lastName = modal.querySelector('#owc-last').value.trim();
+    const birth = modal.querySelector('#owc-birth').value; // yyyy-mm-dd or ''
+    if (!firstName || !lastName) { alert('First name and Last name are required'); return; }
+    const body = { firstName, lastName };
+    if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
+    try {
+      await api.createOwner(body);
+      close();
+      // Refresh owners list and stores owner select
+      await loadOwners();
+      ownersMapCache = null;
+      try {
+        const owners = await api.listOwners();
+        const ownerSelect = document.getElementById('store-owner');
+        if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
+      } catch {}
+    } catch (e) {
+      alert('Failed to create owner');
+    }
+  });
+}
+
+function initOwnersTab() {
+  const refreshBtn = document.getElementById('refresh-owners');
+  if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadOwners); refreshBtn.__wired = true; }
+  const createBtn = document.getElementById('create-owner');
+  if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openOwnerCreateModal()); createBtn.__wired = true; }
+}
+
 async function loadOwners() {
   const list = $('#owners-list'); list.innerHTML = '';
   try {
     const owners = await api.listOwners();
     const ownerSelect = document.getElementById('store-owner');
-    ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
+    if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
     for (const o of owners) {
       const li = document.createElement('li');
       li.dataset.ownerId = o.id || '';
@@ -1200,11 +1267,103 @@ function openStoreEditModal(store) {
   });
 }
 
+async function openStoreCreateModal() {
+  if (document.querySelector('.modal-overlay')) return;
+  // Render modal immediately; owners will be fetched asynchronously to avoid UI freeze
+  let ownerNames = [];
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  const datalistId = 'stc-owner-list';
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Create store</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>Name</label>
+            <input type="text" id="stc-name" value="">
+            <label style="margin-top:8px">Base directory</label>
+            <input type="text" id="stc-basedir" value="" placeholder="/path/to/photos" required>
+            <label style="margin-top:8px">Owner</label>
+            <input type="text" id="stc-owner" list="${datalistId}" placeholder="Loading owners…" autocomplete="off" disabled>
+            <datalist id="${datalistId}"></datalist>
+            <label style="margin-top:8px">Include mask</label>
+            <input type="text" id="stc-include" value="">
+            <label style="margin-top:8px">Ignore mask</label>
+            <input type="text" id="stc-ignore" value="">
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#stc-name')||modal).focus(); }, 0);
+
+  // Fetch owners asynchronously and populate the datalist
+  (async () => {
+    try {
+      const owners = await api.listOwners();
+      ownerNames = owners.map(o => ({ id: o.id, name: `${o.firstName || ''} ${o.lastName || ''}`.trim() }));
+      const optionsHtml = ownerNames.map(o => `<option value="${o.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"></option>`).join('');
+      const dl = overlay.querySelector(`#${datalistId}`);
+      if (dl) dl.innerHTML = optionsHtml;
+      const ownerInput = overlay.querySelector('#stc-owner');
+      if (ownerInput) {
+        ownerInput.disabled = false;
+        ownerInput.placeholder = 'Type owner name…';
+      }
+    } catch (e) {
+      const ownerInput = overlay.querySelector('#stc-owner');
+      if (ownerInput) {
+        ownerInput.disabled = true;
+        ownerInput.placeholder = 'Failed to load owners';
+      }
+    }
+  })();
+
+  function resolveOwnerId(name) {
+    const n = (name||'').trim(); if (!n) return null;
+    const match = ownerNames.find(o => o.name.toLowerCase() === n.toLowerCase());
+    if (match) return match.id;
+    // try startsWith unique
+    const candidates = ownerNames.filter(o => o.name.toLowerCase().startsWith(n.toLowerCase()));
+    if (candidates.length === 1) return candidates[0].id;
+    return null;
+  }
+
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const name = modal.querySelector('#stc-name').value.trim();
+    const baseDirectory = modal.querySelector('#stc-basedir').value.trim();
+    const ownerName = modal.querySelector('#stc-owner').value.trim();
+    const includeMask = modal.querySelector('#stc-include').value.trim();
+    const ignoreMask = modal.querySelector('#stc-ignore').value.trim();
+    if (!baseDirectory) { alert('Base directory is required'); return; }
+    const ownerId = resolveOwnerId(ownerName);
+    if (!ownerId) { alert('Please select a valid owner by name'); return; }
+    const body = { name: name || null, ownerId, baseDirectory, includeMask: includeMask || null, ignoreMask: ignoreMask || null };
+    try {
+      await api.createStore(body);
+      close();
+      await loadStores();
+    } catch(e) {
+      alert('Failed to create store');
+    }
+  });
+}
+
 function initStoresTab() {
-  $('#refresh-stores').addEventListener('click', loadStores);
-  const form = document.getElementById('store-create-form');
-  // Not available in current OpenAPI (no POST /api/store). Disable submit and show info.
-  form.addEventListener('submit', (e) => { e.preventDefault(); alert('Store creation is not available in the API.'); });
+  const refreshBtn = document.getElementById('refresh-stores'); if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadStores); refreshBtn.__wired = true; }
+  const createBtn = document.getElementById('create-store'); if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openStoreCreateModal()); createBtn.__wired = true; }
 }
 
 // Settings
@@ -1240,6 +1399,7 @@ function init() {
     cont.appendChild(btn);
   }
   initEventsTab();
+  initOwnersTab();
   initStoresTab();
   initSettings();
   // Initial media: restore last viewed image if possible, else random

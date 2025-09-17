@@ -435,6 +435,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/owner:
+    post:
+      tags:
+      - Owner
+      summary: Create a new media owner
+      operationId: Create an owner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerCreate'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Owner'
+        '400':
+          description: 'Invalid value for: body'
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/owners:
     get:
       tags:
@@ -523,6 +554,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/store:
+    post:
+      tags:
+      - Store
+      summary: Create a new media store
+      operationId: Create an store
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreCreate'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Store'
+        '400':
+          description: 'Invalid value for: body'
+          content:
+            text/plain:
+              schema:
+                type: string
         '500':
           description: Something went wrong with the backend
           content:
@@ -1010,6 +1072,20 @@ components:
         birthDate:
           type: string
           format: date-time
+    OwnerCreate:
+      title: OwnerCreate
+      type: object
+      required:
+      - firstName
+      - lastName
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        birthDate:
+          type: string
+          format: date-time
     OwnerUpdate:
       title: OwnerUpdate
       type: object
@@ -1059,6 +1135,25 @@ components:
         id:
           type: string
           format: uuid
+        name:
+          type: string
+        ownerId:
+          type: string
+        baseDirectory:
+          type: string
+        includeMask:
+          type: string
+        ignoreMask:
+          type: string
+    StoreCreate:
+      title: StoreCreate
+      type: object
+      required:
+      - ownerId
+      - baseDirectory
+      properties:
+        name:
+          type: string
         ownerId:
           type: string
         baseDirectory:
@@ -1071,6 +1166,8 @@ components:
       title: StoreUpdate
       type: object
       properties:
+        name:
+          type: string
         includeMask:
           type: string
         ignoreMask:

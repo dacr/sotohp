@@ -104,8 +104,28 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  def ownerCreateLogic(toCreate: ApiOwnerCreate): ZIO[ApiEnv, ApiInternalError, ApiOwner] = {
+    for {
+      owner   <- MediaService
+                   .ownerCreate(None, toCreate.firstName, toCreate.lastName, toCreate.birthDate)
+                   .mapError(err => ApiInternalError("Couldn't create owner"))
+      taoOwner = owner.transformInto[ApiOwner]
+    } yield taoOwner
+  }
+
+  def ownerCreateEndpoint =
+    ownerEndpoint()
+      .name("Create an owner")
+      .summary("Create a new media owner")
+      .post
+      .in(jsonBody[ApiOwnerCreate])
+      .out(jsonBody[ApiOwner])
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](toCreate => ownerCreateLogic(toCreate))
+
+
   def ownerGetLogic(ownerId: OwnerId): ZIO[ApiEnv, ApiIssue, ApiOwner] = {
-    val logic = for {
+    for {
       owner   <- MediaService
                    .ownerGet(ownerId)
                    .logError("Couldn't get owner")
@@ -113,8 +133,6 @@ object ApiApp extends ZIOAppDefault {
                    .someOrFail(ApiResourceNotFound("Couldn't find owner"))
       taoOwner = owner.transformInto[ApiOwner]
     } yield taoOwner
-
-    logic
   }
 
   val ownerGetEndpoint =
@@ -192,6 +210,32 @@ object ApiApp extends ZIOAppDefault {
       )
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  def storeCreateLogic(toCreate: ApiStoreCreate): ZIO[ApiEnv, ApiInternalError, ApiStore] = {
+    for {
+      store   <- MediaService
+                   .storeCreate(
+                     None,
+                     name = toCreate.name,
+                     ownerId = toCreate.ownerId,
+                     baseDirectory = toCreate.baseDirectory,
+                     includeMask = toCreate.includeMask,
+                     ignoreMask = toCreate.ignoreMask
+                   )
+                   .mapError(err => ApiInternalError("Couldn't create store"))
+      taoStore = store.transformInto[ApiStore]
+    } yield taoStore
+  }
+
+  def storeCreateEndpoint =
+    storeEndpoint()
+      .name("Create an store")
+      .summary("Create a new media store")
+      .post
+      .in(jsonBody[ApiStoreCreate])
+      .out(jsonBody[ApiStore])
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](toCreate => storeCreateLogic(toCreate))
 
   def storeGetLogic(storeId: StoreId): ZIO[ApiEnv, ApiIssue, ApiStore] = {
     val logic = for {
@@ -783,10 +827,12 @@ object ApiApp extends ZIOAppDefault {
     eventUpdateEndpoint,
     eventDeleteEndpoint,
     // -------------------------
+    ownerCreateEndpoint,
     ownerListEndpoint,
     ownerGetEndpoint,
     ownerUpdateEndpoint,
     // -------------------------
+    storeCreateEndpoint,
     storeListEndpoint,
     storeGetEndpoint,
     storeUpdateEndpoint,
