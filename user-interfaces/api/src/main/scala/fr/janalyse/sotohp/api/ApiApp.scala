@@ -229,7 +229,7 @@ object ApiApp extends ZIOAppDefault {
                  .mapError(err => ApiInternalError("Couldn't get store"))
                  .someOrFail(ApiResourceNotFound("Couldn't find store"))
       _     <- MediaService
-                 .storeUpdate(storeId, includeMask = toUpdate.includeMask, ignoreMask = toUpdate.ignoreMask)
+                 .storeUpdate(storeId, name = toUpdate.name, includeMask = toUpdate.includeMask, ignoreMask = toUpdate.ignoreMask)
                  .logError("Couldn't update store")
                  .mapError(err => ApiInternalError("Couldn't update store"))
     } yield ()

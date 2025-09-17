@@ -2,6 +2,7 @@ package fr.janalyse.sotohp.model
 
 case class Store(
   id: StoreId,
+  name: Option[StoreName],
   ownerId: OwnerId,
   // TODO add language ?
   baseDirectory: BaseDirectoryPath,

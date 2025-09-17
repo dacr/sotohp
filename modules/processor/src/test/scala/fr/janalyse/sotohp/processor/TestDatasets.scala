@@ -18,7 +18,7 @@ trait TestDatasets {
   // -------------------------------------------------------------------------------------------------------------------
   val datasetObjectsPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-object"))
   val datasetObjectsFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
-  val datasetObjectsFakeStore: Store        = Store(datasetObjectsFakeStoreId, fakeOwner.id, datasetObjectsPath)
+  val datasetObjectsFakeStore: Store        = Store(datasetObjectsFakeStoreId, None, fakeOwner.id, datasetObjectsPath)
 
   val datasetObjectsFileMixtureOfObjects: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-objects/mixture-of-objects.jpg"))
   val datasetObjectsFilePersonBicycle: OriginalPath    = OriginalPath(Path.of("samples/dataset-processors-objects/person-bicycle.jpg"))
@@ -26,7 +26,7 @@ trait TestDatasets {
   // -------------------------------------------------------------------------------------------------------------------
   val datasetFacesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-faces"))
   val datasetFacesFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
-  val datasetFacesFakeStore: Store        = Store(datasetFacesFakeStoreId, fakeOwner.id, datasetFacesPath)
+  val datasetFacesFakeStore: Store        = Store(datasetFacesFakeStoreId, None, fakeOwner.id, datasetFacesPath)
 
   val datasetFacesFileMondement: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-faces/mondement.jpg"))
   val datasetFacesFileMariage: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-faces/mariage.jpg"))
@@ -34,7 +34,7 @@ trait TestDatasets {
   // -------------------------------------------------------------------------------------------------------------------
   val datasetClassesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-object"))
   val datasetClassesFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
-  val datasetClassesFakeStore: Store        = Store(datasetClassesFakeStoreId, fakeOwner.id, datasetClassesPath)
+  val datasetClassesFakeStore: Store        = Store(datasetClassesFakeStoreId, None, fakeOwner.id, datasetClassesPath)
 
   val datasetClassesFileLakeForest: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-classifications/lake-forest.jpg"))
   val datasetClassesFileMountain: OriginalPath   = OriginalPath(Path.of("samples/dataset-processors-classifications/mountain.jpg"))

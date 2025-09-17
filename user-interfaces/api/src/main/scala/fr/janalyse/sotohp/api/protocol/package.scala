@@ -65,6 +65,7 @@ package object protocol {
   given Schema[CameraName]       = strAs
   given Schema[ArtistInfo]       = strAs
   given Schema[EventName]        = strAs
+  given Schema[StoreName]        = strAs
   given Schema[FirstName]        = strAs
   given Schema[LastName]         = strAs
   given Schema[EventDescription] = strAs

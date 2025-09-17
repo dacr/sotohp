@@ -82,9 +82,9 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
     test("store create read update delete")(
       for {
         fakeOwnerId  <- ZIO.attempt(OwnerId(ULID.newULID))
-        storeCreated <- MediaService.storeCreate(None, fakeOwnerId, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
+        storeCreated <- MediaService.storeCreate(None, None, fakeOwnerId, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
         storeFetched <- MediaService.storeGet(storeCreated.id)
-        storeUpdated <- MediaService.storeUpdate(storeId = storeCreated.id, includeMask = Some(IncludeMask(".*".r)), ignoreMask = storeCreated.ignoreMask).some
+        storeUpdated <- MediaService.storeUpdate(storeId = storeCreated.id, name = None, includeMask = Some(IncludeMask(".*".r)), ignoreMask = storeCreated.ignoreMask).some
         _            <- MediaService.storeDelete(storeCreated.id)
         afterDelete  <- MediaService.storeGet(storeCreated.id)
       } yield assertTrue(
@@ -98,7 +98,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
       for {
         fakeOwnerId   <- ZIO.attempt(OwnerId(ULID.newULID))
         paths          = List("samples/dataset1", "samples/dataset2", "samples/dataset3").map(dir => BaseDirectoryPath(Path.of(dir)))
-        createdStores <- ZIO.foreach(paths)(path => MediaService.storeCreate(None, fakeOwnerId, path, None, None))
+        createdStores <- ZIO.foreach(paths)(path => MediaService.storeCreate(None, None, fakeOwnerId, path, None, None))
         storesFetched <- MediaService.storeList().runCollect
         _             <- ZIO.foreachDiscard(storesFetched)(store => MediaService.storeDelete(store.id))
       } yield assertTrue(
@@ -111,7 +111,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
     test("keyword rules create read update delete")(
       for {
         owner        <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
-        store        <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
+        store        <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
         rules         = KeywordRules(ignoring = Set.empty, mappings = Nil, rewritings = Nil)
         _            <- MediaService.keywordRulesUpsert(store.id, rules)
         rulesFetched <- MediaService.keywordRulesGet(store.id).some
@@ -126,7 +126,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
     test("keyword rules usage")(
       for {
         owner       <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
-        store       <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
+        store       <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
         _           <- MediaService.keywordRulesUpsert(
                          store.id,
                          KeywordRules(ignoring = Set("with", "i", "am"), mappings = Mapping("nigght","night")::Nil, rewritings = Rewriting("(42)(thing)", "$2$1") :: Nil)

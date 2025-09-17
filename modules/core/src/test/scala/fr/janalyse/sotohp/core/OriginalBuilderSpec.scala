@@ -31,7 +31,7 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
           metadata1      <- from(readDrewMetadata(dataset1Example1))
           shootDateTime1 <- from(extractShootDateTime(dataset1Example1)(metadata1))
         } yield assertTrue(
-          shootDateTime1.toString == "2023-07-26T10:05:59Z"
+          shootDateTime1.toString == "2022-07-19T10:15:25Z"
         )
       ),
       test("camera name can be extracted")(

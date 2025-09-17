@@ -22,11 +22,11 @@ trait TestDatasets {
   val dataset1Example4: OriginalPath = OriginalPath(Path.of("samples/dataset1/example4.tif"))
   val dataset1Example5: OriginalPath = OriginalPath(Path.of("samples/dataset1/example5.png"))
   val fakeStoreId1: StoreId = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
-  val fakeStore1 : Store = Store(fakeStoreId1, fakeOwner.id, dataset1)
+  val fakeStore1 : Store = Store(fakeStoreId1, None, fakeOwner.id, dataset1)
 
   val dataset2: BaseDirectoryPath      = BaseDirectoryPath(Path.of("samples/dataset2"))
   val dataset2tag1: OriginalPath       = OriginalPath(Path.of("samples/dataset2/tags/tag1.jpg"))
   val dataset2landscape1: OriginalPath = OriginalPath(Path.of("samples/dataset2/landscapes/landscape1.jpg"))
   val fakeStoreId2: StoreId = StoreId(UUID.fromString("514f2381-92a8-40d2-add1-1c22769001a2"))
-  val fakeStore2 : Store = Store(fakeStoreId2, fakeOwner.id, dataset2)
+  val fakeStore2 : Store = Store(fakeStoreId2, None, fakeOwner.id, dataset2)
 }

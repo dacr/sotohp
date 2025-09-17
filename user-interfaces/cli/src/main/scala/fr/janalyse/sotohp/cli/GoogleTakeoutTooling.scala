@@ -66,7 +66,7 @@ object GoogleTakeoutTooling extends CommonsCLI {
 
   val logic = ZIO.logSpan("google-takeout-check") {
     val baseDir = Path.of("/data/ALBUMS/google-photos-takeout/Takeout/TODO-synchronize")
-    val store   = Store(fakeStoreId, fakeOwner.id, BaseDirectoryPath(baseDir), includeMask = includeMask)
+    val store   = Store(fakeStoreId, None, fakeOwner.id, BaseDirectoryPath(baseDir), includeMask = includeMask)
 
     for {
       owner          <- MediaService.ownerList().runHead

@@ -18,7 +18,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
       for {
         epoch          <- Clock.currentDateTime      // Virtual Clock so == epoch
         owner          <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
-        store          <- MediaService.storeCreate(None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
+        store          <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
         _              <- MediaService.keywordRulesUpsert(
                             store.id,
                             KeywordRules(

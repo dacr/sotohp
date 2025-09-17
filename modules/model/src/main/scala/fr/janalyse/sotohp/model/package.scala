@@ -300,6 +300,17 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+  opaque type StoreName = String
+
+  object StoreName {
+    def apply(name: String): StoreName = name
+
+    extension (eventName: StoreName) {
+      def text: String = eventName
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   opaque type IncludeMask = Regex
 
   object IncludeMask {

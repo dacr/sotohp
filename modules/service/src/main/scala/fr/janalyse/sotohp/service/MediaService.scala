@@ -100,6 +100,7 @@ trait MediaService {
   def storeDelete(storeId: StoreId): IO[ServiceIssue, Unit]
   def storeCreate(
     providedStoreId: Option[StoreId], // If not provided, it will be chosen automatically
+    name: Option[StoreName],
     ownerId: OwnerId,
     baseDirectory: BaseDirectoryPath,
     includeMask: Option[IncludeMask],
@@ -107,6 +108,7 @@ trait MediaService {
   ): IO[ServiceIssue, Store]
   def storeUpdate(
     storeId: StoreId,
+    name: Option[StoreName],
     includeMask: Option[IncludeMask],
     ignoreMask: Option[IgnoreMask]
   ): IO[ServiceIssue, Option[Store]]
@@ -233,10 +235,10 @@ object MediaService {
 
   def storeDelete(storeId: StoreId): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.storeDelete(storeId))
 
-  def storeCreate(providedStoreId: Option[StoreId], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Store] =
-    ZIO.serviceWithZIO(_.storeCreate(providedStoreId, ownerId, baseDirectory, includeMask, ignoreMask))
+  def storeCreate(providedStoreId: Option[StoreId], name: Option[StoreName], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Store] =
+    ZIO.serviceWithZIO(_.storeCreate(providedStoreId, name, ownerId,  baseDirectory, includeMask, ignoreMask))
 
-  def storeUpdate(storeId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Option[Store]] = ZIO.serviceWithZIO(_.storeUpdate(storeId, includeMask, ignoreMask))
+  def storeUpdate(storeId: StoreId, name: Option[StoreName], includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Option[Store]] = ZIO.serviceWithZIO(_.storeUpdate(storeId, name, includeMask, ignoreMask))
 
   // -------------------------------------------------------------------------------------------------------------------
 

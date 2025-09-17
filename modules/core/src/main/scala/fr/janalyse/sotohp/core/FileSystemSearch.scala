@@ -34,6 +34,7 @@ object FileSystemSearch {
 
   def makeStore(
     ownerId: OwnerId,
+    name: Option[StoreName],
     baseDirectorySpec: String,
     includeMaskPattern: Option[String] = None,
     ignoreMaskPattern: Option[String] = None
@@ -45,6 +46,7 @@ object FileSystemSearch {
       storeId        = StoreId(UUID.randomUUID())
     } yield Store(
       id = storeId,
+      name = name,
       ownerId = ownerId,
       baseDirectory = baseDirectory,
       includeMask = includeMask,

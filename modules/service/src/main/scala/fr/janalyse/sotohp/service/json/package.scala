@@ -161,6 +161,11 @@ package object json {
     (trace: List[JsonError], in: RetractReader) => EventName(JsonDecoder.string.unsafeDecode(trace, in))
   )
 
+  given storeNameCodec:JsonCodec[StoreName] = new JsonCodec(
+    (a: StoreName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => StoreName(JsonDecoder.string.unsafeDecode(trace, in))
+  )
+
   given firstNameCodec:JsonCodec[FirstName] = new JsonCodec(
     (a: FirstName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
     (trace: List[JsonError], in: RetractReader) => FirstName(JsonDecoder.string.unsafeDecode(trace, in))

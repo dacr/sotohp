@@ -8,6 +8,7 @@ import fr.janalyse.sotohp.service.json.{given,*}
 
 case class DaoStore(
   id: StoreId,
+  name: Option[StoreName],
   ownerId: OwnerId,
   baseDirectory: BaseDirectoryPath,
   includeMask: Option[IncludeMask],

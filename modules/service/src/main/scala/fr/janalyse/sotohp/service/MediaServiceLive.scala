@@ -590,23 +590,23 @@ class MediaServiceLive private (
       .unit
   }
 
-  override def storeCreate(providedStoreId: Option[StoreId], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = {
+  override def storeCreate(providedStoreId: Option[StoreId], name: Option[StoreName], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = {
     for {
       storeId <- ZIO
                    .from(providedStoreId)
                    .orElse(ZIO.attempt(StoreId(UUID.randomUUID())))
                    .mapError(err => ServiceInternalIssue(s"Unable to create a store identifier : $err"))
-      store    = Store(storeId, ownerId, baseDirectory, includeMask, ignoreMask)
+      store    = Store(storeId, name, ownerId,  baseDirectory, includeMask, ignoreMask)
       _       <- storesColl
                    .upsert(store.id, _ => store.transformInto[DaoStore])
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create store : $err"))
     } yield store
   }
 
-  override def storeUpdate(storeId: StoreId, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Option[Store]] = {
+  override def storeUpdate(storeId: StoreId, name: Option[StoreName], includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Option[Store]] = {
     for {
       maybeDaoStore <- storesColl
-                         .update(storeId, _.copy(includeMask = includeMask, ignoreMask = ignoreMask))
+                         .update(storeId, _.copy(name = name, includeMask = includeMask, ignoreMask = ignoreMask))
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update store : $err"))
       maybeStore     = maybeDaoStore.map(_.transformInto[Store])
     } yield maybeStore
