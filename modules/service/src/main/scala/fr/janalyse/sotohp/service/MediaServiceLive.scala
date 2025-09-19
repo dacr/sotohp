@@ -808,6 +808,18 @@ class MediaServiceLive private (
   }
 
   override def synchronize(action: SynchronizeAction): IO[ServiceIssue, Unit] = {
+    val finishedLogic =
+      for {
+        currentDate <- Clock.currentDateTime
+        _           <- synchronizeStatusRef
+                         .update(status =>
+                           status.copy(
+                             running = false,
+                             lastUpdated = Some(currentDate)
+                           )
+                         )
+      } yield ()
+
     val syncLogic =
       ZIO.log("Synchronization started") *>
         storeList()
@@ -825,8 +837,10 @@ class MediaServiceLive private (
           .mapZIO(updateSynchronizeStatus)
           .runDrain
           .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
-          .tap(_ => ZIO.log("Synchronization finished !"))
           .catchAll(e => ZIO.logError(s"Sync failed: $e"))
+          .tap(_ => ZIO.log("Synchronization finished !"))
+          .tap(_ => finishedLogic) // TODO not sure it's the best place to do this
+
     // TODO temporary quick & dirty implementation
 
     val startLogic = for {
