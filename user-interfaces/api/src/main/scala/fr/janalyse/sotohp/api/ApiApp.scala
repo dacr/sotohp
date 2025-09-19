@@ -449,7 +449,7 @@ object ApiApp extends ZIOAppDefault {
       .summary("Get media normalized image content")
       .get
       .in(path[String]("mediaAccessKey"))
-      .in("normalized")
+      .in("content" / "normalized")
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
@@ -472,7 +472,7 @@ object ApiApp extends ZIOAppDefault {
       .summary("Get media miniature image content")
       .get
       .in(path[String]("mediaAccessKey"))
-      .in("miniature")
+      .in("content" / "miniature")
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
