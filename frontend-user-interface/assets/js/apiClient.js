@@ -29,8 +29,12 @@ export class ApiClient {
     async listStores() {
         return await this.fetchNdjson('/api/stores');
     }
-    async synchronize() {
-        await this.http.get('/api/admin/synchronize');
+    async synchronizeStatus() {
+        const res = await this.http.get('/api/admin/synchronize');
+        return res.data;
+    }
+    async synchronizeStart() {
+        await this.http.put('/api/admin/synchronize');
     }
     async mediasWithLocations(onItem) {
         await this.fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem);

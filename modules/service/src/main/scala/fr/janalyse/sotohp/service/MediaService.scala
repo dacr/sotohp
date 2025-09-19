@@ -6,7 +6,7 @@ import zio.stream.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
-import fr.janalyse.sotohp.service.model.KeywordRules
+import fr.janalyse.sotohp.service.model.{KeywordRules, SynchronizeAction, SynchronizeStatus}
 import zio.lmdb.LMDB
 
 import java.time.OffsetDateTime
@@ -114,7 +114,8 @@ trait MediaService {
   ): IO[ServiceIssue, Option[Store]]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def synchronize(): IO[ServiceIssue, Unit]
+  def synchronize(action: SynchronizeAction): IO[ServiceIssue, Unit]
+  def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus]
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]]
@@ -242,7 +243,8 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def synchronize(): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronize())
+  def synchronize(action: SynchronizeAction): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronize(action))
+  def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus] = ZIO.serviceWithZIO(_.synchronizeStatus())
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): ZIO[MediaService, ServiceIssue, Set[Keyword]] = ZIO.serviceWithZIO(_.keywordSentenceToKeywords(storeId, sentence))

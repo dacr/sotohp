@@ -44,7 +44,10 @@ class MediaServiceLive private (
   // ------------------------
   classificationProcessorEffect: IO[ClassificationIssue, ClassificationProcessor],
   facesProcessorEffect: IO[FacesDetectionIssue, FacesProcessor],
-  objectsProcessorEffect: IO[ObjectsDetectionIssue, ObjectsDetectionProcessor]
+  objectsProcessorEffect: IO[ObjectsDetectionIssue, ObjectsDetectionProcessor],
+  // ------------------------
+  synchronizeStatusRef: Ref[SynchronizeStatus],
+  synchronizeFiberRef: Ref[Option[Fiber[ServiceIssue, Unit]]]
 ) extends MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -596,7 +599,7 @@ class MediaServiceLive private (
                    .from(providedStoreId)
                    .orElse(ZIO.attempt(StoreId(UUID.randomUUID())))
                    .mapError(err => ServiceInternalIssue(s"Unable to create a store identifier : $err"))
-      store    = Store(storeId, name, ownerId,  baseDirectory, includeMask, ignoreMask)
+      store    = Store(storeId, name, ownerId, baseDirectory, includeMask, ignoreMask)
       _       <- storesColl
                    .upsert(store.id, _ => store.transformInto[DaoStore])
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create store : $err"))
@@ -787,22 +790,66 @@ class MediaServiceLive private (
     logic
   }
 
-  override def synchronize(): IO[ServiceIssue, Unit] = {
-    ZIO.log("Synchronizing...") *>
-      storeList()
-        .mapZIO(store => ZIO.from(FileSystemSearch.originalsStreamFromSearchRoot(store)))
-        .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
-        .right
-        .mapZIO(synchronizeOriginal)
-        .mapZIO(synchronizeState)
-        .mapZIO(synchronizeMedia)
-        .mapZIO(synchronizeProcessors)
-        .mapZIO(locationInduction)
-        .filter(_.state.mediaLastSynchronized.isEmpty)
-        .grouped(25)
-        .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
-        .runDrain
-        .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
+  override def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus] = {
+    synchronizeStatusRef.get
+  }
+
+  def updateSynchronizeStatus(input: Chunk[MediaBag]): UIO[Chunk[MediaBag]] = {
+    for {
+      currentDate <- Clock.currentDateTime
+      _           <- synchronizeStatusRef
+                       .update(status =>
+                         status.copy(
+                           lastUpdated = Some(currentDate),
+                           processedCount = status.processedCount + input.size
+                         )
+                       )
+    } yield input
+  }
+
+  override def synchronize(action: SynchronizeAction): IO[ServiceIssue, Unit] = {
+    val syncLogic =
+      ZIO.log("Synchronization started") *>
+        storeList()
+          .mapZIO(store => ZIO.from(FileSystemSearch.originalsStreamFromSearchRoot(store)))
+          .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
+          .right
+          .mapZIO(synchronizeOriginal)
+          .mapZIO(synchronizeState)
+          .mapZIO(synchronizeMedia)
+          .mapZIO(synchronizeProcessors)
+          .mapZIO(locationInduction)
+          .filter(_.state.mediaLastSynchronized.isEmpty)
+          .grouped(25)
+          .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
+          .mapZIO(updateSynchronizeStatus)
+          .runDrain
+          .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
+          .tap(_ => ZIO.log("Synchronization finished !"))
+          .catchAll(e => ZIO.logError(s"Sync failed: $e"))
+    // TODO temporary quick & dirty implementation
+
+    val startLogic = for {
+      fiber       <- syncLogic.forkDaemon
+      currentDate <- Clock.currentDateTime
+      _           <- synchronizeStatusRef
+                       .update(status =>
+                         status.copy(
+                           running = true,
+                           lastUpdated = Some(currentDate)
+                         )
+                       )
+      _           <- synchronizeFiberRef
+                       .modify {
+                         case None        => ((), Some(fiber))
+                         case s @ Some(f) => ((), s) // already running
+                       }
+    } yield ()
+
+    for {
+      current <- synchronizeStatusRef.get
+      _       <- startLogic.when(!current.running)
+    } yield ()
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1017,6 +1064,8 @@ object MediaServiceLive {
     classificationProcessor       <- ClassificationProcessor.allocate().memoize
     facesProcessor                <- FacesProcessor.allocate().memoize
     objectsProcessor              <- ObjectsDetectionProcessor.allocate().memoize
+    synchronizeStatusReference    <- Ref.make(SynchronizeStatus.empty)
+    synchronizeFiberReference     <- Ref.make(Option.empty[Fiber[Nothing, Unit]])
   } yield new MediaServiceLive(
     lmdb,
     search,
@@ -1036,7 +1085,10 @@ object MediaServiceLive {
     // ------------------------
     classificationProcessor,
     facesProcessor,
-    objectsProcessor
+    objectsProcessor,
+    // ------------------------
+    synchronizeStatusReference,
+    synchronizeFiberReference
   )
 
   // -------------------------------------------------------------------------------------------------------------------

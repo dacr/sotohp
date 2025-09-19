@@ -54,8 +54,13 @@ export class ApiClient {
     return await this.fetchNdjson<Store>('/api/stores')
   }
 
-  async synchronize(): Promise<void> {
-    await this.http.get('/api/admin/synchronize')
+  async synchronizeStatus(): Promise<{ running: boolean; lastUpdated?: string; processedCount: number }> {
+    const res = await this.http.get('/api/admin/synchronize')
+    return res.data
+  }
+
+  async synchronizeStart(): Promise<void> {
+    await this.http.put('/api/admin/synchronize')
   }
 
   async mediasWithLocations(onItem: (m: Media) => void): Promise<void> {

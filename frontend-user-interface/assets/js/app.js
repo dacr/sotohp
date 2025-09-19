@@ -25,7 +25,8 @@ class ApiClient {
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
   async createStore(body) { const res = await this.http.post('/api/store', body); return res.data; }
-  async synchronize() { await this.http.get('/api/admin/synchronize'); }
+  async synchronizeStatus() { const res = await this.http.get('/api/admin/synchronize'); return res.data; }
+  async synchronizeStart() { await this.http.put('/api/admin/synchronize'); }
   async mediasWithLocations(onItem) { await this.#fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
   async #fetchNdjson(url) {
     const res = await this.http.get(url, { responseType: 'text' });
@@ -1367,12 +1368,46 @@ function initStoresTab() {
 }
 
 // Settings
+let syncPollTimer = null;
+async function refreshSyncStatus() {
+  const statusEl = document.getElementById('sync-status');
+  const btn = document.getElementById('btn-sync');
+  try {
+    const st = await api.synchronizeStatus();
+    const running = !!st?.running;
+    const count = typeof st?.processedCount === 'number' ? st.processedCount : 0;
+    const updated = st?.lastUpdated ? new Date(st.lastUpdated).toLocaleString() : 'never';
+    statusEl.textContent = running
+      ? `Running… processed ${count} item(s). Last update: ${updated}`
+      : `Idle. Last run update: ${updated}. Total processed: ${count}`;
+    if (btn) { btn.disabled = running; btn.title = running ? 'Synchronization is running' : 'Synchronize all stores'; }
+  } catch (e) {
+    statusEl.textContent = 'Unable to get synchronization status.';
+    if (btn) { btn.disabled = false; btn.title = 'Synchronize all stores'; }
+  }
+}
+function startSyncPolling() {
+  if (syncPollTimer) return;
+  syncPollTimer = setInterval(refreshSyncStatus, 3000);
+}
+function stopSyncPolling() {
+  if (syncPollTimer) { clearInterval(syncPollTimer); syncPollTimer = null; }
+}
 function initSettings() {
-  $('#btn-sync').addEventListener('click', async () => {
-    const status = $('#sync-status'); status.textContent = 'Synchronizing…';
-    try { await api.synchronize(); status.textContent = 'Synchronization requested.'; }
-    catch { status.textContent = 'Failed to synchronize.'; }
-  });
+  const btn = document.getElementById('btn-sync');
+  if (btn && !btn.__wired) {
+    btn.addEventListener('click', async () => {
+      const statusEl = document.getElementById('sync-status');
+      statusEl.textContent = 'Starting synchronization…';
+      btn.disabled = true;
+      try { await api.synchronizeStart(); await refreshSyncStatus(); }
+      catch { statusEl.textContent = 'Failed to start synchronization.'; btn.disabled = false; }
+    });
+    btn.__wired = true;
+  }
+  // Initial fetch and start polling
+  refreshSyncStatus();
+  startSyncPolling();
 }
 
 function init() {

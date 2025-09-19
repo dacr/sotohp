@@ -16,6 +16,8 @@ import zio.logging.LogFormat
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.{*, given}
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.service.model.SynchronizeAction
+import fr.janalyse.sotohp.service.model.SynchronizeAction.Start
 import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
 import sttp.tapir.{Codec, CodecFormat, EndpointInput, Schema}
@@ -122,7 +124,6 @@ object ApiApp extends ZIOAppDefault {
       .out(jsonBody[ApiOwner])
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](toCreate => ownerCreateLogic(toCreate))
-
 
   def ownerGetLogic(ownerId: OwnerId): ZIO[ApiEnv, ApiIssue, ApiOwner] = {
     for {
@@ -605,15 +606,31 @@ object ApiApp extends ZIOAppDefault {
 
   val adminSynchronizeEndpoint =
     adminEndpoint
-      .name("Synchronize")
+      .name("Synchronize start")
       .summary("Synchronize with all stores content")
-      .get
+      .put
       .in("synchronize")
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv] { _ =>
         MediaService
-          .synchronize()
+          .synchronize(SynchronizeAction.Start)
           .mapError(err => ApiInternalError("Couldn't synchronize"))
+      }
+
+
+  val adminSynchronizeStatusEndpoint =
+    adminEndpoint
+      .name("Get synchronize status")
+      .summary("Get all the details about what's going on with the synchronize operations")
+      .get
+      .in("synchronize")
+      .out(jsonBody[ApiSynchronizeStatus])
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv] { _ =>
+        MediaService
+          .synchronizeStatus()
+          .map(_.transformInto[ApiSynchronizeStatus])
+          .mapError(err => ApiInternalError("Couldn't get synchronize status"))
       }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -840,6 +857,7 @@ object ApiApp extends ZIOAppDefault {
     stateGetEndpoint,
     // -------------------------
     adminSynchronizeEndpoint,
+    adminSynchronizeStatusEndpoint,
     // -------------------------
     serviceStatusEndpoint,
     serviceInfoEndpoint

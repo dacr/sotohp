@@ -728,8 +728,26 @@ paths:
     get:
       tags:
       - Admin
+      summary: Get all the details about what's going on with the synchronize operations
+      operationId: Get synchronize status
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SynchronizeStatus'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    put:
+      tags:
+      - Admin
       summary: Synchronize with all stores content
-      operationId: Synchronize
+      operationId: Synchronize start
       responses:
         '200':
           description: ''
@@ -1172,3 +1190,18 @@ components:
           type: string
         ignoreMask:
           type: string
+    SynchronizeStatus:
+      title: SynchronizeStatus
+      type: object
+      required:
+      - running
+      - processedCount
+      properties:
+        running:
+          type: boolean
+        lastUpdated:
+          type: string
+          format: date-time
+        processedCount:
+          type: integer
+          format: int64
