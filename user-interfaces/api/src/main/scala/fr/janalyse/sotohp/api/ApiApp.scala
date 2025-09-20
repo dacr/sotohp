@@ -649,7 +649,7 @@ object ApiApp extends ZIOAppDefault {
   val adminSynchronizeEndpoint =
     adminEndpoint
       .name("Synchronize start")
-      .summary("Synchronize with all stores content")
+      .summary("Start synchronize background operations with all stores content")
       .put
       .in("synchronize")
       .errorOut(oneOf(statusForApiInternalError))
