@@ -79,6 +79,32 @@ object ApiApp extends ZIOAppDefault {
   def eventEndpoint(plurial: Boolean = false) = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
 
   // -------------------------------------------------------------------------------------------------------------------
+  def extractOwnerId(rawOwnerId: String) =
+    ZIO
+      .attempt(OwnerId.fromString(rawOwnerId))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid owner identifier"))
+
+  def extractMediaAccessKey(rawMediaAccessKey: String) =
+    ZIO
+      .attempt(MediaAccessKey.apply(rawMediaAccessKey))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+
+  def extractEventId(rawEventId: String) =
+    ZIO
+      .attempt(EventId(java.util.UUID.fromString(rawEventId)))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid event identifier"))
+
+  def extractStoreId(rawStoreId: String) =
+    ZIO
+      .attempt(StoreId.fromString(rawStoreId))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid store identifier"))
+
+  def extractOriginalId(rawOriginalId: UUID) =
+    ZIO
+      .attempt(OriginalId(rawOriginalId))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid original identifier"))
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   def stateGetLogic(originalId: OriginalId): ZIO[ApiEnv, ApiIssue, ApiState] = {
     for {
@@ -100,11 +126,9 @@ object ApiApp extends ZIOAppDefault {
       .in(path[UUID]("originalId"))
       .out(jsonBody[ApiState])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawId =>
-        ZIO
-          .attempt(OriginalId(rawId))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid original identifier"))
-          .flatMap(key => stateGetLogic(key))
+      .zServerLogic[ApiEnv](rawOriginalId =>
+        extractOriginalId(rawOriginalId)
+          .flatMap(originalId => stateGetLogic(originalId))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -118,7 +142,7 @@ object ApiApp extends ZIOAppDefault {
     } yield taoOwner
   }
 
-  def ownerCreateEndpoint =
+  val ownerCreateEndpoint =
     ownerEndpoint()
       .name("Create an owner")
       .summary("Create a new media owner")
@@ -147,11 +171,9 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("ownerId"))
       .out(jsonBody[ApiOwner])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawId =>
-        ZIO
-          .attempt(OwnerId.fromString(rawId))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid owner identifier"))
-          .flatMap(key => ownerGetLogic(key))
+      .zServerLogic[ApiEnv](rawOwnerId =>
+        extractOwnerId(rawOwnerId)
+          .flatMap(ownerId => ownerGetLogic(ownerId))
       )
 
   def ownerUpdateLogic(ownerId: OwnerId, toUpdate: ApiOwnerUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
@@ -162,7 +184,13 @@ object ApiApp extends ZIOAppDefault {
                  .mapError(err => ApiInternalError("Couldn't get owner"))
                  .someOrFail(ApiResourceNotFound("Couldn't find owner"))
       _     <- MediaService
-                 .ownerUpdate(ownerId, firstName = toUpdate.firstName, lastName = toUpdate.lastName, birthDate = toUpdate.birthDate)
+                 .ownerUpdate(
+                   ownerId,
+                   firstName = toUpdate.firstName,
+                   lastName = toUpdate.lastName,
+                   birthDate = toUpdate.birthDate,
+                   coverOriginalId = owner.originalId
+                 )
                  .logError("Couldn't update owner")
                  .mapError(err => ApiInternalError("Couldn't update owner"))
     } yield ()
@@ -179,10 +207,37 @@ object ApiApp extends ZIOAppDefault {
       .in(jsonBody[ApiOwnerUpdate]) // TODO security and regex fields
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
       .zServerLogic[ApiEnv]((rawOwnerId, toUpdate) =>
-        ZIO
-          .attempt(OwnerId.fromString(rawOwnerId))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid owner identifier"))
+        extractOwnerId(rawOwnerId)
           .flatMap(ownerId => ownerUpdateLogic(ownerId, toUpdate))
+      )
+
+  val ownerUpdateCoverEndpoint =
+    ownerEndpoint()
+      .name("Update owner image cover")
+      .summary("Update owner image cover for the given owner and original identifiers")
+      .put
+      .in(path[String]("ownerId"))
+      .in("cover")
+      .in(path[String]("mediaAccessKey"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv]((rawOwnerId, rawMediaAccessKey) =>
+        for {
+          ownerId        <- extractOwnerId(rawOwnerId)
+          mediaAccessKey <- extractMediaAccessKey(rawMediaAccessKey)
+          owner          <- ownerGetLogic(ownerId)
+          media          <- mediaGetLogic(mediaAccessKey)
+          _              <- MediaService
+                              .ownerUpdate(
+                                ownerId = ownerId,
+                                firstName = owner.firstName,
+                                lastName = owner.lastName,
+                                birthDate = owner.birthDate,
+                                coverOriginalId = Some(media.original.id)
+                              )
+                              .logError("Couldn't update owner")
+                              .mapError(err => ApiInternalError("Couldn't update owner"))
+
+        } yield ()
       )
 
   val ownerListLogic: ZStream[MediaService, Throwable, ApiOwner] = {
@@ -231,7 +286,7 @@ object ApiApp extends ZIOAppDefault {
     } yield taoStore
   }
 
-  def storeCreateEndpoint =
+  val storeCreateEndpoint =
     storeEndpoint()
       .name("Create an store")
       .summary("Create a new media store")
@@ -262,11 +317,9 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("storeId"))
       .out(jsonBody[ApiStore])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawId =>
-        ZIO
-          .attempt(StoreId.fromString(rawId))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid store identifier"))
-          .flatMap(id => storeGetLogic(id))
+      .zServerLogic[ApiEnv](rawStoreId =>
+        extractStoreId(rawStoreId)
+          .flatMap(storeId => storeGetLogic(storeId))
       )
 
   def storeUpdateLogic(storeId: StoreId, toUpdate: ApiStoreUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
@@ -294,9 +347,7 @@ object ApiApp extends ZIOAppDefault {
       .in(jsonBody[ApiStoreUpdate]) // TODO security and regex fields
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
       .zServerLogic[ApiEnv]((rawStoreId, toUpdate) =>
-        ZIO
-          .attempt(StoreId.fromString(rawStoreId))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid store identifier"))
+        extractStoreId(rawStoreId)
           .flatMap(storeId => storeUpdateLogic(storeId, toUpdate))
       )
 
@@ -351,11 +402,9 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("mediaAccessKey"))
       .out(jsonBody[ApiMedia])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawKey =>
-        ZIO
-          .attempt(MediaAccessKey(rawKey))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
-          .flatMap(key => mediaGetLogic(key))
+      .zServerLogic[ApiEnv](rawMediaAccessKey =>
+        extractMediaAccessKey(rawMediaAccessKey)
+          .flatMap(mediaAccessKey => mediaGetLogic(mediaAccessKey))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -392,16 +441,14 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("mediaAccessKey"))
       .in(jsonBody[ApiMediaUpdate])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawKey, toUpdate) =>
-        ZIO
-          .attempt(MediaAccessKey(rawKey))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+      .zServerLogic[ApiEnv]((rawMediaAccessKey, toUpdate) =>
+        extractMediaAccessKey(rawMediaAccessKey)
           .flatMap(eventId => mediaUpdateLogic(eventId, toUpdate))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
   def mediaUpdateStarredLogic(accessKey: MediaAccessKey, state: Boolean): ZIO[ApiEnv, ApiIssue, Unit] = {
-    val logic = for {
+    for {
       media <- MediaService
                  .mediaGet(accessKey)
                  .logError("Couldn't get media")
@@ -412,8 +459,6 @@ object ApiApp extends ZIOAppDefault {
                  .logError("Couldn't update media")
                  .mapError(err => ApiInternalError("Couldn't update media"))
     } yield ()
-
-    logic
   }
 
   val mediaUpdateStarredEndpoint =
@@ -425,11 +470,9 @@ object ApiApp extends ZIOAppDefault {
       .in("starred")
       .in(query[Boolean]("state"))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawKey, state) =>
-        ZIO
-          .attempt(MediaAccessKey(rawKey))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
-          .flatMap(eventId => mediaUpdateStarredLogic(eventId, state))
+      .zServerLogic[ApiEnv]((rawMediaAccessKey, state) =>
+        extractMediaAccessKey(rawMediaAccessKey)
+          .flatMap(mediaAccessKey => mediaUpdateStarredLogic(mediaAccessKey, state))
       )
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -457,11 +500,9 @@ object ApiApp extends ZIOAppDefault {
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawKey =>
+      .zServerLogic[ApiEnv](rawMediaAccessKey =>
         for {
-          mediaKey            <- ZIO
-                                   .attempt(MediaAccessKey(rawKey))
-                                   .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+          mediaKey            <- extractMediaAccessKey(rawMediaAccessKey)
           (media, byteStream) <- mediaGetImageBytesLogic(mediaKey, false)
           ms                  <- ZIO.service[MediaService]
           httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
@@ -480,11 +521,9 @@ object ApiApp extends ZIOAppDefault {
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawKey =>
+      .zServerLogic[ApiEnv](rawMediaAccessKey =>
         for {
-          mediaKey            <- ZIO
-                                   .attempt(MediaAccessKey(rawKey))
-                                   .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+          mediaKey            <- extractMediaAccessKey(rawMediaAccessKey)
           (media, byteStream) <- mediaGetImageBytesLogic(mediaKey, true)
           ms                  <- ZIO.service[MediaService]
           httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
@@ -620,7 +659,6 @@ object ApiApp extends ZIOAppDefault {
           .mapError(err => ApiInternalError("Couldn't synchronize"))
       }
 
-
   val adminSynchronizeStatusEndpoint =
     adminEndpoint
       .name("Get synchronize status")
@@ -659,10 +697,8 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("eventId"))
       .out(jsonBody[ApiEvent])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawId =>
-        ZIO
-          .attempt(EventId(java.util.UUID.fromString(rawId)))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid event identifier"))
+      .zServerLogic[ApiEnv](rawEventId =>
+        extractEventId(rawEventId)
           .flatMap(id => eventGetLogic(id))
       )
 
@@ -680,7 +716,7 @@ object ApiApp extends ZIOAppDefault {
                    description = toUpdate.description,
                    location = toUpdate.location.transformInto[Option[Location]],
                    timestamp = toUpdate.timestamp,
-                   originalId = event.originalId,
+                   coverOriginalId = event.originalId,
                    keywords = toUpdate.keywords
                  )
                  .logError("Couldn't update event")
@@ -699,10 +735,43 @@ object ApiApp extends ZIOAppDefault {
       .in(jsonBody[ApiEventUpdate])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
       .zServerLogic[ApiEnv]((rawEventId, toUpdate) =>
-        ZIO
-          .attempt(EventId(java.util.UUID.fromString(rawEventId)))
-          .mapError(err => ApiInvalidOrMissingInput("Invalid event identifier"))
+        extractEventId(rawEventId)
           .flatMap(eventId => eventUpdateLogic(eventId, toUpdate))
+      )
+
+  val eventUpdateCoverEndpoint =
+    eventEndpoint()
+      .name("Update event image cover")
+      .summary("Update event image cover for the given event and original identifiers")
+      .put
+      .in(path[String]("eventId"))
+      .in("cover")
+      .in(path[String]("mediaAccessKey"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv]((rawEventId, rawMediaAccessKey) =>
+        for {
+          eventId        <- extractEventId(rawEventId)
+          mediaAccessKey <- extractMediaAccessKey(rawMediaAccessKey)
+          event          <- MediaService
+                              .eventGet(eventId)
+                              .logError("Couldn't get event")
+                              .mapError(err => ApiInternalError("Couldn't get event"))
+                              .someOrFail(ApiResourceNotFound("Couldn't find event"))
+          media          <- mediaGetLogic(mediaAccessKey)
+          _              <- MediaService
+                              .eventUpdate(
+                                eventId = eventId,
+                                name = event.name,
+                                description = event.description,
+                                location = event.location,
+                                timestamp = event.timestamp,
+                                keywords = event.keywords,
+                                coverOriginalId = Some(media.original.id)
+                              )
+                              .logError("Couldn't update event")
+                              .mapError(err => ApiInternalError("Couldn't update event"))
+
+        } yield ()
       )
 
   val eventListLogic: ZStream[MediaService, Throwable, ApiEvent] = {
@@ -845,12 +914,14 @@ object ApiApp extends ZIOAppDefault {
     eventCreateEndpoint,
     eventGetEndpoint,
     eventUpdateEndpoint,
+    eventUpdateCoverEndpoint,
     eventDeleteEndpoint,
     // -------------------------
     ownerCreateEndpoint,
     ownerListEndpoint,
     ownerGetEndpoint,
     ownerUpdateEndpoint,
+    ownerUpdateCoverEndpoint,
     // -------------------------
     storeCreateEndpoint,
     storeListEndpoint,

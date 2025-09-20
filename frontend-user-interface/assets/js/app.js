@@ -15,7 +15,7 @@ class ApiClient {
   mediaMiniatureUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`; }
   async listEvents() { return await this.#fetchNdjson('/api/events'); }
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
-  async createEvent(name) { const res = await this.http.post('/api/event', { name }); return res.data; }
+  async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
   async updateEvent(eventId, body) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body); }
   async updateMedia(mediaAccessKey, body) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}`, body); }
   async updateMediaStarred(mediaAccessKey, state) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}/starred`, null, { params: { state } }); }
@@ -23,10 +23,13 @@ class ApiClient {
   async updateOwner(ownerId, body) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}`, body); }
   async createOwner(body) { const res = await this.http.post('/api/owner', body); return res.data; }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
+  async getStore(storeId) { const res = await this.http.get(`/api/store/${encodeURIComponent(storeId)}`); return res.data; }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
   async createStore(body) { const res = await this.http.post('/api/store', body); return res.data; }
   async synchronizeStatus() { const res = await this.http.get('/api/admin/synchronize'); return res.data; }
   async synchronizeStart() { await this.http.put('/api/admin/synchronize'); }
+  async setEventCover(eventId, mediaAccessKey) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
+  async setOwnerCover(ownerId, mediaAccessKey) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
   async mediasWithLocations(onItem) { await this.#fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
   async #fetchNdjson(url) {
     const res = await this.http.get(url, { responseType: 'text' });
@@ -208,6 +211,10 @@ function openMediaEditModal(media) {
         <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
       </header>
       <div class="content">
+        <div style="margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
+          <button type="button" id="md-event-cover-btn" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:14px">Use for event cover</button>
+          <button type="button" id="md-owner-cover-btn" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:14px">Use for owner cover</button>
+        </div>
         <div class="row">
           <div>
             <label>Description</label>
@@ -395,6 +402,41 @@ function openMediaEditModal(media) {
       copyBtn.title = 'No media location available';
     }
   }
+
+  // Cover button handlers
+  overlay.querySelector('#md-event-cover-btn')?.addEventListener('click', async () => {
+    if (!media.events || media.events.length === 0) {
+      alert('This media is not associated with any event');
+      return;
+    }
+    const eventId = media.events[0].id;
+    try {
+      await api.setEventCover(eventId, media.accessKey);
+      alert('Successfully set as event cover');
+    } catch (e) {
+      console.error('Failed to set event cover:', e);
+      alert('Failed to set as event cover');
+    }
+  });
+
+  overlay.querySelector('#md-owner-cover-btn')?.addEventListener('click', async () => {
+    if (!media.original || !media.original.storeId) {
+      alert('This media is not associated with any store');
+      return;
+    }
+    try {
+      const store = await api.getStore(media.original.storeId);
+      if (!store || !store.ownerId) {
+        alert('This media is not associated with any owner');
+        return;
+      }
+      await api.setOwnerCover(store.ownerId, media.accessKey);
+      alert('Successfully set as owner cover');
+    } catch (e) {
+      console.error('Failed to set owner cover:', e);
+      alert('Failed to set as owner cover');
+    }
+  });
 
   // Save handler
   overlay.querySelector('button.save')?.addEventListener('click', async () => {
@@ -991,16 +1033,92 @@ async function loadEvents() {
   } catch (e) { list.innerHTML = '<li>Failed to load events</li>'; }
 }
 
+function openEventCreateModal() {
+  if (document.querySelector('.modal-overlay')) return;
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Create event</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>Name</label>
+            <input type="text" id="evc-name" value="" required>
+            <label style="margin-top:8px">Description</label>
+            <input type="text" id="evc-desc" value="">
+            <label style="margin-top:8px">Keywords</label>
+            <div class="chips" id="evc-chips"></div>
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#evc-name')||modal).focus(); }, 0);
+
+  // Keywords chips management
+  const chipsEl = overlay.querySelector('#evc-chips');
+  let keywords = [];
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Add keyword and press Enter';
+  function renderChips() {
+    chipsEl.innerHTML = '';
+    for (const kw of keywords) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = kw;
+      const rm = document.createElement('button');
+      rm.className = 'remove'; rm.type = 'button'; rm.textContent = '×';
+      rm.addEventListener('click', () => { keywords = keywords.filter(k => k !== kw); renderChips(); });
+      chip.appendChild(rm);
+      chipsEl.appendChild(chip);
+    }
+    chipsEl.appendChild(input);
+  }
+  function addKeywordFromInput() {
+    const val = input.value.trim();
+    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips();
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKeywordFromInput(); }
+    else if (e.key === 'Backspace' && !input.value && keywords.length > 0) { keywords.pop(); renderChips(); }
+  });
+  input.addEventListener('blur', () => { addKeywordFromInput(); });
+  renderChips();
+
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const name = modal.querySelector('#evc-name').value.trim();
+    const description = modal.querySelector('#evc-desc').value.trim();
+    if (!name) { alert('Event name is required'); return; }
+    const body = { name };
+    if (description) body.description = description;
+    if (keywords.length > 0) body.keywords = keywords;
+    try {
+      await api.createEvent(body);
+      close();
+      await loadEvents();
+    } catch (e) {
+      alert('Failed to create event');
+    }
+  });
+}
+
 function initEventsTab() {
   $('#refresh-events').addEventListener('click', loadEvents);
-  const form = document.getElementById('event-create-form');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = document.getElementById('event-name').value.trim();
-    if (!name) return;
-    try { await api.createEvent(name); document.getElementById('event-name').value=''; await loadEvents(); }
-    catch { alert('Failed to create event'); }
-  });
+  const createBtn = document.getElementById('create-event');
+  if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openEventCreateModal()); createBtn.__wired = true; }
 }
 
 // Owners
@@ -1156,15 +1274,89 @@ async function loadOwners() {
     const owners = await api.listOwners();
     const ownerSelect = document.getElementById('store-owner');
     if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
+
+    // Lazy load thumbnails per owner when needed (similar to Events)
+    const stateCache = new Map(); // originalId -> Promise<State>
+    const limit = 4; // small concurrency for state->image resolution
+    let inFlight = 0;
+    const pending = [];
+    const scheduled = new WeakSet();
+
+    async function resolveAndRenderOwnerThumb(li, owner) {
+      inFlight++;
+      try {
+        if (!owner.originalId) return;
+        let p = stateCache.get(owner.originalId);
+        if (!p) {
+          p = api.getState(owner.originalId).catch(err => { stateCache.delete(owner.originalId); throw err; });
+          stateCache.set(owner.originalId, p);
+        }
+        const st = await p;
+        if (!st || !st.mediaAccessKey) return;
+        const img = new Image();
+        img.src = api.mediaMiniatureUrl(st.mediaAccessKey);
+        img.alt = `${owner.firstName} ${owner.lastName}`;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.display = 'block';
+        const ph = li.querySelector('.owner-thumb');
+        if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
+      } finally {
+        inFlight--;
+        scheduleOwnerThumb();
+      }
+    }
+
+    function scheduleOwnerThumb() {
+      while (inFlight < limit && pending.length > 0) {
+        const item = pending.shift();
+        resolveAndRenderOwnerThumb(item.li, item.owner);
+      }
+    }
+
+    const tabSection = document.getElementById('tab-owners');
+    const observer = ('IntersectionObserver' in window)
+      ? new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const li = entry.target;
+              observer.unobserve(li);
+              if (scheduled.has(li)) continue;
+              const owner = li.__owner;
+              scheduled.add(li);
+              if (owner && owner.originalId) { pending.push({ li, owner }); scheduleOwnerThumb(); }
+            }
+          }
+        }, { root: tabSection, rootMargin: '200px 0px', threshold: 0.01 })
+      : null;
+
     for (const o of owners) {
       const li = document.createElement('li');
+      li.__owner = o; // attach ref for observer
       li.dataset.ownerId = o.id || '';
       const birthStr = o.birthDate ? new Date(o.birthDate).toLocaleDateString() : '';
-      li.innerHTML = `<h4>${o.firstName} ${o.lastName}</h4><div style="font-size:12px;color:#555">id: ${o.id}${birthStr ? ' • birth: '+birthStr : ''}</div>
-        <button class="ev-edit-btn" title="Edit">✎ Edit</button>`;
+      li.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="owner-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">No image</div>
+          <div style="flex: 1;">
+            <h4 style="margin: 0 0 4px 0;">${o.firstName} ${o.lastName}</h4>
+            <div style="font-size:12px;color:#555">id: ${o.id}${birthStr ? ' • birth: '+birthStr : ''}</div>
+          </div>
+          <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+        </div>
+      `;
       list.appendChild(li);
       const editBtn = li.querySelector('.ev-edit-btn');
       if (editBtn) { editBtn.onclick = (e) => { e.stopPropagation(); openOwnerEditModal(o); }; }
+
+      if (observer && o.originalId) {
+        observer.observe(li);
+      } else if (o.originalId) {
+        pending.push({ li, owner: o }); scheduleOwnerThumb();
+      }
     }
   } catch (e) { list.innerHTML = '<li>Failed to load owners</li>'; }
 }
@@ -1176,20 +1368,101 @@ async function loadStores() {
   const list = $('#stores-list'); list.innerHTML = '';
   try {
     const [stores, ownersMap] = await Promise.all([api.listStores(), getOwnersMap()]);
+    
+    // Lazy load thumbnails per store using owner originalId when needed
+    const stateCache = new Map(); // originalId -> Promise<State>
+    const ownerCache = new Map(); // ownerId -> Promise<Owner>
+    const limit = 4; // small concurrency for state->image resolution
+    let inFlight = 0;
+    const pending = [];
+    const scheduled = new WeakSet();
+
+    async function resolveAndRenderStoreThumb(li, store) {
+      inFlight++;
+      try {
+        if (!store.ownerId) return;
+        let ownerPromise = ownerCache.get(store.ownerId);
+        if (!ownerPromise) {
+          ownerPromise = api.listOwners().then(owners => owners.find(o => o.id === store.ownerId)).catch(err => { ownerCache.delete(store.ownerId); throw err; });
+          ownerCache.set(store.ownerId, ownerPromise);
+        }
+        const owner = await ownerPromise;
+        if (!owner || !owner.originalId) return;
+        
+        let statePromise = stateCache.get(owner.originalId);
+        if (!statePromise) {
+          statePromise = api.getState(owner.originalId).catch(err => { stateCache.delete(owner.originalId); throw err; });
+          stateCache.set(owner.originalId, statePromise);
+        }
+        const st = await statePromise;
+        if (!st || !st.mediaAccessKey) return;
+        
+        const img = new Image();
+        img.src = api.mediaMiniatureUrl(st.mediaAccessKey);
+        img.alt = `${store.name || store.baseDirectory}`;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.display = 'block';
+        const ph = li.querySelector('.store-thumb');
+        if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
+      } finally {
+        inFlight--;
+        scheduleStoreThumb();
+      }
+    }
+
+    function scheduleStoreThumb() {
+      while (inFlight < limit && pending.length > 0) {
+        const item = pending.shift();
+        resolveAndRenderStoreThumb(item.li, item.store);
+      }
+    }
+
+    const tabSection = document.getElementById('tab-stores');
+    const observer = ('IntersectionObserver' in window)
+      ? new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const li = entry.target;
+              observer.unobserve(li);
+              if (scheduled.has(li)) continue;
+              const store = li.__store;
+              scheduled.add(li);
+              if (store && store.ownerId) { pending.push({ li, store }); scheduleStoreThumb(); }
+            }
+          }
+        }, { root: tabSection, rootMargin: '200px 0px', threshold: 0.01 })
+      : null;
+
     for (const s of stores) {
       const li = document.createElement('li');
+      li.__store = s; // attach ref for observer
       li.dataset.storeId = s.id || '';
       const title = `${s.name ? (s.name + ': ') : ''}${s.baseDirectory || ''}`;
       const ownerName = ownersMap.get(s.ownerId) || s.ownerName || s.ownerId || '';
       li.innerHTML = `
-        <h4>${title}</h4>
-        <div style="font-size:12px;color:#555">id: ${s.id} • owner: ${ownerName}</div>
-        <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="store-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">No image</div>
+          <div style="flex: 1;">
+            <h4 style="margin: 0 0 4px 0;">${title}</h4>
+            <div style="font-size:12px;color:#555">id: ${s.id} • owner: ${ownerName}</div>
+          </div>
+          <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+        </div>
       `;
       list.appendChild(li);
       const editBtn = li.querySelector('.ev-edit-btn');
       if (editBtn) {
         editBtn.onclick = (e) => { e.stopPropagation(); openStoreEditModal(s); };
+      }
+
+      if (observer && s.ownerId) {
+        observer.observe(li);
+      } else if (s.ownerId) {
+        pending.push({ li, store: s }); scheduleStoreThumb();
       }
     }
   } catch (e) { list.innerHTML = '<li>Failed to load stores</li>'; }

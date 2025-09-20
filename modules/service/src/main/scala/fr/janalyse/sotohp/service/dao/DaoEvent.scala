@@ -5,7 +5,7 @@ import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.json.JsonCodec
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{given, *}
 
 case class DaoEventAttachment(
   storeId: StoreId,
@@ -14,7 +14,8 @@ case class DaoEventAttachment(
 
 object DaoEventAttachment {
   given Transformer[EventAttachment, DaoEventAttachment] =
-    Transformer.define[EventAttachment, DaoEventAttachment]
+    Transformer
+      .define[EventAttachment, DaoEventAttachment]
       .withFieldComputed(_.storeId, _.store.id)
       .buildTransformer
 
@@ -26,7 +27,7 @@ case class DaoEvent(
   name: EventName,
   description: Option[EventDescription],
   location: Option[DaoLocation],          // reference location for this event
-  timestamp: Option[ShootDateTime],    // reference date time for this event,
-  originalId: Option[OriginalId],      // reference/chosen original which will be shown when the event is displayed
+  timestamp: Option[ShootDateTime],       // reference date time for this event,
+  originalId: Option[OriginalId],         // reference/chosen original, which will be shown as the event cover
   keywords: Set[Keyword]
 ) derives LMDBCodecJson

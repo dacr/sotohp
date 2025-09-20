@@ -44,6 +44,12 @@ export interface Event {
   originalId?: string;
 }
 
+export interface EventCreate {
+  name: string;
+  description?: string;
+  keywords?: string[];
+}
+
 export interface EventUpdate {
   name: string;
   description?: string;

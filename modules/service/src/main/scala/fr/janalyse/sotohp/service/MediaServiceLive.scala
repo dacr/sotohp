@@ -506,7 +506,7 @@ class MediaServiceLive private (
     description: Option[EventDescription],
     location: Option[Location],
     timestamp: Option[ShootDateTime],
-    originalId: Option[OriginalId],
+    coverOriginalId: Option[OriginalId],
     keywords: Set[Keyword]
   ): IO[ServiceIssue, Option[Event]] = {
     for {
@@ -518,7 +518,7 @@ class MediaServiceLive private (
                              description = description,
                              location = location.transformInto[Option[DaoLocation]],
                              timestamp = timestamp,
-                             originalId = originalId,
+                             originalId = coverOriginalId,
                              keywords = keywords
                            )
                          )
@@ -555,17 +555,31 @@ class MediaServiceLive private (
                    .from(providedOwnerId)
                    .orElse(ZIO.attempt(OwnerId(ULID.newULID)))
                    .mapError(err => ServiceInternalIssue(s"Unable to create an owner identifier : $err"))
-      owner    = Owner(ownerId, firstName, lastName, birthDate)
+      owner    = Owner(ownerId, firstName, lastName, birthDate, None)
       _       <- ownerColl
                    .upsert(owner.id, _ => owner.transformInto[DaoOwner])
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create owner : $err"))
     } yield owner
   }
 
-  override def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): IO[ServiceIssue, Option[Owner]] = {
+  override def ownerUpdate(
+    ownerId: OwnerId,
+    firstName: FirstName,
+    lastName: LastName,
+    birthDate: Option[BirthDate],
+    coverOriginalId: Option[OriginalId]
+  ): IO[ServiceIssue, Option[Owner]] = {
     for {
       maybeDaoOwner <- ownerColl
-                         .update(ownerId, _.copy(firstName = firstName, lastName = lastName, birthDate = birthDate))
+                         .update(
+                           ownerId,
+                           _.copy(
+                             firstName = firstName,
+                             lastName = lastName,
+                             birthDate = birthDate,
+                             originalId = coverOriginalId
+                           )
+                         )
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
       maybeOwner     = maybeDaoOwner.map(_.transformInto[Owner])
     } yield maybeOwner
@@ -633,7 +647,12 @@ class MediaServiceLive private (
                         .map(state =>
                           state.copy(
                             originalLastChecked = LastChecked(now),
-                            originalHash = state.originalHash.orElse(HashOperations.fileDigest(original.mediaPath.path).toOption.map(OriginalHash.apply))
+                            originalHash = state.originalHash.orElse(
+                              HashOperations
+                                .fileDigest(original.mediaPath.path)
+                                .toOption
+                                .map(OriginalHash.apply)
+                            )
                           )
                         )
                         .getOrElse(
@@ -933,7 +952,7 @@ class MediaServiceLive private (
           description = event.description,
           location = event.location,
           timestamp = event.timestamp,
-          originalId = event.originalId,
+          coverOriginalId = event.originalId,
           keywords = event.keywords
         )
       )

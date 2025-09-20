@@ -24,7 +24,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
                             description = Some(EventDescription("hello")),
                             location = None,
                             timestamp = None,
-                            originalId = None,
+                            coverOriginalId = None,
                             keywords = Set.empty
                           )
                           .some

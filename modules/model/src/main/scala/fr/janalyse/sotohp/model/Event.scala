@@ -12,6 +12,6 @@ case class Event(
   description: Option[EventDescription],
   location: Option[Location],          // reference location for this event
   timestamp: Option[ShootDateTime],    // reference date time for this event,
-  originalId: Option[OriginalId],      // reference/chosen original which will be shown when the event is displayed
+  originalId: Option[OriginalId],         // reference/chosen original, which will be shown as the event cover
   keywords: Set[Keyword]
 )

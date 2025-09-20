@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { Media, MediaSelector, Event as SEvent, Owner, Store, EventUpdate } from './types'
+import type { Media, MediaSelector, Event as SEvent, Owner, Store, EventCreate, EventUpdate } from './types'
 
 export class ApiClient {
   private http: AxiosInstance
@@ -41,8 +41,8 @@ export class ApiClient {
     return res.data
   }
 
-  async createEvent(name: string): Promise<SEvent> {
-    const res = await this.http.post<SEvent>('/api/event', { name })
+  async createEvent(body: EventCreate): Promise<SEvent> {
+    const res = await this.http.post<SEvent>('/api/event', body)
     return res.data
   }
 

@@ -73,7 +73,7 @@ trait MediaService {
     description: Option[EventDescription],
     location: Option[Location],
     timestamp: Option[ShootDateTime],
-    originalId: Option[OriginalId],
+    coverOriginalId: Option[OriginalId],
     keywords: Set[Keyword]
   ): IO[ServiceIssue, Option[Event]]
 
@@ -91,7 +91,8 @@ trait MediaService {
     ownerId: OwnerId,
     firstName: FirstName,
     lastName: LastName,
-    birthDate: Option[BirthDate]
+    birthDate: Option[BirthDate],
+    coverOriginalId: Option[OriginalId]
   ): IO[ServiceIssue, Option[Owner]]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -211,10 +212,10 @@ object MediaService {
     description: Option[EventDescription],
     location: Option[Location],
     timestamp: Option[ShootDateTime],
-    originalId: Option[OriginalId],
+    coverOriginalId: Option[OriginalId],
     keywords: Set[Keyword]
   ): ZIO[MediaService, ServiceIssue, Option[Event]] =
-    ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, location, timestamp, originalId, keywords))
+    ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, location, timestamp, coverOriginalId, keywords))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -226,7 +227,8 @@ object MediaService {
 
   def ownerCreate(providedOwnerId: Option[OwnerId], firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): ZIO[MediaService, ServiceIssue, Owner] = ZIO.serviceWithZIO(_.ownerCreate(providedOwnerId, firstName, lastName, birthDate))
 
-  def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate]): ZIO[MediaService, ServiceIssue, Option[Owner]] = ZIO.serviceWithZIO(_.ownerUpdate(ownerId, firstName, lastName, birthDate))
+  def ownerUpdate(ownerId: OwnerId, firstName: FirstName, lastName: LastName, birthDate: Option[BirthDate], coverOriginalId: Option[OriginalId]): ZIO[MediaService, ServiceIssue, Option[Owner]] =
+    ZIO.serviceWithZIO(_.ownerUpdate(ownerId, firstName, lastName, birthDate, coverOriginalId))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -237,14 +239,14 @@ object MediaService {
   def storeDelete(storeId: StoreId): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.storeDelete(storeId))
 
   def storeCreate(providedStoreId: Option[StoreId], name: Option[StoreName], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Store] =
-    ZIO.serviceWithZIO(_.storeCreate(providedStoreId, name, ownerId,  baseDirectory, includeMask, ignoreMask))
+    ZIO.serviceWithZIO(_.storeCreate(providedStoreId, name, ownerId, baseDirectory, includeMask, ignoreMask))
 
   def storeUpdate(storeId: StoreId, name: Option[StoreName], includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Option[Store]] = ZIO.serviceWithZIO(_.storeUpdate(storeId, name, includeMask, ignoreMask))
 
   // -------------------------------------------------------------------------------------------------------------------
 
   def synchronize(action: SynchronizeAction): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronize(action))
-  def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus] = ZIO.serviceWithZIO(_.synchronizeStatus())
+  def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus]       = ZIO.serviceWithZIO(_.synchronizeStatus())
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): ZIO[MediaService, ServiceIssue, Set[Keyword]] = ZIO.serviceWithZIO(_.keywordSentenceToKeywords(storeId, sentence))

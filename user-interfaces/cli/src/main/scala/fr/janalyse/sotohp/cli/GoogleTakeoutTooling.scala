@@ -29,7 +29,8 @@ object GoogleTakeoutTooling extends CommonsCLI {
     id = OwnerId(ULID("01H84VVZRXZDZ5184V44KVWS3J")),
     firstName = FirstName("John"),
     lastName = LastName("Doe"),
-    birthDate = Some(BirthDate(OffsetDateTime.parse("1970-01-01T00:00:00Z")))
+    birthDate = Some(BirthDate(OffsetDateTime.parse("1970-01-01T00:00:00Z"))),
+    None
   )
   val includeMask      = Option(
     IncludeMask("(?i)[.](?:(jpg)|(png)|(jpeg)|(tif)|(heic)|(gif)|(bmp))".r)

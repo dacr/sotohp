@@ -435,6 +435,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/event/{eventId}/cover/{mediaAccessKey}:
+    put:
+      tags:
+      - Event
+      summary: Update event image cover for the given event and original identifiers
+      operationId: Update event image cover
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: mediaAccessKey
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/owner:
     post:
       tags:
@@ -539,6 +577,44 @@ paths:
             schema:
               $ref: '#/components/schemas/OwnerUpdate'
         required: true
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/owner/{ownerId}/cover/{mediaAccessKey}:
+    put:
+      tags:
+      - Owner
+      summary: Update owner image cover for the given owner and original identifiers
+      operationId: Update owner image cover
+      parameters:
+      - name: ownerId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: mediaAccessKey
+        in: path
+        required: true
+        schema:
+          type: string
       responses:
         '200':
           description: ''
@@ -869,14 +945,6 @@ components:
           type: string
         description:
           type: string
-        location:
-          $ref: '#/components/schemas/Location'
-        timestamp:
-          type: string
-          format: date-time
-        originalId:
-          type: string
-          format: uuid
         keywords:
           type: array
           uniqueItems: true
@@ -1090,6 +1158,9 @@ components:
         birthDate:
           type: string
           format: date-time
+        originalId:
+          type: string
+          format: uuid
     OwnerCreate:
       title: OwnerCreate
       type: object
