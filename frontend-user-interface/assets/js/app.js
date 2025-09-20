@@ -60,6 +60,62 @@ let currentMedia = null;
 let slideshowTimer = null;
 let slideshowPlaying = false;
 
+// Toast notification system
+function ensureToastContainer() {
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  return container;
+}
+
+function showToast(message, type = 'info', duration = 4000) {
+  const container = ensureToastContainer();
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  
+  container.appendChild(toast);
+  
+  // Trigger show animation
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+  
+  // Auto-dismiss
+  setTimeout(() => {
+    toast.classList.remove('show');
+    toast.classList.add('hide');
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+      // Clean up container if empty
+      if (container.children.length === 0) {
+        container.remove();
+      }
+    }, 200);
+  }, duration);
+}
+
+function showSuccess(message, duration = 4000) {
+  showToast(message, 'success', duration);
+}
+
+function showError(message, duration = 5000) {
+  showToast(message, 'error', duration);
+}
+
+function showWarning(message, duration = 4500) {
+  showToast(message, 'warning', duration);
+}
+
+function showInfo(message, duration = 4000) {
+  showToast(message, 'info', duration);
+}
+
 function $(sel) { return document.querySelector(sel); }
 function setActiveTab(name) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
@@ -187,7 +243,7 @@ function showMedia(media) {
         currentMedia.starred = prev;
         starBtn.textContent = prev ? '⭐' : '☆';
         document.getElementById('info-starred').textContent = prev ? '⭐ Yes' : '☆ No';
-        alert('Failed to update starred');
+        showError('Failed to update starred');
       } finally {
         starBtn.disabled = false;
       }
@@ -196,7 +252,7 @@ function showMedia(media) {
 }
 
 function openMediaEditModal(media) {
-  if (!media) { alert('No media loaded'); return; }
+  if (!media) { showWarning('No media loaded'); return; }
   // Prevent multiple modals from being opened simultaneously (e.g., due to duplicate handlers)
   if (document.querySelector('.modal-overlay')) { return; }
   const overlay = document.createElement('div');
@@ -406,35 +462,35 @@ function openMediaEditModal(media) {
   // Cover button handlers
   overlay.querySelector('#md-event-cover-btn')?.addEventListener('click', async () => {
     if (!media.events || media.events.length === 0) {
-      alert('This media is not associated with any event');
+      showWarning('This media is not associated with any event');
       return;
     }
     const eventId = media.events[0].id;
     try {
       await api.setEventCover(eventId, media.accessKey);
-      alert('Successfully set as event cover');
+      showSuccess('Successfully set as event cover');
     } catch (e) {
       console.error('Failed to set event cover:', e);
-      alert('Failed to set as event cover');
+      showError('Failed to set as event cover');
     }
   });
 
   overlay.querySelector('#md-owner-cover-btn')?.addEventListener('click', async () => {
     if (!media.original || !media.original.storeId) {
-      alert('This media is not associated with any store');
+      showWarning('This media is not associated with any store');
       return;
     }
     try {
       const store = await api.getStore(media.original.storeId);
       if (!store || !store.ownerId) {
-        alert('This media is not associated with any owner');
+        showWarning('This media is not associated with any owner');
         return;
       }
       await api.setOwnerCover(store.ownerId, media.accessKey);
-      alert('Successfully set as owner cover');
+      showSuccess('Successfully set as owner cover');
     } catch (e) {
       console.error('Failed to set owner cover:', e);
-      alert('Failed to set as owner cover');
+      showError('Failed to set as owner cover');
     }
   });
 
@@ -454,7 +510,7 @@ function openMediaEditModal(media) {
       const updated = await api.getMediaByKey(media.accessKey);
       showMedia(updated);
     } catch (e) {
-      alert('Failed to save media');
+      showError('Failed to save media');
     }
   });
 }
@@ -895,7 +951,7 @@ function openEventEditModal(ev) {
   // Save handler
   overlay.querySelector('button.save')?.addEventListener('click', async () => {
     const name = overlay.querySelector('#ev-name').value.trim();
-    if (!name) { alert('Name is required'); return; }
+    if (!name) { showWarning('Name is required'); return; }
     const description = overlay.querySelector('#ev-desc').value.trim();
     const tsLocal = overlay.querySelector('#ev-ts').value;
     const timestamp = fromLocalInputValue(tsLocal);
@@ -916,7 +972,7 @@ function openEventEditModal(ev) {
       close();
       refreshEventTile(updatedEv);
     } catch {
-      alert('Failed to save event');
+      showError('Failed to save event');
     }
   });
 }
@@ -1101,7 +1157,7 @@ function openEventCreateModal() {
   overlay.querySelector('button.save')?.addEventListener('click', async () => {
     const name = modal.querySelector('#evc-name').value.trim();
     const description = modal.querySelector('#evc-desc').value.trim();
-    if (!name) { alert('Event name is required'); return; }
+    if (!name) { showWarning('Event name is required'); return; }
     const body = { name };
     if (description) body.description = description;
     if (keywords.length > 0) body.keywords = keywords;
@@ -1110,7 +1166,7 @@ function openEventCreateModal() {
       close();
       await loadEvents();
     } catch (e) {
-      alert('Failed to create event');
+      showError('Failed to create event');
     }
   });
 }
@@ -1134,7 +1190,7 @@ function refreshOwnerTile(updated) {
 }
 
 function openOwnerEditModal(owner) {
-  if (!owner) { alert('No owner'); return; }
+  if (!owner) { showWarning('No owner'); return; }
   if (document.querySelector('.modal-overlay')) return;
   const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
   const firstVal = owner.firstName || '';
@@ -1198,7 +1254,7 @@ function openOwnerEditModal(owner) {
       const ownerSelect = document.getElementById('store-owner');
       if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
     } catch (e) {
-      alert('Failed to update owner');
+      showError('Failed to update owner');
     }
   });
 }
@@ -1241,7 +1297,7 @@ function openOwnerCreateModal() {
     const firstName = modal.querySelector('#owc-first').value.trim();
     const lastName = modal.querySelector('#owc-last').value.trim();
     const birth = modal.querySelector('#owc-birth').value; // yyyy-mm-dd or ''
-    if (!firstName || !lastName) { alert('First name and Last name are required'); return; }
+    if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
     const body = { firstName, lastName };
     if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
     try {
@@ -1256,7 +1312,7 @@ function openOwnerCreateModal() {
         if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
       } catch {}
     } catch (e) {
-      alert('Failed to create owner');
+      showError('Failed to create owner');
     }
   });
 }
@@ -1486,7 +1542,7 @@ function refreshStoreTile(updated) {
 }
 
 function openStoreEditModal(store) {
-  if (!store) { alert('No store'); return; }
+  if (!store) { showWarning('No store'); return; }
   if (document.querySelector('.modal-overlay')) return;
   const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
   const nameVal = store.name || '';
@@ -1536,7 +1592,7 @@ function openStoreEditModal(store) {
       const updated = stores.find(x => x.id === store.id) || { ...store, name, includeMask, ignoreMask };
       refreshStoreTile(updated);
     } catch (e) {
-      alert('Failed to update store');
+      showError('Failed to update store');
     }
   });
 }
@@ -1621,16 +1677,16 @@ async function openStoreCreateModal() {
     const ownerName = modal.querySelector('#stc-owner').value.trim();
     const includeMask = modal.querySelector('#stc-include').value.trim();
     const ignoreMask = modal.querySelector('#stc-ignore').value.trim();
-    if (!baseDirectory) { alert('Base directory is required'); return; }
+    if (!baseDirectory) { showWarning('Base directory is required'); return; }
     const ownerId = resolveOwnerId(ownerName);
-    if (!ownerId) { alert('Please select a valid owner by name'); return; }
+    if (!ownerId) { showWarning('Please select a valid owner by name'); return; }
     const body = { name: name || null, ownerId, baseDirectory, includeMask: includeMask || null, ignoreMask: ignoreMask || null };
     try {
       await api.createStore(body);
       close();
       await loadStores();
     } catch(e) {
-      alert('Failed to create store');
+      showError('Failed to create store');
     }
   });
 }

@@ -102,3 +102,71 @@ main { flex: 1; position: relative; }
 .segmented button { background: transparent; border: none; padding: 0.35rem 0.55rem; cursor: pointer; color: #111827; }
 .segmented button + button { border-left: 1px solid #e5e7eb; }
 .segmented button.active, .segmented button[aria-pressed="true"] { background: #2563eb; color: #fff; }
+
+/* Toast notifications */
+.toast-container { 
+  position: fixed; 
+  bottom: 20px; 
+  left: 50%; 
+  transform: translateX(-50%); 
+  z-index: 2000; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 8px; 
+  pointer-events: none; 
+  max-width: 90vw; 
+  width: auto; 
+}
+
+.toast { 
+  background: #fff; 
+  border-radius: 8px; 
+  padding: 12px 16px; 
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+  border: 1px solid #e5e7eb; 
+  font-size: 14px; 
+  line-height: 1.4; 
+  min-width: 280px; 
+  max-width: 500px; 
+  word-wrap: break-word; 
+  pointer-events: auto; 
+  transform: translateY(100px); 
+  opacity: 0; 
+  transition: all 300ms ease-out; 
+}
+
+.toast.show { 
+  transform: translateY(0); 
+  opacity: 1; 
+}
+
+.toast.hide { 
+  transform: translateY(20px); 
+  opacity: 0; 
+  transition: all 200ms ease-in; 
+}
+
+/* Toast types */
+.toast.success { 
+  background: #f0fdf4; 
+  border-color: #22c55e; 
+  color: #166534; 
+}
+
+.toast.error { 
+  background: #fef2f2; 
+  border-color: #ef4444; 
+  color: #991b1b; 
+}
+
+.toast.warning { 
+  background: #fffbeb; 
+  border-color: #f59e0b; 
+  color: #92400e; 
+}
+
+.toast.info { 
+  background: #eff6ff; 
+  border-color: #3b82f6; 
+  color: #1e40af; 
+}
