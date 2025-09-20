@@ -56,7 +56,10 @@ object ApiApp extends ZIOAppDefault {
     // val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
     val fmt     = LogFormat.annotations |-| LogFormat.line
     val logging = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
-    logging ++ configProviderLayer
+
+    logging
+      ++ configProviderLayer
+      ++ Runtime.enableAutoBlockingExecutor // TODO identify where some blocking operation markers have been forgotten
   }
 
   // -------------------------------------------------------------------------------------------------------------------

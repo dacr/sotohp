@@ -823,7 +823,8 @@ class MediaServiceLive private (
     val syncLogic =
       ZIO.log("Synchronization started") *>
         storeList()
-          .mapZIO(store => ZIO.from(FileSystemSearch.originalsStreamFromSearchRoot(store)))
+          .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store)))
+          .absolve
           .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
           .right
           .mapZIO(synchronizeOriginal)
