@@ -1698,6 +1698,25 @@ function initStoresTab() {
 
 // Settings
 let syncPollTimer = null;
+function formatDuration(startedAt) {
+  const now = new Date();
+  const start = new Date(startedAt);
+  const diffMs = now - start;
+  if (diffMs < 0) return '0s';
+  
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  let result = '';
+  if (hours > 0) result += `${hours}h`;
+  if (minutes > 0) result += `${minutes}m`;
+  if (seconds > 0 || result === '') result += `${seconds}s`;
+  
+  return result;
+}
+
 async function refreshSyncStatus() {
   const statusEl = document.getElementById('sync-status');
   const btn = document.getElementById('btn-sync');
@@ -1706,9 +1725,16 @@ async function refreshSyncStatus() {
     const running = !!st?.running;
     const count = typeof st?.processedCount === 'number' ? st.processedCount : 0;
     const updated = st?.lastUpdated ? new Date(st.lastUpdated).toLocaleString() : 'never';
-    statusEl.textContent = running
-      ? `Running… processed ${count} item(s). Last update: ${updated}`
-      : `Idle. Last run update: ${updated}. Total processed: ${count}`;
+    
+    if (running && st?.startedAt) {
+      const duration = formatDuration(st.startedAt);
+      statusEl.textContent = `Running for ${duration}… processed ${count} item(s). Last update: ${updated}`;
+    } else if (running) {
+      statusEl.textContent = `Running… processed ${count} item(s). Last update: ${updated}`;
+    } else {
+      statusEl.textContent = `Idle. Last run update: ${updated}. Total processed: ${count}`;
+    }
+    
     if (btn) { btn.disabled = running; btn.title = running ? 'Synchronization is running' : 'Synchronize all stores'; }
   } catch (e) {
     statusEl.textContent = 'Unable to get synchronization status.';
