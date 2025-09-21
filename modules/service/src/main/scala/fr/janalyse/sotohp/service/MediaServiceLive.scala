@@ -721,14 +721,15 @@ class MediaServiceLive private (
   private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val logic = for {
       _                         <- normalized(input.media.original.id) // required to optimize AI work so not launched in background
-      fiberMiniaturesFiber      <- miniatures(input.media.original.id).fork
-      fiberFacesFiber           <- faces(input.media.original.id).fork
-      fiberClassificationsFiber <- classifications(input.media.original.id).fork
-      fiberObjectsFiber         <- objects(input.media.original.id).fork
-      _                         <- fiberMiniaturesFiber.join
-      _                         <- fiberFacesFiber.join
-      _                         <- fiberClassificationsFiber.join
-      _                         <- fiberObjectsFiber.join
+      fiberMiniaturesFiber      <- miniatures(input.media.original.id)//.fork
+      fiberFacesFiber           <- faces(input.media.original.id)//.fork
+      fiberClassificationsFiber <- classifications(input.media.original.id)//.fork
+      fiberObjectsFiber         <- objects(input.media.original.id)//.fork
+      // TODO investigate why this is not working
+      //_                         <- fiberMiniaturesFiber.join
+      //_                         <- fiberFacesFiber.join
+      //_                         <- fiberClassificationsFiber.join
+      //_                         <- fiberObjectsFiber.join
     } yield input
     logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.mediaPath.path.toString)
   }

@@ -1005,6 +1005,13 @@ object ApiApp extends ZIOAppDefault {
     } yield {
       Server.Config.default
         .binding(nif, port)
+        .copy(
+          responseCompression = None,
+          soBacklog=100,
+          avoidContextSwitching=false,
+          tcpNoDelay=true,
+          keepAlive=false,
+        )
     }
   }
 

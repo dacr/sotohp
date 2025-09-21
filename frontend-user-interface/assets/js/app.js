@@ -20,6 +20,7 @@ class ApiClient {
   async updateMedia(mediaAccessKey, body) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}`, body); }
   async updateMediaStarred(mediaAccessKey, state) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}/starred`, null, { params: { state } }); }
   async listOwners() { return await this.#fetchNdjson('/api/owners'); }
+  async getOwner(ownerId) { const res = await this.http.get(`/api/owner/${encodeURIComponent(ownerId)}`); return res.data; }
   async updateOwner(ownerId, body) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}`, body); }
   async createOwner(body) { const res = await this.http.post('/api/owner', body); return res.data; }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
@@ -59,6 +60,10 @@ const api = new ApiClient('');
 let currentMedia = null;
 let slideshowTimer = null;
 let slideshowPlaying = false;
+
+// Owner caching to reduce API requests
+const ownerCache = new Map(); // ownerId -> owner object
+const storeCache = new Map(); // storeId -> store object
 
 // Toast notification system
 function ensureToastContainer() {
@@ -181,6 +186,43 @@ function showMedia(media) {
     hasLocEl.title = 'Show on map';
     hasLocEl.onclick = () => goToWorldLocation(media.location, media.accessKey);
   }
+  
+  // Fetch and display owner information
+  const ownerEl = document.getElementById('info-owner');
+  if (ownerEl && media.original?.storeId) {
+    ownerEl.textContent = 'Loading...';
+    (async () => {
+      try {
+        let store = storeCache.get(media.original.storeId);
+        if (!store) {
+          store = await api.getStore(media.original.storeId);
+          storeCache.set(media.original.storeId, store);
+        }
+        
+        if (store?.ownerId) {
+          let owner = ownerCache.get(store.ownerId);
+          if (!owner) {
+            owner = await api.getOwner(store.ownerId);
+            ownerCache.set(store.ownerId, owner);
+          }
+          
+          if (owner?.firstName && owner?.lastName) {
+            ownerEl.textContent = `${owner.firstName} ${owner.lastName}`;
+          } else {
+            ownerEl.textContent = '-';
+          }
+        } else {
+          ownerEl.textContent = '-';
+        }
+      } catch (e) {
+        console.warn('Failed to fetch owner info:', e);
+        ownerEl.textContent = '-';
+      }
+    })();
+  } else if (ownerEl) {
+    ownerEl.textContent = '-';
+  }
+  
   {
     const kwEl = document.getElementById('info-keywords');
     const kws = Array.isArray(media.keywords) ? media.keywords : [];
