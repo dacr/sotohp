@@ -720,16 +720,16 @@ class MediaServiceLive private (
 
   private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val logic = for {
-      _                         <- normalized(input.media.original.id) // required to optimize AI work so not launched in background
-      fiberMiniaturesFiber      <- miniatures(input.media.original.id)//.fork
-      fiberFacesFiber           <- faces(input.media.original.id)//.fork
-      fiberClassificationsFiber <- classifications(input.media.original.id)//.fork
-      fiberObjectsFiber         <- objects(input.media.original.id)//.fork
+      _                         <- normalized(input.media.original.id)      // required to optimize AI work so not launched in background
+      fiberMiniaturesFiber      <- miniatures(input.media.original.id)      // .fork
+      fiberFacesFiber           <- faces(input.media.original.id)           // .fork
+      fiberClassificationsFiber <- classifications(input.media.original.id) // .fork
+      fiberObjectsFiber         <- objects(input.media.original.id)         // .fork
       // TODO investigate why this is not working
-      //_                         <- fiberMiniaturesFiber.join
-      //_                         <- fiberFacesFiber.join
-      //_                         <- fiberClassificationsFiber.join
-      //_                         <- fiberObjectsFiber.join
+      // _                         <- fiberMiniaturesFiber.join
+      // _                         <- fiberFacesFiber.join
+      // _                         <- fiberClassificationsFiber.join
+      // _                         <- fiberObjectsFiber.join
     } yield input
     logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.mediaPath.path.toString)
   }
@@ -845,27 +845,33 @@ class MediaServiceLive private (
                          )
       } yield ()
 
-    val syncLogic =
-      ZIO.log("Synchronization started") *>
-        storeList()
-          .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store)))
-          .absolve
-          .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
-          .right
-          .mapZIO(synchronizeOriginal)
-          .mapZIO(synchronizeState)
-          .mapZIO(synchronizeMedia)
-          .filter(_.state.mediaLastSynchronized.isEmpty)
-          .mapZIO(input => synchronizeProcessors(input).uninterruptible)
-          .mapZIO(input => locationInduction(input).uninterruptible)
-          .grouped(10)
-          .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
-          .mapZIO(input => updateSynchronizeStatus(input).uninterruptible)
-          .runDrain
-          .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
-          .catchAll(e => ZIO.logError(s"Sync failed: $e"))
-          .tap(_ => ZIO.log("Synchronization finished !"))
-          .tap(_ => finishedLogic) // TODO not sure it's the best place to do this
+    val syncLogic = {
+      for {
+        _              <- ZIO.log("Synchronization started")
+        stores         <- storeList().runCollect
+        originalsStream = ZStream
+                            .from(stores)
+                            .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store)))
+                            .absolve
+                            .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
+                            .right
+        _              <- originalsStream
+                            .mapZIO(synchronizeOriginal)
+                            .mapZIO(synchronizeState)
+                            .mapZIO(synchronizeMedia)
+                            .filter(_.state.mediaLastSynchronized.isEmpty)
+                            .mapZIO(input => synchronizeProcessors(input).uninterruptible)
+                            .mapZIO(input => locationInduction(input).uninterruptible)
+                            .grouped(10)
+                            .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
+                            .mapZIO(input => updateSynchronizeStatus(input).uninterruptible)
+                            .runDrain
+                            .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
+                            .catchAll(e => ZIO.logError(s"Sync failed: $e"))
+                            .tap(_ => ZIO.log("Synchronization finished !"))
+                            .tap(_ => finishedLogic) // TODO not sure it's the best place to do this
+      } yield ()
+    }
 
     // TODO temporary quick & dirty implementation
 
