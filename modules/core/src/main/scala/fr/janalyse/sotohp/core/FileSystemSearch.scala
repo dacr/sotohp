@@ -55,7 +55,7 @@ object FileSystemSearch {
 
   private def searchPredicate(includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask])(path: Path, attrs: BasicFileAttributes): Boolean = {
     attrs.isRegularFile &&
-    (ignoreMask.isEmpty || !ignoreMask.get.isIgnored(path.toString)) &&
+    (ignoreMask.isEmpty || ignoreMask.exists(_.toString.isEmpty) || !ignoreMask.get.isIgnored(path.toString)) &&
     (includeMask.isEmpty || includeMask.get.isIncluded(path.toString))
   }
 

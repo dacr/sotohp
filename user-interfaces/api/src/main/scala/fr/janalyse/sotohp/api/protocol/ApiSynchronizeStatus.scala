@@ -8,7 +8,8 @@ import java.time.OffsetDateTime
 case class ApiSynchronizeStatus(
   running: Boolean,
   lastUpdated: Option[OffsetDateTime],
-  processedCount: Long
+  processedCount: Long,
+  startedAt: Option[OffsetDateTime],
 )
 
 object ApiSynchronizeStatus {

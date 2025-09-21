@@ -720,11 +720,15 @@ class MediaServiceLive private (
 
   private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val logic = for {
-      _                    <- normalized(input.media.original.id) // required to optimize AI work so not launched in background
-      fiberMiniatures      <- miniatures(input.media.original.id)
-      fiberFaces           <- faces(input.media.original.id)
-      fiberClassifications <- classifications(input.media.original.id)
-      fiberObjects         <- objects(input.media.original.id)
+      _                         <- normalized(input.media.original.id) // required to optimize AI work so not launched in background
+      fiberMiniaturesFiber      <- miniatures(input.media.original.id).fork
+      fiberFacesFiber           <- faces(input.media.original.id).fork
+      fiberClassificationsFiber <- classifications(input.media.original.id).fork
+      fiberObjectsFiber         <- objects(input.media.original.id).fork
+      _                         <- fiberMiniaturesFiber.join
+      _                         <- fiberFacesFiber.join
+      _                         <- fiberClassificationsFiber.join
+      _                         <- fiberObjectsFiber.join
     } yield input
     logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.mediaPath.path.toString)
   }
@@ -834,7 +838,8 @@ class MediaServiceLive private (
                          .update(status =>
                            status.copy(
                              running = false,
-                             lastUpdated = Some(currentDate)
+                             lastUpdated = Some(currentDate),
+                             startedAt = None
                            )
                          )
       } yield ()
@@ -850,11 +855,11 @@ class MediaServiceLive private (
           .mapZIO(synchronizeState)
           .mapZIO(synchronizeMedia)
           .filter(_.state.mediaLastSynchronized.isEmpty)
-          .mapZIO(synchronizeProcessors)
-          .mapZIO(locationInduction)
-          .grouped(25)
+          .mapZIO(input => synchronizeProcessors(input).uninterruptible)
+          .mapZIO(input => locationInduction(input).uninterruptible)
+          .grouped(10)
           .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
-          .mapZIO(updateSynchronizeStatus)
+          .mapZIO(input => updateSynchronizeStatus(input).uninterruptible)
           .runDrain
           .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
           .catchAll(e => ZIO.logError(s"Sync failed: $e"))
@@ -870,7 +875,8 @@ class MediaServiceLive private (
                        .update(status =>
                          status.copy(
                            running = true,
-                           lastUpdated = Some(currentDate)
+                           lastUpdated = Some(currentDate),
+                           startedAt = Some(currentDate)
                          )
                        )
       _           <- synchronizeFiberRef

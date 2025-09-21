@@ -73,7 +73,7 @@ trait Processor extends AutoCloseable {
     input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)
                        else
                          ZIO
-                           .attempt(original.mediaPath.path.toAbsolutePath) // slower because original
+                           .attemptBlocking(original.mediaPath.path.toAbsolutePath) // slower because original
                            .mapError(th => ProcessorIssue(s"Couldn't build input path for original photo", th))
   } yield input
 
@@ -81,7 +81,7 @@ trait Processor extends AutoCloseable {
     for {
       imagePath     <- getOriginalBestInputFileForProcessors(original)
       bufferedImage <- ZIO
-                         .attempt(BasicImaging.load(imagePath))
+                         .attemptBlocking(BasicImaging.load(imagePath))
                          .mapError(th => ProcessorIssue(s"Couldn't load image $imagePath", th))
     } yield bufferedImage
   }

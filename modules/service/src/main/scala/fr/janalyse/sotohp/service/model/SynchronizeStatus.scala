@@ -5,9 +5,10 @@ import java.time.OffsetDateTime
 case class SynchronizeStatus(
   running: Boolean,
   lastUpdated: Option[OffsetDateTime],
-  processedCount: Long
+  processedCount: Long,
+  startedAt: Option[OffsetDateTime]
 )
 
 object SynchronizeStatus {
-  val empty: SynchronizeStatus = SynchronizeStatus(false, None, 0)
+  val empty: SynchronizeStatus = SynchronizeStatus(false, None, 0, None)
 }

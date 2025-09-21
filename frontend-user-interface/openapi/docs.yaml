@@ -822,7 +822,7 @@ paths:
     put:
       tags:
       - Admin
-      summary: Synchronize with all stores content
+      summary: Start synchronize background operations with all stores content
       operationId: Synchronize start
       responses:
         '200':
@@ -1276,3 +1276,6 @@ components:
         processedCount:
           type: integer
           format: int64
+        startedAt:
+          type: string
+          format: date-time

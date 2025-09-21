@@ -35,7 +35,7 @@ object MiniaturizeProcessor extends Processor {
       input     <- getOriginalBestInputFileForProcessors(original)
       output    <- getOriginalMiniatureFilePath(original, size)
       _         <- ZIO
-                     .attempt(output.getParent.toFile.mkdirs())
+                     .attemptBlocking(output.getParent.toFile.mkdirs())
                      .mapError(th => MiniaturizeIssue("Couldn't target path", th))
       dimension <- miniaturizePhoto(size, input, output)
                      @@ annotated("inputFile" -> input.toString)
