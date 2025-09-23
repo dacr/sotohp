@@ -141,6 +141,14 @@ function setActiveTab(name) {
   if (name === 'events') loadEvents();
   if (name === 'owners') loadOwners();
   if (name === 'stores') loadStores();
+  if (name === 'settings') {
+    // Start sync polling when Settings tab becomes active
+    refreshSyncStatus();
+    startSyncPolling();
+  } else {
+    // Stop sync polling when switching away from Settings tab
+    stopSyncPolling();
+  }
 }
 
 function initTabs() {
@@ -1802,9 +1810,7 @@ function initSettings() {
     });
     btn.__wired = true;
   }
-  // Initial fetch and start polling
-  refreshSyncStatus();
-  startSyncPolling();
+  // Don't automatically start polling - it will be started when Settings tab is activated
 }
 
 function init() {

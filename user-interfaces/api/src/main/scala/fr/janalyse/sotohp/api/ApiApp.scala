@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 import io.scalaland.chimney.dsl.*
 import sttp.tapir.Codec.PlainCodec
+import zio.http.Server.Config.ResponseCompressionConfig
 import zio.stream.{ZPipeline, ZStream}
 
 import java.nio.charset.StandardCharsets
@@ -1007,10 +1008,10 @@ object ApiApp extends ZIOAppDefault {
         .binding(nif, port)
         .copy(
           responseCompression = None,
-          soBacklog=100,
-          avoidContextSwitching=false,
-          tcpNoDelay=true,
-          keepAlive=false,
+          soBacklog = 100,
+          avoidContextSwitching = false,
+          tcpNoDelay = false,
+          keepAlive = true
         )
     }
   }
