@@ -1010,7 +1010,7 @@ object ApiApp extends ZIOAppDefault {
           responseCompression = None,
           soBacklog = 100,
           avoidContextSwitching = false,
-          tcpNoDelay = false,
+          tcpNoDelay = true,
           keepAlive = true
         )
     }

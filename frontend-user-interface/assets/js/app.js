@@ -390,7 +390,7 @@ function openMediaEditModal(media) {
   }
   function addKeywordFromInput() {
     const val = input.value.trim();
-    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips();
+    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips(); input.focus();
   }
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKeywordFromInput(); }
@@ -912,7 +912,7 @@ function openEventEditModal(ev) {
   }
   function addKeywordFromInput() {
     const val = input.value.trim();
-    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips();
+    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips(); input.focus();
   }
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKeywordFromInput(); }
@@ -1195,7 +1195,7 @@ function openEventCreateModal() {
   }
   function addKeywordFromInput() {
     const val = input.value.trim();
-    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips();
+    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips(); input.focus();
   }
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKeywordFromInput(); }
