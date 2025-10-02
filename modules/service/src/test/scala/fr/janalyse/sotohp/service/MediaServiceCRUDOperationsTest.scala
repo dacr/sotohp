@@ -56,7 +56,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
       for {
         ownerCreated <- MediaService.ownerCreate(None, FirstName("tested-first-name"), LastName("tested-last-name"), None)
         ownerFetched <- MediaService.ownerGet(ownerCreated.id)
-        ownerUpdated <- MediaService.ownerUpdate(ownerId = ownerCreated.id, firstName = FirstName("updated-first-name"), lastName = LastName("updated-last-name"), birthDate = None).some
+        ownerUpdated <- MediaService.ownerUpdate(ownerId = ownerCreated.id, firstName = FirstName("updated-first-name"), lastName = LastName("updated-last-name"), birthDate = None, coverOriginalId = None).some
         _            <- MediaService.ownerDelete(ownerCreated.id)
         afterDelete  <- MediaService.ownerGet(ownerCreated.id)
       } yield assertTrue(
@@ -125,12 +125,12 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
     ),
     test("keyword rules usage")(
       for {
-        owner       <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
-        store       <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
-        _           <- MediaService.keywordRulesUpsert(
-                         store.id,
-                         KeywordRules(ignoring = Set("with", "i", "am"), mappings = Mapping("nigght","night")::Nil, rewritings = Rewriting("(42)(thing)", "$2$1") :: Nil)
-                       )
+        owner   <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
+        store   <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset1")), None, None)
+        _       <- MediaService.keywordRulesUpsert(
+                     store.id,
+                     KeywordRules(ignoring = Set("with", "i", "am"), mappings = Mapping("nigght", "night") :: Nil, rewritings = Rewriting("(42)(thing)", "$2$1") :: Nil)
+                   )
         result1 <- MediaService.keywordSentenceToKeywords(store.id, "I am with nigght 42thing")
       } yield assertTrue(
         result1 == Set("night", "thing42").map(Keyword.apply)
@@ -143,7 +143,8 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
       .provideShared(
         LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live,
         configProvider >>> SearchService.live,
-        Scope.default)
+        Scope.default
+      )
       @@ TestAspect.sequential
 
 }

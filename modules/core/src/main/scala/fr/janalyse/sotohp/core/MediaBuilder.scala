@@ -23,19 +23,11 @@ object MediaBuilder {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[MediaBuilder.type])
 
   def buildDefaultMediaAccessKey(original: Original): MediaAccessKey = {
-    val timestamp = computeMediaTimestamp(original)
+    //val timestamp = original.timestamp
     // TODO Migrate to something else as ULID are constrained to start from epoch ! 1947:07:01 15:00:00 +00:00 => -710154000000 for epoch millis !
-    val epoch     = if (timestamp.getYear >= 1970) Try(timestamp.toInstant.toEpochMilli).toOption.getOrElse(0L) else 0L
-    val ulid      = ULID.ofMillis(epoch)
-    MediaAccessKey(original.store.ownerId, ulid)
-  }
-
-  private def computeMediaTimestamp(original: Original): OffsetDateTime = {
-    val sdt = original.cameraShootDateTime
-    sdt match {
-      case Some(shootDateTime) => shootDateTime.offsetDateTime
-      case _                   => original.fileLastModified.offsetDateTime
-    }
+    //val epoch     = if (timestamp.getYear >= 1970) Try(timestamp.toInstant.toEpochMilli).toOption.getOrElse(0L) else 0L
+    //val ulid      = ULID.ofMillis(epoch)
+    MediaAccessKey(original.timestamp, original.id.asUUID)
   }
 
   def buildEventAttachment(original: Original): Option[EventAttachment] = buildEventAttachment(original.store, original.mediaPath)

@@ -127,10 +127,19 @@ class MediaServiceLive private (
     key: MediaAccessKey,
     updatedMedia: Media
   ): IO[ServiceIssue, Option[Media]] = {
-    mediaColl
-      .update(key, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)) // to solve ambiguity with auto-derived transformer
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
-      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+    if (key == updatedMedia.accessKey) {
+      mediaColl
+        .update(key, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)) // to solve ambiguity with auto-derived transformer
+        .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
+        .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
+    } else {
+      // key has been modified require delete record & then insert with the new access key
+      // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
+      (mediaColl.delete(key).unit *> mediaColl.upsert(updatedMedia.accessKey, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)))
+        .uninterruptible
+        .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
+        .flatMap(daoMedia => daoMedia2Media(daoMedia).option)
+    }
     // TODO resync published
   }
 

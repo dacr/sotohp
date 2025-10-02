@@ -1,13 +1,14 @@
 package fr.janalyse.sotohp
 
-import java.time.OffsetDateTime
-import java.util.{Locale, UUID}
 import wvlet.airframe.ulid.ULID
+
+import java.time.{Instant, OffsetDateTime}
 import java.time.OffsetDateTime
 import scala.util.matching.Regex
 import java.io.File
 import java.nio.file.Path
 import java.time.OffsetDateTime
+import java.util.{Locale, UUID}
 import scala.annotation.targetName
 import scala.math.{pow, sqrt}
 import scala.util.{Failure, Success, Try}
@@ -31,26 +32,22 @@ package object model {
 
   // -------------------------------------------------------------------------------------------------------------------
   // use a default encoding that optimize speed to access medias using a default time based order
-  opaque type MediaAccessKey = (ownerId: OwnerId, ulid: ULID)
+  opaque type MediaAccessKey = String
 
   object MediaAccessKey {
-    private val sep      = "/"
-    private val ulidSize = 26
+    private val sep      = "_"
+    private val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
 
-    def apply(ownerId: OwnerId, ulid: ULID): MediaAccessKey = (ownerId, ulid)
-
-    @deprecated // TODO rename to fromString and return a Try
-    def apply(input: String): MediaAccessKey = {
-      if (input.length < (ulidSize + 1)) throw new IllegalArgumentException(s"given MediaAccessKey input ($input) is invalid")
-      else {
-        val ownerIdStr = input.substring(0, ulidSize)
-        val ulidStr    = input.substring(ulidSize + 1)
-        (OwnerId(ULID(ownerIdStr)), ULID(ulidStr))
-      }
+    def apply(timestamp: OffsetDateTime, uuid: UUID): MediaAccessKey = {
+      val formattedTimestamp = formatter.format(timestamp.toInstant.atOffset(java.time.ZoneOffset.UTC))
+      s"$formattedTimestamp$sep${uuid.toString}"
     }
 
+    @deprecated // TODO rename to fromString and return a Try
+    def apply(input: String): MediaAccessKey = input
+
     extension (mediaAccessKey: MediaAccessKey) {
-      def asString: String = s"${mediaAccessKey.ownerId.toString}$sep${mediaAccessKey.ulid.toString}" // natural ordering by (owner / timestamp)
+      def asString: String = mediaAccessKey
     }
   }
 
@@ -134,6 +131,7 @@ package object model {
 
     extension (originalId: OriginalId) {
       def asString: String = originalId.toString
+      def asUUID: UUID     = originalId
     }
   }
 
