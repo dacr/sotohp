@@ -43,6 +43,10 @@ package object model {
       s"$formattedTimestamp$sep${uuid.toString}"
     }
 
+    def apply(timestamp: OffsetDateTime): MediaAccessKey = {
+      apply(timestamp, UUID.randomUUID())
+    }
+
     @deprecated // TODO rename to fromString and return a Try
     def apply(input: String): MediaAccessKey = input
 

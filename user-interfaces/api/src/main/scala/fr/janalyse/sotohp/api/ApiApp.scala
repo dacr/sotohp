@@ -35,6 +35,7 @@ import zio.stream.{ZPipeline, ZStream}
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
+import java.time.OffsetDateTime
 import java.util.UUID
 
 object ApiApp extends ZIOAppDefault {
@@ -622,16 +623,19 @@ object ApiApp extends ZIOAppDefault {
       .summary("Get information from a random, first, last, previous of, or next to media")
       .get
       .in(query[MediaSelector]("select"))
-      .in(query[Option[String]]("referenceMediaAccessKey").description("previous or next require to provide a reference media"))
+      .in(query[Option[String]]("referenceMediaAccessKey").description("previous or next media from the provided a reference media"))
+      .in(query[Option[OffsetDateTime]]("referenceMediaTimestamp").description("previous or next media from the provided timestamp"))
       .out(jsonBody[ApiMedia])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound))
-      .zServerLogic[ApiEnv]((selectCriteria, mayBeRawKey) =>
+      .zServerLogic[ApiEnv]((selectCriteria, mayBeRawKey, mayBeMediaTimestamp) =>
         for {
-          nearKey <- ZIO.foreach(mayBeRawKey)(rawKey =>
-                       ZIO
-                         .attempt(MediaAccessKey(rawKey))
-                         .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
-                     )
+          nearKey <- ZIO
+                       .attempt(
+                         mayBeRawKey
+                           .map(rawKey => MediaAccessKey(rawKey))
+                           .orElse(mayBeMediaTimestamp.map(timestamp => MediaAccessKey(timestamp)))
+                       )
+                       .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
           media   <- selectCriteria match {
                        case MediaSelector.random                        => mediaSelectRandomLogic
                        case MediaSelector.first                         => mediaSelectFirstLogic
