@@ -16,11 +16,21 @@ export class ApiClient {
     mediaNormalizedUrl(mediaAccessKey) {
         return `/api/media/${encodeURIComponent(mediaAccessKey)}/normalized`;
     }
+    mediaMiniatureUrl(mediaAccessKey) {
+        return `/api/media/${encodeURIComponent(mediaAccessKey)}/miniature`;
+    }
     async listEvents() {
         return await this.fetchNdjson('/api/events');
     }
-    async createEvent(name) {
-        const res = await this.http.post('/api/event', { name });
+    async updateEvent(eventId, body) {
+        await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body);
+    }
+    async getState(originalId) {
+        const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`);
+        return res.data;
+    }
+    async createEvent(body) {
+        const res = await this.http.post('/api/event', body);
         return res.data;
     }
     async listOwners() {
