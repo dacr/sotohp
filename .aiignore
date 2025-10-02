@@ -1,0 +1,6 @@
+*.log
+*.json
+cluster*/
+.lmdb/
+.metals/
+.sotohp/

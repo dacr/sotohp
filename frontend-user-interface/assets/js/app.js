@@ -138,6 +138,7 @@ function setActiveTab(name) {
       } catch {}
     }, 50);
   }
+  if (name === 'mosaic') loadMosaic();
   if (name === 'events') loadEvents();
   if (name === 'owners') loadOwners();
   if (name === 'stores') loadStores();
@@ -1225,6 +1226,281 @@ function initEventsTab() {
   $('#refresh-events').addEventListener('click', loadEvents);
   const createBtn = document.getElementById('create-event');
   if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openEventCreateModal()); createBtn.__wired = true; }
+}
+
+// Mosaic Tab
+let mosaicMediaCache = []; // Cache for loaded media
+let mosaicLoadedCount = 0;
+let mosaicIsLoading = false;
+let mosaicScrollTimeout = null;
+let mosaicObserver = null; // Store observer reference for reuse
+let mosaicHasMore = true; // Track if there are more media to load
+
+async function loadMoreMosaicMedia() {
+  const container = document.getElementById('mosaic-container');
+  if (!container || mosaicIsLoading || !mosaicHasMore) return;
+  
+  mosaicIsLoading = true;
+  
+  try {
+    const batchSize = 60;
+    const lastMedia = mosaicMediaCache[mosaicMediaCache.length - 1];
+    if (!lastMedia) {
+      mosaicIsLoading = false;
+      return;
+    }
+    
+    let currentKey = lastMedia.accessKey;
+    const newMedias = [];
+    
+    // Load next batch going backwards in time
+    for (let i = 0; i < batchSize; i++) {
+      try {
+        const prevMedia = await api.getMedia('previous', currentKey);
+        if (prevMedia && prevMedia.accessKey !== currentKey) {
+          newMedias.push(prevMedia);
+          currentKey = prevMedia.accessKey;
+        } else {
+          mosaicHasMore = false;
+          break;
+        }
+      } catch {
+        mosaicHasMore = false;
+        break;
+      }
+    }
+    
+    if (newMedias.length === 0) {
+      mosaicHasMore = false;
+      mosaicIsLoading = false;
+      return;
+    }
+    
+    // Add to cache
+    mosaicMediaCache.push(...newMedias);
+    
+    // Render new tiles
+    for (const media of newMedias) {
+      const tile = document.createElement('div');
+      tile.className = 'mosaic-tile';
+      tile.dataset.mediaKey = media.accessKey;
+      tile.__media = media;
+      
+      if (media.shootDateTime) {
+        tile.dataset.timestamp = media.shootDateTime;
+      }
+      
+      tile.onclick = async () => {
+        try {
+          const fullMedia = await api.getMediaByKey(media.accessKey);
+          setActiveTab('viewer');
+          showMedia(fullMedia);
+        } catch (e) {
+          console.warn('Failed to load media:', e);
+        }
+      };
+      
+      container.appendChild(tile);
+      
+      if (mosaicObserver) {
+        mosaicObserver.observe(tile);
+      } else {
+        const img = new Image();
+        img.src = api.mediaNormalizedUrl(media.accessKey);
+        img.alt = media.shootDateTime ? new Date(media.shootDateTime).toLocaleDateString() : '';
+        img.loading = 'lazy';
+        tile.appendChild(img);
+      }
+    }
+    
+    mosaicLoadedCount = mosaicMediaCache.length;
+  } catch (e) {
+    console.error('Error loading more mosaic media:', e);
+  } finally {
+    mosaicIsLoading = false;
+  }
+}
+
+async function loadMosaic() {
+  const container = document.getElementById('mosaic-container');
+  const indicator = document.getElementById('mosaic-scroll-indicator');
+  const tabSection = document.getElementById('tab-mosaic');
+  if (!container) return;
+  
+  // Clear existing content on first load
+  if (mosaicLoadedCount === 0) {
+    container.innerHTML = '';
+    mosaicMediaCache = [];
+    mosaicHasMore = true;
+  }
+  
+  if (mosaicIsLoading) return;
+  mosaicIsLoading = true;
+  
+  try {
+    // Load initial batch (increased for fullscreen/large displays)
+    const batchSize = 150;
+    const mediasToLoad = [];
+    
+    if (mosaicMediaCache.length === 0) {
+      try {
+        const lastMedia = await api.getMedia('last');
+        
+        // Start from the most recent (last) and go backwards
+        let currentKey = lastMedia.accessKey;
+        mediasToLoad.push(lastMedia);
+        
+        // Load initial batch
+        for (let i = 1; i < batchSize && currentKey; i++) {
+          try {
+            const prevMedia = await api.getMedia('previous', currentKey);
+            if (prevMedia && prevMedia.accessKey !== currentKey) {
+              mediasToLoad.push(prevMedia);
+              currentKey = prevMedia.accessKey;
+            } else {
+              mosaicHasMore = false;
+              break;
+            }
+          } catch {
+            mosaicHasMore = false;
+            break;
+          }
+        }
+        
+        mosaicMediaCache = mediasToLoad;
+      } catch (e) {
+        console.warn('Failed to load media:', e);
+        container.innerHTML = '<div style="padding:2rem;text-align:center;color:#6b7280;">Failed to load media</div>';
+        mosaicIsLoading = false;
+        return;
+      }
+    }
+    
+    // Setup IntersectionObserver for lazy loading
+    if ('IntersectionObserver' in window && !mosaicObserver) {
+      mosaicObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const tile = entry.target;
+            mosaicObserver.unobserve(tile);
+            const media = tile.__media;
+            if (media && media.accessKey) {
+              const img = new Image();
+              img.src = api.mediaNormalizedUrl(media.accessKey);
+              img.alt = media.shootDateTime ? new Date(media.shootDateTime).toLocaleDateString() : '';
+              img.loading = 'lazy';
+              img.decoding = 'async';
+              tile.appendChild(img);
+            }
+          }
+        }
+      }, { root: tabSection, rootMargin: '400px 0px', threshold: 0.01 });
+    }
+    
+    // Render all cached media
+    for (const media of mosaicMediaCache) {
+      if (container.querySelector(`[data-media-key="${media.accessKey}"]`)) continue;
+      
+      const tile = document.createElement('div');
+      tile.className = 'mosaic-tile';
+      tile.dataset.mediaKey = media.accessKey;
+      tile.__media = media;
+      
+      if (media.shootDateTime) {
+        tile.dataset.timestamp = media.shootDateTime;
+      }
+      
+      tile.onclick = async () => {
+        try {
+          const fullMedia = await api.getMediaByKey(media.accessKey);
+          setActiveTab('viewer');
+          showMedia(fullMedia);
+        } catch (e) {
+          console.warn('Failed to load media:', e);
+        }
+      };
+      
+      container.appendChild(tile);
+      
+      if (mosaicObserver) {
+        mosaicObserver.observe(tile);
+      } else {
+        const img = new Image();
+        img.src = api.mediaNormalizedUrl(media.accessKey);
+        img.alt = media.shootDateTime ? new Date(media.shootDateTime).toLocaleDateString() : '';
+        img.loading = 'lazy';
+        tile.appendChild(img);
+      }
+    }
+    
+    mosaicLoadedCount = mosaicMediaCache.length;
+    
+    // Setup scroll indicator and infinite scroll
+    if (tabSection && indicator) {
+      const handleScroll = () => {
+        // Show indicator while scrolling
+        indicator.classList.add('show');
+        
+        // Find the tile closest to the center of viewport
+        const tiles = container.querySelectorAll('.mosaic-tile[data-timestamp]');
+        const viewportCenter = tabSection.scrollTop + tabSection.clientHeight / 2;
+        
+        let closestTile = null;
+        let minDistance = Infinity;
+        
+        for (const tile of tiles) {
+          const rect = tile.getBoundingClientRect();
+          const tileCenter = tabSection.scrollTop + rect.top + rect.height / 2;
+          const distance = Math.abs(tileCenter - viewportCenter);
+          
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestTile = tile;
+          }
+        }
+        
+        if (closestTile && closestTile.dataset.timestamp) {
+          const date = new Date(closestTile.dataset.timestamp);
+          indicator.textContent = date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          });
+        }
+        
+        // Check if near bottom for infinite scroll
+        const scrollBottom = tabSection.scrollTop + tabSection.clientHeight;
+        const scrollHeight = tabSection.scrollHeight;
+        const threshold = 1000; // Load more when within 1000px of bottom
+        
+        if (scrollHeight - scrollBottom < threshold && mosaicHasMore && !mosaicIsLoading) {
+          loadMoreMosaicMedia();
+        }
+        
+        // Hide indicator after scrolling stops
+        clearTimeout(mosaicScrollTimeout);
+        mosaicScrollTimeout = setTimeout(() => {
+          indicator.classList.remove('show');
+        }, 1000);
+      };
+      
+      // Remove existing listener if any
+      if (tabSection.__mosaicScrollListener) {
+        tabSection.removeEventListener('scroll', tabSection.__mosaicScrollListener);
+      }
+      
+      tabSection.__mosaicScrollListener = handleScroll;
+      tabSection.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    
+  } catch (e) {
+    console.error('Error loading mosaic:', e);
+    if (container) {
+      container.innerHTML = '<div style="padding:2rem;text-align:center;color:#6b7280;">Error loading photos</div>';
+    }
+  } finally {
+    mosaicIsLoading = false;
+  }
 }
 
 // Owners
