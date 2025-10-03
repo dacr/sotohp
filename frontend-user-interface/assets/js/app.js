@@ -1890,6 +1890,33 @@ async function loadMosaic() {
   const indicator = document.getElementById('mosaic-scroll-indicator');
   const tabSection = document.getElementById('tab-mosaic');
   if (!container || !tabSection) return;
+
+  // Make mosaic section focusable to ensure keyboard works without an extra click
+  try {
+    if (!tabSection.hasAttribute('tabindex')) tabSection.setAttribute('tabindex', '0');
+    tabSection.setAttribute('aria-label', 'Mosaic view');
+    if (!container.hasAttribute('tabindex')) container.setAttribute('tabindex', '-1');
+    const timelineElInit = document.getElementById('mosaic-timeline');
+    if (timelineElInit && !timelineElInit.hasAttribute('tabindex')) timelineElInit.setAttribute('tabindex', '-1');
+  } catch {}
+
+  function focusMosaic() {
+    try {
+      if (document.activeElement !== tabSection) {
+        if (typeof tabSection.focus === 'function') tabSection.focus({ preventScroll: true });
+      }
+    } catch {}
+  }
+  // Proactively focus the mosaic when moving the mouse over it
+  try {
+    if (!tabSection.__focusWired) {
+      tabSection.addEventListener('mouseenter', () => focusMosaic(), { passive: true });
+      container.addEventListener('mouseenter', () => focusMosaic(), { passive: true });
+      container.addEventListener('mousemove', () => focusMosaic(), { passive: true });
+      container.addEventListener('wheel', () => focusMosaic(), { passive: true });
+      tabSection.__focusWired = true;
+    }
+  } catch {}
   
   // Initialize timestamp range if not already done
   if (!mosaicOldestTimestamp || !mosaicNewestTimestamp) {
@@ -1963,6 +1990,10 @@ async function loadMosaic() {
           const ts = scrollPositionToTimestamp(ratio, mosaicOldestTimestamp, mosaicNewestTimestamp);
           await refreshMosaicAtTimestamp(ts);
         });
+        // Keep keyboard focus on the mosaic when interacting with the timeline
+        timelineEl.addEventListener('mouseenter', () => focusMosaic(), { passive: true });
+        timelineEl.addEventListener('mousemove', () => focusMosaic(), { passive: true });
+        timelineEl.addEventListener('wheel', () => focusMosaic(), { passive: true });
         timelineEl.__wiredClick = true;
       }
 
@@ -2056,6 +2087,8 @@ async function loadMosaic() {
       };
       tabSection.__mosaicKeyListener = handleKey;
       document.addEventListener('keydown', handleKey, { passive: false });
+      // Ensure mosaic keeps keyboard focus after wiring keys
+      try { if (tabSection && typeof tabSection.focus === 'function') tabSection.focus({ preventScroll: true }); } catch {}
 
       // Rebuild timeline on resize
       if (tabSection.__mosaicResizeListener) {

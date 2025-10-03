@@ -94,12 +94,13 @@ section#tab-mosaic.tab.active { display: flex; }
   min-width: 64px;
   max-width: 64px;
   position: relative;
+  z-index: 2;
   border-right: 1px solid #e5e7eb;
   background: linear-gradient(to bottom, #fafafa, #f5f5f5);
   user-select: none;
   cursor: crosshair;
   overflow: visible; /* keep tooltip visible without affecting layout */
-  contain: layout paint; /* isolate layout to prevent width jitter from abs. children */
+  contain: layout; /* isolate layout without clipping paint so tooltip can overflow */
 }
 .mosaic-timeline .year-line { position: absolute; left: 0; right: 0; height: 1px; background: #d1d5db; }
 .mosaic-timeline .year-label { position: absolute; left: 6px; font-size: 10px; color: #6b7280; transform: translateY(-50%); background: rgba(255,255,255,0.7); padding: 0 3px; border-radius: 3px; }
