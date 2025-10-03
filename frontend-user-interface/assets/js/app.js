@@ -1422,6 +1422,65 @@ async function fetchAdjacent(media, direction) {
   } catch { return null; }
 }
 
+// Ensure the cache window around a center media is filled enough to render the viewport
+async function ensureCacheWindowAround(centerMedia, count = MOSAIC_LOAD_BUFFER, biasOlder = 0.5) {
+  const res = { before: [], after: [], loaded: [] };
+  try {
+    if (!centerMedia || !centerMedia.accessKey) return res;
+
+    const refIsValid = isMediaDated(centerMedia);
+    const wantBefore = Math.max(0, Math.floor(count * Math.max(0, Math.min(1, biasOlder))))
+    const wantAfter = Math.max(0, count - wantBefore - (refIsValid ? 1 : 0));
+
+    // First traverse cached neighbors on the older side
+    let mPrev = centerMedia; let guardPrev = 0;
+    while (res.before.length < wantBefore && guardPrev < count * 2) {
+      guardPrev++;
+      const neighbor = getAdjacentFromCache(mPrev, 'previous');
+      if (!neighbor) break;
+      mPrev = neighbor;
+      if (isMediaDated(neighbor)) res.before.push(neighbor);
+    }
+    // Fetch remaining older side
+    while (res.before.length < wantBefore && guardPrev < count * 4) {
+      guardPrev++;
+      const neighbor = await fetchAdjacent(mPrev, 'previous');
+      if (!neighbor) break;
+      mPrev = neighbor;
+      if (isMediaDated(neighbor)) res.before.push(neighbor);
+    }
+
+    // Then the newer side
+    let mNext = centerMedia; let guardNext = 0;
+    while (res.after.length < wantAfter && guardNext < count * 2) {
+      guardNext++;
+      const neighbor = getAdjacentFromCache(mNext, 'next');
+      if (!neighbor) break;
+      mNext = neighbor;
+      if (isMediaDated(neighbor)) res.after.push(neighbor);
+    }
+    while (res.after.length < wantAfter && guardNext < count * 4) {
+      guardNext++;
+      const neighbor = await fetchAdjacent(mNext, 'next');
+      if (!neighbor) break;
+      mNext = neighbor;
+      if (isMediaDated(neighbor)) res.after.push(neighbor);
+    }
+
+    // Build final ordered list oldest -> newest
+    const seq = [];
+    for (let i = res.before.length - 1; i >= 0; i--) seq.push(res.before[i]);
+    if (refIsValid) seq.push(centerMedia);
+    for (const n of res.after) seq.push(n);
+
+    try { linkSequentialAscOldestToNewest(seq); } catch {}
+    for (const media of seq) { if (media && media.accessKey) mosaicMediaCache.set(media.accessKey, media); }
+
+    res.loaded = seq;
+  } catch {}
+  return res;
+}
+
 // Helper: Create a tile element for a media
 function createMosaicTile(media) {
   // Reuse existing tile if already created
@@ -1547,60 +1606,20 @@ async function loadMediaAroundTimestamp(targetTimestamp, count = MOSAIC_LOAD_BUF
     if (!referenceMedia) return result;
     result.referenceMedia = referenceMedia;
 
-    // Prepare arrays collecting only valid-dated media
-    const before = [];
-    const after = [];
+    // Ensure we fill the window around the reference, reusing cache first and only fetching missing neighbors
+    const biasOlder = 0.5; // neutral split when jumping from timeline
+    const ensured = await ensureCacheWindowAround(referenceMedia, count, biasOlder);
+    result.loaded = ensured.loaded;
 
-    // Include reference only if dated
-    const refIsValid = isMediaDated(referenceMedia);
-    if (refIsValid) after.push(referenceMedia);
-
-    // Load previous (older), collecting only valid items
-    let currentPrev = referenceMedia;
-    const wantBefore = Math.ceil(count / 2);
-    let collectedBefore = 0;
-    let guardPrev = 0;
-    while (collectedBefore < wantBefore && guardPrev < count * 4) {
-      guardPrev++;
-      try {
-        const prev = await api.getMedia('previous', currentPrev.accessKey);
-        if (!prev || prev.accessKey === currentPrev.accessKey) break;
-        currentPrev = prev;
-        if (isMediaDated(prev)) { before.push(prev); collectedBefore++; }
-      } catch { break; }
-    }
-
-    // Load next (newer), collecting only valid items
-    let currentNext = referenceMedia;
-    const wantAfter = Math.max(0, count - before.length - (refIsValid ? 1 : 0));
-    let collectedAfter = 0;
-    let guardNext = 0;
-    while (collectedAfter < wantAfter && guardNext < count * 4) {
-      guardNext++;
-      try {
-        const nxt = await api.getMedia('next', currentNext.accessKey);
-        if (!nxt || nxt.accessKey === currentNext.accessKey) break;
-        currentNext = nxt;
-        if (isMediaDated(nxt)) { after.push(nxt); collectedAfter++; }
-      } catch { break; }
-    }
-
-    result.loaded.push(...before.reverse(), ...after);
-
-    // Link adjacency across the loaded window (oldest -> newest)
-    try { linkSequentialAscOldestToNewest(result.loaded); } catch {}
-
-    // Add to cache by accessKey (cache all, regardless of timestamp)
+    // Cache already updated by ensureCacheWindowAround via fetchAdjacent; still make sure all are cached
     for (const media of result.loaded) {
       if (media && media.accessKey) {
         mosaicMediaCache.set(media.accessKey, media);
       }
     }
-    
   } catch (e) {
     console.warn('Error loading media around timestamp:', e);
   }
-  
   return result;
 }
 
@@ -1620,47 +1639,10 @@ async function loadMediaDirectionalFromTimestamp(targetTimestamp, direction = 'p
     if (!referenceMedia) return result;
     result.referenceMedia = referenceMedia;
 
-    // After we have the reference, use accessKey-based next/previous to fill around it
-    const before = [];
-    const after = [];
-
-    // Include reference only if dated
-    const refIsValid = isMediaDated(referenceMedia);
-    if (refIsValid) after.push(referenceMedia);
-
-    // Bias the load: when scrolling down (previous = older), load more older items
+    // Prefer cache and only fetch missing neighbors around the reference
     const biasOlder = dir === 'previous' ? 0.65 : 0.35;
-    const wantBefore = Math.max(0, Math.floor(count * biasOlder));
-    const wantAfter = Math.max(0, count - wantBefore - (refIsValid ? 1 : 0));
-
-    // Load previous (older) – collect only valid-dated
-    let currentPrev = referenceMedia; let iPrev = 0; let guardPrev = 0;
-    while (iPrev < wantBefore && guardPrev < count * 4) {
-      guardPrev++;
-      try {
-        const prev = await api.getMedia('previous', currentPrev.accessKey);
-        if (!prev || prev.accessKey === currentPrev.accessKey) break;
-        currentPrev = prev;
-        if (isMediaDated(prev)) { before.push(prev); iPrev++; }
-      } catch { break; }
-    }
-
-    // Load next (newer) – collect only valid-dated
-    let currentNext = referenceMedia; let iNext = 0; let guardNext = 0;
-    while (iNext < wantAfter && guardNext < count * 4) {
-      guardNext++;
-      try {
-        const nxt = await api.getMedia('next', currentNext.accessKey);
-        if (!nxt || nxt.accessKey === currentNext.accessKey) break;
-        currentNext = nxt;
-        if (isMediaDated(nxt)) { after.push(nxt); iNext++; }
-      } catch { break; }
-    }
-
-    result.loaded.push(...before.reverse(), ...after);
-
-    // Link adjacency across the loaded window (oldest -> newest)
-    try { linkSequentialAscOldestToNewest(result.loaded); } catch {}
+    const ensured = await ensureCacheWindowAround(referenceMedia, count, biasOlder);
+    result.loaded = ensured.loaded;
 
     for (const media of result.loaded) {
       if (media && media.accessKey) mosaicMediaCache.set(media.accessKey, media);
@@ -1887,7 +1869,7 @@ async function navigateMosaic(direction, steps = 1) {
     mosaicCurrentTimestamp = ts;
     persistMosaicTimestamp(mosaicCurrentTimestamp);
     const layout = computeMosaicLayout();
-    await loadMediaAroundTimestamp(ts, layout.totalNeeded);
+    await ensureCacheWindowAround(mosaicCurrentMedia, layout.totalNeeded, 0.5);
     renderMosaicTiles(ts, layout.columns, layout.viewportRows, layout.totalNeeded, mosaicCurrentMedia);
     updateTimelineCursor(ts);
     const indicator = document.getElementById('mosaic-scroll-indicator');
