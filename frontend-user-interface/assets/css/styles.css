@@ -48,10 +48,14 @@ main { flex: 1; position: relative; }
 .list li:hover .ev-thumb img { transform: scale(1.18); transition: transform 1400ms ease-out; }
 
 /* Mosaic Tab */
-.mosaic-container { padding: 0.75rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
+.mosaic-container { padding: 0.75rem; }
+#mosaic-scroll-spacer { position: relative; }
+.mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
 .mosaic-tile { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; cursor: pointer; background: #f3f4f6; }
 .mosaic-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(1); transition: transform 180ms ease-out; will-change: transform; }
 .mosaic-tile:hover img { transform: scale(1.18); transition: transform 1400ms ease-out; }
+/* Reserved: placeholder class no longer used; keep for compatibility */
+.mosaic-placeholder { display: none; }
 .mosaic-scroll-indicator { 
   position: fixed; 
   right: 30px; 
@@ -75,6 +79,17 @@ main { flex: 1; position: relative; }
   letter-spacing: 0.02em;
 }
 .mosaic-scroll-indicator.show { opacity: 1; }
+
+/* Mosaic timeline layout */
+section#tab-mosaic.tab { overflow: hidden; }
+section#tab-mosaic.tab.active { display: flex; }
+.mosaic-timeline { width: 64px; position: relative; border-right: 1px solid #e5e7eb; background: linear-gradient(to bottom, #fafafa, #f5f5f5); user-select: none; cursor: crosshair; }
+.mosaic-timeline .year-line { position: absolute; left: 0; right: 0; height: 1px; background: #d1d5db; }
+.mosaic-timeline .year-label { position: absolute; left: 6px; font-size: 10px; color: #6b7280; transform: translateY(-50%); background: rgba(255,255,255,0.7); padding: 0 3px; border-radius: 3px; }
+.mosaic-timeline .cursor { position: absolute; left: 0; right: 0; height: 2px; background: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+
+/* Ensure mosaic container flexes next to the timeline */
+#mosaic-container.mosaic-container { flex: 1 1 auto; overflow: hidden; }
 
 /* Hover edit button on event tiles */
 .list li { position: relative; }
@@ -199,3 +214,23 @@ main { flex: 1; position: relative; }
   border-color: #3b82f6; 
   color: #1e40af; 
 }
+
+
+/* Mosaic timeline tooltip */
+.mosaic-timeline .tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.85);
+  color: #fff;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  pointer-events: none;
+  display: none;
+  z-index: 10;
+}
+.mosaic-timeline .tooltip.show { display: block; }

@@ -50,10 +50,17 @@ paths:
           $ref: '#/components/schemas/MediaSelector'
       - name: referenceMediaAccessKey
         in: query
-        description: previous or next require to provide a reference media
+        description: previous or next media from the provided a reference media
         required: false
         schema:
           type: string
+      - name: referenceMediaTimestamp
+        in: query
+        description: previous or next media from the provided timestamp
+        required: false
+        schema:
+          type: string
+          format: date-time
       responses:
         '200':
           description: ''
@@ -62,7 +69,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Media'
         '400':
-          description: 'Invalid value for: query parameter select'
+          description: 'Invalid value for: query parameter select, Invalid value for:
+            query parameter referenceMediaTimestamp'
           content:
             text/plain:
               schema:
