@@ -1377,14 +1377,37 @@ function createMosaicTile(media) {
     }
   };
   
-  // Lazy load image
+  // Lazy load image: use miniature first for speed, upgrade to normalized on hover
   const img = new Image();
-  img.src = api.mediaNormalizedUrl(media.accessKey);
+  const miniatureUrl = api.mediaMiniatureUrl(media.accessKey);
+  const normalizedUrl = api.mediaNormalizedUrl(media.accessKey);
+  img.src = miniatureUrl;
   const altTs = mediaTimestamp(media);
   img.alt = altTs ? new Date(altTs).toLocaleDateString() : '';
   img.loading = 'lazy';
   img.decoding = 'async';
   tile.appendChild(img);
+
+  // Preload and switch to normalized image on hover (only once)
+  function loadNormalizedOnce() {
+    try {
+      if (tile.__normalizedLoaded) {
+        if (img.src !== normalizedUrl) img.src = normalizedUrl;
+        return;
+      }
+      const hi = new Image();
+      hi.decoding = 'async';
+      hi.onload = () => {
+        tile.__normalizedLoaded = true;
+        // Swap to normalized only after it has loaded to avoid flicker
+        img.src = normalizedUrl;
+      };
+      hi.src = normalizedUrl;
+    } catch {}
+  }
+  tile.addEventListener('mouseenter', loadNormalizedOnce, { passive: true });
+  // Also upgrade on touchstart for touch devices
+  tile.addEventListener('touchstart', loadNormalizedOnce, { passive: true });
   
   return tile;
 }
