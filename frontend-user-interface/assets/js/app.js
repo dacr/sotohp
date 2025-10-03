@@ -1235,6 +1235,15 @@ function initEventsTab() {
 let mosaicOldestTimestamp = null; // Timestamp of first (oldest) media
 let mosaicNewestTimestamp = null; // Timestamp of last (newest) media
 let mosaicMediaCache = new Map(); // Map: mediaAccessKey -> media object (for all loaded media)
+// DOM tile cache to reuse already created tiles (prevents image reloads)
+let mosaicTileCache = new Map(); // Map: mediaAccessKey -> HTMLElement (tile)
+// Adjacency caches to avoid redundant API calls when navigating
+let mosaicNextByKey = new Map(); // Map: accessKey -> next (newer) accessKey
+let mosaicPrevByKey = new Map(); // Map: accessKey -> previous (older) accessKey
+// In‑flight fetch cache to de‑dupe concurrent neighbor requests
+let mosaicFetchCache = new Map(); // Map: `${dir}:${accessKey}` -> Promise<media|null>
+// Cache for normalized images to avoid reloading and to coordinate preloading across tiles
+let mosaicNormalizedImageCache = new Map(); // Map: accessKey -> Promise<void>
 let mosaicIsLoading = false;
 let mosaicScrollTimeout = null;
 let mosaicObserver = null;
@@ -1269,7 +1278,8 @@ function computeMosaicLayout() {
   const columns = Math.max(1, Math.floor((width + gapPx) / (minTile + gapPx)));
   // Approximate tile size using available width
   const tileSize = Math.max(minTile, Math.floor((width - (columns - 1) * gapPx) / columns));
-  const viewportH = tabSection?.clientHeight || window.innerHeight;
+  const heightEl = container || tabSection;
+  const viewportH = heightEl?.clientHeight || window.innerHeight;
   const viewportRows = Math.max(1, Math.ceil(viewportH / tileSize));
   const bufferRows = 2; // keep a little buffer for smoothness
   const totalNeeded = columns * (viewportRows + bufferRows);
@@ -1345,8 +1355,83 @@ function isMediaDated(media) {
   return isValidTimestampStr(ts);
 }
 
+// ---------------- Cache-aware helpers for mosaic navigation and rendering ----------------
+// Link adjacency between two medias where olderMedia is chronologically older than newerMedia
+function linkAdjacency(olderMedia, newerMedia) {
+  try {
+    if (!olderMedia || !newerMedia) return;
+    const ok = olderMedia.accessKey; const nk = newerMedia.accessKey;
+    if (!ok || !nk || ok === nk) return;
+    mosaicNextByKey.set(ok, nk);
+    mosaicPrevByKey.set(nk, ok);
+  } catch {}
+}
+
+// Link a sequential list ordered from oldest -> newest
+function linkSequentialAscOldestToNewest(list) {
+  try {
+    if (!Array.isArray(list)) return;
+    for (let i = 0; i < list.length - 1; i++) {
+      const a = list[i];
+      const b = list[i + 1];
+      if (a && b && a.accessKey && b.accessKey) linkAdjacency(a, b);
+    }
+  } catch {}
+}
+
+function getAdjacentFromCache(media, direction) {
+  try {
+    if (!media || !media.accessKey) return null;
+    const key = media.accessKey;
+    const dir = direction === 'next' ? 'next' : 'previous';
+    const adjKey = dir === 'next' ? mosaicNextByKey.get(key) : mosaicPrevByKey.get(key);
+    if (!adjKey) return null;
+    const adj = mosaicMediaCache.get(adjKey);
+    return adj || null;
+  } catch { return null; }
+}
+
+async function fetchAdjacent(media, direction) {
+  try {
+    if (!media || !media.accessKey) return null;
+    const dir = direction === 'next' ? 'next' : 'previous';
+    // If we already know the neighbor, return it
+    const known = getAdjacentFromCache(media, dir);
+    if (known) return known;
+    const cacheKey = `${dir}:${media.accessKey}`;
+    if (mosaicFetchCache.has(cacheKey)) {
+      return await mosaicFetchCache.get(cacheKey);
+    }
+    const p = api.getMedia(dir, media.accessKey)
+      .then((m) => {
+        if (!m || !m.accessKey || m.accessKey === media.accessKey) return null;
+        try {
+          mosaicMediaCache.set(m.accessKey, m);
+          if (dir === 'previous') { // fetched older than current
+            linkAdjacency(m, media);
+          } else { // fetched newer than current
+            linkAdjacency(media, m);
+          }
+        } catch {}
+        return m;
+      })
+      .catch((err) => { throw err; })
+      .finally(() => { try { mosaicFetchCache.delete(cacheKey); } catch {} });
+    mosaicFetchCache.set(cacheKey, p);
+    return await p;
+  } catch { return null; }
+}
+
 // Helper: Create a tile element for a media
 function createMosaicTile(media) {
+  // Reuse existing tile if already created
+  try {
+    if (media && media.accessKey) {
+      const existing = mosaicTileCache.get(media.accessKey);
+      if (existing) return existing;
+    }
+  } catch {}
+
   const tile = document.createElement('div');
   tile.className = 'mosaic-tile';
   tile.dataset.mediaKey = media.accessKey;
@@ -1369,7 +1454,9 @@ function createMosaicTile(media) {
   
   tile.onclick = async () => {
     try {
-      const fullMedia = await api.getMediaByKey(media.accessKey);
+      // Prefer cached media info to avoid extra API calls
+      const cached = (media && media.accessKey) ? (mosaicMediaCache.get(media.accessKey) || tile.__media) : null;
+      const fullMedia = (cached && cached.accessKey) ? cached : await api.getMediaByKey(media.accessKey);
       setActiveTab('viewer');
       showMedia(fullMedia);
     } catch (e) {
@@ -1377,37 +1464,62 @@ function createMosaicTile(media) {
     }
   };
   
-  // Lazy load image: use miniature first for speed, upgrade to normalized on hover
-  const img = new Image();
+  // Layered images: miniature below, normalized above fades in after fully decoded (no white flash)
   const miniatureUrl = api.mediaMiniatureUrl(media.accessKey);
   const normalizedUrl = api.mediaNormalizedUrl(media.accessKey);
-  img.src = miniatureUrl;
-  const altTs = mediaTimestamp(media);
-  img.alt = altTs ? new Date(altTs).toLocaleDateString() : '';
-  img.loading = 'lazy';
-  img.decoding = 'async';
-  tile.appendChild(img);
 
-  // Preload and switch to normalized image on hover (only once)
-  function loadNormalizedOnce() {
+  const miniImg = new Image();
+  miniImg.className = 'layer-mini';
+  const altTs = mediaTimestamp(media);
+  miniImg.alt = altTs ? new Date(altTs).toLocaleDateString() : '';
+  miniImg.loading = 'lazy';
+  miniImg.decoding = 'async';
+  miniImg.src = miniatureUrl;
+  tile.appendChild(miniImg);
+
+  const hiImg = new Image();
+  hiImg.className = 'layer-hi';
+  hiImg.alt = '';
+  hiImg.loading = 'eager';
+  hiImg.decoding = 'async';
+  // Do not set src yet; we will assign it once preload completes
+  tile.appendChild(hiImg);
+
+  async function showNormalized() {
     try {
       if (tile.__normalizedLoaded) {
-        if (img.src !== normalizedUrl) img.src = normalizedUrl;
+        // Already loaded once, just fade in
+        hiImg.style.opacity = '1';
         return;
       }
-      const hi = new Image();
-      hi.decoding = 'async';
-      hi.onload = () => {
-        tile.__normalizedLoaded = true;
-        // Swap to normalized only after it has loaded to avoid flicker
-        img.src = normalizedUrl;
-      };
-      hi.src = normalizedUrl;
+      let p = mosaicNormalizedImageCache.get(media.accessKey);
+      if (!p) {
+        p = new Promise((resolve) => {
+          const preload = new Image();
+          preload.decoding = 'async';
+          preload.onload = () => resolve();
+          preload.src = normalizedUrl;
+        });
+        mosaicNormalizedImageCache.set(media.accessKey, p);
+      }
+      await p;
+      if (!hiImg.src) hiImg.src = normalizedUrl;
+      // Ensure decoding is complete before making it visible
+      try { if (hiImg.decode) await hiImg.decode(); } catch {}
+      tile.__normalizedLoaded = true;
+      hiImg.style.opacity = '1';
     } catch {}
   }
-  tile.addEventListener('mouseenter', loadNormalizedOnce, { passive: true });
+  function hideNormalized() {
+    try { if (!tile.__normalizedLoaded) { hiImg.style.opacity = '0'; } } catch {}
+  }
+  tile.addEventListener('mouseenter', showNormalized, { passive: true });
+  tile.addEventListener('mouseleave', hideNormalized, { passive: true });
   // Also upgrade on touchstart for touch devices
-  tile.addEventListener('touchstart', loadNormalizedOnce, { passive: true });
+  tile.addEventListener('touchstart', showNormalized, { passive: true });
+
+  // Cache created tile for reuse in subsequent renders
+  try { if (media && media.accessKey) mosaicTileCache.set(media.accessKey, tile); } catch {}
   
   return tile;
 }
@@ -1474,6 +1586,9 @@ async function loadMediaAroundTimestamp(targetTimestamp, count = MOSAIC_LOAD_BUF
     }
 
     result.loaded.push(...before.reverse(), ...after);
+
+    // Link adjacency across the loaded window (oldest -> newest)
+    try { linkSequentialAscOldestToNewest(result.loaded); } catch {}
 
     // Add to cache by accessKey (cache all, regardless of timestamp)
     for (const media of result.loaded) {
@@ -1543,6 +1658,9 @@ async function loadMediaDirectionalFromTimestamp(targetTimestamp, direction = 'p
     }
 
     result.loaded.push(...before.reverse(), ...after);
+
+    // Link adjacency across the loaded window (oldest -> newest)
+    try { linkSequentialAscOldestToNewest(result.loaded); } catch {}
 
     for (const media of result.loaded) {
       if (media && media.accessKey) mosaicMediaCache.set(media.accessKey, media);
@@ -1619,11 +1737,12 @@ function renderMosaicTiles(currentTimestamp, columns, viewportRows, totalNeeded,
     spacer.appendChild(grid);
   }
 
-  // Rebuild grid content
-  grid.innerHTML = '';
+  // Rebuild grid content using cached tiles to prevent reloads
+  const nodes = [];
   for (const media of display) {
-    grid.appendChild(createMosaicTile(media));
+    nodes.push(createMosaicTile(media));
   }
+  try { grid.replaceChildren(...nodes); } catch { grid.innerHTML = ''; nodes.forEach(n => grid.appendChild(n)); }
 
   // Compute pixel offset to center the reference row at the current scroll position
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -1633,17 +1752,27 @@ function renderMosaicTiles(currentTimestamp, columns, viewportRows, totalNeeded,
   const centerRow = Math.floor(centerLocalIndex / columns);
   const rowsCount = Math.ceil(display.length / columns);
   const gridHeight = Math.max(0, rowsCount * rowHeight - gapPx);
-  const desiredCenterY = tabSection.scrollTop + tabSection.clientHeight / 2;
-  let gridTop = desiredCenterY - (centerRow + 0.5) * rowHeight;
+  const containerEl = document.getElementById('mosaic-container');
+  const containerH = (containerEl?.clientHeight || tabSection.clientHeight) || 0;
+  const desiredCenterY = containerH / 2;
 
-  // Clamp top pad so grid stays within virtual scroll area
-  const maxTop = Math.max(0, (MOSAIC_VIRTUAL_HEIGHT - gridHeight));
-  if (Number.isFinite(maxTop)) {
-    gridTop = Math.max(0, Math.min(maxTop, gridTop));
+  // Desired offset to center the reference row. Can be negative when grid is taller than viewport.
+  let offset = desiredCenterY - (centerRow + 0.5) * rowHeight;
+
+  // Clamp offset so the grid remains fully visible within the mosaic viewport.
+  // When grid is taller than viewport, minOffset is negative and allows revealing the last rows.
+  const minOffset = Math.min(0, containerH - gridHeight);
+  const maxOffset = 0;
+  offset = Math.max(minOffset, Math.min(maxOffset, offset));
+
+  // Apply using either top padding (for positive offset) or a negative translate (for negative offset).
+  if (offset >= 0) {
+    topPad.style.height = `${Math.floor(offset)}px`;
+    if (grid && grid.style) grid.style.transform = 'translateY(0px)';
   } else {
-    gridTop = Math.max(0, gridTop);
+    topPad.style.height = '0px';
+    if (grid && grid.style) grid.style.transform = `translateY(${Math.floor(offset)}px)`;
   }
-  topPad.style.height = `${Math.max(0, Math.floor(gridTop))}px`;
 }
 
 // Build the left-side clickable timeline with year markers
@@ -1733,16 +1862,26 @@ async function navigateMosaic(direction, steps = 1) {
       await refreshMosaicAtTimestamp(mosaicNewestTimestamp);
       return;
     }
+    const dir = direction === 'next' ? 'next' : 'previous';
     let media = mosaicCurrentMedia;
-    for (let i = 0; i < steps; ) {
-      try {
-        const next = await api.getMedia(direction === 'next' ? 'next' : 'previous', media.accessKey);
-        if (!next || next.accessKey === media.accessKey) break;
-        mosaicMediaCache.set(next.accessKey, next);
-        if (isMediaDated(next)) { media = next; i++; } // count only valid-dated items
-        // else skip without incrementing i
-      } catch { break; }
+    let moved = 0;
+
+    // First, traverse through already cached neighbors without hitting the API
+    while (moved < steps) {
+      const neighbor = getAdjacentFromCache(media, dir);
+      if (!neighbor) break;
+      media = neighbor;
+      if (isMediaDated(neighbor)) moved++; // count only valid-dated items
     }
+
+    // Fetch remaining steps, de-duped and with adjacency linking
+    while (moved < steps) {
+      const neighbor = await fetchAdjacent(media, dir);
+      if (!neighbor) break;
+      media = neighbor;
+      if (isMediaDated(neighbor)) moved++;
+    }
+
     mosaicCurrentMedia = media;
     const ts = mediaTimestamp(media) || mosaicCurrentTimestamp || mosaicNewestTimestamp;
     mosaicCurrentTimestamp = ts;
@@ -1820,6 +1959,7 @@ async function loadMosaic() {
       // Clear container and set up virtual scroll
       container.innerHTML = '';
       mosaicMediaCache.clear();
+      try { mosaicTileCache.clear(); mosaicNextByKey.clear(); mosaicPrevByKey.clear(); mosaicFetchCache.clear(); } catch {}
       
       // Create virtual scroll spacer
       const spacer = document.createElement('div');

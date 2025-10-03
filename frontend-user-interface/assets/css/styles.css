@@ -52,8 +52,13 @@ main { flex: 1; position: relative; }
 #mosaic-scroll-spacer { position: relative; }
 .mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
 .mosaic-tile { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; cursor: pointer; background: #f3f4f6; }
-.mosaic-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(1); transition: transform 180ms ease-out; will-change: transform; }
-.mosaic-tile:hover img { transform: scale(1.18); transition: transform 1400ms ease-out; }
+.mosaic-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mosaic-tile img.layer-hi { transform: scale(1); transition: transform 180ms ease-out; will-change: transform; }
+.mosaic-tile:hover img.layer-hi { transform: scale(1.18); transition: transform 1400ms ease-out; }
+/* Layered images to avoid white flash when upgrading miniature -> normalized */
+.mosaic-tile img.layer-mini,
+.mosaic-tile img.layer-hi { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.mosaic-tile img.layer-hi { opacity: 0; transition: opacity 160ms ease-in-out; }
 /* Reserved: placeholder class no longer used; keep for compatibility */
 .mosaic-placeholder { display: none; }
 .mosaic-scroll-indicator { 
