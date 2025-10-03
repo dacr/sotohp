@@ -1883,11 +1883,21 @@ async function loadMosaic() {
       const handleKey = (e) => {
         const active = document.getElementById('tab-mosaic')?.classList.contains('active');
         if (!active) return;
-        if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        if (e.key === 'PageDown') {
+          e.preventDefault();
+          const layout = computeMosaicLayout();
+          const steps = Math.max(1, layout.columns * layout.viewportRows);
+          navigateMosaic('previous', steps);
+        } else if (e.key === 'PageUp') {
+          e.preventDefault();
+          const layout = computeMosaicLayout();
+          const steps = Math.max(1, layout.columns * layout.viewportRows);
+          navigateMosaic('next', steps);
+        } else if (e.key === 'ArrowDown') {
           e.preventDefault();
           const steps = Math.max(1, computeMosaicLayout().columns);
           navigateMosaic('previous', steps);
-        } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        } else if (e.key === 'ArrowUp') {
           e.preventDefault();
           const steps = Math.max(1, computeMosaicLayout().columns);
           navigateMosaic('next', steps);
