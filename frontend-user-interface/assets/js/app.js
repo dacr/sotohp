@@ -1031,6 +1031,21 @@ function openEventEditModal(ev) {
   });
 }
 
+async function goToMosaicAtTimestamp(ts) {
+  try {
+    setActiveTab('mosaic');
+    // Wait for mosaic to initialize its timestamp range
+    let tries = 0;
+    while (tries < 100 && (!mosaicOldestTimestamp || !mosaicNewestTimestamp)) {
+      await new Promise(r => setTimeout(r, 50));
+      tries++;
+    }
+    if (ts) {
+      await refreshMosaicAtTimestamp(ts);
+    }
+  } catch {}
+}
+
 async function loadEvents() {
   const list = $('#events-list'); list.innerHTML = '';
   try {
@@ -1073,7 +1088,7 @@ async function loadEvents() {
         if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
         li.style.cursor = 'pointer';
         li.onclick = async () => {
-          try { const media = await api.getMediaByKey(st.mediaAccessKey); setActiveTab('viewer'); showMedia(media); } catch {}
+          try { await goToMosaicAtTimestamp(ev.timestamp); } catch {}
         };
       } finally {
         inFlight--;
@@ -1126,10 +1141,7 @@ async function loadEvents() {
         li.style.cursor = 'pointer';
         li.onclick = async () => {
           try {
-            let p = stateCache.get(ev.originalId);
-            if (!p) { p = api.getState(ev.originalId).catch(err => { stateCache.delete(ev.originalId); throw err; }); stateCache.set(ev.originalId, p); }
-            const st = await p; if (!st || !st.mediaAccessKey) return;
-            const media = await api.getMediaByKey(st.mediaAccessKey); setActiveTab('viewer'); showMedia(media);
+            await goToMosaicAtTimestamp(ev.timestamp);
           } catch {}
         };
       }
