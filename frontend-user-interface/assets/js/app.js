@@ -142,7 +142,7 @@ function setActiveTab(name) {
     }, 50);
   }
   if (name === 'mosaic') loadMosaic();
-  if (name === 'events') loadEvents();
+  if (name === 'events') { initEventsTab(); ensureEventsLoaded(); }
   if (name === 'owners') loadOwners();
   if (name === 'stores') loadStores();
   if (name === 'settings') {
@@ -1073,7 +1073,7 @@ async function goToEventsById(eventId) {
     }
     if (!li) {
       // As a fallback, trigger a refresh then try once more quickly
-      try { await loadEvents(); } catch {}
+      try { await loadEvents({ force: false }); } catch {}
       li = document.querySelector(`#events-list li[data-event-id="${eventId}"]`);
     }
     if (li) {
@@ -1084,8 +1084,34 @@ async function goToEventsById(eventId) {
   } catch {}
 }
 
-async function loadEvents() {
-  const list = $('#events-list'); list.innerHTML = '';
+let eventsLoaded = false;
+function getSavedEventsScrollTop() { try { return parseInt(localStorage.getItem('events.scrollTop')||'0',10)||0; } catch { return 0; } }
+function setSavedEventsScrollTop(v) { try { localStorage.setItem('events.scrollTop', String(Math.max(0, v|0))); } catch {} }
+function getSavedEventsAnchorId() { try { return localStorage.getItem('events.anchorId'); } catch { return null; } }
+function setSavedEventsAnchorId(id) { try { if (id) localStorage.setItem('events.anchorId', id); } catch {} }
+function restoreEventsScrollState() {
+  try {
+    const sec = document.getElementById('tab-events');
+    if (!sec) return;
+    const anchor = getSavedEventsAnchorId();
+    if (anchor) {
+      const li = document.querySelector(`#events-list li[data-event-id="${anchor}"]`);
+      if (li) { try { li.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch { li.scrollIntoView(true); } return; }
+    }
+    const st = getSavedEventsScrollTop();
+    if (typeof st === 'number' && st > 0) sec.scrollTop = st;
+  } catch {}
+}
+function ensureEventsLoaded() { try { if (!eventsLoaded) { loadEvents({ force: false }); } } catch {} }
+
+async function loadEvents(options = {}) { const { force = false } = options;
+  const list = $('#events-list');
+  const tabSection = document.getElementById('tab-events');
+  if (!force && eventsLoaded && list && list.children && list.children.length > 0) {
+    try { restoreEventsScrollState(); } catch {}
+    return;
+  }
+  list.innerHTML = '';
   try {
     const events = await api.listEvents();
     // Sort by timestamp desc (newest first)
@@ -1190,6 +1216,8 @@ async function loadEvents() {
         pending.push({ li, ev }); schedule();
       }
     }
+    eventsLoaded = true;
+    setTimeout(() => { try { restoreEventsScrollState(); } catch {} }, 0);
   } catch (e) { list.innerHTML = '<li>Failed to load events</li>'; }
 }
 
@@ -1268,7 +1296,7 @@ function openEventCreateModal() {
     try {
       await api.createEvent(body);
       close();
-      await loadEvents();
+      await loadEvents({ force: true });
     } catch (e) {
       showError('Failed to create event');
     }
@@ -1276,9 +1304,33 @@ function openEventCreateModal() {
 }
 
 function initEventsTab() {
-  $('#refresh-events').addEventListener('click', loadEvents);
+  const refreshBtn = document.getElementById('refresh-events');
+  if (refreshBtn && !refreshBtn.__wired) {
+    refreshBtn.addEventListener('click', () => loadEvents({ force: true }));
+    refreshBtn.__wired = true;
+  }
   const createBtn = document.getElementById('create-event');
   if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openEventCreateModal()); createBtn.__wired = true; }
+  // Wire scroll persistence once
+  const sec = document.getElementById('tab-events');
+  if (sec && !sec.__scrollWired) {
+    let timer = null;
+    const saveNow = () => {
+      try {
+        setSavedEventsScrollTop(sec.scrollTop);
+        const rect = sec.getBoundingClientRect();
+        const x = rect.left + 24; const y = rect.top + rect.height / 2;
+        const el = document.elementFromPoint(x, y);
+        const li = el && el.closest ? el.closest('#events-list li') : null;
+        if (li && li.dataset && li.dataset.eventId) setSavedEventsAnchorId(li.dataset.eventId);
+      } catch {}
+    };
+    const onScroll = () => { if (timer) clearTimeout(timer); timer = setTimeout(saveNow, 120); };
+    sec.addEventListener('scroll', onScroll, { passive: true });
+    // Initial save to initialize state
+    setTimeout(saveNow, 0);
+    sec.__scrollWired = true;
+  }
 }
 
 // Mosaic Tab - Fixed timestamp-based scroller
@@ -1533,6 +1585,51 @@ async function ensureCacheWindowAround(centerMedia, count = MOSAIC_LOAD_BUFFER, 
 
 // Helper: Create a tile element for a media
 function createMosaicTile(media) {
+  // Shared tooltip utilities for mosaic tiles
+  if (!window.__mosaicPhotoTooltip__) {
+    const tip = document.createElement('div');
+    tip.className = 'mosaic-photo-tooltip';
+    tip.style.position = 'fixed';
+    tip.style.left = '0px';
+    tip.style.top = '0px';
+    tip.style.display = 'none';
+    document.body.appendChild(tip);
+    window.__mosaicPhotoTooltip__ = tip;
+    window.__mosaicPhotoTooltipHideTimer__ = null;
+    window.__mosaicPhotoTooltipIdleTimer__ = null;
+  }
+  function hidePhotoTooltip(immediate = false) {
+    const tip = window.__mosaicPhotoTooltip__;
+    if (!tip) return;
+    tip.classList.remove('show');
+    const doHide = () => { tip.style.display = 'none'; };
+    if (immediate) { doHide(); return; }
+    setTimeout(doHide, 140);
+  }
+  function showPhotoTooltip(html, x, y) {
+    const tip = window.__mosaicPhotoTooltip__;
+    if (!tip) return;
+    tip.innerHTML = html;
+    tip.style.display = 'block';
+    // Positioning: decide left or right of cursor based on viewport
+    const padding = 10;
+    const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+    tip.style.maxWidth = Math.floor(vw * 0.6) + 'px';
+    // Temporarily set to compute size
+    tip.style.left = '0px'; tip.style.top = '0px';
+    tip.classList.add('show');
+    const rect = tip.getBoundingClientRect();
+    const placeRight = x < vw * 0.55; // if near left/middle, place to right; else to left
+    let left = placeRight ? (x + 14) : (x - rect.width - 14);
+    let top = y + 12;
+    // keep within viewport
+    if (left < padding) left = padding;
+    if (left + rect.width + padding > vw) left = vw - rect.width - padding;
+    if (top + rect.height + padding > vh) top = Math.max(padding, y - rect.height - 12);
+    tip.style.left = Math.floor(left) + 'px';
+    tip.style.top = Math.floor(top) + 'px';
+  }
   // Reuse existing tile if already created
   try {
     if (media && media.accessKey) {
@@ -1626,6 +1723,60 @@ function createMosaicTile(media) {
   tile.addEventListener('mouseleave', hideNormalized, { passive: true });
   // Also upgrade on touchstart for touch devices
   tile.addEventListener('touchstart', showNormalized, { passive: true });
+
+  // Enhanced tooltip logic: show event name + timestamp when mouse stops moving
+  // and auto-hide a few seconds after movement resumes. Position near cursor with viewport clamping.
+  try { tile.title = ''; } catch {}
+  const IDLE_MS = 500; // delay before showing when still
+  const HIDE_AFTER_MOVE_MS = 2200; // auto-hide a few seconds after movement resumes
+  let lastMouse = { x: 0, y: 0 };
+  let idleTimer = null;
+  let hideTimer = null;
+  let tipVisible = false;
+  let lastMoveAt = 0;
+
+  function buildTooltipHtml() {
+    const tsStr = mediaTimestamp(media);
+    const ts = tsStr ? new Date(tsStr) : null;
+    const tsHuman = ts && !isNaN(ts.getTime())
+      ? ts.toLocaleString(undefined, { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' })
+      : '';
+    const ev0 = Array.isArray(media?.events) && media.events.length > 0 ? media.events[0] : null;
+    const evName = ev0 && ev0.name ? ev0.name : '';
+    const title = evName || '(no event)';
+    const subtitle = tsHuman || '';
+    return `<div class="title">${title.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`+
+           (subtitle ? `<div class="subtitle">${subtitle}</div>` : '');
+  }
+
+  const onMouseMove = (e) => {
+    lastMouse = { x: e.clientX, y: e.clientY };
+    lastMoveAt = performance.now();
+    // If tooltip is visible, schedule auto-hide after movement
+    if (tipVisible) {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      hideTimer = setTimeout(() => { hidePhotoTooltip(false); tipVisible = false; }, HIDE_AFTER_MOVE_MS);
+    }
+    // Reset idle timer to show tooltip after mouse becomes still
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    idleTimer = setTimeout(() => {
+      // Check that mouse is still (no moves since timer set)
+      const now = performance.now();
+      if (now - lastMoveAt >= IDLE_MS - 10) {
+        const html = buildTooltipHtml();
+        if (html) { showPhotoTooltip(html, lastMouse.x, lastMouse.y); tipVisible = true; }
+      }
+    }, IDLE_MS);
+  };
+  const onMouseLeave = () => {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    if (tipVisible) { hidePhotoTooltip(true); tipVisible = false; }
+  };
+  tile.addEventListener('mousemove', onMouseMove, { passive: true });
+  tile.addEventListener('mouseleave', onMouseLeave, { passive: true });
+  tile.addEventListener('mouseenter', onMouseMove, { passive: true });
+  // On touch, we won't show the tooltip to avoid conflicts with tap actions
 
   // Cache created tile for reuse in subsequent renders
   try { if (media && media.accessKey) mosaicTileCache.set(media.accessKey, tile); } catch {}

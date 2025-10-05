@@ -61,6 +61,37 @@ main { flex: 1; position: relative; }
 .mosaic-tile img.layer-hi { opacity: 0; transition: opacity 160ms ease-in-out; }
 /* Reserved: placeholder class no longer used; keep for compatibility */
 .mosaic-placeholder { display: none; }
+
+/* Tooltip for mosaic photo tiles */
+.mosaic-photo-tooltip {
+  position: fixed;
+  z-index: 1001;
+  background: rgba(0,0,0,0.88);
+  color: #fff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  pointer-events: none;
+  max-width: min(60vw, 420px);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.mosaic-photo-tooltip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.mosaic-photo-tooltip .title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.mosaic-photo-tooltip .subtitle {
+  color: #d1d5db;
+  font-size: 11px;
+}
+
 .mosaic-scroll-indicator { 
   position: fixed; 
   right: 30px; 
