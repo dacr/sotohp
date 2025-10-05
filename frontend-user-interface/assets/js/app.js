@@ -175,9 +175,22 @@ function showMedia(media) {
   img.src = api.mediaNormalizedUrl(media.accessKey) + `?t=${Date.now()}`; // cache bust
   const date = media.shootDateTime || media.original?.cameraShootDateTime || '-';
   const dateStr = date ? new Date(date).toLocaleString() : '-';
-  const eventName = (media.events && media.events.length > 0) ? media.events[0].name : '-';
+  const ev0 = (media.events && media.events.length > 0) ? media.events[0] : null;
+  const eventName = ev0 ? (ev0.name || '(no name)') : '-';
   $('#info-date').textContent = dateStr;
-  $('#info-event').textContent = eventName;
+  const evEl = $('#info-event');
+  if (evEl) {
+    evEl.textContent = eventName;
+    // Reset any previous interactivity
+    evEl.style.cursor = 'default';
+    evEl.title = '';
+    evEl.onclick = null;
+    if (ev0 && ev0.id) {
+      evEl.style.cursor = 'pointer';
+      evEl.title = 'Open in Events';
+      evEl.onclick = async () => { try { await goToEventsById(ev0.id); } catch {} };
+    }
+  }
   const starInfoEl = document.getElementById('info-starred'); if (starInfoEl) starInfoEl.textContent = media.starred ? '⭐ Yes' : '☆ No';
   const hasLoc = !!(media.location || media.userDefinedLocation || media.deductedLocation);
   // Show colored location pin like fullscreen overlay
@@ -1042,6 +1055,31 @@ async function goToMosaicAtTimestamp(ts) {
     }
     if (ts) {
       await refreshMosaicAtTimestamp(ts);
+    }
+  } catch {}
+}
+
+async function goToEventsById(eventId) {
+  try {
+    setActiveTab('events');
+    // Wait for events to load and the target tile to exist
+    let tries = 0;
+    let li = null;
+    while (tries < 120) { // up to ~6s
+      li = document.querySelector(`#events-list li[data-event-id="${eventId}"]`);
+      if (li) break;
+      await new Promise(r => setTimeout(r, 50));
+      tries++;
+    }
+    if (!li) {
+      // As a fallback, trigger a refresh then try once more quickly
+      try { await loadEvents(); } catch {}
+      li = document.querySelector(`#events-list li[data-event-id="${eventId}"]`);
+    }
+    if (li) {
+      try { li.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { li.scrollIntoView(true); }
+      li.classList.add('highlight');
+      setTimeout(() => { try { li.classList.remove('highlight'); } catch {} }, 1500);
     }
   } catch {}
 }

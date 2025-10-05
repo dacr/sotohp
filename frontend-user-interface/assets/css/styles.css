@@ -115,6 +115,14 @@ section#tab-mosaic.tab.active { display: flex; }
 .list li:hover .ev-edit-btn { opacity: 1; transform: translateY(0); }
 .ev-edit-btn:hover { background: #1d4ed8; }
 
+/* Highlight effect when jumping to an event from the viewer */
+.list li.highlight {
+  outline: 2px solid #2563eb;
+  background: #eef2ff;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+  transition: background 300ms ease, box-shadow 300ms ease, outline-color 300ms ease;
+}
+
 /* Hover edit button on viewer image */
 .img-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
 .image-container:hover .img-edit-btn { opacity: 1; transform: translateY(0); }
