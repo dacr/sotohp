@@ -142,6 +142,12 @@ function setActiveTab(name) {
     }, 50);
   }
   if (name === 'mosaic') loadMosaic();
+  if (name === 'viewer') {
+    try {
+      const sec = document.getElementById('tab-viewer');
+      if (sec) setTimeout(() => { try { sec.focus({ preventScroll: true }); } catch { try { sec.focus(); } catch {} } }, 0);
+    } catch {}
+  }
   if (name === 'events') { 
     initEventsTab(); 
     ensureEventsLoaded(); 
@@ -739,6 +745,35 @@ function initViewerControls() {
     }
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   });
+
+  // Ensure the Viewer tab keeps keyboard focus for navigation
+  try {
+    const viewerSec = document.getElementById('tab-viewer');
+    if (viewerSec && !viewerSec.__focusWired) {
+      try { viewerSec.setAttribute('tabindex', '0'); } catch {}
+      try { viewerSec.setAttribute('aria-label', 'Viewer'); } catch {}
+      const focusViewer = () => { try { viewerSec.focus({ preventScroll: true }); } catch { try { viewerSec.focus(); } catch {} } };
+      // Refocus when pointer enters/moves/wheels over the Viewer area
+      viewerSec.addEventListener('mouseenter', focusViewer, { passive: true });
+      viewerSec.addEventListener('mousemove', focusViewer, { passive: true });
+      viewerSec.addEventListener('wheel', focusViewer, { passive: true });
+      // Also refocus when interacting with the inner image container to avoid focus being taken by buttons/controls
+      const imgCont = document.querySelector('#tab-viewer .image-container');
+      if (imgCont) {
+        imgCont.addEventListener('mouseenter', focusViewer, { passive: true });
+        imgCont.addEventListener('mousemove', focusViewer, { passive: true });
+        imgCont.addEventListener('wheel', focusViewer, { passive: true });
+        imgCont.addEventListener('click', focusViewer, { passive: true });
+      }
+      const sidebar = document.querySelector('#tab-viewer .sidebar');
+      if (sidebar) {
+        sidebar.addEventListener('mouseenter', focusViewer, { passive: true });
+        sidebar.addEventListener('mousemove', focusViewer, { passive: true });
+        sidebar.addEventListener('wheel', focusViewer, { passive: true });
+      }
+      viewerSec.__focusWired = true;
+    }
+  } catch {}
 
   // Keyboard scrolling for Events tab
   document.addEventListener('keydown', (e) => {
