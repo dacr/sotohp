@@ -142,7 +142,14 @@ function setActiveTab(name) {
     }, 50);
   }
   if (name === 'mosaic') loadMosaic();
-  if (name === 'events') { initEventsTab(); ensureEventsLoaded(); }
+  if (name === 'events') { 
+    initEventsTab(); 
+    ensureEventsLoaded(); 
+    try {
+      const sec = document.getElementById('tab-events');
+      if (sec) setTimeout(() => { try { sec.focus({ preventScroll: true }); } catch { try { sec.focus(); } catch {} } }, 0);
+    } catch {}
+  }
   if (name === 'owners') loadOwners();
   if (name === 'stores') loadStores();
   if (name === 'settings') {
@@ -178,7 +185,19 @@ function showMedia(media) {
   const dateStr = date ? new Date(date).toLocaleString() : '-';
   const ev0 = (media.events && media.events.length > 0) ? media.events[0] : null;
   const eventName = ev0 ? (ev0.name || '(no name)') : '-';
-  $('#info-date').textContent = dateStr;
+  const dateEl = document.getElementById('info-date');
+  if (dateEl) {
+    dateEl.textContent = dateStr;
+    // Make date clickable to open Mosaic at this timestamp if valid
+    const ts = (media.shootDateTime || (media.original && media.original.cameraShootDateTime)) || null;
+    const valid = ts && !Number.isNaN(new Date(ts).getTime());
+    dateEl.style.cursor = valid ? 'pointer' : 'default';
+    dateEl.title = valid ? 'Open in Mosaic at this date' : '';
+    dateEl.onclick = null;
+    if (valid) {
+      dateEl.onclick = async () => { try { await goToMosaicAtTimestamp(ts); } catch {} };
+    }
+  }
   const evEl = $('#info-event');
   if (evEl) {
     evEl.textContent = eventName;
@@ -717,6 +736,37 @@ function initViewerControls() {
       case 'PageUp':
         if (currentMedia) loadMedia('previous', currentMedia.accessKey); else loadMedia('last');
         handled = true; break;
+    }
+    if (handled) { e.preventDefault(); e.stopPropagation(); }
+  });
+
+  // Keyboard scrolling for Events tab
+  document.addEventListener('keydown', (e) => {
+    const eventsActive = document.getElementById('tab-events')?.classList.contains('active');
+    if (!eventsActive) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    const sec = document.getElementById('tab-events');
+    if (!sec) return;
+    const line = 40; // px per arrow step
+    let handled = false;
+    switch (e.key) {
+      case 'Home':
+        sec.scrollTo({ top: 0, behavior: 'smooth' }); handled = true; break;
+      case 'End':
+        sec.scrollTo({ top: sec.scrollHeight, behavior: 'smooth' }); handled = true; break;
+      case 'PageDown': {
+        const by = Math.max(0, (sec.clientHeight || 400) - 40);
+        sec.scrollBy({ top: by, left: 0, behavior: 'smooth' }); handled = true; break;
+      }
+      case 'PageUp': {
+        const by = Math.max(0, (sec.clientHeight || 400) - 40);
+        sec.scrollBy({ top: -by, left: 0, behavior: 'smooth' }); handled = true; break;
+      }
+      case 'ArrowDown':
+        sec.scrollBy({ top: line, left: 0 }); handled = true; break;
+      case 'ArrowUp':
+        sec.scrollBy({ top: -line, left: 0 }); handled = true; break;
     }
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   });
@@ -1331,6 +1381,24 @@ function initEventsTab() {
     // Initial save to initialize state
     setTimeout(saveNow, 0);
     sec.__scrollWired = true;
+  }
+  // Make the Events section focusable and keep focus for keyboard scrolling
+  if (sec && !sec.__focusWired) {
+    try { sec.setAttribute('tabindex', '0'); } catch {}
+    try { sec.setAttribute('aria-label', 'Events'); } catch {}
+    const focusEvents = () => { try { sec.focus({ preventScroll: true }); } catch { try { sec.focus(); } catch {} } };
+    // Refocus when pointer enters/moves/wheels over the Events area
+    sec.addEventListener('mouseenter', focusEvents, { passive: true });
+    sec.addEventListener('mousemove', focusEvents, { passive: true });
+    sec.addEventListener('wheel', focusEvents, { passive: true });
+    // Also refocus when interacting with the inner list area
+    const list = document.getElementById('events-list');
+    if (list) {
+      list.addEventListener('mouseenter', focusEvents, { passive: true });
+      list.addEventListener('mousemove', focusEvents, { passive: true });
+      list.addEventListener('wheel', focusEvents, { passive: true });
+    }
+    sec.__focusWired = true;
   }
 }
 
