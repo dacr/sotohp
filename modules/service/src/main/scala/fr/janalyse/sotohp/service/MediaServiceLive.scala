@@ -9,6 +9,7 @@ import fr.janalyse.sotohp.search.model.MediaBag
 import json.*
 import fr.janalyse.sotohp.service.dao.*
 import fr.janalyse.sotohp.service.model.*
+import fr.janalyse.sotohp.service.model.SynchronizeAction.{Stop, WaitForCompletion}
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.{LMDB, LMDBCodec, LMDBCollection, LMDBKodec, StorageSystemError, StorageUserError}
@@ -135,8 +136,7 @@ class MediaServiceLive private (
     } else {
       // key has been modified require delete record & then insert with the new access key
       // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
-      (mediaColl.delete(key).unit *> mediaColl.upsert(updatedMedia.accessKey, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)))
-        .uninterruptible
+      (mediaColl.delete(key).unit *> mediaColl.upsert(updatedMedia.accessKey, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer))).uninterruptible
         .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
         .flatMap(daoMedia => daoMedia2Media(daoMedia).option)
     }
@@ -499,7 +499,15 @@ class MediaServiceLive private (
       .unit
   }
 
-  override def eventCreate(attachment: Option[EventAttachment], name: EventName, description: Option[EventDescription], keywords: Set[Keyword]): IO[ServiceIssue, Event] = {
+  override def eventCreate(
+    attachment: Option[EventAttachment],
+    name: EventName,
+    description: Option[EventDescription],
+    keywords: Set[Keyword],
+    location: Option[Location],
+    timestamp: Option[ShootDateTime],
+    originalId: Option[OriginalId]
+  ): IO[ServiceIssue, Event] = {
     for {
       eventId <- Random.nextUUID.map(EventId.apply)
       event    = Event(eventId, attachment, name, description, None, None, None, keywords)
@@ -687,14 +695,17 @@ class MediaServiceLive private (
       .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
   }
 
-  private def createDefaultEvent(attachment: EventAttachment): IO[ServiceIssue, Event] = {
+  private def createDefaultEvent(original: Original, attachment: EventAttachment): IO[ServiceIssue, Event] = {
     // TODO add automatic keywords extraction
     keywordSentenceToKeywords(attachment.store.id, attachment.eventMediaDirectory.toString).flatMap { autoKeywords =>
       eventCreate(
         attachment = Some(attachment),
         name = EventName(attachment.eventMediaDirectory.toString),
         description = None,
-        keywords = autoKeywords
+        keywords = autoKeywords,
+        location = original.location,
+        timestamp = original.cameraShootDateTime,
+        originalId = Some(original.id)
       )
     }
   }
@@ -703,7 +714,10 @@ class MediaServiceLive private (
     val relatedEventAttachment = MediaBuilder.buildEventAttachment(input.original)
     val logic                  = for {
       mayBeEvent   <- ZIO
-                        .foreach(relatedEventAttachment)(attachment => getEventForAttachment(attachment).someOrElseZIO(createDefaultEvent(attachment)))
+                        .foreach(relatedEventAttachment)(attachment =>
+                          getEventForAttachment(attachment)
+                            .someOrElseZIO(createDefaultEvent(input.original, attachment))
+                        )
       currentMedia <- mediaGet(input.state.mediaAccessKey) // already existing media is the source of truth !
                         .someOrElseZIO {
                           val daoMedia = DaoMedia(
@@ -852,6 +866,8 @@ class MediaServiceLive private (
                              startedAt = None
                            )
                          )
+        _           <- synchronizeFiberRef
+                         .update(_ => None)
       } yield ()
 
     val syncLogic = {
@@ -896,16 +912,33 @@ class MediaServiceLive private (
                          )
                        )
       _           <- synchronizeFiberRef
-                       .modify {
-                         case None        => ((), Some(fiber))
-                         case s @ Some(f) => ((), s) // already running
+                       .update {
+                         case None      => Some(fiber)
+                         case something => something // already running
                        }
     } yield ()
 
-    for {
-      current <- synchronizeStatusRef.get
-      _       <- startLogic.when(!current.running)
-    } yield ()
+    action match {
+      case SynchronizeAction.Start => // TODO need refactoring - temporary unsatisfying implementation
+        for {
+          current <- synchronizeStatusRef.get
+          _       <- startLogic.when(!current.running)
+        } yield ()
+
+      case SynchronizeAction.WaitForCompletion =>  // TODO need refactoring - temporary unsatisfying implementation
+        for {
+          fiber <- synchronizeFiberRef.get
+          _     <- ZIO.foreachDiscard(fiber)(f => f.join)
+        } yield ()
+
+      case SynchronizeAction.Stop =>  // TODO need refactoring - temporary unsatisfying implementation
+        for {
+          fiber <- synchronizeFiberRef.get
+          _     <- ZIO.foreachDiscard(fiber)(f => f.interrupt)
+          _     <- ZIO.foreachDiscard(fiber)(f => f.join)
+        } yield ()
+
+    }
   }
 
   // -------------------------------------------------------------------------------------------------------------------

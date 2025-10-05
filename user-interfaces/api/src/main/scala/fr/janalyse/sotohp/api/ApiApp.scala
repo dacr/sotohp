@@ -848,7 +848,10 @@ object ApiApp extends ZIOAppDefault {
                      attachment = None, // user-defined event, no attachment
                      name = toCreate.name,
                      description = toCreate.description,
-                     keywords = toCreate.keywords
+                     keywords = toCreate.keywords,
+                     location = None,
+                     timestamp = None,
+                     originalId = None
                    )
                    .logError("Couldn't create event")
                    .orElseFail(ApiInternalError("Couldn't create event"))

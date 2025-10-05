@@ -15,7 +15,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
   def suiteEvents = suite("Events")(
     test("event create read update delete")(
       for {
-        eventCreated <- MediaService.eventCreate(None, EventName("test-event"), None, Set.empty)
+        eventCreated <- MediaService.eventCreate(None, EventName("test-event"), None, Set.empty, None, None, None)
         eventFetched <- MediaService.eventGet(eventCreated.id)
         eventUpdated <- MediaService
                           .eventUpdate(
@@ -41,7 +41,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
     test("list events") {
       val eventNames = List("event1", "event2", "event3")
       for {
-        createdEvents <- ZIO.foreach(eventNames)(name => MediaService.eventCreate(None, EventName(name), None, Set.empty))
+        createdEvents <- ZIO.foreach(eventNames)(name => MediaService.eventCreate(None, EventName(name), None, Set.empty, None, None, None))
         eventsFetched <- MediaService.eventList().runCollect
         _             <- ZIO.foreachDiscard(eventsFetched)(event => MediaService.eventDelete(event.id))
       } yield assertTrue(

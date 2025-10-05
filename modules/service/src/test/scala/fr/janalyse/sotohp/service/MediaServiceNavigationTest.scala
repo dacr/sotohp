@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.service
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.model.KeywordRules
+import fr.janalyse.sotohp.service.model.SynchronizeAction.{Start, WaitForCompletion}
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.LMDB
@@ -18,7 +19,8 @@ object MediaServiceNavigationTest extends BaseSpecDefault {
       for {
         owner             <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
         store             <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
-        _                 <- MediaService.synchronize()
+        _                 <- MediaService.synchronize(Start)
+        _                 <- MediaService.synchronize(WaitForCompletion)
         medias            <- MediaService.mediaList().runCollect
         last              <- MediaService.mediaLast().some
         previousLast      <- MediaService.mediaPrevious(last.accessKey).some

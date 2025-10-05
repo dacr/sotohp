@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.service
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.model.KeywordRules
+import fr.janalyse.sotohp.service.model.SynchronizeAction.{Start, WaitForCompletion}
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.LMDB
@@ -16,7 +17,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
   def suiteSynchronization = suite("Synchronize")(
     test("standard scenario") {
       for {
-        epoch          <- Clock.currentDateTime      // Virtual Clock so == epoch
+        epoch          <- Clock.currentDateTime           // Virtual Clock so == epoch
         owner          <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
         store          <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
         _              <- MediaService.keywordRulesUpsert(
@@ -27,14 +28,16 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
                               rewritings = Nil
                             )
                           )
-        _              <- MediaService.synchronize() // ------ FIRST SYNC
+        _              <- MediaService.synchronize(Start) // ------ FIRST SYNC
+        _              <- MediaService.synchronize(WaitForCompletion)
         originals      <- MediaService.originalList().runCollect
         count          <- MediaService.originalCount()
         events         <- MediaService.eventList().runCollect
         states         <- MediaService.stateList().runCollect
         medias         <- MediaService.mediaList().runCollect
         _              <- TestClock.adjust(1.hour)
-        _              <- MediaService.synchronize() // ------ SECOND SYNC
+        _              <- MediaService.synchronize(Start) // ------ SECOND SYNC
+        _              <- MediaService.synchronize(WaitForCompletion)
         originalsAgain <- MediaService.originalList().runCollect
         eventsAgain    <- MediaService.eventList().runCollect
         statesAgain    <- MediaService.stateList().runCollect
