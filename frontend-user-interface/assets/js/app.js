@@ -129,7 +129,7 @@ function setActiveTab(name) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('main .tab').forEach(s => s.classList.toggle('active', s.id === `tab-${name}`));
   location.hash = `#${name}`;
-  if (name === 'world') {
+  if (name === 'map') {
     ensureMap();
     // Force Leaflet to recalculate dimensions when tab becomes visible
     setTimeout(() => { if (map) { map.invalidateSize(true); } }, 0);
@@ -157,7 +157,8 @@ function setActiveTab(name) {
 
 function initTabs() {
   document.querySelectorAll('nav.tabs button').forEach(btn => btn.addEventListener('click', () => setActiveTab(btn.dataset.tab)));
-  const initial = location.hash?.slice(1) || 'viewer';
+  const initialRaw = location.hash?.slice(1) || 'viewer';
+  const initial = (initialRaw === 'world') ? 'map' : initialRaw;
   setActiveTab(initial);
 }
 
@@ -742,7 +743,7 @@ function ensureMap() {
 
 function goToWorldLocation(loc, accessKey) {
   try {
-    setActiveTab('world');
+    setActiveTab('map');
     ensureMap();
     pendingFocusKey = accessKey || null;
     setTimeout(() => {
