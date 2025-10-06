@@ -4,7 +4,7 @@ ThisBuild / description  := "Photos management made simple"
 
 ThisBuild / licenses += "Apache 2" -> url(s"https://www.apache.org/licenses/LICENSE-2.0.txt")
 
-ThisBuild / scalaVersion := "3.7.2"
+ThisBuild / scalaVersion := "3.7.3"
 
 publishArtifact := false // no artifact for "root" project
 
@@ -15,15 +15,15 @@ val versions = new {
   val ziojson    = "0.7.44"
   val ziologging = "2.5.1"
   val ziolmdb    = "2.1.3"
-  val uuidgen    = "5.1.0"
+  val uuidgen    = "5.1.1"
   val elastic4s  = "8.18.1"
   val metadata   = "2.19.0"
   val ulid       = "2025.1.14"
   // val javafx     = "21"
   val djl        = "0.34.0"
   val chimney    = "1.8.2"
-  val tapir      = "1.11.41"
-  val logback    = "1.5.18"
+  val tapir      = "1.11.47"
+  val logback    = "1.5.19"
 }
 
 lazy val deepJavaLearningLibs = Seq(
