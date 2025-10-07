@@ -204,6 +204,13 @@ function showMedia(media) {
       dateEl.onclick = async () => { try { await goToMosaicAtTimestamp(ts); } catch {} };
     }
   }
+  // Description just after date
+  const descEl = document.getElementById('info-description');
+  if (descEl) {
+    const desc = (media && typeof media.description === 'string') ? media.description.trim() : '';
+    descEl.textContent = desc || '-';
+    descEl.title = desc || '';
+  }
   const evEl = $('#info-event');
   if (evEl) {
     evEl.textContent = eventName;
