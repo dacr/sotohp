@@ -17,7 +17,7 @@ trait TestDatasets {
   )
 
   // -------------------------------------------------------------------------------------------------------------------
-  val datasetObjectsPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-object"))
+  val datasetObjectsPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-objects"))
   val datasetObjectsFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
   val datasetObjectsFakeStore: Store        = Store(datasetObjectsFakeStoreId, None, fakeOwner.id, datasetObjectsPath)
 
@@ -33,7 +33,7 @@ trait TestDatasets {
   val datasetFacesFileMariage: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-faces/mariage.jpg"))
 
   // -------------------------------------------------------------------------------------------------------------------
-  val datasetClassesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-object"))
+  val datasetClassesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-classifications"))
   val datasetClassesFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
   val datasetClassesFakeStore: Store        = Store(datasetClassesFakeStoreId, None, fakeOwner.id, datasetClassesPath)
 

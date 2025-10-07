@@ -33,9 +33,7 @@ object MediaBuilder {
   def buildEventAttachment(original: Original): Option[EventAttachment] = buildEventAttachment(original.store, original.mediaPath)
 
   def buildEventAttachment(store: Store, originalMediaPath: OriginalPath): Option[EventAttachment] = {
-    val relativeDirectory = Option(originalMediaPath.parent).map { photoParentDir =>
-      store.baseDirectory.path.relativize(photoParentDir)
-    }
+    val relativeDirectory = Option(originalMediaPath.parent).filter(_ != null)
 
     relativeDirectory.map(dir => EventAttachment(store, EventMediaDirectory(dir))).filter(_.eventMediaDirectory.path.toString.nonEmpty)
   }

@@ -2,6 +2,7 @@ package fr.janalyse.sotohp.model
 
 import fr.janalyse.sotohp.model
 
+import java.nio.file.Path
 import java.time.OffsetDateTime
 
 case class Original(
@@ -30,4 +31,7 @@ case class Original(
       
   def hasLocation: Boolean =
     location.isDefined && location.exists(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d) // TODO fix location data
+
+  def relativeMediaPath: Path = mediaPath.path
+  def absoluteMediaPath: Path = store.baseDirectory.path.resolve(relativeMediaPath)
 }

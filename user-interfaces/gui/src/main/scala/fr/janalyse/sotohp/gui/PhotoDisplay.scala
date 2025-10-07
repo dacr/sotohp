@@ -88,9 +88,9 @@ class PhotoDisplay extends Region {
     currentPhoto.foreach { photo =>
       clear()
       val (filepath, rotationDegrees) = {
-        if (isZoomed()) photo.media.original.mediaPath.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
+        if (isZoomed()) photo.media.original.absoluteMediaPath -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
         else photo.normalizedPath.map(_ -> 0).getOrElse(
-          photo.media.original.mediaPath.path -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
+          photo.media.original.absoluteMediaPath -> photo.orientation.map(_.rotationDegrees).getOrElse(0)
         )
       }
       val image    = Image(java.io.FileInputStream(filepath.toFile))

@@ -13,6 +13,10 @@ import java.time.temporal.ChronoUnit.{MONTHS, YEARS}
 import java.time.{Instant, OffsetDateTime}
 import scala.io.AnsiColor.*
 
+/*
+ * This is a one-shot tool to rebuild media access keys
+ * to be used when the user customize the media shootDateTime to override the original one
+ */
 object RebuildMediaAccessKey extends CommonsCLI {
 
   override def run =

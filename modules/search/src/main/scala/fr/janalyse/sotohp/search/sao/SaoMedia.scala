@@ -70,7 +70,7 @@ object SaoMedia {
       originalId = media.original.id.asString,
       // ----------------- ORIGINAL FILE INFO -----------------
       fileSize = media.original.fileSize.value,
-      filePath = media.original.mediaPath.path.toString,
+      filePath = media.original.relativeMediaPath.toString,
       fileHash = bag.state.originalHash.map(_.code),
       // ----------------- USER DATA -----------------
       event = event,

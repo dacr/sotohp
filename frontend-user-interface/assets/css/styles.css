@@ -1,6 +1,6 @@
 /* Basic reset */
 * { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; color: #1f2937; }
+html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; color: #1f2937; overscroll-behavior-y: none; }
 body { display: flex; flex-direction: column; }
 
 header { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; }
@@ -117,9 +117,11 @@ main { flex: 1; position: relative; }
 .mosaic-scroll-indicator.show { opacity: 1; }
 
 /* Mosaic timeline layout */
-section#tab-mosaic.tab { overflow: hidden; }
+section#tab-mosaic.tab { overflow: hidden; touch-action: none; overscroll-behavior: contain; }
 section#tab-mosaic.tab.active { display: flex; }
 .mosaic-timeline {
+  touch-action: none;
+  overscroll-behavior: contain;
   width: 64px;
   flex: 0 0 64px;
   min-width: 64px;
@@ -138,7 +140,7 @@ section#tab-mosaic.tab.active { display: flex; }
 .mosaic-timeline .cursor { position: absolute; left: 0; right: 0; height: 2px; background: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
 
 /* Ensure mosaic container flexes next to the timeline */
-#mosaic-container.mosaic-container { flex: 1 1 auto; overflow: hidden; }
+#mosaic-container.mosaic-container { flex: 1 1 auto; overflow: hidden; touch-action: none; overscroll-behavior: contain; }
 
 /* Hover edit button on event tiles */
 .list li { position: relative; }

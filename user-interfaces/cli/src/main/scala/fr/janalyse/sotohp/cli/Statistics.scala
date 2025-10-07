@@ -53,10 +53,10 @@ object Statistics extends CommonsCLI {
       hasNormalized     = normalized.exists(_.status.successful)
       shootingDate      = media.shootDateTime.orElse(media.original.cameraShootDateTime).map(_.offsetDateTime)
       fileHash          = state.flatMap(_.originalHash.map(_.code))
-      originalFound    <- ZIO.attempt(media.original.mediaPath.path.toFile.exists())
+      originalFound    <- ZIO.attempt(media.original.absoluteMediaPath.toFile.exists())
       events            = media.events
       originalModified <- ZIO
-                            .attempt(media.original.fileLastModified.offsetDateTime.toInstant.toEpochMilli != media.original.mediaPath.path.toFile.lastModified())
+                            .attempt(media.original.fileLastModified.offsetDateTime.toInstant.toEpochMilli != media.original.absoluteMediaPath.toFile.lastModified())
                             .when(originalFound)
                             .someOrElse(false)
     } yield {

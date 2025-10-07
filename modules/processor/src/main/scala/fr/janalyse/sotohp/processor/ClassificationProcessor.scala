@@ -63,7 +63,7 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
 
     logic
       @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.mediaPath.toString)
+      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
 
   }
 }

@@ -147,7 +147,7 @@ object PhotoViewerApp extends ZIOAppDefault {
       display.onDragDetected = event => {
         if (event.isPrimaryButtonDown) {
           val dragBoard = display.startDragAndDrop(TransferMode.COPY)
-          val content   = ClipboardContent(DataFormat.Files -> java.util.List.of(photo.media.original.mediaPath.path.toFile))
+          val content   = ClipboardContent(DataFormat.Files -> java.util.List.of(photo.media.original.absoluteMediaPath.toFile))
           dragBoard.setContent(content)
         }
       }

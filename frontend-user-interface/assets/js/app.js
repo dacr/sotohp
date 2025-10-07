@@ -2302,7 +2302,7 @@ async function loadMosaic() {
         timelineEl.__wiredClick = true;
       }
 
-      // Timeline hover → show precise date tooltip
+      // Timeline hover → show precise date tooltip and drag-to-scroll behavior
       if (timelineEl && !timelineEl.__wiredHover) {
         const updateTooltip = (e) => {
           const rect = timelineEl.getBoundingClientRect();
@@ -2316,6 +2316,8 @@ async function loadMosaic() {
             tip.textContent = d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
             tip.classList.add('show');
           }
+          // Also move the blue cursor while hovering/dragging
+          try { updateTimelineCursor(ts); } catch {}
         };
         timelineEl.addEventListener('mousemove', updateTooltip);
         timelineEl.addEventListener('mouseenter', updateTooltip);
@@ -2323,6 +2325,59 @@ async function loadMosaic() {
           const tip = timelineEl.querySelector('#mosaic-timeline-tooltip');
           if (tip) tip.classList.remove('show');
         });
+
+        // Drag-to-scroll through the timeline
+        if (!timelineEl.__dragWired) {
+          const posToTs = (clientY) => {
+            const rect = timelineEl.getBoundingClientRect();
+            const yPx = (clientY - rect.top);
+            const ratio = Math.max(0, Math.min(1, yPx / Math.max(1, rect.height)));
+            return scrollPositionToTimestamp(ratio, mosaicOldestTimestamp, mosaicNewestTimestamp);
+          };
+          const state = { active: false, lastTs: null, rafPending: false };
+          const onMoveDoc = (ev) => {
+            if (!state.active) return;
+            const clientY = (ev.touches && ev.touches.length) ? ev.touches[0].clientY : ev.clientY;
+            const ts = posToTs(clientY);
+            state.lastTs = ts;
+            updateTooltip({ clientY });
+            if (!state.rafPending) {
+              state.rafPending = true;
+              requestAnimationFrame(async () => {
+                state.rafPending = false;
+                if (!state.active || !state.lastTs) return;
+                try { await refreshMosaicAtTimestamp(state.lastTs); } catch {}
+              });
+            }
+          };
+          const onUpDoc = () => {
+            if (!state.active) return;
+            state.active = false;
+            try { document.removeEventListener('mousemove', onMoveDoc); } catch {}
+            try { document.removeEventListener('mouseup', onUpDoc); } catch {}
+            try { document.removeEventListener('touchmove', onMoveDoc); } catch {}
+            try { document.removeEventListener('touchend', onUpDoc); } catch {}
+            try { document.body.classList.remove('mosaic-dragging'); } catch {}
+          };
+          const onDown = (ev) => {
+            ev.preventDefault();
+            focusMosaic();
+            state.active = true; state.lastTs = null;
+            try { document.addEventListener('mousemove', onMoveDoc, { passive: true }); } catch {}
+            try { document.addEventListener('mouseup', onUpDoc, { passive: true }); } catch {}
+            try { document.addEventListener('touchmove', onMoveDoc, { passive: true }); } catch {}
+            try { document.addEventListener('touchend', onUpDoc, { passive: true }); } catch {}
+            try { document.body.classList.add('mosaic-dragging'); } catch {}
+            const clientY = (ev.touches && ev.touches.length) ? ev.touches[0].clientY : ev.clientY;
+            const ts = posToTs(clientY);
+            // Initial refresh so content updates immediately
+            refreshMosaicAtTimestamp(ts);
+          };
+          timelineEl.addEventListener('mousedown', onDown);
+          timelineEl.addEventListener('touchstart', onDown, { passive: false });
+          timelineEl.__dragWired = true;
+        }
+
         timelineEl.__wiredHover = true;
       }
 
@@ -2356,6 +2411,119 @@ async function loadMosaic() {
       };
       tabSection.__mosaicWheelListener = handleWheel;
       tabSection.addEventListener('wheel', handleWheel, { passive: false });
+
+      // Touch drag navigation for smartphones/tablets on the mosaic area
+      if (tabSection.__mosaicTouchWired) {
+        try { tabSection.removeEventListener('touchstart', tabSection.__mosaicTouchStart, { passive: false }); } catch {}
+        try { tabSection.removeEventListener('touchmove', tabSection.__mosaicTouchMove, { passive: false }); } catch {}
+        try { tabSection.removeEventListener('touchend', tabSection.__mosaicTouchEnd, { passive: false }); } catch {}
+      }
+      (function(){
+        const touchState = { active: false, lastY: 0, accum: 0, raf: false };
+        const stepThresholdPx = () => {
+          const layout = computeMosaicLayout();
+          return Math.max(40, Math.floor(layout.tileSize * 0.6)); // ~60% of a row height
+        };
+        const processAccum = () => {
+          touchState.raf = false;
+          const thr = stepThresholdPx();
+          const acc = touchState.accum;
+          if (!acc) return;
+          const cols = computeMosaicLayout().columns || 1;
+          const magnitude = Math.abs(acc);
+          const rows = Math.floor(magnitude / thr);
+          if (rows <= 0) return;
+          const dir = acc < 0 ? 'previous' : 'next'; // finger up → negative dy → older
+          const steps = Math.max(1, Math.min(cols * 8, rows * cols));
+          // reduce accumulation by consumed pixels
+          touchState.accum = acc + (dir === 'previous' ? rows * thr : -rows * thr);
+          navigateMosaic(dir, steps);
+        };
+        const onTouchStart = (e) => {
+          if (!e.touches || e.touches.length !== 1) return; // ignore multi-touch
+          e.preventDefault();
+          touchState.active = true;
+          touchState.lastY = e.touches[0].clientY;
+          touchState.accum = 0;
+        };
+        const onTouchMove = (e) => {
+          if (!touchState.active || !e.touches || e.touches.length !== 1) return;
+          e.preventDefault();
+          const y = e.touches[0].clientY;
+          const dy = y - touchState.lastY;
+          touchState.lastY = y;
+          touchState.accum += dy;
+          if (!touchState.raf) { touchState.raf = true; requestAnimationFrame(processAccum); }
+        };
+        const onTouchEnd = (e) => {
+          if (!touchState.active) return;
+          e.preventDefault();
+          touchState.active = false;
+          // process any remaining accumulation
+          processAccum();
+          touchState.accum = 0;
+        };
+        tabSection.__mosaicTouchStart = onTouchStart;
+        tabSection.__mosaicTouchMove = onTouchMove;
+        tabSection.__mosaicTouchEnd = onTouchEnd;
+        tabSection.addEventListener('touchstart', onTouchStart, { passive: false });
+        tabSection.addEventListener('touchmove', onTouchMove, { passive: false });
+        tabSection.addEventListener('touchend', onTouchEnd, { passive: false });
+      })();
+
+      // Mirror touch navigation handlers on the mosaic container to ensure mobile browsers
+      // consistently prevent default viewport scrolling (pull-to-refresh, page scroll)
+      (function(){
+        const containerEl = document.getElementById('mosaic-container');
+        if (!containerEl) return;
+        if (containerEl.__mosaicTouchWired) return;
+        const touchState = { active: false, lastY: 0, accum: 0, raf: false };
+        const stepThresholdPx = () => {
+          const layout = computeMosaicLayout();
+          return Math.max(40, Math.floor(layout.tileSize * 0.6));
+        };
+        const processAccum = () => {
+          touchState.raf = false;
+          const thr = stepThresholdPx();
+          const acc = touchState.accum;
+          if (!acc) return;
+          const cols = computeMosaicLayout().columns || 1;
+          const magnitude = Math.abs(acc);
+          const rows = Math.floor(magnitude / thr);
+          if (rows <= 0) return;
+          const dir = acc < 0 ? 'previous' : 'next'; // finger up → negative dy → older
+          const steps = Math.max(1, Math.min(cols * 8, rows * cols));
+          touchState.accum = acc + (dir === 'previous' ? rows * thr : -rows * thr);
+          navigateMosaic(dir, steps);
+        };
+        const onTouchStart = (e) => {
+          if (!e.touches || e.touches.length !== 1) return;
+          e.preventDefault();
+          touchState.active = true;
+          touchState.lastY = e.touches[0].clientY;
+          touchState.accum = 0;
+        };
+        const onTouchMove = (e) => {
+          if (!touchState.active || !e.touches || e.touches.length !== 1) return;
+          e.preventDefault();
+          const y = e.touches[0].clientY;
+          const dy = y - touchState.lastY;
+          touchState.lastY = y;
+          touchState.accum += dy;
+          if (!touchState.raf) { touchState.raf = true; requestAnimationFrame(processAccum); }
+        };
+        const onTouchEnd = (e) => {
+          if (!touchState.active) return;
+          e.preventDefault();
+          touchState.active = false;
+          processAccum();
+          touchState.accum = 0;
+        };
+        containerEl.addEventListener('touchstart', onTouchStart, { passive: false });
+        containerEl.addEventListener('touchmove', onTouchMove, { passive: false });
+        containerEl.addEventListener('touchend', onTouchEnd, { passive: false });
+        containerEl.__mosaicTouchWired = true;
+      })();
 
       // Keyboard navigation when Mosaic tab is active
       if (tabSection.__mosaicKeyListener) {

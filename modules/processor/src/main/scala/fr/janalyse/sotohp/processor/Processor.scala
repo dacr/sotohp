@@ -73,7 +73,7 @@ trait Processor extends AutoCloseable {
     input           <- if (normalizedInput.toFile.exists()) ZIO.succeed(normalizedInput)
                        else
                          ZIO
-                           .attemptBlocking(original.mediaPath.path.toAbsolutePath) // slower because original
+                           .attemptBlocking(original.absoluteMediaPath) // slower because original
                            .mapError(th => ProcessorIssue(s"Couldn't build input path for original photo", th))
   } yield input
 

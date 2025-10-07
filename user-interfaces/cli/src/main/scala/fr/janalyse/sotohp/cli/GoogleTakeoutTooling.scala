@@ -50,7 +50,7 @@ object GoogleTakeoutTooling extends CommonsCLI {
     // -- compute a kind of "unique" signature for each photo based on available meta data
     List(
       // in my case ~120000 photos for 1 owner, cameraShootDateTime is an acceptable criteria (when available)
-      original.cameraShootDateTime.map(_.offsetDateTime.toInstant.toString).orElse(HashOperations.fileDigest(original.mediaPath.path).toOption),
+      original.cameraShootDateTime.map(_.offsetDateTime.toInstant.toString).orElse(HashOperations.fileDigest(original.absoluteMediaPath).toOption),
       original.cameraName,
       original.artistInfo,
       original.exposureTime,

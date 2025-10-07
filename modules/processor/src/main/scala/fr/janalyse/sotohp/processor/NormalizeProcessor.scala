@@ -48,7 +48,7 @@ object NormalizeProcessor extends Processor {
     val logic = for {
       now            <- Clock.currentDateTime
       input          <- ZIO
-                          .attempt(original.mediaPath.path.toAbsolutePath)
+                          .attempt(original.absoluteMediaPath)
                           .mapError(th => NormalizeIssue(s"Couldn't build input path", th))
       output         <- getOriginalNormalizedFilePath(original)
       _              <- makeOutputDirectories(output)
@@ -60,7 +60,7 @@ object NormalizeProcessor extends Processor {
     logic
       .logError(s"Normalization issue")
       @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.mediaPath.toString)
+      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
   }
 
 }

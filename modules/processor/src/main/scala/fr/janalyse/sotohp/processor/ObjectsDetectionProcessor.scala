@@ -73,7 +73,7 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
 
     logic
       @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.mediaPath.toString)
+      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
   }
 
 }

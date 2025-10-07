@@ -26,27 +26,38 @@ object SearchService {
                              .attempt(ElasticOperations(config))
                              .tapError(err => ZIO.logError(err.toString))
                              .mapError(th => SearchServiceIssue(s"Couldn't initialize search engine configuration", Nil))
+                             .option
+                             .when(config.enabled)
+                             .map(_.flatten)
       _                 <- ZIO.logInfo("SearchEngine layer ready")
     } yield SearchServiceLive(elasticOperations, config)
   )
 }
 
-class SearchServiceLive(elasticOperations: ElasticOperations, config: SearchServiceConfig) extends SearchService {
+class SearchServiceLive(mayBeElasticOperations: Option[ElasticOperations], config: SearchServiceConfig) extends SearchService {
   override def publish(bags: Chunk[MediaBag]): IO[SearchServiceIssue, Chunk[MediaBag]] = {
-    elasticOperations
-      .upsert(config.indexPrefix, bags.map(bag => SaoMedia.fromMedia(bag)))(_.timestamp, _.id)
-      .when(config.enabled)
-      .logError("couldn't upsert some or all photos from the given chunk of photos")
-      .mapError(errs => SearchServiceIssue(s"Couldn't upsert", errs))
-      .as(bags)
+    mayBeElasticOperations match {
+      case None                    => ZIO.succeed(bags)
+      case Some(elasticOperations) =>
+        elasticOperations
+          .upsert(config.indexPrefix, bags.map(bag => SaoMedia.fromMedia(bag)))(_.timestamp, _.id)
+          .when(config.enabled)
+          .logError("couldn't upsert some or all photos from the given chunk of photos")
+          .mapError(errs => SearchServiceIssue(s"Couldn't upsert", errs))
+          .as(bags)
+    }
   }
 
   override def unpublish(media: Media): IO[SearchServiceIssue, Unit] = {
-    elasticOperations
-      .delete(config.indexPrefix, media.accessKey.asString, media.timestamp)
-      .when(config.enabled)
-      .map(_ => ())
-      .logError(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}")
-      .mapError(err => SearchServiceIssue(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}", err :: Nil))
+    mayBeElasticOperations match {
+      case None                    => ZIO.succeed(())
+      case Some(elasticOperations) =>
+        elasticOperations
+          .delete(config.indexPrefix, media.accessKey.asString, media.timestamp)
+          .when(config.enabled)
+          .map(_ => ())
+          .logError(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}")
+          .mapError(err => SearchServiceIssue(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}", err :: Nil))
+    }
   }
 }

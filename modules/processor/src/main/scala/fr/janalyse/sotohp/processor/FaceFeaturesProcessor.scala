@@ -92,7 +92,7 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
     logic
       .logError("Face features issue")
       @@ annotated("originalId" -> faces.original.id.asString)
-      @@ annotated("originalPath" -> faces.original.mediaPath.toString)
+      @@ annotated("originalPath" -> faces.original.absoluteMediaPath.toString)
   }
 
 }

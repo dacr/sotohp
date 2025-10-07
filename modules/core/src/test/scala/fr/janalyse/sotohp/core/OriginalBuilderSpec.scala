@@ -120,7 +120,7 @@ object OriginalBuilderSpec extends ZIOSpecDefault with TestDatasets {
           original <- from(originalFromFile(fakeStore1, dataset1Example1))
         } yield assertTrue(
           original.fileSize == FileSize(472624L),
-          original.mediaPath == dataset1Example1,
+          original.mediaPath == dataset1Example1.path.getFileName,
           original.cameraName.exists(_.text.contains("Canon")),
           original.artistInfo.exists(_.artist.contains("DAVID"))
         )

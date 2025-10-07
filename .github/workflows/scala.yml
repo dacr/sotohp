@@ -16,4 +16,7 @@ jobs:
       - name: Setup sbt launcher
         uses: sbt/setup-sbt@v1
       - name: Build and Test
+        env:
+          PHOTOS_ELASTIC_ENABLED: false
         run: sbt test
+        

@@ -29,10 +29,10 @@ object OriginalBuilder {
     }
   }
 
-  def buildOriginalId(baseDirectory: BaseDirectoryPath, mediaPath: OriginalPath, ownerId: OwnerId): OriginalId = {
+  def buildOriginalId(baseDirectory: BaseDirectoryPath, absoluteMediaPath: OriginalPath, ownerId: OwnerId): OriginalId = {
     // Using photo relative file path and owner id for photo identifier generation
     // as the same photo can be used within several directories or people
-    val relativePath = baseDirectory.path.relativize(mediaPath.path)
+    val relativePath = baseDirectory.path.relativize(absoluteMediaPath.path)
     val key          = s"${ownerId}:$relativePath"
     val uuid         = nameBaseUUIDGenerator.generate(key)
     OriginalId(uuid)
@@ -269,6 +269,7 @@ object OriginalBuilder {
       fileLastModified <- getOriginalFileLastModified(mediaPath)
       kind             <- computeMediaKind(mediaPath)
       drewMetadata      = readDrewMetadata(mediaPath).toOption
+      relativeMediaPath = store.baseDirectory.path.relativize(mediaPath.path)
       shootDateTime     = drewMetadata.flatMap(extractShootDateTime(mediaPath))
       cameraName        = drewMetadata.flatMap(extractCameraName)
       artistInfo        = drewMetadata.flatMap(extractArtistInfo)
@@ -283,7 +284,7 @@ object OriginalBuilder {
     } yield Original(
       id = originalId,
       store = store,
-      mediaPath = mediaPath,
+      mediaPath = OriginalPath(relativeMediaPath),
       fileSize = fileSize,
       fileLastModified = FileLastModified(fileLastModified),
       kind = kind,

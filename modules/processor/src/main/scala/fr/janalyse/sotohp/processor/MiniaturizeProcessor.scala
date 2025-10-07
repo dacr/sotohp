@@ -69,7 +69,7 @@ object MiniaturizeProcessor extends Processor {
     logic
       .logError(s"Miniaturization issue")
       @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.mediaPath.toString)
+      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
   }
 
 }

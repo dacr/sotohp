@@ -28,8 +28,9 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
           mediaPaths           = medias.map(_.original.mediaPath)
         } yield assertTrue(
           medias.size == 5,
-          baseDirectories.head == dataset1,
-          mediaPaths.toSet == Set(dataset1Example1, dataset1Example2, dataset1Example3, dataset1Example4, dataset1Example5),
+          baseDirectories.head.path == photoSearchFileRoot.baseDirectory.path,
+          mediaPaths.toSet == Set(dataset1Example1, dataset1Example2, dataset1Example3, dataset1Example4, dataset1Example5)
+            .map(p => photoSearchFileRoot.baseDirectory.path.relativize(p.path)),
           medias.forall(_.events.isEmpty)
         )
       },
@@ -46,7 +47,8 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
         } yield assertTrue(
           medias.size == 2,
           baseDirectories.head == dataset2,
-          mediaPaths.toSet == Set(dataset2tag1, dataset2landscape1),
+          mediaPaths.toSet == Set(dataset2tag1, dataset2landscape1)
+            .map(p => photoSearchFileRoot.baseDirectory.path.relativize(p.path)),
           mediaEvents.toSet == Set("landscapes", "tags")
         )
       }

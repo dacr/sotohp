@@ -102,7 +102,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                                  )
                                })
       originalBufferedImage <- ZIO
-                                 .attemptBlocking(BasicImaging.load(original.mediaPath.path))
+                                 .attemptBlocking(BasicImaging.load(original.absoluteMediaPath))
                                  .mapError(th => FacesDetectionIssue("Unable to load original image", th))
       _                     <- ZIO.foreachDiscard(detectedFaces)(face => cacheFaceImage(face, originalBufferedImage))
     } yield detectedFaces.filter(_.path.path.toFile.exists()) // filtering because already encounter saving issue - such as invalid colorspace errors
@@ -126,7 +126,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     } yield OriginalFaces(original, status, faces)
     logic
       @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.mediaPath.toString)
+      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
   }
 
 }

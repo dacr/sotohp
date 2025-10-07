@@ -172,8 +172,7 @@ class MediaServiceLive private (
       media <- mediaGet(key)
                  .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
                  .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
-      path   = media.original.mediaPath.path
-    } yield path
+    } yield media.original.absoluteMediaPath
 
     ZStream.unwrapScoped {
       pathEffect.map { path =>
@@ -653,20 +652,22 @@ class MediaServiceLive private (
       available <- originalExists(original.id)
       _         <- originalUpsert(original).when(!available)
     } yield original
-    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.mediaPath.path.toString)
+    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
   }
 
   private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
     val logic = for {
       currentState <- stateGet(original.id)
       now          <- Clock.currentDateTime
+      relativePath = original.mediaPath.path
+      absolutePath = original.store.baseDirectory.path.resolve(relativePath)
       updatedState  = currentState
                         .map(state =>
                           state.copy(
                             originalLastChecked = LastChecked(now),
                             originalHash = state.originalHash.orElse(
                               HashOperations
-                                .fileDigest(original.mediaPath.path)
+                                .fileDigest(absolutePath)
                                 .toOption
                                 .map(OriginalHash.apply)
                             )
@@ -675,7 +676,7 @@ class MediaServiceLive private (
                         .getOrElse(
                           State(
                             originalId = original.id,
-                            originalHash = HashOperations.fileDigest(original.mediaPath.path).toOption.map(OriginalHash.apply),
+                            originalHash = HashOperations.fileDigest(absolutePath).toOption.map(OriginalHash.apply),
                             originalAddedOn = AddedOn(now),
                             originalLastChecked = LastChecked(now),
                             mediaAccessKey = MediaBuilder.buildDefaultMediaAccessKey(original),
@@ -684,7 +685,7 @@ class MediaServiceLive private (
                         )
       state        <- stateUpsert(original.id, updatedState)
     } yield (original, state)
-    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.mediaPath.path.toString)
+    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
   }
 
   private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
@@ -738,7 +739,7 @@ class MediaServiceLive private (
                             .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
                         }
     } yield (currentMedia, input.state)
-    logic @@ annotated("originalId" -> input.original.id.toString, "originalMediaPath" -> input.original.mediaPath.path.toString)
+    logic @@ annotated("originalId" -> input.original.id.toString, "originalMediaPath" -> input.original.absoluteMediaPath.toString)
   }
 
   private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
@@ -754,7 +755,7 @@ class MediaServiceLive private (
       // _                         <- fiberClassificationsFiber.join
       // _                         <- fiberObjectsFiber.join
     } yield input
-    logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.mediaPath.path.toString)
+    logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.absoluteMediaPath.toString)
   }
 
   // TODO generic utility function

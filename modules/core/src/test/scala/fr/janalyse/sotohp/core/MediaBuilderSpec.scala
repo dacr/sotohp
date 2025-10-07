@@ -20,11 +20,11 @@ object MediaBuilderSpec extends ZIOSpecDefault with TestDatasets {
         val fakeStore = Store(fakeStoreId1, None, fakeOwner.id, BaseDirectoryPath(Path.of("tmp")))
         val check     = (basedir: String, path: String, expected: Option[String]) => buildDefaultMediaEvent(fakeStore, OriginalPath(Path.of(path)), None).map(_.name) == expected
         assertTrue(
-          check("tmp", "tmp/toto.jpeg", None),
-          check("tmp/", "tmp/toto.jpeg", None),
-          check("tmp", "tmp/landscape/toto.jpeg", Some("landscape")),
-          check("tmp/", "tmp/landscape/toto.jpeg", Some("landscape")),
-          check("tmp", "tmp/country/landscape/toto.jpeg", Some("country/landscape"))
+          check("tmp", "toto.jpeg", None),
+          check("tmp/", "toto.jpeg", None),
+          check("tmp", "landscape/toto.jpeg", Some("landscape")),
+          check("tmp/", "landscape/toto.jpeg", Some("landscape")),
+          check("tmp", "country/landscape/toto.jpeg", Some("country/landscape"))
         )
       },
       test("generate media record") {
