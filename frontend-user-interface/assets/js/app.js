@@ -1832,8 +1832,44 @@ function createMosaicTile(media) {
   }
   tile.addEventListener('mouseenter', showNormalized, { passive: true });
   tile.addEventListener('mouseleave', hideNormalized, { passive: true });
-  // Also upgrade on touchstart for touch devices
-  tile.addEventListener('touchstart', showNormalized, { passive: true });
+  // Touch support: detect tap to open viewer; also upgrade to normalized image
+  const __touch = { x: 0, y: 0, t: 0, moved: false };
+  tile.addEventListener('touchstart', (e) => {
+    try {
+      if (!e.touches || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      __touch.x = t.clientX; __touch.y = t.clientY; __touch.t = Date.now(); __touch.moved = false;
+      // Show normalized layer as user touches the tile
+      showNormalized();
+      // Allow parent mosaic touch handlers to process drag for scrolling; do not stopPropagation here
+    } catch {}
+  }, { passive: true });
+  tile.addEventListener('touchmove', (e) => {
+    try {
+      if (!e.touches || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = Math.abs(t.clientX - __touch.x);
+      const dy = Math.abs(t.clientY - __touch.y);
+      if (dx > 10 || dy > 10) __touch.moved = true;
+      // Allow parent mosaic touch handlers to process drag for scrolling; do not stopPropagation here
+    } catch {}
+  }, { passive: true });
+  tile.addEventListener('touchend', async (e) => {
+    try {
+      e.stopPropagation();
+      const dt = Date.now() - (__touch.t || Date.now());
+      const isTap = !__touch.moved && dt < 500;
+      if (!isTap) return;
+      // Treat as click: open in viewer using cached media when possible
+      e.preventDefault();
+      const cached = (media && media.accessKey) ? (mosaicMediaCache.get(media.accessKey) || tile.__media) : null;
+      const fullMedia = (cached && cached.accessKey) ? cached : await api.getMediaByKey(media.accessKey);
+      setActiveTab('viewer');
+      showMedia(fullMedia);
+    } catch (err) {
+      console.warn('Touch tap open failed', err);
+    }
+  }, { passive: false });
 
   // Enhanced tooltip logic: show event name + timestamp when mouse stops moving
   // and auto-hide a few seconds after movement resumes. Position near cursor with viewport clamping.
