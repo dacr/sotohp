@@ -509,7 +509,7 @@ class MediaServiceLive private (
   ): IO[ServiceIssue, Event] = {
     for {
       eventId <- Random.nextUUID.map(EventId.apply)
-      event    = Event(eventId, attachment, name, description, None, None, None, keywords)
+      event    = Event(eventId, attachment, name, description, location, timestamp, originalId, keywords)
       _       <- eventColl
                    .upsert(eventId, _ => event.into[DaoEvent].transform)
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
