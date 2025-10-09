@@ -19,14 +19,15 @@ case class Statistics(
   deductedGeoLocalizedCount: Int = 0,
   normalizedFailureCount: Int = 0,
   facesCount: Int = 0,
-  duplicated: Map[Option[String], Int] = Map.empty, // TODO potentially high memory usage
+  duplicated: Map[Option[String], Int] = Map.empty,     // TODO potentially high memory usage
   missingCount: Int = 0,
   modifiedCount: Int = 0,
   missingShootingDate: Int = 0,
   invalidShootingDateCount: Int = 0,
   eventsCount: Map[Option[EventName], Int] = Map.empty, // TODO potentially high memory usage
   oldestDigitalShootingDate: Option[OffsetDateTime] = None,
-  newestDigitalShootingDate: Option[OffsetDateTime] = None
+  newestDigitalShootingDate: Option[OffsetDateTime] = None,
+  missing: List[Original] = Nil
 )
 
 object Statistics extends CommonsCLI {
@@ -42,7 +43,7 @@ object Statistics extends CommonsCLI {
       )
 
   val shootingDateMinimumValidYear        = 1826 // https://en.wikipedia.org/wiki/History_of_photography
-  val digitalShootingDateMinimumValidYear = 1989 // https://en.wikipedia.org/wiki/Digital_camera
+  //val digitalShootingDateMinimumValidYear = 1989 // https://en.wikipedia.org/wiki/Digital_camera
 
   def updateStats(stats: Statistics, media: Media) = {
     for {
@@ -51,7 +52,9 @@ object Statistics extends CommonsCLI {
       faces            <- MediaService.faces(media.original.id)
       normalized       <- MediaService.normalized(media.original.id)
       hasNormalized     = normalized.exists(_.status.successful)
-      shootingDate      = media.shootDateTime.orElse(media.original.cameraShootDateTime).map(_.offsetDateTime)
+      shootingDate      = media.shootDateTime
+                            .orElse(media.original.cameraShootDateTime)
+                            .map(_.offsetDateTime)
       fileHash          = state.flatMap(_.originalHash.map(_.code))
       originalFound    <- ZIO.attempt(media.original.absoluteMediaPath.toFile.exists())
       events            = media.events
@@ -90,7 +93,7 @@ object Statistics extends CommonsCLI {
       })
 
       val updatedOldestValidTimestamp = (stats.oldestDigitalShootingDate, shootingDate) match {
-        case (_, Some(date)) if date.getYear < digitalShootingDateMinimumValidYear => stats.oldestDigitalShootingDate
+        //case (_, Some(date)) if date.getYear < digitalShootingDateMinimumValidYear => stats.oldestDigitalShootingDate
         case (None, Some(date))                                                    => Some(date)
         case (Some(currentOldest), Some(date)) if date.isBefore(currentOldest)     => Some(date)
         case _                                                                     => stats.oldestDigitalShootingDate
@@ -113,7 +116,8 @@ object Statistics extends CommonsCLI {
         invalidShootingDateCount = updatedInvalidShootingDateCount,
         eventsCount = updatedEventsCount,
         oldestDigitalShootingDate = updatedOldestValidTimestamp,
-        newestDigitalShootingDate = updatedNewestValidTimestamp
+        newestDigitalShootingDate = updatedNewestValidTimestamp,
+        missing = if (originalFound) stats.missing else media.original :: stats.missing
       )
     }
   }
@@ -128,6 +132,9 @@ object Statistics extends CommonsCLI {
       case _                            => (0, 0)
     }
     for {
+      _ <- Console.printLine("-----------------------------------------------------------------------------------------")
+      _ <- ZIO.foreachDiscard(stats.missing)(original => Console.printLine(s"${RED}Missing original : ${original.mediaPath.path}$RESET"))
+      _ <- Console.printLine("-----------------------------------------------------------------------------------------")
       _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :$RESET")
       _ <- Console.printLine(s"${GREEN}- $count photos$RESET")
       _ <- Console.printLine(s"${GREEN}- $eventCount events")
@@ -137,12 +144,13 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount - deductedGeoLocalizedCount} without GPS infos)$RESET")
       _ <- Console.printLine(s"${YELLOW}  - ${deductedGeoLocalizedCount} deducted GPS info from time/space nearby photos$RESET")
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET").when(duplicatedCount > 0)
-      _ <- Console.printLine(s"${YELLOW}- $missingShootingDate photos without shooting date$RESET").when(missingShootingDate > 0)
+      _ <- Console.printLine(s"${YELLOW}- $missingShootingDate photos without shooting date (coming from camera or user given)$RESET").when(missingShootingDate > 0)
       _ <- Console.printLine(s"${YELLOW}- $modifiedCount modified originals$RESET").when(modifiedCount > 0)
       _ <- Console.printLine(s"${YELLOW}- ${eventsCount.getOrElse(None, 0)} orphan photos (no related event)$RESET")
       _ <- Console.printLine(s"${RED}- $missingCount missing originals !!$RESET").when(missingCount > 0)
       _ <- Console.printLine(s"${RED}- $invalidShootingDateCount invalid shooting date year (< $shootingDateMinimumValidYear)$RESET").when(invalidShootingDateCount > 0)
       _ <- Console.printLine(s"${RED}- $normalizedFailureCount not loadable photos (probably not supported format or corrupted)$RESET").when(normalizedFailureCount > 0)
+      _ <- Console.printLine("-----------------------------------------------------------------------------------------")
     } yield stats
   }
 
