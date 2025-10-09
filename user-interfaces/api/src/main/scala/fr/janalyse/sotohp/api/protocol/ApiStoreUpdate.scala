@@ -7,6 +7,7 @@ import zio.json.{DeriveJsonCodec, JsonCodec}
 
 case class ApiStoreUpdate(
   name: Option[StoreName],
+  baseDirectory: BaseDirectoryPath,
   includeMask: Option[IncludeMask] = None,
   ignoreMask: Option[IgnoreMask] = None
 )

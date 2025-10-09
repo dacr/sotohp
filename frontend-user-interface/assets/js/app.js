@@ -3054,6 +3054,7 @@ function openStoreEditModal(store) {
   if (document.querySelector('.modal-overlay')) return;
   const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
   const nameVal = store.name || '';
+  const baseDirVal = store.baseDirectory || '';
   const includeVal = store.includeMask || '';
   const ignoreVal = store.ignoreMask || '';
   overlay.innerHTML = `
@@ -3067,6 +3068,8 @@ function openStoreEditModal(store) {
           <div>
             <label>Name</label>
             <input type="text" id="st-name" value="${(nameVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Base directory</label>
+            <input type="text" id="st-basedir" placeholder="/path/to/base/directory" value="${(baseDirVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
             <label style="margin-top:8px">Include mask</label>
             <input type="text" id="st-include" value="${(includeVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
             <label style="margin-top:8px">Ignore mask</label>
@@ -3089,15 +3092,16 @@ function openStoreEditModal(store) {
 
   overlay.querySelector('button.save')?.addEventListener('click', async () => {
     const name = modal.querySelector('#st-name').value;
+    const baseDirectory = modal.querySelector('#st-basedir').value;
     const includeMask = modal.querySelector('#st-include').value;
     const ignoreMask = modal.querySelector('#st-ignore').value;
-    const body = { name, includeMask, ignoreMask };
+    const body = { name, baseDirectory, includeMask, ignoreMask };
     try {
       await api.updateStore(store.id, body);
       close();
       // refetch this store from list to get latest values
       const stores = await api.listStores();
-      const updated = stores.find(x => x.id === store.id) || { ...store, name, includeMask, ignoreMask };
+      const updated = stores.find(x => x.id === store.id) || { ...store, name, baseDirectory, includeMask, ignoreMask };
       refreshStoreTile(updated);
     } catch (e) {
       showError('Failed to update store');

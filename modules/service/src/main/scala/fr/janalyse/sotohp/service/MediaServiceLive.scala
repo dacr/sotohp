@@ -623,7 +623,14 @@ class MediaServiceLive private (
       .unit
   }
 
-  override def storeCreate(providedStoreId: Option[StoreId], name: Option[StoreName], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Store] = {
+  override def storeCreate(
+    providedStoreId: Option[StoreId],
+    name: Option[StoreName],
+    ownerId: OwnerId,
+    baseDirectory: BaseDirectoryPath,
+    includeMask: Option[IncludeMask],
+    ignoreMask: Option[IgnoreMask]
+  ): IO[ServiceIssue, Store] = {
     for {
       storeId <- ZIO
                    .from(providedStoreId)
@@ -636,10 +643,24 @@ class MediaServiceLive private (
     } yield store
   }
 
-  override def storeUpdate(storeId: StoreId, name: Option[StoreName], includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): IO[ServiceIssue, Option[Store]] = {
+  override def storeUpdate(
+    storeId: StoreId,
+    name: Option[StoreName],
+    baseDirectory: BaseDirectoryPath,
+    includeMask: Option[IncludeMask],
+    ignoreMask: Option[IgnoreMask]
+  ): IO[ServiceIssue, Option[Store]] = {
     for {
       maybeDaoStore <- storesColl
-                         .update(storeId, _.copy(name = name, includeMask = includeMask, ignoreMask = ignoreMask))
+                         .update(
+                           storeId,
+                           _.copy(
+                             name = name,
+                             baseDirectory = baseDirectory,
+                             includeMask = includeMask,
+                             ignoreMask = ignoreMask
+                           )
+                         )
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update store : $err"))
       maybeStore     = maybeDaoStore.map(_.transformInto[Store])
     } yield maybeStore
@@ -652,39 +673,6 @@ class MediaServiceLive private (
       available <- originalExists(original.id)
       _         <- originalUpsert(original).when(!available)
     } yield original
-    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
-  }
-
-  private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
-    val logic = for {
-      currentState <- stateGet(original.id)
-      now          <- Clock.currentDateTime
-      relativePath = original.mediaPath.path
-      absolutePath = original.store.baseDirectory.path.resolve(relativePath)
-      updatedState  = currentState
-                        .map(state =>
-                          state.copy(
-                            originalLastChecked = LastChecked(now),
-                            originalHash = state.originalHash.orElse(
-                              HashOperations
-                                .fileDigest(absolutePath)
-                                .toOption
-                                .map(OriginalHash.apply)
-                            )
-                          )
-                        )
-                        .getOrElse(
-                          State(
-                            originalId = original.id,
-                            originalHash = HashOperations.fileDigest(absolutePath).toOption.map(OriginalHash.apply),
-                            originalAddedOn = AddedOn(now),
-                            originalLastChecked = LastChecked(now),
-                            mediaAccessKey = MediaBuilder.buildDefaultMediaAccessKey(original),
-                            mediaLastSynchronized = None
-                          )
-                        )
-      state        <- stateUpsert(original.id, updatedState)
-    } yield (original, state)
     logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
   }
 
@@ -709,6 +697,41 @@ class MediaServiceLive private (
         originalId = Some(original.id)
       )
     }
+  }
+
+  private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
+    val relatedEventAttachment = MediaBuilder.buildEventAttachment(original)
+    val logic                  = for {
+      mayBeEvent   <- ZIO.foreach(relatedEventAttachment)(getEventForAttachment).map(_.flatten)
+      currentState <- stateGet(original.id)
+      now          <- Clock.currentDateTime
+      relativePath  = original.mediaPath.path
+      absolutePath  = original.store.baseDirectory.path.resolve(relativePath)
+      updatedState  = currentState
+                        .map(state =>
+                          state.copy(
+                            originalLastChecked = LastChecked(now),
+                            originalHash = state.originalHash.orElse(
+                              HashOperations
+                                .fileDigest(absolutePath)
+                                .toOption
+                                .map(OriginalHash.apply)
+                            )
+                          )
+                        )
+                        .getOrElse(
+                          State(
+                            originalId = original.id,
+                            originalHash = HashOperations.fileDigest(absolutePath).toOption.map(OriginalHash.apply),
+                            originalAddedOn = AddedOn(now),
+                            originalLastChecked = LastChecked(now),
+                            mediaAccessKey = MediaBuilder.buildDefaultMediaAccessKey(original, mayBeEvent),
+                            mediaLastSynchronized = None
+                          )
+                        )
+      state        <- stateUpsert(original.id, updatedState)
+    } yield (original, state)
+    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
   }
 
   private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
@@ -926,13 +949,13 @@ class MediaServiceLive private (
           _       <- startLogic.when(!current.running)
         } yield ()
 
-      case SynchronizeAction.WaitForCompletion =>  // TODO need refactoring - temporary unsatisfying implementation
+      case SynchronizeAction.WaitForCompletion => // TODO need refactoring - temporary unsatisfying implementation
         for {
           fiber <- synchronizeFiberRef.get
           _     <- ZIO.foreachDiscard(fiber)(f => f.join)
         } yield ()
 
-      case SynchronizeAction.Stop =>  // TODO need refactoring - temporary unsatisfying implementation
+      case SynchronizeAction.Stop => // TODO need refactoring - temporary unsatisfying implementation
         for {
           fiber <- synchronizeFiberRef.get
           _     <- ZIO.foreachDiscard(fiber)(f => f.interrupt)

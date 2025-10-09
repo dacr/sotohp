@@ -113,6 +113,7 @@ trait MediaService {
   def storeUpdate(
     storeId: StoreId,
     name: Option[StoreName],
+    baseDirectory: BaseDirectoryPath,
     includeMask: Option[IncludeMask],
     ignoreMask: Option[IgnoreMask]
   ): IO[ServiceIssue, Option[Store]]
@@ -252,7 +253,7 @@ object MediaService {
   def storeCreate(providedStoreId: Option[StoreId], name: Option[StoreName], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Store] =
     ZIO.serviceWithZIO(_.storeCreate(providedStoreId, name, ownerId, baseDirectory, includeMask, ignoreMask))
 
-  def storeUpdate(storeId: StoreId, name: Option[StoreName], includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Option[Store]] = ZIO.serviceWithZIO(_.storeUpdate(storeId, name, includeMask, ignoreMask))
+  def storeUpdate(storeId: StoreId, name: Option[StoreName], baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Option[Store]] = ZIO.serviceWithZIO(_.storeUpdate(storeId, name, baseDirectory, includeMask, ignoreMask))
 
   // -------------------------------------------------------------------------------------------------------------------
 

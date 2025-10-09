@@ -1262,8 +1262,12 @@ components:
     StoreUpdate:
       title: StoreUpdate
       type: object
+      required:
+      - baseDirectory
       properties:
         name:
+          type: string
+        baseDirectory:
           type: string
         includeMask:
           type: string
