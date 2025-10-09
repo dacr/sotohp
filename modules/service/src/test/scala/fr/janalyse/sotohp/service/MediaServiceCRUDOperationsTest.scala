@@ -84,7 +84,15 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
         fakeOwnerId  <- ZIO.attempt(OwnerId(ULID.newULID))
         storeCreated <- MediaService.storeCreate(None, None, fakeOwnerId, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
         storeFetched <- MediaService.storeGet(storeCreated.id)
-        storeUpdated <- MediaService.storeUpdate(storeId = storeCreated.id, name = None, includeMask = Some(IncludeMask(".*".r)), ignoreMask = storeCreated.ignoreMask).some
+        storeUpdated <- MediaService
+                          .storeUpdate(
+                            storeId = storeCreated.id,
+                            name = None,
+                            baseDirectory = storeCreated.baseDirectory,
+                            includeMask = Some(IncludeMask(".*".r)),
+                            ignoreMask = storeCreated.ignoreMask
+                          )
+                          .some
         _            <- MediaService.storeDelete(storeCreated.id)
         afterDelete  <- MediaService.storeGet(storeCreated.id)
       } yield assertTrue(
