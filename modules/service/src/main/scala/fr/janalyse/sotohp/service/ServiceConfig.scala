@@ -17,7 +17,7 @@ case class FileSystemSearchConfig(
   def toCoreConfig: FileSystemSearchCoreConfig = {
     this
       .into[FileSystemSearchCoreConfig]
-      .withFieldComputed(_.lockDirectory, _.lockDirectory.filter(_.trim.nonEmpty).map(d => Path.of(d)))
+      .withFieldComputed(_.lockDirectory, _.lockDirectory.filterNot(_.trim.isEmpty).map(d => Path.of(d)))
       .transform
   }
 }
