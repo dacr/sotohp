@@ -12,15 +12,16 @@ Once again this project has first started as just [a "small" script][photosc].
 - A simple database is used to store all your added metadata such as description, keywords, fixed location, fixed dates, stars, ... 
 
 ## Current status
-- to be released soon as a standalone docker application,
-- code is stable and usable for
+- will be released soon as a standalone docker application,
+- comes with an API and a **web user interface** providing:
   - fast visualization,
   - automatic slideshow,
+  - timeline mosaic browsing,
   - managing locations, dates, keywords, descriptions, ...
   - managing events,
-  - managing several owners and storage directories,
+  - managing several owners and storage directories.
 
-The  web user interface is quite fast, user-friendly and feature-rich:
+The web user interface is quite fast, user-friendly and feature-rich:
 ![](docs/screenshots/01-viewer.png)  
 ![](docs/screenshots/02-mosaic.png)  
 ![](docs/screenshots/03-events.png)  
