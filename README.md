@@ -1,6 +1,6 @@
 # SOTOHP [![][sotohpImg]][sotohpLnk]
 
-A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 123 years 😉 we've had to deal with almost **140000 photos** through 2000 family events.
+A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events.
 
 Once again this project has first started as just [a "small" script][photosc].
 
@@ -12,22 +12,21 @@ Once again this project has first started as just [a "small" script][photosc].
 - A simple database is used to store all your added metadata such as description, keywords, fixed location, fixed dates, stars, ... 
 
 ## Current status
-- no release available yet
+- to be released soon as a standalone docker application,
 - code is stable and usable for
-  - visualization
-  - publishing photo records to elasticsearch / opensearch
-  - searching and statistics purposes
+  - fast visualization,
+  - automatic slideshow,
+  - managing locations, dates, keywords, descriptions, ...
+  - managing events,
+  - managing several owners and storage directories,
 
-The visualisation with the graphical user interface is very fast :) It starts in 2 seconds even with my 103000 photo database.  
-![](gui-viewer.png)
-
-Published information to elasticsearch or opensearch make it easy to build very interesting dashboards such as :
-![](gui-dashboard.png)
-
+The  web user interface is quite fast, user-friendly and feature-rich:
+![](docs/screenshots/01-viewer.png)  
+![](docs/screenshots/02-mosaic.png)  
+![](docs/screenshots/03-events.png)  
+![](docs/screenshots/04-maps.png)  
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
-[ulid]: https://github.com/ulid/spec
-[djl]: https://github.com/deepjavalibrary/djl
 [lmdb]: https://github.com/dacr/zio-lmdb
 
 [sotohp]:    https://github.com/dacr/sotohp
