@@ -75,8 +75,9 @@ object GoogleTakeoutTooling extends CommonsCLI {
                           .originalList()
                           .runCollect
       existings       = originals.groupBy(makeUniqueKey)
+      searchConfig    = FileSystemSearchCoreConfig()
       takeoutsStream <- ZIO
-                          .from(FileSystemSearch.originalsStreamFromSearchRoot(store))
+                          .from(FileSystemSearch.originalsStreamFromSearchRoot(store, searchConfig))
                           .map(ZStream.from)
       takeouts       <- takeoutsStream
                           .collect { case Right(takeout) => takeout }

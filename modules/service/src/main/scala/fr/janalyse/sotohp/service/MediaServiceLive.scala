@@ -911,10 +911,10 @@ class MediaServiceLive private (
                             .mapZIO(synchronizeOriginal)
                             .mapZIO(synchronizeState)
                             .mapZIO(synchronizeMedia)
-                            // .filter(_.state.mediaLastSynchronized.isEmpty)
+                            .filter(_.state.mediaLastSynchronized.isEmpty)
                             .mapZIO(input => synchronizeProcessors(input).uninterruptible)
                             .mapZIO(input => locationInduction(input).uninterruptible)
-                            .grouped(10)
+                            .grouped(50)
                             .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
                             .mapZIO(input => updateSynchronizeStatus(input).uninterruptible)
                             .runDrain
