@@ -19,6 +19,7 @@ import zio.ZIOAspect.annotated
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.time.OffsetDateTime
 import java.util.UUID
 import java.util.regex.Pattern
 import scala.annotation.tailrec
@@ -908,6 +909,8 @@ class MediaServiceLive private (
                             .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
                             .right
         _              <- originalsStream
+                            // TODO to parametrize and take into account in API for fastest synchronization rather than full one
+                            .filter(original => original.fileLastModified.offsetDateTime.isAfter(OffsetDateTime.now().minusDays(20)))
                             .mapZIO(synchronizeOriginal)
                             .mapZIO(synchronizeState)
                             .mapZIO(synchronizeMedia)

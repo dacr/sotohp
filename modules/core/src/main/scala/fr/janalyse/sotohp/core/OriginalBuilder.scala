@@ -102,8 +102,11 @@ object OriginalBuilder {
         if exif.containsTag(ExifDirectoryBase.TAG_DATETIME_ORIGINAL)
         exifSubIFD         = Option(metadata.getFirstDirectoryOfType(classOf[ExifSubIFDDirectory]))
         shootDateTimeRaw  <- Option(exif.getString(ExifDirectoryBase.TAG_DATETIME_ORIGINAL))
+                               .filterNot(_.startsWith("0000:00:00 00:00:00")) // TODO enhance oftenly seen bad timestamps
+                               .filterNot(_.contains(": ")) // TODO enhance oftenly seen bad timestamps such as : 2005:05:17 21:57: 3 +00:00
         shootZoneOffsetRaw = exifSubIFD
                                .flatMap(dir => Option(dir.getString(ExifDirectoryBase.TAG_TIME_ZONE_ORIGINAL)))
+                               .filterNot(_.endsWith("+01:0")) // TODO enhance oftenly seen bad timestamps timezone suc as : +01:0
                                .getOrElse("+00:00")
         shootDateTime      = parseExifDateTimeFormat(shootDateTimeRaw, shootZoneOffsetRaw)
       } yield shootDateTime.toInstant.atOffset(ZoneOffset.UTC)
