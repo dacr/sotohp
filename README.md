@@ -1,22 +1,15 @@
 # SOTOHP [![][sotohpImg]][sotohpLnk]
 
-A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 23 years, I've taken more than 103000
-photos. Once again this project has first started as just [a "small" script][photosc].
+A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 123 years 😉 we've had to deal with almost **140000 photos** through 2000 family events.
+
+Once again this project has first started as just [a "small" script][photosc].
 
 ## Principles
 
-- The photos referential is always your photos directories as you've organized them,
+- The photo referential is always your photos directories as you've organized them,
 - Your photos directories are left unchanged, only read operations are done,
-- A local [LMDB database][lmdb] is used to store/cache/query, serialization is JSON based,
-- Background jobs are run to update, to enrich, to analyze, to process your photos
-- Dedicated Filesystem targets for pre-processed photos
-- Photos are identified using an [ULID][ulid] identifier computed from the shoot timestamp
-  - if shoot timestamp is missing or invalid, file last modified is used (at first seen)
-  - SO photos stream is automatically ordered by this timestamp
-- [DeepJavaLibrary][djl] is intensively used for 
-  - photos classifications,
-  - people faces detection,
-  - objects detection,...
+- Cache is used for pre-computed photos, miniatures, people faces, detected objects, ...
+- A simple database is used to store all your added metadata such as description, keywords, fixed location, fixed dates, stars, ... 
 
 ## Current status
 - no release available yet
