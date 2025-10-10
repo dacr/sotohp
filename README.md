@@ -21,11 +21,18 @@ Once again this project has first started as just [a "small" script][photosc].
   - managing events,
   - managing several owners and storage directories.
 
-The web user interface is quite fast, user-friendly and feature-rich:
-![](docs/screenshots/01-viewer.png)  
-![](docs/screenshots/02-mosaic.png)  
-![](docs/screenshots/03-events.png)  
-![](docs/screenshots/04-maps.png)  
+## User interfaces
+The web user interface is quite fast, user-friendly and feature-rich, and behind the scene a REST API is available:
+
+![](docs/screenshots/01-viewer.png)
+
+![](docs/screenshots/02-mosaic.png)
+
+![](docs/screenshots/03-events.png)
+
+![](docs/screenshots/04-maps.png)
+
+![](docs/screenshots/42-openapi.png)
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
 [lmdb]: https://github.com/dacr/zio-lmdb
