@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, HashOperations, MediaBuilder, OriginalBuilder}
+import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
@@ -898,9 +898,12 @@ class MediaServiceLive private (
       for {
         _              <- ZIO.log("Synchronization started")
         stores         <- storeList().runCollect
+        serviceConfig  <- ServiceConfig.config
+                            .mapError(err => ServiceInternalIssue(s"Unable to retrieve service configuration : $err"))
+        searchConfig    = serviceConfig.fileSystemSearch.toCoreConfig
         originalsStream = ZStream
                             .from(stores)
-                            .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store)))
+                            .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store, searchConfig)))
                             .absolve
                             .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
                             .right
@@ -908,7 +911,7 @@ class MediaServiceLive private (
                             .mapZIO(synchronizeOriginal)
                             .mapZIO(synchronizeState)
                             .mapZIO(synchronizeMedia)
-                            .filter(_.state.mediaLastSynchronized.isEmpty)
+                            // .filter(_.state.mediaLastSynchronized.isEmpty)
                             .mapZIO(input => synchronizeProcessors(input).uninterruptible)
                             .mapZIO(input => locationInduction(input).uninterruptible)
                             .grouped(10)
@@ -925,7 +928,9 @@ class MediaServiceLive private (
     // TODO temporary quick & dirty implementation
 
     val startLogic = for {
-      fiber       <- syncLogic.forkDaemon
+      fiber       <- syncLogic
+                       .tapError(err => ZIO.logError(s"Couldn't synchronize : $err"))
+                       .forkDaemon
       currentDate <- Clock.currentDateTime
       _           <- synchronizeStatusRef
                        .update(status =>

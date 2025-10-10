@@ -53,31 +53,57 @@ object FileSystemSearch {
       ignoreMask = ignoreMask
     )
 
-  private def searchPredicate(includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask])(path: Path, attrs: BasicFileAttributes): Boolean = {
-    attrs.isRegularFile &&
-    (ignoreMask.isEmpty || ignoreMask.exists(_.toString.isEmpty) || !ignoreMask.get.isIgnored(path.toString)) &&
-    (includeMask.isEmpty || includeMask.get.isIncluded(path.toString))
+  private def searchPredicate(
+    includeMask: Option[IncludeMask],
+    ignoreMask: Option[IgnoreMask],
+    searchConfig: FileSystemSearchCoreConfig
+  )(path: Path, attrs: BasicFileAttributes): Boolean = {
+    // TAKE CARE WITH THIS PART OF THE CODE: TO AVOID ANY SECURITY ISSUE
+
+    val basicChecks =
+      ( // keep the parenthesis to enforce all conditions are taken into account with the && or || when spilling conditions across several lines
+        attrs.isRegularFile &&
+          (ignoreMask.isEmpty || ignoreMask.exists(_.toString.isEmpty) || !ignoreMask.get.isIgnored(path.toString)) &&
+          (includeMask.isEmpty || includeMask.get.isIncluded(path.toString))
+      )
+
+    val securityConstraints =
+      ( // keep the parenthesis to enforce all conditions are taken into account with the && or || when spilling conditions across several lines
+        searchConfig.lockDirectory.isEmpty ||
+          path.normalize().startsWith(searchConfig.lockDirectory.get.normalize()) // the normalize() operations are very important here
+      )
+
+    (basicChecks && securityConstraints)
   }
 
   private type SearchRootResult = (searchRoot: Store, originalPath: OriginalPath)
 
   private def fileStreamFromSearchRoot(
-    searchRoot: Store
+    searchRoot: Store,
+    searchConfig: FileSystemSearchCoreConfig
   ): Either[FileSystemSearchIssue, JStream[SearchRootResult]] = {
     import searchRoot.{baseDirectory, includeMask, ignoreMask}
-    val maxDepth   = 10
-    val javaStream = Try(Files.find(baseDirectory.path, maxDepth, searchPredicate(includeMask, ignoreMask), FileVisitOption.FOLLOW_LINKS)) match {
+
+    val maxDepth = searchConfig.maxDepth
+
+    val visitOptions: List[FileVisitOption] = if (searchConfig.followLinks) List(FileVisitOption.FOLLOW_LINKS) else Nil
+
+    val triedFind = Try(Files.find(baseDirectory.path, maxDepth, searchPredicate(includeMask, ignoreMask, searchConfig), visitOptions*)) match {
       case Failure(exception) => Left(FileSystemSearchFindIssue(s"Couldn't create find file stream", exception))
       case Success(value)     => Right(value)
     }
 
-    javaStream.map(stream => stream.map(path => (searchRoot = searchRoot, originalPath = OriginalPath(path))))
+    triedFind.map(stream =>
+      stream
+        .map(path => (searchRoot = searchRoot, originalPath = OriginalPath(path)))
+    )
   }
 
   def originalsStreamFromSearchRoot(
-    searchRoot: Store
+    searchRoot: Store,
+    searchConfig: FileSystemSearchCoreConfig
   ): Either[FileSystemSearchIssue, JStream[Either[OriginalIssue, Original]]] = {
-    fileStreamFromSearchRoot(searchRoot)
+    fileStreamFromSearchRoot(searchRoot, searchConfig)
       .map(stream =>
         stream.map { case (searchRoot = sr, originalPath = op) =>
           OriginalBuilder.originalFromFile(sr, op)
@@ -86,10 +112,11 @@ object FileSystemSearch {
   }
 
   def mediasStreamFromSearchRoot(
-    searchRoot: Store,
-    eventGetter: Original => Option[Event]
+                                  searchRoot: Store,
+                                  searchConfig: FileSystemSearchCoreConfig,
+                                  eventGetter: Original => Option[Event]
   ): Either[FileSystemSearchIssue, JStream[Either[CoreIssue, Media]]] = {
-    originalsStreamFromSearchRoot(searchRoot)
+    originalsStreamFromSearchRoot(searchRoot, searchConfig)
       .map { stream =>
         stream.map { originalEither =>
           originalEither.flatMap { original =>
