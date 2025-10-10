@@ -2,7 +2,7 @@
 
 A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events.
 
-Once again this project has first started as just [a "small" script][photosc].
+Once again this project has first started as just [a "small" script][photosc], first published on Dec 19, 2021!
 
 ## Principles
 
