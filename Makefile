@@ -15,6 +15,32 @@ test:
       sbt "test"
 
 # -----------------------------------------------------------------------------
+# Publishing helpers
+# -----------------------------------------------------------------------------
+
+.PHONY: release publish-snapshot publish-local sona-release
+
+# Full release to Maven Central via Central Portal (non-SNAPSHOT)
+release:
+	@echo "[Release] Running sbt release with defaults (uploads bundle to Central & releases)"
+	sbt "release with-defaults"
+
+# Publish a SNAPSHOT to the Central snapshots repository
+publish-snapshot:
+	@echo "[Publish] Publishing signed SNAPSHOT artifacts to Central snapshots"
+	sbt "+publishSigned"
+
+# Re-attempt Central Portal upload/release if artifacts were already staged locally
+sona-release:
+	@echo "[Sonatype] Uploading bundle and releasing via Central Portal"
+	sbt "sonaRelease"
+
+# For local testing only
+publish-local:
+	@echo "[Publish] Publishing to local Ivy/Maven cache"
+	sbt "+publishLocal"
+
+# -----------------------------------------------------------------------------
 # Frontend UI build
 # Sources live in frontend-user-interface and are built/copied into
 # frontend-user-interface-dist which is served by the API under /ui
