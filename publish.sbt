@@ -18,12 +18,14 @@ ThisBuild / credentials ++= (for {
   password <- sys.env.get("SONATYPE_PASSWORD")
 } yield Credentials("Sonatype Nexus Repository Manager", "central.sonatype.org", username, password))
 
+// -----------------------------------------------------------------------------
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
-ThisBuild / releaseTagComment := s"Releasing ${(ThisBuild / version).value}"
-ThisBuild / releaseCommitMessage := s"Setting version to ${(ThisBuild / version).value}"
+ThisBuild / releaseTagComment        := s"Releasing ${(ThisBuild / version).value}"
+ThisBuild / releaseCommitMessage     := s"Setting version to ${(ThisBuild / version).value}"
 ThisBuild / releaseNextCommitMessage := s"[ci skip] Setting version to ${(ThisBuild / version).value}"
 
+// -----------------------------------------------------------------------------
 import ReleaseTransformations.*
 ThisBuild / releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies,

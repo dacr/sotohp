@@ -11,7 +11,7 @@ publishArtifact := false // no artifact for "root" project
 val versions = new {
   val zio        = "2.1.21"
 //  val zionio     = "2.0.1"
-  val zioconfig  = "4.0.4"
+  val zioconfig  = "4.0.5"
   val ziojson    = "0.7.44"
   val ziologging = "2.5.1"
   val ziolmdb    = "2.1.3"
@@ -22,7 +22,7 @@ val versions = new {
   // val javafx     = "21"
   val djl        = "0.34.0"
   val chimney    = "1.8.2"
-  val tapir      = "1.11.47"
+  val tapir      = "1.11.49"
   val logback    = "1.5.19"
 }
 
