@@ -217,7 +217,13 @@ lazy val api =
     )
 
 ThisBuild / homepage   := Some(url("https://github.com/dacr/sotohp"))
-ThisBuild / scmInfo    := Some(ScmInfo(url(s"https://github.com/dacr/sotohp.git"), s"git@github.com:dacr/sotohp.git"))
+ThisBuild / scmInfo    := Some(
+  ScmInfo(
+    url(s"https://github.com/dacr/sotohp.git"),
+    s"scm:git:git@github.com:dacr/sotohp.git",
+    Some("scm:git:https://github.com/dacr/sotohp.git")
+  )
+)
 ThisBuild / developers := List(
   Developer(
     id = "dacr",
