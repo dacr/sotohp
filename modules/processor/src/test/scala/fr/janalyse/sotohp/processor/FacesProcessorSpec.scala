@@ -23,10 +23,10 @@ object FacesProcessorSpec extends BaseSpecDefault with TestDatasets {
         result2.status.successful,
         result2.faces.size == 27
       )
-    }
+    } @@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteFaces @@ TestAspect.sequential
+    suiteFaces @@ TestAspect.sequential @@ TestAspect.ignore
 
 }

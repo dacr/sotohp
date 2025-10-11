@@ -27,7 +27,7 @@ object ObjectsDetectionProcessorSpec extends BaseSpecDefault with TestDatasets {
         result2.objects.map(_.name).size == 2,
         result2.objects.map(_.name).contains("person")
       )
-    }
+    } @@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =

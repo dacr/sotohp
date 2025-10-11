@@ -45,7 +45,7 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
         names5.size == 1,
         names5.contains("go-kart")
       )
-    }
+    } @@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =

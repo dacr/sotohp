@@ -216,23 +216,7 @@ lazy val api =
       )
     )
 
-lazy val root = (project in file("."))
-  .aggregate(
-    moduleModel,
-    moduleImaging,
-    moduleCore,
-    moduleProcessor,
-    moduleSearch,
-    moduleService,
-    cli,
-    gui,
-    api
-  )
-  .settings(
-    sharedSettings,
-    name := "sotohp"
-  )
-
+// -----------------------------------------------------------------------------
 ThisBuild / homepage   := Some(url("https://github.com/dacr/sotohp"))
 ThisBuild / scmInfo    := Some(
   ScmInfo(

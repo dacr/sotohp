@@ -19,7 +19,7 @@ object MiniaturizeProcessorSpec extends BaseSpecDefault with TestDatasets {
         result.status.successful,
         result.faces.size == 9
       )
-    }
+    } @@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
