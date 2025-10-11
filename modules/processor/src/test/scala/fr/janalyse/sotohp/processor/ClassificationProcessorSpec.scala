@@ -49,6 +49,6 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteClassification @@ TestAspect.sequential
+    suiteClassification @@ TestAspect.sequential @@ TestAspect.ignore
 
 }

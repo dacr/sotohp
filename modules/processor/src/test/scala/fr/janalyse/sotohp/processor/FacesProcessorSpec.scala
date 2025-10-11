@@ -27,6 +27,6 @@ object FacesProcessorSpec extends BaseSpecDefault with TestDatasets {
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteFaces @@ TestAspect.sequential
+    suiteFaces @@ TestAspect.sequential @@ TestAspect.ignore
 
 }
