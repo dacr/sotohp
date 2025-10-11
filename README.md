@@ -8,10 +8,10 @@ Once again this project has first started as just [a "small" script][photosc], f
 ## Principles
 
 - The photo referential is always your photos directories as you organize them,
-  - Continue to use your favorite file manager for that task,
-  - Keep your directory tree unchanged
-  - Add new directories and new files
-  - Use, for convenience, such a pattern for your storage `2025/2025-10-11 event label/photo.jpg`
+    - Continue to use your favorite file manager for that task,
+    - Keep your directory tree unchanged
+    - Add new directories and new files
+    - Use, for convenience, such a pattern for your storage `2025/2025-10-11 event label/photo.jpg`
 - Your photos directories are left unchanged, only read operations are done,
 - Cache is used for pre-computed photos, miniatures, people's faces, detected objects, ...
 - A database is used to manage all your added metadata such as description, keywords, fixed location, fixed dates,
@@ -20,7 +20,7 @@ Once again this project has first started as just [a "small" script][photosc], f
 ## Current status
 
 - will be released soon as a standalone docker application,
-- comes with an API and a **web user interface** providing:
+- comes with an [REST API](frontend-user-interface/openapi/docs.yaml) and a **web user interface** providing:
     - fast visualization,
     - automatic slideshow,
     - timeline mosaic browsing,
