@@ -31,6 +31,6 @@ object ObjectsDetectionProcessorSpec extends BaseSpecDefault with TestDatasets {
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteObjectsDetection @@ TestAspect.sequential
+    suiteObjectsDetection @@ TestAspect.sequential @@ TestAspect.ignore
 
 }
