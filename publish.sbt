@@ -5,6 +5,7 @@ ThisBuild / releaseCrossBuild      := true
 ThisBuild / versionScheme          := Some("semver-spec")
 
 // -----------------------------------------------------------------------------
+ThisBuild / sonatypeProfileName := "" // Empty string to skip profile lookup
 ThisBuild / sonatypeCredentialHost := Sonatype.sonatypeCentralHost
 
 ThisBuild / publishTo := {
