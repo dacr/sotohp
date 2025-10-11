@@ -10,7 +10,7 @@ ThisBuild / sonatypeCredentialHost := Sonatype.sonatypeCentralHost
 ThisBuild / publishTo := {
   val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
   if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
-  else sonatypePublishToBundle.value
+  else localStaging.value
 }
 
 ThisBuild / credentials ++= (for {
@@ -27,7 +27,6 @@ ThisBuild / releaseNextCommitMessage := s"[ci skip] Setting version to ${(ThisBu
 
 // -----------------------------------------------------------------------------
 import ReleaseTransformations.*
-addCommandAlias("sonaRelease", "+publishSigned; sonatypeBundleUpload; sonatypeBundleRelease")
 
 ThisBuild / releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies,
@@ -42,23 +41,4 @@ ThisBuild / releaseProcess := Seq[ReleaseStep](
   setNextVersion,
   commitNextVersion,
   pushChanges
-)
-
-// -----------------------------------------------------------------------------
-// Common POM metadata for all modules (required by Central Portal validation)
-ThisBuild / homepage := Some(url("https://github.com/dacr/sotohp"))
-ThisBuild / scmInfo := Some(
-  ScmInfo(
-    url("https://github.com/dacr/sotohp"),
-    "scm:git:git@github.com:dacr/sotohp.git",
-    Some("scm:git:https://github.com/dacr/sotohp.git")
-  )
-)
-ThisBuild / developers := List(
-  Developer(
-    id = "dacr",
-    name = "David Crosson",
-    email = "crosson.david@gmail.com",
-    url = url("https://github.com/dacr")
-  )
 )

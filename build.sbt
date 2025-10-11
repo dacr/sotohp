@@ -201,7 +201,7 @@ lazy val api =
     .enablePlugins(JavaServerAppPackaging)
     .settings(
       sharedSettings,
-      name := "sotohp-api",
+      name                    := "sotohp-api",
       Universal / packageName := "sotohp",
       fork                    := true,
       javaOptions ++= lmdbJavaOptions,
@@ -215,6 +215,23 @@ lazy val api =
         "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % versions.tapir
       )
     )
+
+lazy val root = (project in file("."))
+  .aggregate(
+    moduleModel,
+    moduleImaging,
+    moduleCore,
+    moduleProcessor,
+    moduleSearch,
+    moduleService,
+    cli,
+    gui,
+    api
+  )
+  .settings(
+    sharedSettings,
+    name := "sotohp"
+  )
 
 ThisBuild / homepage   := Some(url("https://github.com/dacr/sotohp"))
 ThisBuild / scmInfo    := Some(
