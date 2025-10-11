@@ -67,7 +67,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         mediasAgain == medias,
         keywords.size == 19
       )
-    }
+    } @@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =

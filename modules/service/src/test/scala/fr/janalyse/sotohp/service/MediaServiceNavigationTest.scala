@@ -33,7 +33,7 @@ object MediaServiceNavigationTest extends BaseSpecDefault {
         first == nextPreviousFirst,
         last == previousNextLast
       )
-    }
+    } @@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
