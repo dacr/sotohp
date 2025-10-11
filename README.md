@@ -7,10 +7,14 @@ Once again this project has first started as just [a "small" script][photosc], f
 
 ## Principles
 
-- The photo referential is always your photos directories as you've organized them,
+- The photo referential is always your photos directories as you organize them,
+  - Continue to use your favorite file manager for that task,
+  - Keep your directory tree unchanged
+  - Add new directories and new files
+  - Use, for convenience, such a pattern for your storage `2025/2025-10-11 event label/photo.jpg`
 - Your photos directories are left unchanged, only read operations are done,
-- Cache is used for pre-computed photos, miniatures, people faces, detected objects, ...
-- A simple database is used to store all your added metadata such as description, keywords, fixed location, fixed dates,
+- Cache is used for pre-computed photos, miniatures, people's faces, detected objects, ...
+- A database is used to manage all your added metadata such as description, keywords, fixed location, fixed dates,
   stars, ... and also to keep track of all people detected faces, detected objects, image classifications, ...
 
 ## Current status
@@ -20,9 +24,11 @@ Once again this project has first started as just [a "small" script][photosc], f
     - fast visualization,
     - automatic slideshow,
     - timeline mosaic browsing,
-    - managing locations, dates, keywords, descriptions, ...
+    - customizing locations, dates, keywords, descriptions, ...
     - managing events,
-    - managing several owners and storage directories.
+    - managing owners and storage directories,
+    - synchronize originals from multiple storage directories,
+    - ...
 
 ## User interfaces
 
@@ -59,6 +65,8 @@ User configuration is done through environment variables, the main ones are:
 | `PHOTOS_ELASTIC_URL_TRUST_SELF_SIGNED`     | Elasticsearch/Opensearch : Allowing self signed SSL certificate | `false`                 |
 | `PHOTOS_ELASTIC_USERNAME`                  | Elasticsearch/Opensearch : username                             |                         |
 | `PHOTOS_ELASTIC_PASSWORD`                  | Elasticsearch/Opensearch : password                             |                         |
+|                                            |                                                                 |                         |
+| `PHOTOS_LISTENING_PORT`                    | Web server and API listening port                               | `8080`                  |
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
 
