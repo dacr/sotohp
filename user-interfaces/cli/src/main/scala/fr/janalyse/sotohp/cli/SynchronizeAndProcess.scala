@@ -27,7 +27,8 @@ object SynchronizeAndProcess extends CommonsCLI {
   val logic = ZIO.logSpan("Synchronize") {
     for {
       _     <- ZIO.logInfo("start photos synchronization and processing")
-      _     <- MediaService.synchronize(Start) // TODO add wait for completion
+      _     <- MediaService.synchronizeStart(Some(42))
+      _     <- MediaService.synchronizeWait()
       count <- MediaService.originalCount()
       _     <- ZIO.logInfo(s"$count photos synchronized")
       _     <- GoogleTakeoutTooling.logic
