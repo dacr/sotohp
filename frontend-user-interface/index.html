@@ -114,8 +114,29 @@
 
     <!-- Settings Tab -->
     <section id="tab-settings" class="tab">
-      <button id="btn-sync">Synchronize all stores</button>
-      <div id="sync-status" class="status"></div>
+      <div class="settings-card">
+        <h3>Synchronization</h3>
+        <p class="muted">Keep your libraries up to date. You can run a quick sync that scans only recent additions, or a full sync over all stores.</p>
+        <div class="settings-controls">
+          <label class="checkbox">
+            <input type="checkbox" id="sync-fast" checked>
+            <span>Quick scan: only files added in the last</span>
+          </label>
+          <div class="inline-input">
+            <input id="sync-days" list="sync-days-options" type="number" min="1" step="1" value="20" aria-label="Days" />
+            <span class="suffix">days</span>
+            <datalist id="sync-days-options">
+              <option value="7"></option>
+              <option value="20"></option>
+              <option value="42"></option>
+            </datalist>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button id="btn-sync" class="primary">▷ Synchronize</button>
+        </div>
+        <div id="sync-status" class="status"></div>
+      </div>
     </section>
   </main>
 

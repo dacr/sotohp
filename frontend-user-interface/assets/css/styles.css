@@ -249,6 +249,19 @@ section#tab-mosaic.tab.active { display: flex; }
   transition: all 200ms ease-in; 
 }
 
+/* Settings styles */
+.settings-card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); max-width: 920px; }
+.settings-card h3 { margin: 0 0 6px 0; font-size: 18px; }
+.settings-card .muted { margin: 0 0 10px 0; color: #6b7280; font-size: 13px; }
+.settings-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.settings-controls .checkbox { display: inline-flex; align-items: center; gap: 8px; }
+.settings-controls .inline-input { display: inline-flex; align-items: center; gap: 6px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 4px 8px; }
+.settings-controls .inline-input input { width: 70px; border: none; background: transparent; outline: none; text-align: right; padding: 4px; }
+.settings-controls .inline-input .suffix { color: #6b7280; font-size: 12px; }
+.settings-actions { margin-top: 6px; }
+.settings-actions .primary { background: #2563eb; color: #fff; border: 1px solid #1d4ed8; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.settings-actions .primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Toast types */
 .toast.success { 
   background: #f0fdf4; 
