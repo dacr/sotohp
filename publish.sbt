@@ -27,7 +27,7 @@ ThisBuild / releaseNextCommitMessage := s"[ci skip] Setting version to ${(ThisBu
 
 // -----------------------------------------------------------------------------
 import ReleaseTransformations.*
-addCommandAlias("sonaRelease", "sonatypeBundleUpload; sonatypeBundleRelease")
+addCommandAlias("sonaRelease", "+publishSigned; sonatypeBundleUpload; sonatypeBundleRelease")
 
 ThisBuild / releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies,
