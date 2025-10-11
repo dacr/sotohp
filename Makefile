@@ -9,6 +9,11 @@ viewer:
 stats:
 	sbt "; project cli ; runMain fr.janalyse.sotohp.cli.Statistics"
 
+test:
+	export PHOTOS_ELASTIC_ENABLED=false && \
+	  export PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY="" && \
+      sbt "test"
+
 # -----------------------------------------------------------------------------
 # Frontend UI build
 # Sources live in frontend-user-interface and are built/copied into
