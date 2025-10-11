@@ -862,24 +862,7 @@ class MediaServiceLive private (
     logic
   }
 
-  override def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus] = {
-    synchronizeStatusRef.get
-  }
-
-  def updateSynchronizeStatus(input: Chunk[MediaBag]): UIO[Chunk[MediaBag]] = {
-    for {
-      currentDate <- Clock.currentDateTime
-      _           <- synchronizeStatusRef
-                       .update(status =>
-                         status.copy(
-                           lastUpdated = Some(currentDate),
-                           processedCount = status.processedCount + input.size
-                         )
-                       )
-    } yield input
-  }
-
-  override def synchronize(action: SynchronizeAction): IO[ServiceIssue, Unit] = {
+  override def synchronizeStart(addedThoseLastDays: Option[Int]): IO[ServiceIssue, Unit] = {
     val finishedLogic =
       for {
         currentDate <- Clock.currentDateTime
@@ -897,7 +880,7 @@ class MediaServiceLive private (
 
     val syncLogic = {
       for {
-        _              <- ZIO.log("Synchronization started")
+        _              <- ZIO.log(s"Synchronization started addedThoseLastDays=$addedThoseLastDays")
         stores         <- storeList().runCollect
         serviceConfig  <- ServiceConfig.config
                             .mapError(err => ServiceInternalIssue(s"Unable to retrieve service configuration : $err"))
@@ -909,8 +892,8 @@ class MediaServiceLive private (
                             .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
                             .right
         _              <- originalsStream
-                            // TODO to parametrize and take into account in API for fastest synchronization rather than full one
-                            .filter(original => original.fileLastModified.offsetDateTime.isAfter(OffsetDateTime.now().minusDays(20)))
+                            .tap(_ => updateSynchronizeCheckedStatus())
+                            .filter(original => addedThoseLastDays.isEmpty || original.fileLastModified.offsetDateTime.isAfter(OffsetDateTime.now().minusDays(addedThoseLastDays.get)))
                             .mapZIO(synchronizeOriginal)
                             .mapZIO(synchronizeState)
                             .mapZIO(synchronizeMedia)
@@ -919,7 +902,7 @@ class MediaServiceLive private (
                             .mapZIO(input => locationInduction(input).uninterruptible)
                             .grouped(50)
                             .mapZIO(input => synchronizeSearchEngine(input).uninterruptible)
-                            .mapZIO(input => updateSynchronizeStatus(input).uninterruptible)
+                            .mapZIO(input => updateSynchronizeProcessedStatus(input).uninterruptible)
                             .runDrain
                             .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
                             .catchAll(e => ZIO.logError(s"Sync failed: $e"))
@@ -931,18 +914,20 @@ class MediaServiceLive private (
     // TODO temporary quick & dirty implementation
 
     val startLogic = for {
-      fiber       <- syncLogic
-                       .tapError(err => ZIO.logError(s"Couldn't synchronize : $err"))
-                       .forkDaemon
       currentDate <- Clock.currentDateTime
       _           <- synchronizeStatusRef
                        .update(status =>
                          status.copy(
                            running = true,
                            lastUpdated = Some(currentDate),
-                           startedAt = Some(currentDate)
+                           startedAt = Some(currentDate),
+                           checkedCount = 0,
+                           processedCount = 0
                          )
                        )
+      fiber       <- syncLogic
+                       .tapError(err => ZIO.logError(s"Couldn't synchronize : $err"))
+                       .forkDaemon
       _           <- synchronizeFiberRef
                        .update {
                          case None      => Some(fiber)
@@ -950,27 +935,55 @@ class MediaServiceLive private (
                        }
     } yield ()
 
-    action match {
-      case SynchronizeAction.Start => // TODO need refactoring - temporary unsatisfying implementation
-        for {
-          current <- synchronizeStatusRef.get
-          _       <- startLogic.when(!current.running)
-        } yield ()
+    for { // TODO need refactoring - temporary unsatisfying implementation
+      current <- synchronizeStatusRef.get
+      _       <- startLogic.when(!current.running)
+    } yield ()
+  }
 
-      case SynchronizeAction.WaitForCompletion => // TODO need refactoring - temporary unsatisfying implementation
-        for {
-          fiber <- synchronizeFiberRef.get
-          _     <- ZIO.foreachDiscard(fiber)(f => f.join)
-        } yield ()
+  override def synchronizeWait(): IO[ServiceIssue, Unit] = {
+    for { // TODO need refactoring - temporary unsatisfying implementation
+      fiber <- synchronizeFiberRef.get
+      _     <- ZIO.foreachDiscard(fiber)(f => f.join)
+    } yield ()
 
-      case SynchronizeAction.Stop => // TODO need refactoring - temporary unsatisfying implementation
-        for {
-          fiber <- synchronizeFiberRef.get
-          _     <- ZIO.foreachDiscard(fiber)(f => f.interrupt)
-          _     <- ZIO.foreachDiscard(fiber)(f => f.join)
-        } yield ()
+  }
 
-    }
+  override def synchronizeStop(): IO[ServiceIssue, Unit] = {
+    for { // TODO need refactoring - temporary unsatisfying implementation
+      fiber <- synchronizeFiberRef.get
+      _     <- ZIO.foreachDiscard(fiber)(f => f.interrupt)
+      _     <- ZIO.foreachDiscard(fiber)(f => f.join)
+    } yield ()
+  }
+
+  override def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus] = {
+    synchronizeStatusRef.get
+  }
+
+  def updateSynchronizeProcessedStatus(input: Chunk[MediaBag]): UIO[Chunk[MediaBag]] = {
+    for {
+      currentDate <- Clock.currentDateTime
+      _           <- synchronizeStatusRef
+                       .update(status =>
+                         status.copy(
+                           lastUpdated = Some(currentDate),
+                           processedCount = status.processedCount + input.size
+                         )
+                       )
+    } yield input
+  }
+
+  def updateSynchronizeCheckedStatus(): UIO[Unit] = {
+    for {
+      currentDate <- Clock.currentDateTime
+      _           <- synchronizeStatusRef
+                       .update(status =>
+                         status.copy(
+                           checkedCount = status.checkedCount + 1
+                         )
+                       )
+    } yield ()
   }
 
   // -------------------------------------------------------------------------------------------------------------------

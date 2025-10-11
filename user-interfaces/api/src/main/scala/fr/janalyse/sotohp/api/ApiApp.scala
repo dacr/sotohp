@@ -657,10 +657,11 @@ object ApiApp extends ZIOAppDefault {
       .summary("Start synchronize background operations with all stores content")
       .put
       .in("synchronize")
+      .in(query[Option[Int]]("addedThoseLastDays").description("for faster synchronize operations provide how much days back to look for new medias"))
       .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv] { _ =>
+      .zServerLogic[ApiEnv] { addedThoseLastDays =>
         MediaService
-          .synchronize(SynchronizeAction.Start)
+          .synchronizeStart(addedThoseLastDays)
           .mapError(err => ApiInternalError("Couldn't synchronize"))
       }
 

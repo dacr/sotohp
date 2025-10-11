@@ -19,8 +19,8 @@ object MediaServiceNavigationTest extends BaseSpecDefault {
       for {
         owner             <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
         store             <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
-        _                 <- MediaService.synchronize(Start)
-        _                 <- MediaService.synchronize(WaitForCompletion)
+        _                 <- MediaService.synchronizeStart(None)
+        _                 <- MediaService.synchronizeWait()
         medias            <- MediaService.mediaList().runCollect
         last              <- MediaService.mediaLast().some
         previousLast      <- MediaService.mediaPrevious(last.accessKey).some

@@ -28,16 +28,16 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
                               rewritings = Nil
                             )
                           )
-        _              <- MediaService.synchronize(Start) // ------ FIRST SYNC
-        _              <- MediaService.synchronize(WaitForCompletion)
+        _              <- MediaService.synchronizeStart(None) // ------ FIRST SYNC
+        _              <- MediaService.synchronizeWait()
         originals      <- MediaService.originalList().runCollect
         count          <- MediaService.originalCount()
         events         <- MediaService.eventList().runCollect
         states         <- MediaService.stateList().runCollect
         medias         <- MediaService.mediaList().runCollect
         _              <- TestClock.adjust(1.hour)
-        _              <- MediaService.synchronize(Start) // ------ SECOND SYNC
-        _              <- MediaService.synchronize(WaitForCompletion)
+        _              <- MediaService.synchronizeStart(None) // ------ SECOND SYNC
+        _              <- MediaService.synchronizeWait()
         originalsAgain <- MediaService.originalList().runCollect
         eventsAgain    <- MediaService.eventList().runCollect
         statesAgain    <- MediaService.stateList().runCollect

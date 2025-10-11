@@ -119,7 +119,9 @@ trait MediaService {
   ): IO[ServiceIssue, Option[Store]]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def synchronize(action: SynchronizeAction): IO[ServiceIssue, Unit]
+  def synchronizeStart(addedThoseLastDays: Option[Int]): IO[ServiceIssue, Unit]
+  def synchronizeWait(): IO[ServiceIssue, Unit]
+  def synchronizeStop(): IO[ServiceIssue, Unit]
   def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -253,11 +255,14 @@ object MediaService {
   def storeCreate(providedStoreId: Option[StoreId], name: Option[StoreName], ownerId: OwnerId, baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Store] =
     ZIO.serviceWithZIO(_.storeCreate(providedStoreId, name, ownerId, baseDirectory, includeMask, ignoreMask))
 
-  def storeUpdate(storeId: StoreId, name: Option[StoreName], baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Option[Store]] = ZIO.serviceWithZIO(_.storeUpdate(storeId, name, baseDirectory, includeMask, ignoreMask))
+  def storeUpdate(storeId: StoreId, name: Option[StoreName], baseDirectory: BaseDirectoryPath, includeMask: Option[IncludeMask], ignoreMask: Option[IgnoreMask]): ZIO[MediaService, ServiceIssue, Option[Store]] =
+    ZIO.serviceWithZIO(_.storeUpdate(storeId, name, baseDirectory, includeMask, ignoreMask))
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def synchronize(action: SynchronizeAction): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronize(action))
+  def synchronizeStart(addedThoseLastDays: Option[Int]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronizeStart(addedThoseLastDays))
+  def synchronizeWait(): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronizeWait())
+  def synchronizeStop(): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronizeStop())
   def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus]       = ZIO.serviceWithZIO(_.synchronizeStatus())
 
   // -------------------------------------------------------------------------------------------------------------------
