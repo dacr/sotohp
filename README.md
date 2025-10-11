@@ -42,6 +42,8 @@ The web user interface is quite fast, user-friendly and feature-rich, and behind
 
 ![](docs/screenshots/04-maps.png)
 
+![](docs/screenshots/21-settings.png)
+
 ![](docs/screenshots/42-openapi.png)
 
 ![](docs/screenshots/99-dashboard.png)
