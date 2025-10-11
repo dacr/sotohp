@@ -5,10 +5,11 @@ ThisBuild / releaseCrossBuild      := true
 ThisBuild / versionScheme          := Some("semver-spec")
 
 // -----------------------------------------------------------------------------
+// Central Portal configuration
 ThisBuild / sonatypeCredentialHost := Sonatype.sonatypeCentralHost
-ThisBuild / sonatypeProfileName := "fr.janalyse"  // Your verified namespace
+//ThisBuild / sonatypeProfileName := "fr.janalyse"
 
-ThisBuild / sonatypeRepository := "https://central.sonatype.com/api/v1/publisher"
+//ThisBuild / sonatypeRepository := "https://central.sonatype.com/api/v1/publisher"
 
 ThisBuild / publishTo := {
   val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
