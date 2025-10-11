@@ -832,9 +832,24 @@ paths:
       - Admin
       summary: Start synchronize background operations with all stores content
       operationId: Synchronize start
+      parameters:
+      - name: addedThoseLastDays
+        in: query
+        description: for faster synchronize operations provide how much days back
+          to look for new medias
+        required: false
+        schema:
+          type: integer
+          format: int32
       responses:
         '200':
           description: ''
+        '400':
+          description: 'Invalid value for: query parameter addedThoseLastDays'
+          content:
+            text/plain:
+              schema:
+                type: string
         '500':
           description: Something went wrong with the backend
           content:
