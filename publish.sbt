@@ -10,7 +10,7 @@ ThisBuild / sonatypeCredentialHost := Sonatype.sonatypeCentralHost
 ThisBuild / publishTo := {
   val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
   if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
-  else localStaging.value
+  else sonatypePublishToBundle.value
 }
 
 ThisBuild / credentials ++= (for {
@@ -27,6 +27,8 @@ ThisBuild / releaseCommitMessage     := s"Setting version to ${(ThisBuild / vers
 ThisBuild / releaseNextCommitMessage := s"[ci skip] Setting version to ${(ThisBuild / version).value}"
 
 // -----------------------------------------------------------------------------
+addCommandAlias("sonaRelease", "+publishSigned; sonatypeBundleUpload; sonatypeBundleRelease")
+
 import ReleaseTransformations.*
 ThisBuild / releaseProcess := Seq[ReleaseStep](
   checkSnapshotDependencies,
