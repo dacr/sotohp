@@ -10,7 +10,7 @@ ThisBuild / sonatypeCredentialHost := Sonatype.sonatypeCentralHost
 ThisBuild / publishTo := {
   val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
   if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
-  else sonatypePublishToBundle.value
+  else localStaging.value
 }
 
 ThisBuild / credentials ++= (for {
