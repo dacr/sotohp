@@ -1,7 +1,8 @@
 # SOTOHP [![][sotohpImg]][sotohpLnk]
 
-A software to easily and quickly manage a huge amount of photos. Why ? Just because those past 123 years 😉 we have to
-deal with almost **140,000 photos** through 2,000 family events.
+A software to easily and quickly manage a huge number of photos. Why? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events.
+
+![](docs/screenshots/00-diaporama.png)
 
 Once again this project has first started as just [a "small" script][photosc], first published on Dec 19, 2021!
 
@@ -20,9 +21,9 @@ Once again this project has first started as just [a "small" script][photosc], f
 ## Current status
 
 - will be released soon as a standalone docker application,
-- comes with an [REST API](frontend-user-interface/openapi/docs.yaml) and a **web user interface** providing:
+- comes with a [REST API](frontend-user-interface/openapi/docs.yaml) and a **web user interface** providing:
     - fast visualization,
-    - automatic slideshow,
+    - photos diaporama,
     - timeline mosaic browsing,
     - customizing locations, dates, keywords, descriptions, ...
     - managing events,
@@ -32,7 +33,7 @@ Once again this project has first started as just [a "small" script][photosc], f
 
 ## User interfaces
 
-The web user interface is quite fast, user-friendly and feature-rich, and behind the scene a REST API is available:
+The web user interface is quite fast, user-friendly and feature-rich, with behind the scene a REST API:
 
 ![](docs/screenshots/01-viewer.png)
 
