@@ -16,32 +16,34 @@ trait TestDatasets {
     None
   )
 
+  val testSamples: String = scala.util.Properties.envOrElse("PHOTOS_TEST_SAMPLES", "samples")
+
   // -------------------------------------------------------------------------------------------------------------------
-  val datasetObjectsPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-objects"))
+  val datasetObjectsPath: BaseDirectoryPath = BaseDirectoryPath(Path.of(testSamples, "dataset-processors-objects"))
   val datasetObjectsFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
   val datasetObjectsFakeStore: Store        = Store(datasetObjectsFakeStoreId, None, fakeOwner.id, datasetObjectsPath)
 
-  val datasetObjectsFileMixtureOfObjects: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-objects/mixture-of-objects.jpg"))
-  val datasetObjectsFilePersonBicycle: OriginalPath    = OriginalPath(Path.of("samples/dataset-processors-objects/person-bicycle.jpg"))
+  val datasetObjectsFileMixtureOfObjects: OriginalPath = OriginalPath(Path.of(testSamples, "dataset-processors-objects/mixture-of-objects.jpg"))
+  val datasetObjectsFilePersonBicycle: OriginalPath    = OriginalPath(Path.of(testSamples, "dataset-processors-objects/person-bicycle.jpg"))
 
   // -------------------------------------------------------------------------------------------------------------------
-  val datasetFacesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-faces"))
+  val datasetFacesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of(testSamples, "dataset-processors-faces"))
   val datasetFacesFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
   val datasetFacesFakeStore: Store        = Store(datasetFacesFakeStoreId, None, fakeOwner.id, datasetFacesPath)
 
-  val datasetFacesFileMondement: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-faces/mondement.jpg"))
-  val datasetFacesFileMariage: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-faces/mariage.jpg"))
+  val datasetFacesFileMondement: OriginalPath = OriginalPath(Path.of(testSamples, "dataset-processors-faces/mondement.jpg"))
+  val datasetFacesFileMariage: OriginalPath = OriginalPath(Path.of(testSamples, "dataset-processors-faces/mariage.jpg"))
 
   // -------------------------------------------------------------------------------------------------------------------
-  val datasetClassesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of("samples/dataset-processors-classifications"))
+  val datasetClassesPath: BaseDirectoryPath = BaseDirectoryPath(Path.of(testSamples, "dataset-processors-classifications"))
   val datasetClassesFakeStoreId: StoreId    = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
   val datasetClassesFakeStore: Store        = Store(datasetClassesFakeStoreId, None, fakeOwner.id, datasetClassesPath)
 
-  val datasetClassesFileLakeForest: OriginalPath = OriginalPath(Path.of("samples/dataset-processors-classifications/lake-forest.jpg"))
-  val datasetClassesFileMountain: OriginalPath   = OriginalPath(Path.of("samples/dataset-processors-classifications/mountain.jpg"))
-  val datasetClassesFileSeacoast: OriginalPath   = OriginalPath(Path.of("samples/dataset-processors-classifications/seacoast.jpg"))
-  val datasetClassesFileSkiWinter: OriginalPath  = OriginalPath(Path.of("samples/dataset-processors-classifications/ski-winter.jpg"))
-  val datasetClassesFileCarRace: OriginalPath    = OriginalPath(Path.of("samples/dataset-processors-classifications/car-race.jpg"))
+  val datasetClassesFileLakeForest: OriginalPath = OriginalPath(Path.of(testSamples, "dataset-processors-classifications/lake-forest.jpg"))
+  val datasetClassesFileMountain: OriginalPath   = OriginalPath(Path.of(testSamples, "dataset-processors-classifications/mountain.jpg"))
+  val datasetClassesFileSeacoast: OriginalPath   = OriginalPath(Path.of(testSamples, "dataset-processors-classifications/seacoast.jpg"))
+  val datasetClassesFileSkiWinter: OriginalPath  = OriginalPath(Path.of(testSamples, "dataset-processors-classifications/ski-winter.jpg"))
+  val datasetClassesFileCarRace: OriginalPath    = OriginalPath(Path.of(testSamples, "dataset-processors-classifications/car-race.jpg"))
 
   // -------------------------------------------------------------------------------------------------------------------
 }

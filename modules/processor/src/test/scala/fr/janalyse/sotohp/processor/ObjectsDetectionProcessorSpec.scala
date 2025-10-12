@@ -1,11 +1,8 @@
 package fr.janalyse.sotohp.processor
 
-import fr.janalyse.sotohp.core.OriginalBuilder
 import fr.janalyse.sotohp.core.OriginalBuilder.originalFromFile
-import wvlet.airframe.ulid.ULID
 import zio.Scope
 import zio.*
-import zio.lmdb.LMDB
 import zio.test.*
 
 object ObjectsDetectionProcessorSpec extends BaseSpecDefault with TestDatasets {
@@ -27,10 +24,10 @@ object ObjectsDetectionProcessorSpec extends BaseSpecDefault with TestDatasets {
         result2.objects.map(_.name).size == 2,
         result2.objects.map(_.name).contains("person")
       )
-    } @@ TestAspect.ignore
+    } //@@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteObjectsDetection @@ TestAspect.sequential @@ TestAspect.ignore
+    suiteObjectsDetection @@ TestAspect.sequential
 
 }

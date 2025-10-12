@@ -23,6 +23,7 @@ node_modules/
 .vscode/
 .idea/
 target/
+out/
 project/target/
 project/project/
 project/metals.sbt

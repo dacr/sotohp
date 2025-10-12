@@ -1,10 +1,7 @@
 package fr.janalyse.sotohp.processor
 
-import fr.janalyse.sotohp.core.OriginalBuilder
 import fr.janalyse.sotohp.core.OriginalBuilder.originalFromFile
-import wvlet.airframe.ulid.ULID
 import zio.*
-import zio.lmdb.LMDB
 import zio.test.*
 
 object MiniaturizeProcessorSpec extends BaseSpecDefault with TestDatasets {
@@ -19,10 +16,10 @@ object MiniaturizeProcessorSpec extends BaseSpecDefault with TestDatasets {
         result.status.successful,
         result.faces.size == 9
       )
-    } @@ TestAspect.ignore
+    } //@@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteFaces @@ TestAspect.sequential @@ TestAspect.ignore
+    suiteFaces @@ TestAspect.sequential
 
 }

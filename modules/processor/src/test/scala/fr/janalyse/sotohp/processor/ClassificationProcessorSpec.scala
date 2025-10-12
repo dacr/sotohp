@@ -1,10 +1,7 @@
 package fr.janalyse.sotohp.processor
 
-import fr.janalyse.sotohp.core.OriginalBuilder
 import fr.janalyse.sotohp.core.OriginalBuilder.originalFromFile
-import wvlet.airframe.ulid.ULID
 import zio.*
-import zio.lmdb.LMDB
 import zio.test.*
 
 object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
@@ -45,10 +42,10 @@ object ClassificationProcessorSpec extends BaseSpecDefault with TestDatasets {
         names5.size == 1,
         names5.contains("go-kart")
       )
-    } @@ TestAspect.ignore
+    } //@@ TestAspect.ignore
   )
 
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    suiteClassification @@ TestAspect.sequential @@ TestAspect.ignore
+    suiteClassification @@ TestAspect.sequential
 
 }

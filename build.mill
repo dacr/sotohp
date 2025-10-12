@@ -1,0 +1,134 @@
+//| mill-jvm-opts: [ "-Xss50M" ]
+
+package build
+import mill.*, scalalib.*, mill.scalalib.publish.*
+
+lazy val lmdbJavaOptions = Seq(
+  "--add-opens",
+  "java.base/java.nio=ALL-UNNAMED",
+  "--add-opens",
+  "java.base/sun.nio.ch=ALL-UNNAMED"
+)
+
+trait Publishable extends SonatypeCentralPublishModule {
+  override def publishVersion = "1.0.16"
+  def pomSettings             = PomSettings(
+    description = "Photos management made simple",
+    organization = "fr.janalyse",
+    url = "https://github.com/dacr/sotohp",
+    licenses = Seq(License.Common.Apache2),
+    versionControl = VersionControl.github("dacr", "sotohp"),
+    developers = Seq(Developer("dacr", "David Crosson", "https://github.com/dacr"))
+  )
+}
+
+trait SotohpModule extends SbtModule {
+  def scalaVersion  = "3.7.3"
+  def scalacOptions = Seq("-deprecation")
+  object test extends SbtTests, TestModule.ZioTest {
+    def forkArgs       = lmdbJavaOptions
+    def zioTestVersion = "2.1.21"
+  }
+  def repositories = Seq("https://central.sonatype.com/repository/maven-snapshots")
+}
+
+object modules extends Module {
+  object model extends SotohpModule with Publishable {
+    def artifactName = "sotohp-model"
+    def mvnDeps      = Seq(
+      mvn"org.wvlet.airframe::airframe-ulid:2025.1.14"
+    )
+  }
+
+  object core extends SotohpModule with Publishable {
+    def artifactName = "sotohp-core"
+    def moduleDeps   = Seq(model)
+    def mvnDeps      = Seq(
+      mvn"dev.zio::zio-config:4.0.5",
+      mvn"dev.zio::zio-config-typesafe:4.0.5",
+      mvn"dev.zio::zio-config-magnolia:4.0.5",
+      mvn"com.fasterxml.uuid:java-uuid-generator:5.1.1",
+      mvn"com.drewnoakes:metadata-extractor:2.19.0"
+    )
+  }
+
+  object imaging extends SotohpModule with Publishable {
+    def artifactName = "sotohp-imaging"
+    def moduleDeps   = Seq(model)
+  }
+
+  object processor extends SotohpModule with Publishable {
+    def artifactName = "sotohp-processor"
+    def moduleDeps   = Seq(core, imaging)
+    def mvnDeps      = Seq(
+      mvn"ai.djl:api:0.34.0",
+      mvn"ai.djl:basicdataset:0.34.0",
+      mvn"ai.djl:model-zoo:0.34.0",
+      mvn"ai.djl.huggingface:tokenizers:0.34.0",
+      mvn"ai.djl.mxnet:mxnet-engine:0.34.0",
+      mvn"ai.djl.mxnet:mxnet-model-zoo:0.34.0",
+      mvn"ai.djl.pytorch:pytorch-engine:0.34.0",
+      mvn"ai.djl.pytorch:pytorch-model-zoo:0.34.0",
+      mvn"ai.djl.tensorflow:tensorflow-engine:0.34.0",
+      mvn"ai.djl.tensorflow:tensorflow-model-zoo:0.34.0",
+      mvn"ai.djl.onnxruntime:onnxruntime-engine:0.34.0",
+      mvn"net.java.dev.jna:jna:5.17.0"
+    )
+  }
+
+  object search extends SotohpModule with Publishable {
+    def artifactName = "sotohp-search"
+    def moduleDeps   = Seq(core, processor)
+    def mvnDeps      = Seq(
+      mvn"nl.gn0s1s::elastic4s-effect-zio:8.18.1",
+      mvn"nl.gn0s1s::elastic4s-client-esjava:8.18.1",
+      mvn"nl.gn0s1s::elastic4s-json-zio:8.18.1"
+    )
+  }
+
+  object service extends SotohpModule with Publishable {
+    def artifactName = "sotohp-service"
+    def moduleDeps   = Seq(core, search, processor)
+    def mvnDeps      = Seq(
+      mvn"fr.janalyse::zio-lmdb:2.1.4",
+      mvn"io.scalaland::chimney:1.8.2"
+    )
+  }
+}
+
+object `user-interfaces` extends Module {
+  object api extends SotohpModule with Publishable {
+    def artifactName = "sotohp-api"
+    def moduleDeps   = Seq(modules.service)
+    def forkArgs     = lmdbJavaOptions
+    def mvnDeps      = Seq(
+      mvn"dev.zio::zio-logging:2.5.1",
+      mvn"dev.zio::zio-logging-slf4j2:2.5.1",
+      mvn"ch.qos.logback:logback-classic:1.5.19",
+      mvn"com.softwaremill.sttp.tapir::tapir-zio:1.11.49",
+      mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:1.11.49",
+      mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.11.49",
+      mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.11.49"
+    )
+  }
+
+  object cli extends SotohpModule with Publishable {
+    def artifactName = "sotohp-cli"
+    def moduleDeps   = Seq(modules.service)
+    def forkArgs     = lmdbJavaOptions
+    def mvnDeps      = Seq(
+      mvn"dev.zio::zio-logging:2.5.1",
+      mvn"dev.zio::zio-logging-slf4j2:2.5.1",
+      mvn"ch.qos.logback:logback-classic:1.5.19"
+    )
+  }
+
+  object gui extends SotohpModule with Publishable {
+    def artifactName = "sotohp-gui"
+    def moduleDeps   = Seq(modules.service)
+    def forkArgs     = lmdbJavaOptions
+    def mvnDeps      = Seq(
+      mvn"org.scalafx::scalafx:21.0.0-R32"
+    )
+  }
+}

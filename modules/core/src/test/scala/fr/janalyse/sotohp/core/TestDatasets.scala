@@ -16,18 +16,20 @@ trait TestDatasets {
     None
   )
 
-  val dataset1: BaseDirectoryPath    = BaseDirectoryPath(Path.of("samples/dataset1"))
-  val dataset1Example1: OriginalPath = OriginalPath(Path.of("samples/dataset1/example1.jpg"))
-  val dataset1Example2: OriginalPath = OriginalPath(Path.of("samples/dataset1/example2.jpg"))
-  val dataset1Example3: OriginalPath = OriginalPath(Path.of("samples/dataset1/example3.gif"))
-  val dataset1Example4: OriginalPath = OriginalPath(Path.of("samples/dataset1/example4.tif"))
-  val dataset1Example5: OriginalPath = OriginalPath(Path.of("samples/dataset1/example5.png"))
+  val testSamples: String = scala.util.Properties.envOrElse("PHOTOS_TEST_SAMPLES", "samples")
+
+  val dataset1: BaseDirectoryPath    = BaseDirectoryPath(Path.of(testSamples, "dataset1"))
+  val dataset1Example1: OriginalPath = OriginalPath(Path.of(testSamples, "dataset1/example1.jpg"))
+  val dataset1Example2: OriginalPath = OriginalPath(Path.of(testSamples, "dataset1/example2.jpg"))
+  val dataset1Example3: OriginalPath = OriginalPath(Path.of(testSamples, "dataset1/example3.gif"))
+  val dataset1Example4: OriginalPath = OriginalPath(Path.of(testSamples, "dataset1/example4.tif"))
+  val dataset1Example5: OriginalPath = OriginalPath(Path.of(testSamples, "dataset1/example5.png"))
   val fakeStoreId1: StoreId = StoreId(UUID.fromString("cfc0f571-48d7-4c43-9ee3-1c2cd923386d"))
   val fakeStore1 : Store = Store(fakeStoreId1, None, fakeOwner.id, dataset1)
 
-  val dataset2: BaseDirectoryPath      = BaseDirectoryPath(Path.of("samples/dataset2"))
-  val dataset2tag1: OriginalPath       = OriginalPath(Path.of("samples/dataset2/tags/tag1.jpg"))
-  val dataset2landscape1: OriginalPath = OriginalPath(Path.of("samples/dataset2/landscapes/landscape1.jpg"))
+  val dataset2: BaseDirectoryPath      = BaseDirectoryPath(Path.of(testSamples, "dataset2"))
+  val dataset2tag1: OriginalPath       = OriginalPath(Path.of(testSamples, "dataset2/tags/tag1.jpg"))
+  val dataset2landscape1: OriginalPath = OriginalPath(Path.of(testSamples, "dataset2/landscapes/landscape1.jpg"))
   val fakeStoreId2: StoreId = StoreId(UUID.fromString("514f2381-92a8-40d2-add1-1c22769001a2"))
   val fakeStore2 : Store = Store(fakeStoreId2, None, fakeOwner.id, dataset2)
 }

@@ -17,9 +17,10 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
   def suiteSynchronization = suite("Synchronize")(
     test("standard scenario") {
       for {
-        epoch          <- Clock.currentDateTime           // Virtual Clock so == epoch
+        epoch          <- Clock.currentDateTime               // Virtual Clock so == epoch
         owner          <- MediaService.ownerCreate(None, FirstName("John"), LastName("Doe"), None)
-        store          <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of("samples/dataset3")), None, None)
+        testSamples     = scala.util.Properties.envOrElse("PHOTOS_TEST_SAMPLES", "samples")
+        store          <- MediaService.storeCreate(None, None, owner.id, BaseDirectoryPath(Path.of(testSamples, "dataset3")), None, None)
         _              <- MediaService.keywordRulesUpsert(
                             store.id,
                             KeywordRules(
