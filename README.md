@@ -1,6 +1,6 @@
 # SOTOHP [![][sotohpImg]][sotohpLnk]
 
-A software to easily and quickly manage a huge number of photos. Why? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events.
+A software to easily and quickly manage a huge number of photos. Why? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events. My two favorite features are the diaporama and the ability to enrich photo descriptions, adjust locations with family members or friends from anywhere.
 
 ![](docs/screenshots/00-diaporama.png)
 
