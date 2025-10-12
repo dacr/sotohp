@@ -11,7 +11,7 @@ lazy val lmdbJavaOptions = Seq(
 )
 
 trait Publishable extends SonatypeCentralPublishModule {
-  override def publishVersion = "1.0.16"
+  override def publishVersion = "1.0.17-SNAPSHOT"
   def pomSettings             = PomSettings(
     description = "Photos management made simple",
     organization = "fr.janalyse",
