@@ -21,7 +21,7 @@ node_modules/
 .metals/
 .bloop/
 .vscode/
-.idea/
+.idea*/
 target/
 out/
 project/target/
