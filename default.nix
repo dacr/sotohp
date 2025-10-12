@@ -1,35 +1,23 @@
-{ pkgs ? import <nixpkgs> {
-     config.allowUnfree = true;
-  }
-}: pkgs.mkShell {
+let
+  stable   = import (fetchTarball https://nixos.org/channels/nixos-25.05/nixexprs.tar.xz) {
+    config.allowUnfree = true;
+   };
+  unstable = import (fetchTarball https://nixos.org/channels/nixos-unstable/nixexprs.tar.xz) { };
+in stable.mkShell {
    name = "sotohp-env-shell";
    buildInputs =
      let
-       jdk23fx = pkgs.jdk23.override {
+       jdk21fx = stable.jdk21.override {
          enableJavaFX = true;
        };
-       sbt23fx = pkgs.sbt.override {
-         jre = jdk23fx;
+       mill21fx = unstable.mill.override {
+         jre = jdk21fx;
        };
-     in with pkgs; [
+     in with stable; [
          gtk3 pkg-config
          git gitRepo gnupg autoconf curl
          procps gnumake util-linux m4 gperf unzip
-         cudatoolkit linuxPackages.nvidia_x11
-         cudaPackages.cuda_cudart
-         libGLU libGL
-         xorg.libXi xorg.libXmu freeglut
-         xorg.libXext xorg.libX11 xorg.libXv xorg.libXrandr zlib
          ncurses5 stdenv.cc binutils
-         jdk23fx sbt23fx
+         jdk21fx mill21fx
   ];
-  ## TODO workaround as openjfx is not yet well supported under NIX
-  shellHook = ''
-      export CUDA_PATH=${pkgs.cudatoolkit}
-      export LD_LIBRARY_PATH=${pkgs.linuxPackages.nvidia_x11}/lib:$LD_LIBRARY_PATH
-      export LD_LIBRARY_PATH=${pkgs.ncurses5}/lib:$LD_LIBRARY_PATH
-      export LD_LIBRARY_PATH=${pkgs.cudaPackages.cuda_cudart}/lib:$LD_LIBRARY_PATH
-      export EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib"
-      export EXTRA_CCFLAGS="-I/usr/include"
-  '';
 }
