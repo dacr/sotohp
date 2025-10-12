@@ -1,44 +1,26 @@
-all:
+all: test
 
-api:
-	sbt "; project api; runMain fr.janalyse.sotohp.api.ApiApp"
+run-api:
+	mill user-interfaces.api.run
 
-viewer:
-	sbt "; project gui ; runMain fr.janalyse.sotohp.gui.PhotoViewerApp"
+run-viewer:
+	mill user-interfaces.gui.run
 
-stats:
-	sbt "; project cli ; runMain fr.janalyse.sotohp.cli.Statistics"
+run-stats:
+	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
 test:
 	export PHOTOS_ELASTIC_ENABLED=false && \
 	  export PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY="" && \
-      sbt "test"
+      mill __.test
 
 # -----------------------------------------------------------------------------
 # Publishing helpers
 # -----------------------------------------------------------------------------
 
-.PHONY: release publish-snapshot publish-local sona-release
-
-# Full release to Maven Central via Central Portal (non-SNAPSHOT)
-release:
-	@echo "[Release] Running sbt release with defaults (uploads bundle to Central & releases)"
-	sbt "release with-defaults"
-
-# Publish a SNAPSHOT to the Central snapshots repository
-publish-snapshot:
-	@echo "[Publish] Publishing signed SNAPSHOT artifacts to Central snapshots"
-	sbt "+publishSigned"
-
-# Re-attempt Central Portal upload/release if artifacts were already staged locally
-sona-release:
+publish:
 	@echo "[Sonatype] Uploading bundle and releasing via Central Portal"
-	sbt "sonaRelease"
-
-# For local testing only
-publish-local:
-	@echo "[Publish] Publishing to local Ivy/Maven cache"
-	sbt "+publishLocal"
+	mill mill.javalib.SonatypeCentralPublishModule/
 
 # -----------------------------------------------------------------------------
 # Frontend UI build
