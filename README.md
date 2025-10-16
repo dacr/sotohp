@@ -35,17 +35,21 @@ Once again this project has first started as just [a "small" script][photosc], f
 
 The web user interface is quite fast, user-friendly and feature-rich, with behind the scene a REST API:
 
-![](docs/screenshots/01-viewer.png)
+![](docs/screenshots/10-viewer.png)
 
-![](docs/screenshots/02-mosaic.png)
+![](docs/screenshots/15-viewer-edit.png)
 
-![](docs/screenshots/03-events.png)
+![](docs/screenshots/30-mosaic.png)
 
-![](docs/screenshots/04-maps.png)
+![](docs/screenshots/40-events.png)
 
-![](docs/screenshots/21-settings.png)
+![](docs/screenshots/45-events-edit.png)
 
-![](docs/screenshots/42-openapi.png)
+![](docs/screenshots/60-maps.png)
+
+![](docs/screenshots/70-settings.png)
+
+![](docs/screenshots/80-openapi.png)
 
 ![](docs/screenshots/99-dashboard.png)
 
