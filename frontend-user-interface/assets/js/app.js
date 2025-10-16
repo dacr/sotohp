@@ -64,6 +64,49 @@ let currentMedia = null;
 let slideshowTimer = null;
 let slideshowPlaying = false;
 
+// Global keyboard shortcuts for modals:
+// - Escape: close the topmost modal overlay
+// - Ctrl+Enter / Cmd+Enter: trigger the primary action (Save/Create) in the topmost modal
+// Applies to any create/update form that uses the common .modal-overlay wrapper
+document.addEventListener('keydown', (e) => {
+  try {
+    const overlays = document.querySelectorAll('.modal-overlay');
+    if (!overlays || overlays.length === 0) return;
+    const last = overlays[overlays.length - 1];
+
+    // Escape closes the modal
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (last && typeof last.remove === 'function') last.remove();
+      return;
+    }
+
+    // Ctrl+Enter (or Cmd+Enter on macOS) activates the primary action
+    const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.keyCode === 13;
+    const hasCtrlOrMeta = e.ctrlKey || e.metaKey;
+    if (isEnter && hasCtrlOrMeta) {
+      const modal = last.querySelector('.modal');
+      if (!modal) return;
+      // Prefer explicit primary button with class .save
+      let primaryBtn = modal.querySelector('button.save');
+      // Fallback: first button in footer that is not a .cancel
+      if (!primaryBtn) {
+        const footer = modal.querySelector('footer');
+        if (footer) {
+          const btns = Array.from(footer.querySelectorAll('button'));
+          primaryBtn = btns.find(b => !b.classList.contains('cancel')) || null;
+        }
+      }
+      if (primaryBtn && typeof primaryBtn.click === 'function') {
+        e.preventDefault();
+        e.stopPropagation();
+        primaryBtn.click();
+      }
+    }
+  } catch {}
+});
+
 // Owner caching to reduce API requests
 const ownerCache = new Map(); // ownerId -> owner object
 const storeCache = new Map(); // storeId -> store object
