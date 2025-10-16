@@ -945,6 +945,7 @@ function openEventEditModal(ev) {
   const nameVal = ev.name || '';
   const descVal = ev.description || '';
   const tsVal = toLocalInputValue(ev.timestamp);
+  const pubVal = ev.publishedOn || '';
   const overlayHtml = `
     <div class="modal">
       <header>
@@ -960,6 +961,8 @@ function openEventEditModal(ev) {
             <textarea id="ev-desc">${(descVal||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
             <label style="margin-top:8px">Timestamp</label>
             <input type="datetime-local" id="ev-ts" value="${tsVal}">
+            <label style="margin-top:8px">Published On (URL)</label>
+            <input type="url" id="ev-published" placeholder="https://example.com/album" value="${pubVal.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
             <label style="margin-top:8px">Keywords</label>
             <div class="chips" id="ev-chips"></div>
           </div>
@@ -1115,9 +1118,14 @@ function openEventEditModal(ev) {
     const description = overlay.querySelector('#ev-desc').value.trim();
     const tsLocal = overlay.querySelector('#ev-ts').value;
     const timestamp = fromLocalInputValue(tsLocal);
+    const published = (overlay.querySelector('#ev-published')?.value || '').trim();
+
     const body = { name };
     if (description) body.description = description;
     if (timestamp) body.timestamp = timestamp;
+    if (published === '') body.publishedOn = null; else if (published) {
+      try { new URL(published); body.publishedOn = published; } catch { showWarning('Invalid Published On URL'); return; }
+    }
     if (clearedLoc) body.location = null; else if (currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number') body.location = currentLoc;
     if (keywords && keywords.length > 0) body.keywords = keywords;
     try {
@@ -1127,6 +1135,7 @@ function openEventEditModal(ev) {
       updatedEv.name = name || ev.name;
       updatedEv.description = description || undefined;
       updatedEv.timestamp = timestamp || undefined;
+      if (published === '') updatedEv.publishedOn = undefined; else if (body.publishedOn) updatedEv.publishedOn = body.publishedOn;
       if (clearedLoc) updatedEv.location = null; else if (body.location) updatedEv.location = body.location;
       if (keywords && keywords.length >= 0) updatedEv.keywords = keywords;
       close();

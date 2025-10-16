@@ -42,6 +42,7 @@ export interface Event {
   keywords?: string[];
   timestamp?: string;
   originalId?: string;
+  publishedOn?: string;
 }
 
 export interface EventCreate {
@@ -55,7 +56,7 @@ export interface EventUpdate {
   description?: string;
   location?: Location;
   timestamp?: string; // ISO date-time
-  originalId?: string;
+  publishedOn?: string; // URL where this event album has been published
   keywords?: string[];
 }
 

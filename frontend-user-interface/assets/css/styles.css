@@ -172,7 +172,7 @@ section#tab-mosaic.tab.active { display: flex; }
 .modal footer { display: flex; gap: 8px; justify-content: flex-end; padding: 10px 14px; border-top: 1px solid #e5e7eb; background: #fafafa; }
 .modal .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .modal label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; }
-.modal input[type="text"], .modal textarea, .modal input[type="datetime-local"] { width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
+.modal input[type="text"], .modal textarea, .modal input[type="datetime-local"], .modal input[type="url"] { width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
 .modal textarea { min-height: 70px; resize: vertical; }
 
 /* Keywords chips */

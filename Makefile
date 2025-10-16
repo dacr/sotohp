@@ -1,6 +1,6 @@
 all: test
 
-run-api:
+run-api: ui
 	mill user-interfaces.api.run
 
 run-viewer:
@@ -9,7 +9,7 @@ run-viewer:
 run-stats:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
-test:
+test: ui
 	export PHOTOS_ELASTIC_ENABLED=false && \
 	  export PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY="" && \
       mill __.test
@@ -18,7 +18,7 @@ test:
 # Publishing helpers
 # -----------------------------------------------------------------------------
 
-publish:
+publish: ui
 	@echo "[Sonatype] Uploading bundle and releasing via Central Portal"
 	mill mill.javalib.SonatypeCentralPublishModule/
 
