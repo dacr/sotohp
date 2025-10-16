@@ -25,6 +25,7 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
                             location = None,
                             timestamp = None,
                             coverOriginalId = None,
+                            publishedOn = None,
                             keywords = Set.empty
                           )
                           .some

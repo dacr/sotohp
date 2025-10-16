@@ -9,6 +9,7 @@ import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDete
 import fr.janalyse.sotohp.service.model.{KeywordRules, SynchronizeAction, SynchronizeStatus}
 import zio.lmdb.LMDB
 
+import java.net.URL
 import java.time.OffsetDateTime
 import java.util.regex.Pattern
 
@@ -77,6 +78,7 @@ trait MediaService {
     location: Option[Location],
     timestamp: Option[ShootDateTime],
     coverOriginalId: Option[OriginalId],
+    publishedOn: Option[URL],
     keywords: Set[Keyword]
   ): IO[ServiceIssue, Option[Event]]
 
@@ -227,9 +229,10 @@ object MediaService {
     location: Option[Location],
     timestamp: Option[ShootDateTime],
     coverOriginalId: Option[OriginalId],
+    publishedOn: Option[URL],
     keywords: Set[Keyword]
   ): ZIO[MediaService, ServiceIssue, Option[Event]] =
-    ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, location, timestamp, coverOriginalId, keywords))
+    ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, location, timestamp, coverOriginalId, publishedOn, keywords))
 
   // -------------------------------------------------------------------------------------------------------------------
 

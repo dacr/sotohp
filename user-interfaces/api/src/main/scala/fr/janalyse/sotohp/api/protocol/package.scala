@@ -12,6 +12,8 @@ import java.util.UUID
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath}
 
+import java.net.URL
+
 package object protocol {
 
   // Primitive schemas we’ll reuse
@@ -71,6 +73,7 @@ package object protocol {
   given Schema[EventDescription] = strAs
   given Schema[MediaDescription] = strAs
   given Schema[Keyword]          = strAs
+  given Schema[URL]              = strAs
 
   // Booleans
   given Schema[Starred] = boolAs

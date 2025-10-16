@@ -723,6 +723,7 @@ object ApiApp extends ZIOAppDefault {
                    location = toUpdate.location.transformInto[Option[Location]],
                    timestamp = toUpdate.timestamp,
                    coverOriginalId = event.originalId,
+                   publishedOn = toUpdate.publishedOn,
                    keywords = toUpdate.keywords
                  )
                  .logError("Couldn't update event")
@@ -771,8 +772,9 @@ object ApiApp extends ZIOAppDefault {
                                 description = event.description,
                                 location = event.location,
                                 timestamp = event.timestamp,
+                                coverOriginalId = Some(media.original.id),
+                                publishedOn = event.publishedOn,
                                 keywords = event.keywords,
-                                coverOriginalId = Some(media.original.id)
                               )
                               .logError("Couldn't update event")
                               .mapError(err => ApiInternalError("Couldn't update event"))

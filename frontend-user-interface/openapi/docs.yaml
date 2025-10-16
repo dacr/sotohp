@@ -953,6 +953,8 @@ components:
         originalId:
           type: string
           format: uuid
+        publishedOn:
+          type: string
         keywords:
           type: array
           uniqueItems: true
@@ -988,6 +990,8 @@ components:
         timestamp:
           type: string
           format: date-time
+        publishedOn:
+          type: string
         keywords:
           type: array
           uniqueItems: true
@@ -1293,6 +1297,7 @@ components:
       type: object
       required:
       - running
+      - checkedCount
       - processedCount
       properties:
         running:
@@ -1300,6 +1305,9 @@ components:
         lastUpdated:
           type: string
           format: date-time
+        checkedCount:
+          type: integer
+          format: int64
         processedCount:
           type: integer
           format: int64

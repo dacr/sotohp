@@ -61,6 +61,7 @@ object MediaBuilder {
           location = mayBeOriginal.flatMap(_.location),
           timestamp = mayBeOriginal.flatMap(_.cameraShootDateTime),
           originalId = mayBeOriginal.map(_.id),
+          publishedOn = None,
           keywords = Set.empty
         )
       )

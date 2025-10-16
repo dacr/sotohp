@@ -17,6 +17,7 @@ import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
 import zio.ZIOAspect.annotated
 
+import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
@@ -476,7 +477,11 @@ class MediaServiceLive private (
                                }
                                .someOrFail(ServiceDatabaseIssue(s"Couldn't find store for event attachment : ${daoAttachment.storeId}"))
                            }
-      event            = daoEvent.into[Event].withFieldConst(_.attachment, maybeAttachment).transform
+      event            = daoEvent
+                           .into[Event]
+                           .withFieldConst(_.attachment, maybeAttachment)
+                           .withFieldComputed(_.publishedOn, in => in.publishedOn.flatMap(uri => Try(java.net.URI(uri).toURL).toOption))
+                           .transform
     } yield event
   }
 
@@ -510,7 +515,7 @@ class MediaServiceLive private (
   ): IO[ServiceIssue, Event] = {
     for {
       eventId <- Random.nextUUID.map(EventId.apply)
-      event    = Event(eventId, attachment, name, description, location, timestamp, originalId, keywords)
+      event    = Event(eventId, attachment, name, description, location, timestamp, originalId, None, keywords)
       _       <- eventColl
                    .upsert(eventId, _ => event.into[DaoEvent].transform)
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
@@ -524,6 +529,7 @@ class MediaServiceLive private (
     location: Option[Location],
     timestamp: Option[ShootDateTime],
     coverOriginalId: Option[OriginalId],
+    publishedOn: Option[URL],
     keywords: Set[Keyword]
   ): IO[ServiceIssue, Option[Event]] = {
     for {
@@ -536,6 +542,7 @@ class MediaServiceLive private (
                              location = location.transformInto[Option[DaoLocation]],
                              timestamp = timestamp,
                              originalId = coverOriginalId,
+                             publishedOn = publishedOn.map(_.toString),
                              keywords = keywords
                            )
                          )
@@ -1053,6 +1060,7 @@ class MediaServiceLive private (
           location = event.location,
           timestamp = event.timestamp,
           coverOriginalId = event.originalId,
+          publishedOn = event.publishedOn,
           keywords = event.keywords
         )
       )
