@@ -25,7 +25,7 @@ Once again this project has first started as just [a "small" script][photosc], f
 
 ## Current status
 
-- will be released soon as a standalone docker application,
+- Released first as a docker application, [see below for more details](#docker-container-quick-start),
 - comes with a [REST API](frontend-user-interface/openapi/docs.yaml) and a **web user interface** providing:
     - fast visualization,
     - photos diaporama,
