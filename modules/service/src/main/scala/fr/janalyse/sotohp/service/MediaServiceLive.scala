@@ -777,15 +777,17 @@ class MediaServiceLive private (
     val logic = for {
       _                         <- normalized(input.media.original.id)      // required to optimize AI work so not launched in background
       fiberMiniaturesFiber      <- miniatures(input.media.original.id)      // .fork
-      fiberFacesFiber           <- faces(input.media.original.id)           // .fork
-      fiberClassificationsFiber <- classifications(input.media.original.id) // .fork
-      fiberObjectsFiber         <- objects(input.media.original.id)         // .fork
+      fiberFacesFiber           <- faces(input.media.original.id).ignoreLogged           // .fork
+      fiberClassificationsFiber <- classifications(input.media.original.id).ignoreLogged // .fork
+      fiberObjectsFiber         <- objects(input.media.original.id).ignoreLogged         // .fork
       // TODO investigate why this is not working
       // _                         <- fiberMiniaturesFiber.join
       // _                         <- fiberFacesFiber.join
       // _                         <- fiberClassificationsFiber.join
       // _                         <- fiberObjectsFiber.join
     } yield input
+
+    // TODO AI processors may fail, but we don't want to stop the whole synchronization => check the added `.ignoreLogged`
     logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.absoluteMediaPath.toString)
   }
 
