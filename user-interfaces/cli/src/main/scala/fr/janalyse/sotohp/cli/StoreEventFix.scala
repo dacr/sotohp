@@ -38,6 +38,7 @@ object StoreEventFix extends CommonsCLI {
                           location = selectedMedia.flatMap(_.original.location),
                           timestamp = selectedMedia.flatMap(_.original.cameraShootDateTime),
                           coverOriginalId = selectedMedia.map(_.original.id),
+                          publishedOn = event.publishedOn,
                           keywords = event.keywords
                         )
                         .when(selectedMedia.isDefined)
