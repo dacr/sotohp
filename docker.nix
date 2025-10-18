@@ -1,0 +1,72 @@
+let
+  pkgs = import (fetchTarball "https://nixos.org/channels/nixos-25.05/nixexprs.tar.xz") {};
+  # Generate the UTF-8 locale archive inside the image
+  localeArchive = pkgs.glibcLocales.override {
+    locales = [ "en_US.UTF-8/UTF-8" ];
+  };
+
+  # Ensure the prebuilt artifacts from the repo are copied into the Nix store
+  apiJar = pkgs.runCommand "sotohp-api.jar" {} ''
+    mkdir -p $out
+    cp ${./out/user-interfaces/api/assembly.dest/out.jar} $out/sotohp-api.jar
+  '';
+
+  uiDist = pkgs.runCommand "sotohp-ui-dist" {} ''
+    mkdir -p $out
+    cp -r ${./frontend-user-interface-dist} $out/frontend-user-interface-dist
+  '';
+
+  runScript = pkgs.writeShellScript "run-sotohp" ''
+    set -euo pipefail
+    export PHOTOS_LISTENING_PORT="''${PHOTOS_LISTENING_PORT:-8080}"
+    # Default directories if not provided by the user
+    export PHOTOS_CACHE_DIRECTORY="''${PHOTOS_CACHE_DIRECTORY:-/data/SOTOHP/cache}"
+    export PHOTOS_LMDB_PATH="''${PHOTOS_LMDB_PATH:-/data/SOTOHP/database}"
+    ${pkgs.toybox}/bin/mkdir -p $PHOTOS_LMDB_PATH
+    ${pkgs.toybox}/bin/mkdir -p $PHOTOS_CACHE_DIRECTORY
+    # If albums are mounted, you can point PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY to a subdirectory of /data
+    export JAVA_OPTS="-Dfile.encoding=UTF-8 --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED"
+    exec ${pkgs.temurin-jre-bin-24}/bin/java -Xms1g -Xmx1g $JAVA_OPTS -jar /app/sotohp-api.jar
+  '';
+
+in pkgs.dockerTools.buildLayeredImage {
+  name = "sotohp";
+  tag = "latest";
+
+  contents = [apiJar uiDist localeArchive];
+
+  extraCommands = ''
+    mkdir -p app
+    ln -s ${apiJar}/sotohp-api.jar app/sotohp-api.jar
+    ln -s ${uiDist}/frontend-user-interface-dist app/frontend-user-interface-dist
+    cp ${runScript} entrypoint.sh
+    chmod +x entrypoint.sh
+    mkdir -m 1777 -p tmp
+  '';
+
+  config = {
+    WorkingDir = "/app";
+    Entrypoint = [ "${pkgs.bash}/bin/bash" "/entrypoint.sh" ];
+    #Entrypoint = [ "${pkgs.bash}/bin/bash" ];
+    Env = [
+      "PHOTOS_LISTENING_PORT=8080"
+      "PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY=/data/ALBUMS"
+      "PHOTOS_CACHE_DIRECTORY=/data/SOTOHP/cache"
+      "PHOTOS_LMDB_PATH=/data/SOTOHP/database"
+      "PHOTOS_ELASTIC_ENABLED=false"
+      "PHOTOS_ELASTIC_URL=http://127.0.0.1:9200"
+      #"PATH=${pkgs.toybox}/bin:$PATH"
+      "LANG=en_US.UTF-8"
+      "LC_ALL=en_US.UTF-8"
+      # Point glibc to the included locale archive
+      "LOCALE_ARCHIVE=${localeArchive}/lib/locale/locale-archive"
+    ];
+    ExposedPorts = {
+      "8080/tcp" = {};
+    };
+    Volumes = {
+      "/data/ALBUMS" = {};
+      "/data/SOTOHP" = {};
+    };
+  };
+}

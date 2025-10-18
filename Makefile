@@ -9,10 +9,21 @@ run-viewer:
 run-stats:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
+assembly:
+	mill -i user-interfaces.api.assembly
+
 test: ui
 	export PHOTOS_ELASTIC_ENABLED=false && \
 	  export PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY="" && \
       mill __.test
+
+docker-build:  ui assembly
+	nix-build docker.nix
+	docker load < result
+
+docker-run-api: docker-build
+	docker run --rm -it -p 8888:8080 -v "${PWD}/samples:/data/ALBUMS" --name sotohp sotohp:latest
+
 
 # -----------------------------------------------------------------------------
 # Publishing helpers

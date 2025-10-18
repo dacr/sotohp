@@ -140,13 +140,14 @@ trait MediaService {
 
 object MediaService {
 
-  val live: ZLayer[LMDB & SearchService, LMDBIssues | CoreIssue, MediaService] = ZLayer.fromZIO(
+  val live: ZLayer[LMDB & SearchService, LMDBIssues | CoreIssue, MediaService] = ZLayer.fromZIO {
     for {
       lmdb             <- ZIO.service[LMDB]
       searchService    <- ZIO.service[SearchService]
-      mediaServiceLive <- MediaServiceLive.setup(lmdb, searchService)
+      mediaServiceLive <- MediaServiceLive.setup(lmdb, searchService).logError("MediaServiceLive setup error")
+      _                <- ZIO.logInfo(s"MediaServiceLive layer ready")
     } yield mediaServiceLive
-  )
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -264,9 +265,9 @@ object MediaService {
   // -------------------------------------------------------------------------------------------------------------------
 
   def synchronizeStart(addedThoseLastDays: Option[Int]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronizeStart(addedThoseLastDays))
-  def synchronizeWait(): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronizeWait())
-  def synchronizeStop(): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.synchronizeStop())
-  def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus]       = ZIO.serviceWithZIO(_.synchronizeStatus())
+  def synchronizeWait(): ZIO[MediaService, ServiceIssue, Unit]                                 = ZIO.serviceWithZIO(_.synchronizeWait())
+  def synchronizeStop(): ZIO[MediaService, ServiceIssue, Unit]                                 = ZIO.serviceWithZIO(_.synchronizeStop())
+  def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus]                  = ZIO.serviceWithZIO(_.synchronizeStatus())
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): ZIO[MediaService, ServiceIssue, Set[Keyword]] = ZIO.serviceWithZIO(_.keywordSentenceToKeywords(storeId, sentence))

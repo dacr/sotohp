@@ -774,7 +774,7 @@ object ApiApp extends ZIOAppDefault {
                                 timestamp = event.timestamp,
                                 coverOriginalId = Some(media.original.id),
                                 publishedOn = event.publishedOn,
-                                keywords = event.keywords,
+                                keywords = event.keywords
                               )
                               .logError("Couldn't update event")
                               .mapError(err => ApiInternalError("Couldn't update event"))
@@ -992,8 +992,18 @@ object ApiApp extends ZIOAppDefault {
       .widen[ApiEnv]
   }
 
-  def buildFrontRoutes: IO[Exception, List[ZServerEndpoint[ApiEnv, Any]]] = for {
-    uiBaseDir <- ApiConfig.config.map(_.clientResourcesPath)
+  def buildFrontRoutes: IO[Throwable, List[ZServerEndpoint[ApiEnv, Any]]] = for {
+    dir       <- ApiConfig.config.map(_.clientResourcesPath)
+    uiBaseDir <- ZIO
+                   .attempt(
+                     Path
+                       .of(dir)
+                       .toAbsolutePath
+                       .normalize()
+                       .toString
+                   )
+                   .logError("Issue with the user interface resources path")
+    _         <- ZIO.logInfo(s"User interface resources path: $uiBaseDir")
   } yield {
     htmlStaticAssets(uiBaseDir)
       :+ htmlRouteFallback(uiBaseDir)
@@ -1001,10 +1011,12 @@ object ApiApp extends ZIOAppDefault {
   }
 
   def server = for {
+    _           <- ZIO.logInfo("Starting service")
     frontRoutes <- buildFrontRoutes
+    _           <- ZIO.logInfo("Front routes are ready")
     allRoutes    = apiRoutes ++ apiDocRoutes ++ frontRoutes
     httpApp      = ZioHttpInterpreter().toHttp(allRoutes)
-    _           <- ZIO.logInfo("Starting service")
+    _           <- ZIO.logInfo("All routes are ready")
     zservice    <- Server.serve(httpApp)
   } yield zservice
 
@@ -1029,14 +1041,15 @@ object ApiApp extends ZIOAppDefault {
   override def run = {
     for {
       config <- ApiConfig.config
-      _      <- server.provide(
-                  LMDB.live,
-                  MediaService.live,
-                  SearchService.live,
-                  serverConfigLayer,
-                  Server.live,
-                  Scope.default
-                )
+      _      <- server
+                  .provide(
+                    LMDB.live,
+                    MediaService.live,
+                    SearchService.live,
+                    serverConfigLayer,
+                    Server.live,
+                    Scope.default
+                  )
     } yield ()
   }
 }

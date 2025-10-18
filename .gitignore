@@ -11,6 +11,7 @@ nohup.out
 *.tmp
 null
 node_modules/
+result
 
 # direnv
 .envrc
