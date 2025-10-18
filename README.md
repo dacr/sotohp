@@ -1,6 +1,9 @@
 # SOTOHP [![][sotohpImg]][sotohpLnk]
 
-A software to easily and quickly manage a huge number of photos. Why? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events. My two favorite features are the diaporama and the ability to enrich photo descriptions, adjust locations with family members or friends from anywhere.
+A software to easily and quickly manage and annotate a huge number of photos.
+Why? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events.
+My two favorite features are the diaporama and the ability to enrich photo descriptions,
+adjust locations with family members or friends from anywhere.
 
 ![](docs/screenshots/00-diaporama.png)
 
@@ -30,6 +33,9 @@ Once again this project has first started as just [a "small" script][photosc], f
     - managing owners and storage directories,
     - synchronize originals from multiple storage directories,
     - ...
+- ⚠️ keep in mind that this software is currently designed for use in **private home network**,
+  do not expose it directly to the internet without configuring a secured reverse proxy, know
+  what you do!
 
 ## User interfaces
 
@@ -74,6 +80,16 @@ User configuration is done through environment variables, the main ones are:
 | `PHOTOS_ELASTIC_PASSWORD`                  | Elasticsearch/Opensearch : password                             |                         |
 |                                            |                                                                 |                         |
 | `PHOTOS_LISTENING_PORT`                    | Web server and API listening port                               | `8080`                  |
+
+## Docker container quick start
+```
+docker run \
+  -p 8888:8080 \
+  -v "/my/path/to/my/albums:/data/ALBUMS" \
+  -v "/where/to/keep/sotohp/data:/data/SOTOHP" \
+  --name sotohp \
+  dacr/sotohp:latest
+```
 
 [photosc]: https://gist.github.com/dacr/46718666ae96ebac300b27c80ed7bec3
 
