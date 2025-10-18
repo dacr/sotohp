@@ -84,6 +84,7 @@ User configuration is done through environment variables, the main ones are:
 | `PHOTOS_LISTENING_PORT`                    | Web server and API listening port                               | `8080`                  |
 
 ## Docker container quick start
+[dacr/sotohp docker images information](https://hub.docker.com/repository/docker/dacr/sotohp/general)
 ```
 docker run \
   -p 8888:8080 \
