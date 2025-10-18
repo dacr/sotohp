@@ -21,9 +21,9 @@ let
     export PHOTOS_LISTENING_PORT="''${PHOTOS_LISTENING_PORT:-8080}"
     # Default directories if not provided by the user
     export PHOTOS_CACHE_DIRECTORY="''${PHOTOS_CACHE_DIRECTORY:-/data/SOTOHP/cache}"
-    export PHOTOS_LMDB_PATH="''${PHOTOS_LMDB_PATH:-/data/SOTOHP/database}"
-    ${pkgs.toybox}/bin/mkdir -p $PHOTOS_LMDB_PATH
+    export PHOTOS_DATABASE_PATH="''${PHOTOS_DATABASE_PATH:-/data/SOTOHP/database}"
     ${pkgs.toybox}/bin/mkdir -p $PHOTOS_CACHE_DIRECTORY
+    ${pkgs.toybox}/bin/mkdir -p $PHOTOS_DATABASE_PATH
     # If albums are mounted, you can point PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY to a subdirectory of /data
     export JAVA_OPTS="-Dfile.encoding=UTF-8 --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED"
     exec ${pkgs.temurin-jre-bin-24}/bin/java -Xms1g -Xmx1g $JAVA_OPTS -jar /app/sotohp-api.jar
@@ -52,7 +52,7 @@ in pkgs.dockerTools.buildLayeredImage {
       "PHOTOS_LISTENING_PORT=8080"
       "PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY=/data/ALBUMS"
       "PHOTOS_CACHE_DIRECTORY=/data/SOTOHP/cache"
-      "PHOTOS_LMDB_PATH=/data/SOTOHP/database"
+      "PHOTOS_DATABASE_PATH=/data/SOTOHP/database"
       "PHOTOS_ELASTIC_ENABLED=false"
       "PHOTOS_ELASTIC_URL=http://127.0.0.1:9200"
       #"PATH=${pkgs.toybox}/bin:$PATH"

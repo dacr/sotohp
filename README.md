@@ -61,7 +61,7 @@ User configuration is done through environment variables, the main ones are:
 |--------------------------------------------|-----------------------------------------------------------------|-------------------------|
 | `PHOTOS_CACHE_DIRECTORY`                   | Cache for optimized, miniatures, faces, ... images              | `.sotohp` (current dir) |
 |                                            |                                                                 |                         |
-| `PHOTOS_LMDB_PATH`                         | Database storage directory ([LMDB][lmdb])                       | `.lmdb` (current dir)   |
+| `PHOTOS_DATABASE_PATH`                     | Database storage directory ([LMDB][lmdb])                       | `.lmdb` (current dir)   |
 |                                            |                                                                 |                         |
 | `PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY` | Media originals store prison location base                      | `/data/ALBUMS`          |
 | `PHOTOS_FILE_SYSTEM_SEARCH_MAX_DEPTH`      | Media originals max search depth                                | `10`                    |
