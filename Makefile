@@ -17,16 +17,24 @@ test: ui
 	  export PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY="" && \
       mill __.test
 
-docker-build:  ui assembly
+docker-build: ui assembly
 	nix-build docker.nix
 	docker load < result
-	docker tag sotohp:latest dacr/sotohp:v1.0.17
+	docker tag sotohp:latest dacr/sotohp:$$(mill show user-interfaces.api.publishVersion 2>/dev/null | tr -d '"' | tr "-" "_")
 	docker tag sotohp:latest dacr/sotohp:latest
 
+docker-push: docker-build
+	docker push -a dacr/sotohp
 
-docker-run-api: docker-build
-	docker run --rm -it -p 8888:8080 -v "${PWD}/samples:/data/ALBUMS" --name sotohp sotohp:latest
+docker-run-demo: docker-build
+	docker run --rm -it -p 8888:8080 -v "${PWD}/demo/ALBUMS:/data/ALBUMS" --name sotohp sotohp:latest
 
+docker-run-demo-update: docker-build
+	docker run --rm -it -p 8888:8080 \
+		-v "${PWD}/demo/ALBUMS:/data/ALBUMS" \
+		-v "${PWD}/demo/SOTOHP:/data/SOTOHP" \
+		--name sotohp \
+		sotohp:latest
 
 # -----------------------------------------------------------------------------
 # Publishing helpers

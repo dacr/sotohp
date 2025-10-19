@@ -101,6 +101,7 @@ object ObjectsDetectionProcessor {
                        val objectsDetectionPredictor = objectDetectionsModel.newPredictor() // not thread safe !
                        ObjectsDetectionProcessor(objectsDetectionPredictor)
                      }
+                     .logError("Objects detection processor allocation issue")
                      .mapError(err => ObjectsDetectionIssue("Unable to allocate objects detection processor", err))
       result    <- semaphore.withPermit(logic)
     } yield result

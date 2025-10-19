@@ -101,6 +101,7 @@ object ClassificationProcessor {
       semaphore <- Semaphore.make(1)
       logic      = ZIO
                      .attemptBlocking(ClassificationProcessor(imageClassificationModel.newPredictor() /* not thread safe !*/ ))
+                     .logError("Classification processor allocation issue")
                      .mapError(ClassificationIssue("Unable to allocate classification processor", _))
       result    <- semaphore.withPermit(logic)
     } yield result

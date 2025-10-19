@@ -161,6 +161,7 @@ object FacesProcessor {
                        val facesPredictor                               = facesModel.newPredictor() // not thread safe !
                        FacesProcessor(facesPredictor)
                      }
+                     .logError("Faces processor allocation issue")
                      .mapError(err => FacesDetectionIssue("Unable to allocate faces processor", err))
       result    <- semaphore.withPermit(logic)
     } yield result

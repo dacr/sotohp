@@ -9,7 +9,7 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%highlight(%d{yyyy-MM-dd HH:mm:ss.SSS} [%-5level] [%logger]) %msg %kvp{DOUBLE}%n</pattern>
+            <pattern>%highlight(%d{yyyy-MM-dd HH:mm:ss.SSS} [%-5level] [%logger]) %msg %kvp{DOUBLE} %throwable{full}%n</pattern>
             <!--            <pattern>%msg %mdc%n</pattern>-->
         </encoder>
     </appender>

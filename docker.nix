@@ -25,7 +25,7 @@ let
     ${pkgs.toybox}/bin/mkdir -p $PHOTOS_CACHE_DIRECTORY
     ${pkgs.toybox}/bin/mkdir -p $PHOTOS_DATABASE_PATH
     # If albums are mounted, you can point PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY to a subdirectory of /data
-    export JAVA_OPTS="-Dfile.encoding=UTF-8 --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED"
+    export JAVA_OPTS="-Dfile.encoding=UTF-8 --enable-native-access=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED"
     exec ${pkgs.temurin-bin-24}/bin/java -Xms1g -Xmx1g $JAVA_OPTS -jar /app/sotohp-api.jar
   '';
 
@@ -46,16 +46,17 @@ in pkgs.dockerTools.buildLayeredImage {
 
   config = {
     WorkingDir = "/app";
-    Entrypoint = [ "${pkgs.bash}/bin/bash" "/entrypoint.sh" ];
-    #Entrypoint = [ "${pkgs.bash}/bin/bash" ];
+    #Entrypoint = [ "${pkgs.bash}/bin/bash" "/entrypoint.sh" ];
+    Entrypoint = [ "${pkgs.bash}/bin/bash" ];
     Env = [
+      "PATH=${pkgs.toybox}/bin:$PATH"
+      "DJL_CACHE_DIR=/data/DJLAI"
       "PHOTOS_LISTENING_PORT=8080"
       "PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY=/data/ALBUMS"
       "PHOTOS_CACHE_DIRECTORY=/data/SOTOHP/cache"
       "PHOTOS_DATABASE_PATH=/data/SOTOHP/database"
       "PHOTOS_ELASTIC_ENABLED=false"
       "PHOTOS_ELASTIC_URL=http://127.0.0.1:9200"
-      #"PATH=${pkgs.toybox}/bin:$PATH"
       "LANG=en_US.UTF-8"
       "LC_ALL=en_US.UTF-8"
       # Point glibc to the included locale archive

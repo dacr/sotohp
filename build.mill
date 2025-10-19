@@ -5,6 +5,7 @@ package build
 import mill.*, scalalib.*, mill.scalalib.publish.*
 
 lazy val lmdbJavaOptions = Seq(
+  "--enable-native-access=ALL-UNNAMED",
   "--add-opens",
   "java.base/java.nio=ALL-UNNAMED",
   "--add-opens",
@@ -12,7 +13,7 @@ lazy val lmdbJavaOptions = Seq(
 )
 
 trait Publishable extends SonatypeCentralPublishModule {
-  override def publishVersion = "1.0.18-SNAPSHOT"
+  override def publishVersion = "1.0.18"
   def pomSettings             = PomSettings(
     description = "Photos management made simple",
     organization = "fr.janalyse",
