@@ -11,7 +11,7 @@ import sttp.tapir.json.zio.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import sttp.tapir.ztapir.*
-import zio.logging.backend.SLF4J
+//import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.{*, given}
@@ -57,7 +57,8 @@ object ApiApp extends ZIOAppDefault {
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
     // val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
     val fmt     = LogFormat.annotations |-| LogFormat.line
-    val logging = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
+    //val logging = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
+    val logging = zio.logging.slf4j.bridge.Slf4jBridge.initialize
 
     logging
       ++ configProviderLayer
