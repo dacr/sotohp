@@ -26,7 +26,7 @@ let
     ${pkgs.toybox}/bin/mkdir -p $PHOTOS_DATABASE_PATH
     # If albums are mounted, you can point PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY to a subdirectory of /data
     export JAVA_OPTS="-Dfile.encoding=UTF-8 --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED"
-    exec ${pkgs.temurin-jre-bin-24}/bin/java -Xms1g -Xmx1g $JAVA_OPTS -jar /app/sotohp-api.jar
+    exec ${pkgs.temurin-bin-24}/bin/java -Xms1g -Xmx1g $JAVA_OPTS -jar /app/sotohp-api.jar
   '';
 
 in pkgs.dockerTools.buildLayeredImage {

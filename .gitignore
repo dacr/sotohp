@@ -31,7 +31,6 @@ project/metals.sbt
 frontend-user-interface-dist/*
 
 # sotohp related data
-originals-*
 cluster*/
 .sotohp/
 .lmdb/

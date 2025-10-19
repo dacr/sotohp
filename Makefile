@@ -20,6 +20,9 @@ test: ui
 docker-build:  ui assembly
 	nix-build docker.nix
 	docker load < result
+	docker tag sotohp:latest dacr/sotohp:v1.0.17
+	docker tag sotohp:latest dacr/sotohp:latest
+
 
 docker-run-api: docker-build
 	docker run --rm -it -p 8888:8080 -v "${PWD}/samples:/data/ALBUMS" --name sotohp sotohp:latest
