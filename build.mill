@@ -1,9 +1,12 @@
 //| mill-version: 1.0.6
 //| mill-jvm-opts: [ "-Xss50M" ]
+//| mvnDeps:
+//| - io.github.hoangmaihuy::mill-universal-packager::0.2.0
+
 
 package build
 import mill.*, scalalib.*, mill.scalalib.publish.*
-import mill.scalalib.Assembly.*
+import io.github.hoangmaihuy.mill.packager.archetypes.JavaAppPackagingModule
 
 lazy val lmdbJavaOptions = Seq(
   "--enable-native-access=ALL-UNNAMED",
@@ -100,10 +103,11 @@ object modules extends Module {
 }
 
 object `user-interfaces` extends Module {
-  object api extends SotohpModule with Publishable {
+  object api extends SotohpModule with Publishable with JavaAppPackagingModule {
     def artifactName = "sotohp-api"
     def moduleDeps   = Seq(modules.service)
     def forkArgs     = Seq("-Xms512m", "-Xmx512m") ++ lmdbJavaOptions
+    def mainClass    = Some("fr.janalyse.sotohp.api.ApiApp")
     def mvnDeps      = Seq(
       mvn"dev.zio::zio-logging:2.5.1",
       //mvn"dev.zio::zio-logging-slf4j2:2.5.1",
@@ -114,14 +118,8 @@ object `user-interfaces` extends Module {
       mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.11.49",
       mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.11.49"
     )
-    def assemblyRules = Seq(
-      Rule.Append("reference.conf"),
-      Rule.Append("META-INF/services/.*"),
-      Rule.Exclude("META-INF/INDEX.LIST"),
-      Rule.Exclude("META-INF/.*\\.SF"),
-      Rule.Exclude("META-INF/.*\\.DSA"),
-      Rule.Exclude("META-INF/.*\\.RSA")
-    )
+
+    override def packageVersion = publishVersion
   }
 
   object cli extends SotohpModule with Publishable {

@@ -6,9 +6,9 @@ let
   };
 
   # Ensure the prebuilt artifacts from the repo are copied into the Nix store
-  apiJar = pkgs.runCommand "sotohp-api.jar" {} ''
+  apiStage = pkgs.runCommand "sotohp-api-universal" {} ''
     mkdir -p $out
-    cp ${./out/user-interfaces/api/assembly.dest/out.jar} $out/sotohp-api.jar
+    cp -r ${./out/user-interfaces/api/universalStage.dest} $out/sotohp-api
   '';
 
   uiDist = pkgs.runCommand "sotohp-ui-dist" {} ''
@@ -26,18 +26,20 @@ let
     ${pkgs.toybox}/bin/mkdir -p $PHOTOS_DATABASE_PATH
     # If albums are mounted, you can point PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY to a subdirectory of /data
     export JAVA_OPTS="-Dfile.encoding=UTF-8 --enable-native-access=ALL-UNNAMED --add-opens java.base/java.nio=ALL-UNNAMED --add-opens java.base/sun.nio.ch=ALL-UNNAMED"
-    exec ${pkgs.temurin-bin}/bin/java -Xms1g -Xmx1g $JAVA_OPTS -jar /app/sotohp-api.jar
+    export JAVA_OPTS="-Xms1g -Xmx1g $JAVA_OPTS"
+    exec bash /app/bin/sotohp-api
   '';
 
 in pkgs.dockerTools.buildLayeredImage {
   name = "sotohp";
   tag = "latest";
 
-  contents = [apiJar uiDist localeArchive];
+  contents = [apiStage uiDist localeArchive];
 
   extraCommands = ''
     mkdir -p app
-    ln -s ${apiJar}/sotohp-api.jar app/sotohp-api.jar
+    ln -s ${apiStage}/sotohp-api/bin app/bin
+    ln -s ${apiStage}/sotohp-api/lib app/lib
     ln -s ${uiDist}/frontend-user-interface-dist app/frontend-user-interface-dist
     cp ${runScript} entrypoint.sh
     chmod +x entrypoint.sh
@@ -46,10 +48,11 @@ in pkgs.dockerTools.buildLayeredImage {
 
   config = {
     WorkingDir = "/app";
-    #Entrypoint = [ "${pkgs.bash}/bin/bash" "/entrypoint.sh" ];
-    Entrypoint = [ "${pkgs.bash}/bin/bash" ];
+    Entrypoint = [ "${pkgs.bash}/bin/bash" "/entrypoint.sh" ];
+    #Entrypoint = [ "${pkgs.bash}/bin/bash" ];
     Env = [
-      "PATH=${pkgs.toybox}/bin:$PATH"
+      "PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.gawk}/bin:${pkgs.temurin-jre-bin}/bin:$PATH"
+      #"PATH=${pkgs.temurin-bin}/bin:$PATH"
       "DJL_CACHE_DIR=/data/DJLAI"
       "PHOTOS_LISTENING_PORT=8080"
       "PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY=/data/ALBUMS"
@@ -61,6 +64,7 @@ in pkgs.dockerTools.buildLayeredImage {
       "LC_ALL=en_US.UTF-8"
       # Point glibc to the included locale archive
       "LOCALE_ARCHIVE=${localeArchive}/lib/locale/locale-archive"
+      "LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath [pkgs.stdenv.cc.cc]}"
     ];
     ExposedPorts = {
       "8080/tcp" = {};

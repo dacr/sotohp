@@ -9,15 +9,18 @@ run-viewer:
 run-stats:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
-assembly:
-	mill -i user-interfaces.api.assembly
+api-jar:
+	mill -i user-interfaces.api.jar
+
+api-universal-stage:
+	mill -i user-interfaces.api.universalStage
 
 test: ui
 	export PHOTOS_ELASTIC_ENABLED=false && \
 	  export PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY="" && \
       mill __.test
 
-docker-build: ui assembly
+docker-build: ui api-universal-stage
 	nix-build docker.nix
 	docker load < result
 	docker tag sotohp:latest dacr/sotohp:$$(mill show user-interfaces.api.publishVersion 2>/dev/null | tr -d '"' | tr "-" "_")
