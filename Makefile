@@ -35,8 +35,8 @@ docker-demo-build: ui api-universal-stage
 docker-push: docker-build
 	docker push -a dacr/sotohp
 
-docker-push-demo: docker-demo-build
-	docker push -a dacr/sotohp-demo
+docker-demo-push: docker-demo-build
+	docker push -a dacr/sotohp_demo
 
 docker-run-demo: docker-demo-build
 	docker run --rm -it -p 8888:8080 --name sotohp_demo sotohp_demo:latest
