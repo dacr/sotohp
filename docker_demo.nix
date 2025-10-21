@@ -16,6 +16,11 @@ let
     cp -r ${./frontend-user-interface-dist} $out/frontend-user-interface-dist
   '';
 
+  demoFiles = pkgs.runCommand "sotohp-demo-files" {} ''
+    mkdir -p $out
+    cp -pr ${./demo} $out/demo
+  '';
+
   runScript = pkgs.writeShellScript "run-sotohp" ''
     set -euo pipefail
     export PHOTOS_LISTENING_PORT="''${PHOTOS_LISTENING_PORT:-8080}"
@@ -31,16 +36,19 @@ let
   '';
 
 in pkgs.dockerTools.buildLayeredImage {
-  name = "sotohp";
+  name = "sotohp_demo";
   tag = "latest";
 
-  contents = [apiStage uiDist localeArchive];
+  contents = [apiStage uiDist demoFiles localeArchive];
 
   extraCommands = ''
     mkdir -p app
     ln -s ${apiStage}/sotohp-api/bin app/bin
     ln -s ${apiStage}/sotohp-api/lib app/lib
     ln -s ${uiDist}/frontend-user-interface-dist app/frontend-user-interface-dist
+    mkdir -p data
+    ln -s  ${demoFiles}/demo/ALBUMS data/ALBUMS
+    cp -rp ${demoFiles}/demo/SOTOHP data/
     cp ${runScript} entrypoint.sh
     chmod +x entrypoint.sh
     mkdir -m 1777 -p tmp

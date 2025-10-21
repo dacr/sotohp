@@ -26,13 +26,26 @@ docker-build: ui api-universal-stage
 	docker tag sotohp:latest dacr/sotohp:$$(mill show user-interfaces.api.publishVersion 2>/dev/null | tr -d '"' | tr "-" "_")
 	docker tag sotohp:latest dacr/sotohp:latest
 
+docker-demo-build: ui api-universal-stage
+	nix-build docker_demo.nix
+	docker load < result
+	docker tag sotohp_demo:latest dacr/sotohp_demo:$$(mill show user-interfaces.api.publishVersion 2>/dev/null | tr -d '"' | tr "-" "_")
+	docker tag sotohp_demo:latest dacr/sotohp_demo:latest
+
 docker-push: docker-build
 	docker push -a dacr/sotohp
 
-docker-run-demo: docker-build
+docker-push-demo: docker-demo-build
+	docker push -a dacr/sotohp-demo
+
+docker-run-demo: docker-demo-build
+	docker run --rm -it -p 8888:8080 --name sotohp_demo sotohp_demo:latest
+
+
+docker-run-demo-maker: docker-build
 	docker run --rm -it -p 8888:8080 -v "${PWD}/demo/ALBUMS:/data/ALBUMS" --name sotohp sotohp:latest
 
-docker-run-demo-update: docker-build
+docker-run-demo-maker-update: docker-build
 	docker run --rm -it -p 8888:8080 \
 		-v "${PWD}/demo/ALBUMS:/data/ALBUMS" \
 		-v "${PWD}/demo/SOTOHP:/data/SOTOHP" \
