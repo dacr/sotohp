@@ -86,7 +86,7 @@ User configuration is done through environment variables, the main ones are:
 ## Docker demo container quick start
 
 ```
-docker run --rm -it -p 8888:8080 --name sotohp_demo sotohp_demo:latest
+docker run --rm -it -p 8888:8080 dacr/sotohp_demo:latest
 ```
 And then visit http://localhost:8888/ for a preinitialized sotohp instance :  
 ![](docs/screenshots/sotohp-demo-container.png)
