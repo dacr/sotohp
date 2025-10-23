@@ -39,18 +39,18 @@ docker-demo-push: docker-demo-build
 	docker push -a dacr/sotohp_demo
 
 docker-run-demo: docker-demo-build
-	docker run --rm -it -p 8888:8080 --name sotohp_demo sotohp_demo:latest
+	docker run --rm -it -p 8888:8080 --name sotohp_demo dacr/sotohp_demo:latest
 
 
 docker-run-demo-maker: docker-build
-	docker run --rm -it -p 8888:8080 -v "${PWD}/demo/ALBUMS:/data/ALBUMS" --name sotohp sotohp:latest
+	docker run --rm -it -p 8888:8080 -v "${PWD}/demo/ALBUMS:/data/ALBUMS" --name sotohp dacr/sotohp:latest
 
 docker-run-demo-maker-update: docker-build
 	docker run --rm -it -p 8888:8080 \
 		-v "${PWD}/demo/ALBUMS:/data/ALBUMS" \
 		-v "${PWD}/demo/SOTOHP:/data/SOTOHP" \
 		--name sotohp \
-		sotohp:latest
+		dacr/sotohp:latest
 
 # -----------------------------------------------------------------------------
 # Publishing helpers

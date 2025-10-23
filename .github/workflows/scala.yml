@@ -14,7 +14,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Build and Test
-        run: ./mill __.test
+        run: ./millit __.test
         env:
           PHOTOS_ELASTIC_ENABLED: false
           PHOTOS_FILE_SYSTEM_SEARCH_LOCK_DIRECTORY: ""
