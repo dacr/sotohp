@@ -12,6 +12,7 @@ nohup.out
 null
 node_modules/
 result
+lock.mdb
 
 # direnv
 .envrc
