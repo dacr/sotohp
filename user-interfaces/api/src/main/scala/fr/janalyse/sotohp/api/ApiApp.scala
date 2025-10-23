@@ -57,7 +57,7 @@ object ApiApp extends ZIOAppDefault {
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
     // val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
     val fmt     = LogFormat.annotations |-| LogFormat.line
-    //val logging = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
+    // val logging = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
     val logging = zio.logging.slf4j.bridge.Slf4jBridge.initialize
 
     logging
@@ -479,19 +479,52 @@ object ApiApp extends ZIOAppDefault {
       )
   // -------------------------------------------------------------------------------------------------------------------
 
-  def mediaGetImageBytesLogic(accessKey: MediaAccessKey, mininiatureOne: Boolean): ZIO[ApiEnv, ApiIssue, (Media, ZStream[ApiEnv, ApiInternalError, Byte])] = {
+  enum WhichMedia {
+    case Original
+    case Normalized
+    case Miniature
+  }
+
+  def mediaGetImageBytesStream(accessKey: MediaAccessKey, whichMedia: WhichMedia): ZIO[ApiEnv, ApiIssue, (Media, ZStream[ApiEnv, ApiInternalError, Byte])] = {
     val logic = for {
       media           <- MediaService
                            .mediaGet(accessKey)
                            .logError("Couldn't get media")
                            .mapError(err => ApiInternalError("Couldn't get media"))
                            .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      imageBytesStream = if (mininiatureOne) MediaService.mediaMiniatureRead(media.accessKey)
-                         else MediaService.mediaNormalizedRead(media.accessKey)
+      imageBytesStream = whichMedia match {
+                           case WhichMedia.Original   => MediaService.mediaOriginalRead(media.accessKey)
+                           case WhichMedia.Normalized => MediaService.mediaNormalizedRead(media.accessKey)
+                           case WhichMedia.Miniature  => MediaService.mediaMiniatureRead(media.accessKey)
+                         }
     } yield (media, imageBytesStream.mapError(err => ApiInternalError("Couldn't read media")))
 
     logic
   }
+
+  def mediaGetImageBytesLogic(rawMediaAccessKey: String, whichMedia: WhichMedia) = {
+    for {
+      mediaKey            <- extractMediaAccessKey(rawMediaAccessKey)
+      (media, byteStream) <- mediaGetImageBytesStream(mediaKey, whichMedia)
+      ms                  <- ZIO.service[MediaService]
+      httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
+    } yield (MediaType.ImageJpeg.toString, httpStream)
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  val mediaGetOriginalEndpoint =
+    mediaEndpoint()
+      .name("Get media original size image")
+      .summary("Get media original size image content")
+      .get
+      .in(path[String]("mediaAccessKey"))
+      .in("content" / "original")
+      .out(header[String]("Content-Type"))
+      .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Original))
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   val mediaGetNormalizedEndpoint =
     mediaEndpoint()
@@ -503,14 +536,7 @@ object ApiApp extends ZIOAppDefault {
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey =>
-        for {
-          mediaKey            <- extractMediaAccessKey(rawMediaAccessKey)
-          (media, byteStream) <- mediaGetImageBytesLogic(mediaKey, false)
-          ms                  <- ZIO.service[MediaService]
-          httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
-        } yield (MediaType.ImageJpeg.toString, httpStream)
-      )
+      .zServerLogic[ApiEnv](rawMediaAccessKey =>mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Normalized))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -524,14 +550,7 @@ object ApiApp extends ZIOAppDefault {
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey =>
-        for {
-          mediaKey            <- extractMediaAccessKey(rawMediaAccessKey)
-          (media, byteStream) <- mediaGetImageBytesLogic(mediaKey, true)
-          ms                  <- ZIO.service[MediaService]
-          httpStream           = byteStream.provideEnvironment(ZEnvironment(ms))
-        } yield (MediaType.ImageJpeg.toString, httpStream)
-      )
+      .zServerLogic[ApiEnv](rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Miniature))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -919,6 +938,7 @@ object ApiApp extends ZIOAppDefault {
     mediaGetEndpoint,
     mediaUpdateEndpoint,
     mediaUpdateStarredEndpoint,
+    mediaGetOriginalEndpoint,
     mediaGetNormalizedEndpoint,
     mediaGetMiniatureEndpoint,
     // -------------------------
