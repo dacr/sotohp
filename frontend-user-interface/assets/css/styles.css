@@ -21,10 +21,10 @@ main { flex: 1; position: relative; }
 /* Zoom-in (Ken Burns-like) animation applied while an image is displayed in Viewer */
 @keyframes viewer-zoom-in {
   from { transform: translate(-50%, -50%) scale(1); }
-  to   { transform: translate(-50%, -50%) scale(1.12); }
+  to   { transform: translate(-50%, -50%) scale(1.25); }
 }
 /* Class toggled by JS to start the animation; duration can be customized via --viewer-zoom-duration */
-#main-image.zooming { animation: viewer-zoom-in var(--viewer-zoom-duration, 20s) ease-out forwards; }
+#main-image.zooming { animation: viewer-zoom-in var(--viewer-zoom-duration, 20s) linear forwards; }
 .sidebar { display: flex; flex-direction: column; gap: 0.75rem; }
 .info { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.5rem; background: #fafafa; }
 .controls { border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
