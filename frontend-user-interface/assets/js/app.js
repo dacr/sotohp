@@ -16,6 +16,7 @@ class ApiClient {
   }
   mediaNormalizedUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`; }
   mediaMiniatureUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`; }
+  mediaOriginalUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`; }
   async listEvents() { return await this.#fetchNdjson('/api/events'); }
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
   async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
@@ -229,7 +230,36 @@ function showMedia(media) {
   currentMedia = media;
   try { localStorage.setItem('viewer.lastMediaAccessKey', media.accessKey); } catch {}
   const img = $('#main-image');
-  img.src = api.mediaNormalizedUrl(media.accessKey) + `?t=${Date.now()}`; // cache bust
+  if (img) {
+    // Determine which size to use: original only in fullscreen, otherwise normalized
+    const cont = document.querySelector('.image-container');
+    const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
+    const srcUrl = (isFs ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey)) + `?t=${Date.now()}`;
+    // Smooth fade transition for image swaps
+    try { img.style.opacity = '0'; } catch {}
+    // Start zoom exactly when the new image is displayed
+    img.onload = () => {
+      try { img.style.opacity = '1'; } catch {}
+      try {
+        // Update zoom duration from slideshow controls (fallback 20s)
+        const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
+        const secs = parseInt(durActive?.dataset?.secs || '20', 10) || 20;
+        img.style.setProperty('--viewer-zoom-duration', `${secs}s`);
+      } catch {}
+      if (slideshowPlaying) {
+        // Restart animation in sync with display time
+        img.classList.remove('zooming');
+        void img.offsetWidth; // force reflow to restart animation
+        img.classList.add('zooming');
+      } else {
+        // Ensure no zoom effect while slideshow is paused/stopped
+        img.classList.remove('zooming');
+      }
+      // Clear handler
+      img.onload = null;
+    };
+    img.src = srcUrl; // cache bust
+  }
   const date = media.shootDateTime || media.original?.cameraShootDateTime || '-';
   const dateStr = date ? new Date(date).toLocaleString() : '-';
   const ev0 = (media.events && media.events.length > 0) ? media.events[0] : null;
@@ -699,11 +729,43 @@ function initViewerControls() {
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });
 
+  // Swap image source when entering/exiting fullscreen: original in fullscreen, normalized otherwise
+  document.addEventListener('fullscreenchange', () => {
+    try {
+      const img = document.getElementById('main-image');
+      const cont = document.querySelector('.image-container');
+      if (!img || !currentMedia) return;
+      const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
+      const newUrl = (isFs ? api.mediaOriginalUrl(currentMedia.accessKey) : api.mediaNormalizedUrl(currentMedia.accessKey)) + `?t=${Date.now()}`;
+      // Fade and restart zoom timing on the newly displayed variant
+      try { img.style.opacity = '0'; } catch {}
+      img.onload = () => {
+        try { img.style.opacity = '1'; } catch {}
+        try {
+          const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
+          const secs = parseInt(durActive?.dataset?.secs || '20', 10) || 20;
+          img.style.setProperty('--viewer-zoom-duration', `${secs}s`);
+        } catch {}
+        if (slideshowPlaying) {
+          img.classList.remove('zooming');
+          void img.offsetWidth;
+          img.classList.add('zooming');
+        } else {
+          img.classList.remove('zooming');
+        }
+        img.onload = null;
+      };
+      img.src = newUrl;
+    } catch {}
+  });
+
   // Slideshow helpers using setTimeout so new settings are applied at each tick
   function stopSlideshow() {
     slideshowPlaying = false;
     if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
     const btn = $('#btn-play'); if (btn) btn.textContent = '▷';
+    // Ensure zoom effect is stopped when slideshow is paused/stopped
+    try { const img = document.getElementById('main-image'); if (img) img.classList.remove('zooming'); } catch {}
   }
   function scheduleNextTick() {
     if (!slideshowPlaying) return;
@@ -733,6 +795,18 @@ function initViewerControls() {
     const btn = $('#btn-play');
     if (slideshowPlaying) { stopSlideshow(); return; }
     slideshowPlaying = true; btn.textContent = '❚❚';
+    // Start or restart zoom on the currently displayed image immediately
+    try {
+      const img = document.getElementById('main-image');
+      if (img) {
+        const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
+        const secs = parseInt(durActive?.dataset?.secs || '20', 10) || 20;
+        img.style.setProperty('--viewer-zoom-duration', `${secs}s`);
+        img.classList.remove('zooming');
+        void img.offsetWidth;
+        img.classList.add('zooming');
+      }
+    } catch {}
     // Start waiting according to current selection, then advance
     scheduleNextTick();
   });
@@ -782,6 +856,13 @@ function initViewerControls() {
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     let handled = false;
     switch (e.key) {
+      case ' ':
+      case 'Space':
+      case 'Spacebar': {
+        const btn = document.getElementById('btn-play');
+        if (btn && typeof btn.click === 'function') btn.click();
+        handled = true; break;
+      }
       case 'Home':
         loadMedia('first'); handled = true; break;
       case 'End':

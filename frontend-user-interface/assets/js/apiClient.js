@@ -14,10 +14,13 @@ export class ApiClient {
         return res.data;
     }
     mediaNormalizedUrl(mediaAccessKey) {
-        return `/api/media/${encodeURIComponent(mediaAccessKey)}/normalized`;
+        return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`;
     }
     mediaMiniatureUrl(mediaAccessKey) {
-        return `/api/media/${encodeURIComponent(mediaAccessKey)}/miniature`;
+        return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`;
+    }
+    mediaOriginalUrl(mediaAccessKey) {
+        return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`;
     }
     async listEvents() {
         return await this.fetchNdjson('/api/events');

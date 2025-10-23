@@ -21,11 +21,15 @@ export class ApiClient {
   }
 
   mediaNormalizedUrl(mediaAccessKey: string): string {
-    return `/api/media/${encodeURIComponent(mediaAccessKey)}/normalized`
+    return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`
   }
 
   mediaMiniatureUrl(mediaAccessKey: string): string {
-    return `/api/media/${encodeURIComponent(mediaAccessKey)}/miniature`
+    return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`
+  }
+
+  mediaOriginalUrl(mediaAccessKey: string): string {
+    return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`
   }
 
   async listEvents(): Promise<SEvent[]> {
