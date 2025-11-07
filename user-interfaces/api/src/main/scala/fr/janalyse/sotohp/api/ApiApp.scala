@@ -17,6 +17,9 @@ import zio.logging.LogFormat
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.{*, given}
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.processor.model.PersonId
+import fr.janalyse.sotohp.api.protocol.{ApiPersonCreate, ApiPersonUpdate}
+import wvlet.airframe.ulid.ULID
 import fr.janalyse.sotohp.service.model.SynchronizeAction
 import fr.janalyse.sotohp.service.model.SynchronizeAction.Start
 import sttp.capabilities.zio.ZioStreams
@@ -74,20 +77,26 @@ object ApiApp extends ZIOAppDefault {
   val statusForApiResourceNotFound    = oneOfVariant(StatusCode.NotFound, jsonBody[ApiResourceNotFound].description("Couldn't find the request resource"))
 
   // -------------------------------------------------------------------------------------------------------------------
-  val systemEndpoint                          = endpoint.in("api").in("system").tag("System")
-  val adminEndpoint                           = endpoint.in("api").in("admin").tag("Admin")
-  def stateEndpoint(plurial: Boolean = false) = endpoint.in("api").in("state" + (if (plurial) "s" else "")).tag("State")
-  def mediaEndpoint(plurial: Boolean = false) = endpoint.in("api").in("media" + (if (plurial) "s" else "")).tag("Media")
-  def storeEndpoint(plurial: Boolean = false) = endpoint.in("api").in("store" + (if (plurial) "s" else "")).tag("Store")
-  def ownerEndpoint(plurial: Boolean = false) = endpoint.in("api").in("owner" + (if (plurial) "s" else "")).tag("Owner")
-  def eventEndpoint(plurial: Boolean = false) = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
-  def faceEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("face" + (if (plurial) "s" else "")).tag("Face")
+  val systemEndpoint                           = endpoint.in("api").in("system").tag("System")
+  val adminEndpoint                            = endpoint.in("api").in("admin").tag("Admin")
+  def stateEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("state" + (if (plurial) "s" else "")).tag("State")
+  def mediaEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("media" + (if (plurial) "s" else "")).tag("Media")
+  def storeEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("store" + (if (plurial) "s" else "")).tag("Store")
+  def ownerEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("owner" + (if (plurial) "s" else "")).tag("Owner")
+  def personEndpoint(plurial: Boolean = false) = endpoint.in("api").in("person" + (if (plurial) "s" else "")).tag("Person")
+  def eventEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
+  def faceEndpoint(plurial: Boolean = false)   = endpoint.in("api").in("face" + (if (plurial) "s" else "")).tag("Face")
 
   // -------------------------------------------------------------------------------------------------------------------
   def extractOwnerId(rawOwnerId: String) =
     ZIO
       .attempt(OwnerId.fromString(rawOwnerId))
       .mapError(err => ApiInvalidOrMissingInput("Invalid owner identifier"))
+
+  def extractPersonId(rawPersonId: String) =
+    ZIO
+      .attempt(PersonId(ULID.fromString(rawPersonId)))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid person identifier"))
 
   def extractFaceId(rawFaceId: String) =
     ZIO
@@ -817,6 +826,163 @@ object ApiApp extends ZIOAppDefault {
       }
 
   // -------------------------------------------------------------------------------------------------------------------
+  val personListLogic: ZStream[MediaService, Throwable, ApiPerson] = {
+    MediaService
+      .personList()
+      .map(_.transformInto[ApiPerson])
+      .mapError(err => ApiInternalError("Couldn't list persons"))
+  }
+
+  val personListEndpoint =
+    personEndpoint(true)
+      .name("List persons")
+      .summary("Stream all defined persons")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiPerson.apiOwnerSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Person JSON object per line)")
+      )
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](_ =>
+        for {
+          ms        <- ZIO.service[MediaService]
+          byteStream = personListLogic
+                         .map(_.toJson)
+                         .intersperse("\n")
+                         .via(ZPipeline.utf8Encode)
+                         .provideEnvironment(ZEnvironment(ms))
+        } yield byteStream
+      )
+
+  def personCreateLogic(toCreate: ApiPersonCreate): ZIO[ApiEnv, ApiInternalError, ApiPerson] = {
+    for {
+      person   <- MediaService
+                    .personCreate(None, toCreate.firstName, toCreate.lastName, toCreate.birthDate, toCreate.description)
+                    .mapError(err => ApiInternalError("Couldn't create person"))
+      apiPerson = person.transformInto[ApiPerson]
+    } yield apiPerson
+  }
+
+  val personCreateEndpoint =
+    personEndpoint()
+      .name("Create a person")
+      .summary("Create a new person")
+      .post
+      .in(jsonBody[ApiPersonCreate])
+      .out(jsonBody[ApiPerson])
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](toCreate => personCreateLogic(toCreate))
+
+  def personGetLogic(personId: PersonId): ZIO[ApiEnv, ApiIssue, ApiPerson] = {
+    for {
+      person   <- MediaService
+                    .personGet(personId)
+                    .logError("Couldn't get person")
+                    .mapError(err => ApiInternalError("Couldn't get person"))
+                    .someOrFail(ApiResourceNotFound("Couldn't find person"))
+      apiPerson = person.transformInto[ApiPerson]
+    } yield apiPerson
+  }
+
+  val personGetEndpoint =
+    personEndpoint()
+      .name("Get person")
+      .summary("Get all person information for the given person identifier")
+      .get
+      .in(path[String]("personId"))
+      .out(jsonBody[ApiPerson])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawPersonId =>
+        extractPersonId(rawPersonId)
+          .flatMap(personId => personGetLogic(personId))
+      )
+
+  def personUpdateLogic(personId: PersonId, toUpdate: ApiPersonUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
+    for {
+      _ <- MediaService
+             .personUpdate(
+               personId,
+               toUpdate.firstName,
+               toUpdate.lastName,
+               toUpdate.birthDate,
+               toUpdate.description,
+               toUpdate.chosenFaceId
+             )
+             .logError("Couldn't update person")
+             .mapError(err => ApiInternalError("Couldn't update person"))
+    } yield ()
+  }
+
+  val personUpdateEndpoint =
+    personEndpoint()
+      .name("Update person")
+      .summary("Update person configuration for the given person identifier")
+      .put
+      .in(path[String]("personId"))
+      .in(jsonBody[ApiPersonUpdate])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv]((rawPersonId, toUpdate) =>
+        extractPersonId(rawPersonId)
+          .flatMap(personId => personUpdateLogic(personId, toUpdate))
+      )
+
+  val personUpdateFaceEndpoint =
+    personEndpoint()
+      .name("Update person face")
+      .summary("Update person face for the given person and face identifiers")
+      .put
+      .in(path[String]("personId"))
+      .in("face")
+      .in(path[String]("faceId"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv]((rawPersonId, rawFaceId) =>
+        for {
+          personId <- extractPersonId(rawPersonId)
+          faceId   <- extractFaceId(rawFaceId)
+          _        <- MediaService
+                        .faceGet(faceId)
+                        .logError("Couldn't get face")
+                        .mapError(err => ApiInternalError("Couldn't get face"))
+                        .someOrFail(ApiResourceNotFound("Couldn't find face"))
+          person   <- MediaService
+                        .personGet(personId)
+                        .logError("Couldn't get person")
+                        .mapError(err => ApiInternalError("Couldn't get person"))
+                        .someOrFail(ApiResourceNotFound("Couldn't find person"))
+          _        <- MediaService
+                        .personUpdate(
+                          personId = personId,
+                          firstName = person.firstName,
+                          lastName = person.lastName,
+                          birthDate = person.birthDate,
+                          description = person.description,
+                          chosenFaceId = Some(faceId)
+                        )
+                        .logError("Couldn't update person")
+                        .mapError(err => ApiInternalError("Couldn't update person"))
+        } yield ()
+      )
+
+  def personDeleteLogic(personId: PersonId): ZIO[ApiEnv, ApiIssue, Unit] = {
+    MediaService
+      .personDelete(personId)
+      .logError("Couldn't delete person")
+      .mapError(err => ApiInternalError("Couldn't delete person"))
+  }
+
+  val personDeleteEndpoint =
+    personEndpoint()
+      .name("Delete person")
+      .summary("Delete the person for the given person identifier")
+      .delete
+      .in(path[String]("personId"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawPersonId =>
+        extractPersonId(rawPersonId)
+          .flatMap(personId => personDeleteLogic(personId))
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   def eventGetLogic(eventId: EventId): ZIO[ApiEnv, ApiIssue, ApiEvent] = {
     val logic = for {
@@ -1064,6 +1230,13 @@ object ApiApp extends ZIOAppDefault {
     faceListEndpoint,
     faceGetEndpoint,
     faceContentGetEndpoint,
+    // -------------------------
+    personListEndpoint,
+    personCreateEndpoint,
+    personGetEndpoint,
+    personUpdateEndpoint,
+    personUpdateFaceEndpoint,
+    personDeleteEndpoint,
     // -------------------------
     eventListEndpoint,
     eventCreateEndpoint,

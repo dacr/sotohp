@@ -71,6 +71,7 @@ trait MediaService {
   def personExists(personId: PersonId): IO[ServiceIssue, Boolean]
   def personDelete(personId: PersonId): IO[ServiceIssue, Unit]
   def personCreate(
+    id: Option[PersonId],
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
@@ -246,11 +247,12 @@ object MediaService {
   def personExists(personId: PersonId): ZIO[MediaService, ServiceIssue, Boolean]     = ZIO.serviceWithZIO(_.personExists(personId))
   def personDelete(personId: PersonId): ZIO[MediaService, ServiceIssue, Unit]        = ZIO.serviceWithZIO(_.personDelete(personId))
   def personCreate(
+    id: Option[PersonId],
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
     description: Option[PersonDescription]
-  ): ZIO[MediaService, ServiceIssue, Person] = ZIO.serviceWithZIO(_.personCreate(firstName, lastName, birthDate, description))
+  ): ZIO[MediaService, ServiceIssue, Person] = ZIO.serviceWithZIO(_.personCreate(id, firstName, lastName, birthDate, description))
   def personUpdate(
     personId: PersonId,
     firstName: FirstName,

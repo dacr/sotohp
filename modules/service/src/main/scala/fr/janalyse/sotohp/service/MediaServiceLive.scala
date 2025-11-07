@@ -354,15 +354,14 @@ class MediaServiceLive private (
   }
 
   def personCreate(
+    id: Option[PersonId],
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
     description: Option[PersonDescription]
   ): IO[ServiceIssue, Person] = {
     for {
-      personId <- ZIO
-                    .attempt(PersonId(ULID.newULID))
-                    .mapError(err => ServiceInternalIssue(s"Couldn't generate person id : $err"))
+      personId <- id.map(ZIO.succeed).getOrElse(ZIO.succeed(PersonId(ULID.newULID)))
       person    = Person(personId, firstName = firstName, lastName = lastName, birthDate = birthDate, description = description, chosenFaceId = None)
       _        <- personsColl
                     .upsertOverwrite(personId, person.into[DaoPerson].transform)
