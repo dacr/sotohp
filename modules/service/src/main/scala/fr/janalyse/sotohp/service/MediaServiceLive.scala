@@ -304,9 +304,9 @@ class MediaServiceLive private (
   def faceRead(faceId: FaceId): Stream[ServiceStreamIssue, Byte] = {
     val pathEffect: IO[ServiceStreamIssue, java.nio.file.Path] = for {
       face <- faceGet(faceId)
-                 .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch face for id ${faceId.asString} : $err"))
-                 .someOrFail(ServiceStreamInternalIssue(s"Couldn't find face for id : ${faceId.asString}"))
-      path   = face.path.path
+                .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch face for id ${faceId.asString} : $err"))
+                .someOrFail(ServiceStreamInternalIssue(s"Couldn't find face for id : ${faceId.asString}"))
+      path  = face.path.path
     } yield path
 
     ZStream.unwrapScoped {

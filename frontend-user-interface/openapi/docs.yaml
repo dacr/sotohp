@@ -329,6 +329,105 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/faces:
+    get:
+      tags:
+      - Face
+      summary: Stream people faces
+      operationId: List faces
+      responses:
+        '200':
+          description: NDJSON (one Store JSON object per line)
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/DetectedFace'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/face/{faceId}:
+    get:
+      tags:
+      - Face
+      summary: Get all face information for the given face identifier
+      operationId: Get face
+      parameters:
+      - name: faceId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectedFace'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/face/{faceId}/content:
+    get:
+      tags:
+      - Face
+      summary: Get face image content
+      operationId: Get face image
+      parameters:
+      - name: faceId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          headers:
+            Content-Type:
+              required: true
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/events:
     get:
       tags:
@@ -945,6 +1044,44 @@ components:
       properties:
         message:
           type: string
+    BoundingBox:
+      title: BoundingBox
+      type: object
+      required:
+      - x
+      - y
+      - width
+      - height
+      properties:
+        x:
+          type: number
+          format: double
+        y:
+          type: number
+          format: double
+        width:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+    DetectedFace:
+      title: DetectedFace
+      type: object
+      required:
+      - faceId
+      - originalId
+      - box
+      properties:
+        faceId:
+          type: string
+        originalId:
+          type: string
+          format: uuid
+        box:
+          $ref: '#/components/schemas/BoundingBox'
+        identifiedPersonId:
+          type: string
     Dimension:
       title: Dimension
       type: object
@@ -1211,6 +1348,19 @@ components:
         focalLength:
           type: number
           format: double
+    OriginalFaces:
+      title: OriginalFaces
+      type: object
+      required:
+      - originalId
+      properties:
+        originalId:
+          type: string
+          format: uuid
+        facesIds:
+          type: array
+          items:
+            type: string
     Owner:
       title: Owner
       type: object

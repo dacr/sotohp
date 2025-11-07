@@ -10,7 +10,7 @@ import java.nio.file.Path
 import java.time.OffsetDateTime
 import java.util.UUID
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath, PersonId}
+import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath, PersonDescription, PersonId}
 
 import java.net.URL
 
@@ -32,13 +32,13 @@ package object protocol {
   given Schema[EventId]    = uuidAs
 
   // ULID- / String-based wrappers
-  given Schema[OwnerId]        = strAs
-  given Schema[FaceId]         = strAs
-  given Schema[PersonId]       = strAs
+  given Schema[OwnerId]  = strAs
+  given Schema[FaceId]   = strAs
+  given Schema[PersonId] = strAs
 
   // String to String wrappers
   given Schema[MediaAccessKey] = strAs
-  given Schema[OriginalHash] = strAs
+  given Schema[OriginalHash]   = strAs
 
   // Path-based wrappers (string JSON representation)
   given Schema[BaseDirectoryPath]   = strAs
@@ -67,16 +67,17 @@ package object protocol {
   given Schema[LastSynchronized] = offsetDateTimeAs
 
   // Simple string wrappers
-  given Schema[CameraName]       = strAs
-  given Schema[ArtistInfo]       = strAs
-  given Schema[EventName]        = strAs
-  given Schema[StoreName]        = strAs
-  given Schema[FirstName]        = strAs
-  given Schema[LastName]         = strAs
-  given Schema[EventDescription] = strAs
-  given Schema[MediaDescription] = strAs
-  given Schema[Keyword]          = strAs
-  given Schema[URL]              = strAs
+  given Schema[CameraName]        = strAs
+  given Schema[ArtistInfo]        = strAs
+  given Schema[EventName]         = strAs
+  given Schema[StoreName]         = strAs
+  given Schema[FirstName]         = strAs
+  given Schema[LastName]          = strAs
+  given Schema[EventDescription]  = strAs
+  given Schema[MediaDescription]  = strAs
+  given Schema[PersonDescription] = strAs
+  given Schema[Keyword]           = strAs
+  given Schema[URL]               = strAs
 
   // Booleans
   given Schema[Starred] = boolAs

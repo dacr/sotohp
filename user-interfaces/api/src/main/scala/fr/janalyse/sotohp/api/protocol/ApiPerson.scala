@@ -1,0 +1,22 @@
+package fr.janalyse.sotohp.api.protocol
+
+import fr.janalyse.sotohp.model.{BirthDate, FirstName, LastName}
+import fr.janalyse.sotohp.processor.model.{FaceId, PersonDescription, PersonId}
+import sttp.tapir.Schema
+import zio.json.{DeriveJsonCodec, JsonCodec}
+import fr.janalyse.sotohp.service.json.{*, given}
+
+case class ApiPerson(
+  id: PersonId,
+  firstName: FirstName,
+  lastName: LastName,
+  birthDate: Option[BirthDate],
+  description: Option[PersonDescription],
+  chosenFaceId: Option[FaceId]
+)
+
+object ApiPerson {
+  given JsonCodec[ApiPerson] = DeriveJsonCodec.gen
+
+  given apiOwnerSchema: Schema[ApiPerson] = Schema.derived[ApiPerson].name(Schema.SName("Person"))
+}
