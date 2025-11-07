@@ -428,6 +428,201 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/persons:
+    get:
+      tags:
+      - Person
+      summary: Stream all defined persons
+      operationId: List persons
+      responses:
+        '200':
+          description: NDJSON (one Person JSON object per line)
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/person:
+    post:
+      tags:
+      - Person
+      summary: Create a new person
+      operationId: Create a person
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonCreate'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '400':
+          description: 'Invalid value for: body'
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/person/{personId}:
+    get:
+      tags:
+      - Person
+      summary: Get all person information for the given person identifier
+      operationId: Get person
+      parameters:
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Person'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    put:
+      tags:
+      - Person
+      summary: Update person configuration for the given person identifier
+      operationId: Update person
+      parameters:
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonUpdate'
+        required: true
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+    delete:
+      tags:
+      - Person
+      summary: Delete the person for the given person identifier
+      operationId: Delete person
+      parameters:
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/person/{personId}/face/{faceId}:
+    put:
+      tags:
+      - Person
+      summary: Update person face for the given person and face identifiers
+      operationId: Update person face
+      parameters:
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: faceId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/events:
     get:
       tags:
@@ -1409,6 +1604,61 @@ components:
         birthDate:
           type: string
           format: date-time
+    Person:
+      title: Person
+      type: object
+      required:
+      - id
+      - firstName
+      - lastName
+      properties:
+        id:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        birthDate:
+          type: string
+          format: date-time
+        description:
+          type: string
+        chosenFaceId:
+          type: string
+    PersonCreate:
+      title: PersonCreate
+      type: object
+      required:
+      - firstName
+      - lastName
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        birthDate:
+          type: string
+          format: date-time
+        description:
+          type: string
+    PersonUpdate:
+      title: PersonUpdate
+      type: object
+      required:
+      - firstName
+      - lastName
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        birthDate:
+          type: string
+          format: date-time
+        description:
+          type: string
+        chosenFaceId:
+          type: string
     State:
       title: State
       type: object
