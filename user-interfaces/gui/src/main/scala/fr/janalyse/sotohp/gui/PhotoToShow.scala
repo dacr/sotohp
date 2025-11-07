@@ -24,10 +24,10 @@ case class PhotoToShow(
 
 object PhotoToShow {
   def fromLazyPhoto(media: Media): ZIO[MediaService, Any, PhotoToShow] = for {
-    normalized      <- MediaService.normalized(media.original.id).map(_.flatMap(_.normalized))
-    classifications <- MediaService.classifications(media.original.id).map(_.map(_.classifications))
-    objects         <- MediaService.objects(media.original.id).map(_.map(_.objects))
-    faces           <- MediaService.faces(media.original.id).map(_.map(_.faces))
+    normalized      <- MediaService.originalNormalized(media.original.id).map(_.flatMap(_.normalized))
+    classifications <- MediaService.originalClassifications(media.original.id).map(_.map(_.classifications))
+    objects         <- MediaService.originalObjects(media.original.id).map(_.map(_.objects))
+    faces           <- MediaService.originalFaces(media.original.id).map(_.map(_.faces))
     place            = media.location
     shootDateTime    = media.shootDateTime.orElse(media.original.cameraShootDateTime)
     orientation      = media.orientation.orElse(media.original.orientation)

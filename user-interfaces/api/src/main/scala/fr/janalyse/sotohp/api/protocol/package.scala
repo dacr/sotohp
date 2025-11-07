@@ -10,7 +10,7 @@ import java.nio.file.Path
 import java.time.OffsetDateTime
 import java.util.UUID
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath}
+import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath, PersonId}
 
 import java.net.URL
 
@@ -34,8 +34,11 @@ package object protocol {
   // ULID- / String-based wrappers
   given Schema[OwnerId]        = strAs
   given Schema[FaceId]         = strAs
+  given Schema[PersonId]       = strAs
+
+  // String to String wrappers
   given Schema[MediaAccessKey] = strAs
-  given Schema[OriginalHash]   = strAs
+  given Schema[OriginalHash] = strAs
 
   // Path-based wrappers (string JSON representation)
   given Schema[BaseDirectoryPath]   = strAs

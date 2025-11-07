@@ -5,7 +5,7 @@ import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
+import fr.janalyse.sotohp.processor.model.{DetectedFace, FaceId, OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized, Person, PersonDescription, PersonId}
 import fr.janalyse.sotohp.service.model.{KeywordRules, SynchronizeAction, SynchronizeStatus}
 import zio.lmdb.LMDB
 
@@ -44,11 +44,46 @@ trait MediaService {
   def stateUpsert(originalId: OriginalId, state: State): IO[ServiceIssue, State]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def classifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]]
-  def faces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]]
-  def objects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]]
-  def normalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
-  def miniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
+  def originalClassifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]]
+  def originalFaces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]]
+  def originalObjects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]]
+  def originalNormalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
+  def originalMiniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
+
+  def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): IO[ServiceIssue, Unit]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def faceList(): Stream[ServiceStreamIssue, DetectedFace]
+  def faceCount(): IO[ServiceIssue, Long]
+  def faceGet(faceId: FaceId): IO[ServiceIssue, Option[DetectedFace]]
+  def faceExists(faceId: FaceId): IO[ServiceIssue, Boolean]
+  def faceDelete(faceId: FaceId): IO[ServiceIssue, Unit]
+  def faceUpdate(
+    faceId: FaceId, // current face id
+    face: DetectedFace // may contain and updated id
+  ): IO[ServiceIssue, DetectedFace]
+  def faceRead(faceId: FaceId): Stream[ServiceStreamIssue, Byte]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def personList(): Stream[ServiceStreamIssue, Person]
+  def personCount(): IO[ServiceIssue, Long]
+  def personGet(personId: PersonId): IO[ServiceIssue, Option[Person]]
+  def personExists(personId: PersonId): IO[ServiceIssue, Boolean]
+  def personDelete(personId: PersonId): IO[ServiceIssue, Unit]
+  def personCreate(
+    firstName: FirstName,
+    lastName: LastName,
+    birthDate: Option[BirthDate],
+    description: Option[PersonDescription]
+  ): IO[ServiceIssue, Person]
+  def personUpdate(
+    personId: PersonId,
+    firstName: FirstName,
+    lastName: LastName,
+    birthDate: Option[BirthDate],
+    description: Option[PersonDescription],
+    chosenFaceId: Option[FaceId]
+  ): IO[ServiceIssue, Option[Person]]
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): Stream[ServiceStreamIssue, Original]
@@ -138,6 +173,8 @@ trait MediaService {
   def keywordRulesDelete(storeId: StoreId): IO[ServiceIssue, Unit]
 }
 
+// =====================================================================================================================
+
 object MediaService {
 
   val live: ZLayer[LMDB & SearchService, LMDBIssues | CoreIssue, MediaService] = ZLayer.fromZIO {
@@ -182,11 +219,46 @@ object MediaService {
   def stateUpsert(originalId: OriginalId, state: State): ZIO[MediaService, ServiceIssue, State] = ZIO.serviceWithZIO(_.stateUpsert(originalId, state))
 
   // -------------------------------------------------------------------------------------------------------------------
-  def classifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalClassifications]] = ZIO.serviceWithZIO(_.classifications(originalId))
-  def faces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaces]]                     = ZIO.serviceWithZIO(_.faces(originalId))
-  def objects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.objects(originalId))
-  def normalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.normalized(originalId))
-  def miniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.miniatures(originalId))
+  def originalClassifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalClassifications]] = ZIO.serviceWithZIO(_.originalClassifications(originalId))
+  def originalFaces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaces]]                     = ZIO.serviceWithZIO(_.originalFaces(originalId))
+  def originalObjects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.originalObjects(originalId))
+  def originalNormalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.originalNormalized(originalId))
+  def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))
+
+  def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.originalFacesUpdate(originalId, facesIds))
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def faceList(): ZStream[MediaService, ServiceStreamIssue, DetectedFace]            = ZStream.serviceWithStream(_.faceList())
+  def faceCount(): ZIO[MediaService, ServiceIssue, Long]                             = ZIO.serviceWithZIO(_.faceCount())
+  def faceGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[DetectedFace]] = ZIO.serviceWithZIO(_.faceGet(faceId))
+  def faceExists(faceId: FaceId): ZIO[MediaService, ServiceIssue, Boolean]           = ZIO.serviceWithZIO(_.faceExists(faceId))
+  def faceDelete(faceId: FaceId): ZIO[MediaService, ServiceIssue, Unit]              = ZIO.serviceWithZIO(_.faceDelete(faceId))
+  def faceUpdate(
+    faceId: FaceId, // current face id
+    face: DetectedFace // may contain and updated id
+  ): ZIO[MediaService, ServiceIssue, DetectedFace] = ZIO.serviceWithZIO(_.faceUpdate(faceId, face))
+  def faceRead(faceId: FaceId): ZStream[MediaService, ServiceStreamIssue, Byte]      = ZStream.serviceWithStream(_.faceRead(faceId))
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                = ZStream.serviceWithStream(_.personList())
+  def personCount(): ZIO[MediaService, ServiceIssue, Long]                           = ZIO.serviceWithZIO(_.personCount())
+  def personGet(personId: PersonId): ZIO[MediaService, ServiceIssue, Option[Person]] = ZIO.serviceWithZIO(_.personGet(personId))
+  def personExists(personId: PersonId): ZIO[MediaService, ServiceIssue, Boolean]     = ZIO.serviceWithZIO(_.personExists(personId))
+  def personDelete(personId: PersonId): ZIO[MediaService, ServiceIssue, Unit]        = ZIO.serviceWithZIO(_.personDelete(personId))
+  def personCreate(
+    firstName: FirstName,
+    lastName: LastName,
+    birthDate: Option[BirthDate],
+    description: Option[PersonDescription]
+  ): ZIO[MediaService, ServiceIssue, Person] = ZIO.serviceWithZIO(_.personCreate(firstName, lastName, birthDate, description))
+  def personUpdate(
+    personId: PersonId,
+    firstName: FirstName,
+    lastName: LastName,
+    birthDate: Option[BirthDate],
+    description: Option[PersonDescription],
+    chosenFaceId: Option[FaceId]
+  ): ZIO[MediaService, ServiceIssue, Option[Person]] = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthDate, description, chosenFaceId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())

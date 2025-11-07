@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.service
 import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
-import fr.janalyse.sotohp.processor.model.{OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized}
+import fr.janalyse.sotohp.processor.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.search.model.MediaBag
 import json.*
@@ -32,18 +32,20 @@ class MediaServiceLive private (
   lmdb: LMDB,
   search: SearchService,
   // ------------------------
-  originalColl: LMDBCollection[OriginalId, DaoOriginal],
-  stateColl: LMDBCollection[OriginalId, DaoState],
-  eventColl: LMDBCollection[EventId, DaoEvent],
-  mediaColl: LMDBCollection[MediaAccessKey, DaoMedia],
-  ownerColl: LMDBCollection[OwnerId, DaoOwner],
+  originalsColl: LMDBCollection[OriginalId, DaoOriginal],
+  statesColl: LMDBCollection[OriginalId, DaoState],
+  eventsColl: LMDBCollection[EventId, DaoEvent],
+  mediasColl: LMDBCollection[MediaAccessKey, DaoMedia],
+  ownersColl: LMDBCollection[OwnerId, DaoOwner],
   storesColl: LMDBCollection[StoreId, DaoStore],
   keywordRulesColl: LMDBCollection[StoreId, DaoKeywordRules],
   classificationsColl: LMDBCollection[OriginalId, DaoOriginalClassifications],
-  facesColl: LMDBCollection[OriginalId, DaoOriginalFaces],
+  detectedFaceColl: LMDBCollection[FaceId, DaoDetectedFace],
+  originalFoundFacesColl: LMDBCollection[OriginalId, DaoOriginalFaces],
   objectsColl: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
   miniaturesColl: LMDBCollection[OriginalId, DaoOriginalMiniatures],
   normalizedColl: LMDBCollection[OriginalId, DaoOriginalNormalized],
+  personsColl: LMDBCollection[PersonId, DaoPerson],
   // ------------------------
   classificationProcessorEffect: IO[ClassificationIssue, ClassificationProcessor],
   facesProcessorEffect: IO[FacesDetectionIssue, FacesProcessor],
@@ -68,7 +70,7 @@ class MediaServiceLive private (
   }
 
   override def mediaList(): Stream[ServiceStreamIssue, Media] = {
-    mediaColl
+    mediasColl
       .stream()
       .mapZIO(daoMedia2Media)
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect medias : $err"))
@@ -79,7 +81,7 @@ class MediaServiceLive private (
   override def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media] = ???
 
   override def mediaFirst(): IO[ServiceIssue, Option[Media]] = {
-    mediaColl
+    mediasColl
       .head()
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -87,7 +89,7 @@ class MediaServiceLive private (
   }
 
   override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
-    mediaColl
+    mediasColl
       .previous(nearKey)
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -95,7 +97,7 @@ class MediaServiceLive private (
   }
 
   override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
-    mediaColl
+    mediasColl
       .next(nearKey)
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -103,7 +105,7 @@ class MediaServiceLive private (
   }
 
   override def mediaLast(): IO[ServiceIssue, Option[Media]] = {
-    mediaColl
+    mediasColl
       .last()
       .map(result => result.map((key, media) => media))
       .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
@@ -111,14 +113,14 @@ class MediaServiceLive private (
   }
 
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
-    mediaColl
+    mediasColl
       .fetch(key)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
       .flatMap(maybeDaoMedia => ZIO.foreach(maybeDaoMedia)(daoMedia2Media))
   }
 
   override def mediaGetAt(index: Long): IO[ServiceIssue, Option[Media]] = {
-    mediaColl
+    mediasColl
       .fetchAt(index)
       .provideEnvironment(ZEnvironment(lmdb))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch random issue media : $err"))
@@ -131,14 +133,15 @@ class MediaServiceLive private (
     updatedMedia: Media
   ): IO[ServiceIssue, Option[Media]] = {
     if (key == updatedMedia.accessKey) {
-      mediaColl
+      mediasColl
         .update(key, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)) // to solve ambiguity with auto-derived transformer
         .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
         .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
     } else {
+      // TODO require transactions
       // key has been modified require delete record & then insert with the new access key
       // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
-      (mediaColl.delete(key).unit *> mediaColl.upsert(updatedMedia.accessKey, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer))).uninterruptible
+      (mediasColl.delete(key).unit *> mediasColl.upsert(updatedMedia.accessKey, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer))).uninterruptible
         .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
         .flatMap(daoMedia => daoMedia2Media(daoMedia).option)
     }
@@ -151,7 +154,7 @@ class MediaServiceLive private (
       media <- mediaGet(key)
                  .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
                  .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
-      onorm <- normalized(media.original.id)
+      onorm <- originalNormalized(media.original.id)
                  .mapError(err => ServiceStreamInternalIssue(s"Couldn't retrieve normalized info for original ${media.original.id.asString} : $err"))
                  .someOrFail(ServiceStreamInternalIssue(s"Couldn't get normalized information for original : ${media.original.id.asString}"))
       norm  <- ZIO
@@ -195,7 +198,7 @@ class MediaServiceLive private (
                     .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media for key ${key.asString} : $err"))
                     .someOrFail(ServiceStreamInternalIssue(s"Couldn't find media for key : ${key.asString}"))
         // ensure miniatures info is computed/stored (best effort)
-        _      <- miniatures(media.original.id).either
+        _      <- originalMiniatures(media.original.id).either
         sizes  <- MiniaturizerConfig.config.map(_.referenceSizes).mapError(err => ServiceStreamInternalIssue(err.toString))
         size    = sizes.maxOption.getOrElse(256)
         path   <- MiniaturizeProcessor
@@ -220,28 +223,175 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
   def stateList(): Stream[ServiceStreamIssue, State]                             = {
-    stateColl
+    statesColl
       .stream()
       .map(daoState => daoState.transformInto[State])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect states : $err"))
   }
   def stateGet(originalId: OriginalId): IO[ServiceIssue, Option[State]]          = {
-    stateColl
+    statesColl
       .fetch(originalId)
       .map(maybeDaoState => maybeDaoState.map(_.transformInto[State]))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch state : $err"))
   }
   def stateDelete(originalId: OriginalId): IO[ServiceIssue, Unit]                = {
-    stateColl
+    statesColl
       .delete(originalId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete state : $err"))
       .unit
   }
   def stateUpsert(originalId: OriginalId, state: State): IO[ServiceIssue, State] = {
-    stateColl
+    statesColl
       .upsert(originalId, _ => state.transformInto[DaoState])
       .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update state : $err"))
       .as(state)
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def faceList(): Stream[ServiceStreamIssue, DetectedFace] = {
+    detectedFaceColl
+      .stream()
+      .map(daoFace => daoFace.transformInto[DetectedFace])
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect medias : $err"))
+  }
+
+  def faceCount(): IO[ServiceIssue, Long] = {
+    detectedFaceColl
+      .size()
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't count faces : $err"))
+  }
+
+  def faceGet(faceId: FaceId): IO[ServiceIssue, Option[DetectedFace]] = {
+    detectedFaceColl
+      .fetch(faceId)
+      .map(maybeDaoFace => maybeDaoFace.map(_.transformInto[DetectedFace]))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch face : $err"))
+  }
+
+  def faceExists(faceId: FaceId): IO[ServiceIssue, Boolean] = {
+    detectedFaceColl
+      .contains(faceId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't check if face exists : $err"))
+  }
+
+  def faceDelete(faceId: FaceId): IO[ServiceIssue, Unit] = {
+    detectedFaceColl
+      .delete(faceId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete face : $err"))
+      .unit
+  }
+
+  def faceUpdate(
+    faceId: FaceId, // current face id
+    face: DetectedFace // may contain and updated id
+  ): IO[ServiceIssue, DetectedFace] = {
+    if (face.faceId == faceId) {
+      detectedFaceColl
+        .upsert(faceId, _ => face.transformInto[DaoDetectedFace])
+        .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
+        .as(face)
+    } else {
+      // TODO require transactions
+      // id has been modified require delete record & then insert with the new access key
+      // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
+      (detectedFaceColl.delete(faceId).unit *> detectedFaceColl.upsert(face.faceId, _ => face.transformInto[DaoDetectedFace])).uninterruptible
+        .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
+        .as(face)
+    }
+  }
+
+  def faceRead(faceId: FaceId): Stream[ServiceStreamIssue, Byte] = {
+    val pathEffect: IO[ServiceStreamIssue, java.nio.file.Path] = for {
+      face <- faceGet(faceId)
+                 .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch face for id ${faceId.asString} : $err"))
+                 .someOrFail(ServiceStreamInternalIssue(s"Couldn't find face for id : ${faceId.asString}"))
+      path   = face.path.path
+    } yield path
+
+    ZStream.unwrapScoped {
+      pathEffect.map { path =>
+        ZStream
+          .fromInputStreamZIO(ZIO.attemptBlockingIO(new java.io.FileInputStream(path.toFile)))
+          .mapError(th => ServiceStreamInternalIssue(s"Couldn't open/read normalized image file $path : $th"))
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def personList(): Stream[ServiceStreamIssue, Person] = {
+    personsColl
+      .stream()
+      .map(daoPerson => daoPerson.transformInto[Person])
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect persons : $err"))
+  }
+
+  def personCount(): IO[ServiceIssue, Long] = {
+    personsColl
+      .size()
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't count persons : $err"))
+  }
+
+  def personGet(personId: PersonId): IO[ServiceIssue, Option[Person]] = {
+    personsColl
+      .fetch(personId)
+      .map(_.map(_.transformInto[Person]))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch person : $err"))
+  }
+
+  def personExists(personId: PersonId): IO[ServiceIssue, Boolean] = {
+    personsColl
+      .contains(personId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't check if person exists : $err"))
+  }
+
+  def personDelete(personId: PersonId): IO[ServiceIssue, Unit] = {
+    personsColl
+      .delete(personId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete person : $err"))
+      .unit
+  }
+
+  def personCreate(
+    firstName: FirstName,
+    lastName: LastName,
+    birthDate: Option[BirthDate],
+    description: Option[PersonDescription]
+  ): IO[ServiceIssue, Person] = {
+    for {
+      personId <- ZIO
+                    .attempt(PersonId(ULID.newULID))
+                    .mapError(err => ServiceInternalIssue(s"Couldn't generate person id : $err"))
+      person    = Person(personId, firstName = firstName, lastName = lastName, birthDate = birthDate, description = description, chosenFaceId = None)
+      _        <- personsColl
+                    .upsertOverwrite(personId, person.into[DaoPerson].transform)
+                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create person : $err"))
+    } yield person
+  }
+
+  def personUpdate(
+    personId: PersonId,
+    firstName: FirstName,
+    lastName: LastName,
+    birthDate: Option[BirthDate],
+    description: Option[PersonDescription],
+    chosenFaceId: Option[FaceId]
+  ): IO[ServiceIssue, Option[Person]] = {
+    for {
+      maybeDaoPerson <- personsColl
+                          .update(
+                            personId,
+                            _.copy(
+                              firstName = firstName,
+                              lastName = lastName,
+                              birthDate = birthDate,
+                              description = description,
+                              chosenFaceId = chosenFaceId
+                            )
+                          )
+                          .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
+    } yield maybeDaoPerson.map(_.transformInto[Person])
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -270,7 +420,7 @@ class MediaServiceLive private (
     logic.uninterruptible
   }
 
-  override def classifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]] = {
+  override def originalClassifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]] = {
     for {
       stored <- classificationsColl
                   .fetch(originalId)
@@ -285,14 +435,17 @@ class MediaServiceLive private (
   def daoFacesToFaces(input: DaoOriginalFaces): IO[ServiceIssue, OriginalFaces] = {
     for {
       original <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      faces    <- ZIO.foreach(input.facesIds)(faceId => faceGet(faceId))
       result    = input
                     .into[OriginalFaces]
                     .withFieldConst(_.original, original)
+                    .withFieldConst(_.faces, faces.flatten)
                     .transform
     } yield result
   }
 
   def computeFaces(originalId: OriginalId): IO[ServiceIssue, OriginalFaces] = {
+    // TODO transaction required
     val logic = for {
       original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
       processor <- facesProcessorEffect
@@ -300,16 +453,21 @@ class MediaServiceLive private (
       computed  <- processor
                      .extractFaces(original)
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces : $err"))
-      _         <- facesColl
+      _         <- originalFoundFacesColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalFaces].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
+      _         <- ZIO.foreachDiscard(computed.faces)(face =>
+                     detectedFaceColl
+                       .upsertOverwrite(face.faceId, face.into[DaoDetectedFace].transform)
+                       .mapError(err => ServiceDatabaseIssue(s"Unable to store computed detected face : $err"))
+                   )
     } yield computed
     logic.uninterruptible
   }
 
-  override def faces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]] = {
+  override def originalFaces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]] = {
     for {
-      stored <- facesColl
+      stored <- originalFoundFacesColl
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoFacesToFaces))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
@@ -345,7 +503,7 @@ class MediaServiceLive private (
     logic.uninterruptible
   }
 
-  override def objects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]] = {
+  override def originalObjects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]] = {
     for {
       stored <- objectsColl
                   .fetch(originalId)
@@ -379,7 +537,7 @@ class MediaServiceLive private (
     } yield computed
   }
 
-  override def normalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]] = {
+  override def originalNormalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]] = {
     for {
       stored <- normalizedColl
                   .fetch(originalId)
@@ -412,7 +570,7 @@ class MediaServiceLive private (
     } yield computed
   }
 
-  override def miniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]] = {
+  override def originalMiniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]] = {
     for {
       stored <- miniaturesColl
                   .fetch(originalId)
@@ -420,6 +578,14 @@ class MediaServiceLive private (
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch normalized original from database: $err"))
       result <- computeMiniatures(originalId).when(stored.isEmpty)
     } yield stored.orElse(result)
+  }
+
+  override def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): IO[ServiceIssue, Unit] = {
+    for {
+      originalFacesDao <- originalFoundFacesColl
+                            .update(originalId, previous => previous.copy(facesIds = facesIds))
+                            .mapError(err => ServiceDatabaseIssue(s"Unable to update computed faces : $err"))
+    } yield ()
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -431,35 +597,35 @@ class MediaServiceLive private (
   }
 
   override def originalList(): Stream[ServiceStreamIssue, Original] = {
-    originalColl
+    originalsColl
       .stream()
       .mapZIO(daoOriginal2Original)
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect originals : $err"))
   }
 
   override def originalCount(): IO[ServiceIssue, Long] = for {
-    count <- originalColl
+    count <- originalsColl
                .size()
                .mapError(err => ServiceDatabaseIssue(s"Couldn't count originals : $err"))
   } yield count
 
   override def originalGet(originalId: OriginalId): IO[ServiceIssue, Option[Original]] = for {
-    maybeDaoOriginal <- originalColl.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
+    maybeDaoOriginal <- originalsColl.fetch(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch original : $err"))
     maybeOriginal    <- ZIO.foreach(maybeDaoOriginal)(daoOriginal2Original)
   } yield maybeOriginal
 
   override def originalExists(originalId: OriginalId): IO[ServiceIssue, Boolean] =
-    originalColl.contains(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't lookup original : $err"))
+    originalsColl.contains(originalId).mapError(err => ServiceDatabaseIssue(s"Couldn't lookup original : $err"))
 
   override def originalDelete(originalId: OriginalId): IO[ServiceIssue, Unit] = {
-    originalColl
+    originalsColl
       .delete(originalId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete original : $err"))
       .unit
   }
 
   override def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original] = {
-    originalColl
+    originalsColl
       .upsert(providedOriginal.id, previous => providedOriginal.into[DaoOriginal].transform)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't create or update original : $err"))
       .as(providedOriginal)
@@ -486,19 +652,19 @@ class MediaServiceLive private (
   }
 
   override def eventList(): Stream[ServiceStreamIssue, Event] = {
-    eventColl
+    eventsColl
       .stream()
       .mapZIO(daoEvent2Event)
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect events : $err"))
   }
 
   override def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]] = for {
-    maybeDaoEvent <- eventColl.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
+    maybeDaoEvent <- eventsColl.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
     maybeEvent    <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
   } yield maybeEvent
 
   override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = {
-    eventColl
+    eventsColl
       .delete(eventId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
       .unit
@@ -516,7 +682,7 @@ class MediaServiceLive private (
     for {
       eventId <- Random.nextUUID.map(EventId.apply)
       event    = Event(eventId, attachment, name, description, location, timestamp, originalId, None, keywords)
-      _       <- eventColl
+      _       <- eventsColl
                    .upsert(eventId, _ => event.into[DaoEvent].transform)
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
     } yield event
@@ -533,7 +699,7 @@ class MediaServiceLive private (
     keywords: Set[Keyword]
   ): IO[ServiceIssue, Option[Event]] = {
     for {
-      maybeDaoEvent <- eventColl
+      maybeDaoEvent <- eventsColl
                          .update(
                            eventId,
                            _.copy(
@@ -555,19 +721,19 @@ class MediaServiceLive private (
   // -------------------------------------------------------------------------------------------------------------------
 
   override def ownerList(): Stream[ServiceIssue, Owner] = {
-    ownerColl
+    ownersColl
       .stream()
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect owners : $err"), daoOwner => daoOwner.transformInto[Owner])
   }
 
   override def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]] = {
-    ownerColl
+    ownersColl
       .fetch(ownerId)
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't fetch owner : $err"), maybeDaoOwner => maybeDaoOwner.map(_.transformInto[Owner]))
   }
 
   override def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit] = {
-    ownerColl
+    ownersColl
       .delete(ownerId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't delete owner : $err"))
       .unit
@@ -580,7 +746,7 @@ class MediaServiceLive private (
                    .orElse(ZIO.attempt(OwnerId(ULID.newULID)))
                    .mapError(err => ServiceInternalIssue(s"Unable to create an owner identifier : $err"))
       owner    = Owner(ownerId, firstName, lastName, birthDate, None)
-      _       <- ownerColl
+      _       <- ownersColl
                    .upsert(owner.id, _ => owner.transformInto[DaoOwner])
                    .mapError(err => ServiceDatabaseIssue(s"Couldn't create owner : $err"))
     } yield owner
@@ -594,7 +760,7 @@ class MediaServiceLive private (
     coverOriginalId: Option[OriginalId]
   ): IO[ServiceIssue, Option[Owner]] = {
     for {
-      maybeDaoOwner <- ownerColl
+      maybeDaoOwner <- ownersColl
                          .update(
                            ownerId,
                            _.copy(
@@ -686,7 +852,7 @@ class MediaServiceLive private (
 
   private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
     // TODO first basic and naive implementation - not good for complexity
-    eventColl
+    eventsColl
       .collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"), _.headOption)
       .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
@@ -764,7 +930,7 @@ class MediaServiceLive private (
                             userDefinedLocation = None,
                             deductedLocation = None
                           )
-                          mediaColl
+                          mediasColl
                             .upsert(input.state.mediaAccessKey, _ => daoMedia)
                             .flatMap(daoMedia2Media)
                             .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
@@ -775,11 +941,11 @@ class MediaServiceLive private (
 
   private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
     val logic = for {
-      _                         <- normalized(input.media.original.id)      // required to optimize AI work so not launched in background
-      fiberMiniaturesFiber      <- miniatures(input.media.original.id)      // .fork
-      fiberFacesFiber           <- faces(input.media.original.id).ignoreLogged           // .fork
-      fiberClassificationsFiber <- classifications(input.media.original.id).ignoreLogged // .fork
-      fiberObjectsFiber         <- objects(input.media.original.id).ignoreLogged         // .fork
+      _                         <- originalNormalized(input.media.original.id)                   // required to optimize AI work so not launched in background
+      fiberMiniaturesFiber      <- originalMiniatures(input.media.original.id)                   // .fork
+      fiberFacesFiber           <- originalFaces(input.media.original.id).ignoreLogged           // .fork
+      fiberClassificationsFiber <- originalClassifications(input.media.original.id).ignoreLogged // .fork
+      fiberObjectsFiber         <- originalObjects(input.media.original.id).ignoreLogged         // .fork
       // TODO investigate why this is not working
       // _                         <- fiberMiniaturesFiber.join
       // _                         <- fiberFacesFiber.join
@@ -848,11 +1014,11 @@ class MediaServiceLive private (
       now       <- Clock.currentDateTime.map(LastSynchronized.apply)
       bag       <- ZIO.foreach(inputs) { input =>
                      for {
-                       classifications <- classifications(input.media.original.id)
-                       objects         <- objects(input.media.original.id)
-                       miniatures      <- miniatures(input.media.original.id)
-                       faces           <- faces(input.media.original.id)
-                       normalized      <- normalized(input.media.original.id)
+                       classifications <- originalClassifications(input.media.original.id)
+                       objects         <- originalObjects(input.media.original.id)
+                       miniatures      <- originalMiniatures(input.media.original.id)
+                       faces           <- originalFaces(input.media.original.id)
+                       normalized      <- originalNormalized(input.media.original.id)
                      } yield MediaBag(
                        media = input.media,
                        state = input.state,
@@ -1152,6 +1318,18 @@ object MediaServiceLive {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+  given LMDBKodec[FaceId] = new LMDBKodec {
+    def encode(key: FaceId): Array[Byte]                     = key.asString.getBytes(charset.name())
+    def decode(keyBytes: ByteBuffer): Either[String, FaceId] = ulidBytesToEither(keyBytes).map(FaceId.apply)
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  given LMDBKodec[PersonId] = new LMDBKodec {
+    def encode(key: PersonId): Array[Byte]                     = key.asString.getBytes(charset.name())
+    def decode(keyBytes: ByteBuffer): Either[String, PersonId] = ulidBytesToEither(keyBytes).map(PersonId.apply)
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   given LMDBKodec[StoreId] = new LMDBKodec {
     def encode(key: StoreId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, StoreId] = uuidBytesToEither(keyBytes).map(StoreId.apply)
@@ -1172,11 +1350,14 @@ object MediaServiceLive {
   private val storesCollectionName          = "stores"
   private val keywordRulesCollectionName    = "keywordRules"
   private val classificationsCollectionName = "classifications"
+  private val detectedFacesCollectionName   = "detectedFaces"
   private val facesCollectionName           = "faces"
   private val objectsCollectionName         = "objects"
   private val miniaturesCollectionName      = "miniatures"
   private val normalizedCollectionName      = "normalized"
-  private val allCollections                = List(
+  private val personsCollectionName         = "persons"
+
+  private val allCollections = List(
     originalsCollectionName,
     statesCollectionName,
     eventsCollectionName,
@@ -1185,31 +1366,35 @@ object MediaServiceLive {
     storesCollectionName,
     keywordRulesCollectionName,
     classificationsCollectionName,
+    detectedFacesCollectionName,
     facesCollectionName,
     objectsCollectionName,
     miniaturesCollectionName,
-    normalizedCollectionName
+    normalizedCollectionName,
+    personsCollectionName
   )
 
   def setup(lmdb: LMDB, search: SearchService): IO[LMDBIssues | CoreIssue, MediaService] = for {
-    _                             <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
-    originalsColl                 <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
-    statesColl                    <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
-    eventsColl                    <- lmdb.collectionGet[EventId, DaoEvent](eventsCollectionName)
-    mediasColl                    <- lmdb.collectionGet[MediaAccessKey, DaoMedia](mediasCollectionName)
-    ownersColl                    <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
-    storesColl                    <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
-    keywordRulesColl              <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
-    classificationsCollectionColl <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
-    facesCollectionColl           <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
-    objectsCollectionColl         <- lmdb.collectionGet[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName)
-    miniaturesCollectionColl      <- lmdb.collectionGet[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName)
-    normalizedCollectionColl      <- lmdb.collectionGet[OriginalId, DaoOriginalNormalized](normalizedCollectionName)
-    classificationProcessor       <- ClassificationProcessor.allocate().memoize
-    facesProcessor                <- FacesProcessor.allocate().memoize
-    objectsProcessor              <- ObjectsDetectionProcessor.allocate().memoize
-    synchronizeStatusReference    <- Ref.make(SynchronizeStatus.empty)
-    synchronizeFiberReference     <- Ref.make(Option.empty[Fiber[Nothing, Unit]])
+    _                          <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
+    originalsColl              <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
+    statesColl                 <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
+    eventsColl                 <- lmdb.collectionGet[EventId, DaoEvent](eventsCollectionName)
+    mediasColl                 <- lmdb.collectionGet[MediaAccessKey, DaoMedia](mediasCollectionName)
+    ownersColl                 <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
+    storesColl                 <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
+    keywordRulesColl           <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
+    classificationsColl        <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
+    detectedFacesColl          <- lmdb.collectionGet[FaceId, DaoDetectedFace](detectedFacesCollectionName)
+    originalFoundFacesColl     <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
+    objectsColl                <- lmdb.collectionGet[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName)
+    miniaturesColl             <- lmdb.collectionGet[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName)
+    normalizedColl             <- lmdb.collectionGet[OriginalId, DaoOriginalNormalized](normalizedCollectionName)
+    personsColl                <- lmdb.collectionGet[PersonId, DaoPerson](personsCollectionName)
+    classificationProcessor    <- ClassificationProcessor.allocate().memoize
+    facesProcessor             <- FacesProcessor.allocate().memoize
+    objectsProcessor           <- ObjectsDetectionProcessor.allocate().memoize
+    synchronizeStatusReference <- Ref.make(SynchronizeStatus.empty)
+    synchronizeFiberReference  <- Ref.make(Option.empty[Fiber[Nothing, Unit]])
   } yield new MediaServiceLive(
     lmdb,
     search,
@@ -1221,11 +1406,13 @@ object MediaServiceLive {
     ownersColl,
     storesColl,
     keywordRulesColl,
-    classificationsCollectionColl,
-    facesCollectionColl,
-    objectsCollectionColl,
-    miniaturesCollectionColl,
-    normalizedCollectionColl,
+    classificationsColl,
+    detectedFacesColl,
+    originalFoundFacesColl,
+    objectsColl,
+    miniaturesColl,
+    normalizedColl,
+    personsColl,
     // ------------------------
     classificationProcessor,
     facesProcessor,

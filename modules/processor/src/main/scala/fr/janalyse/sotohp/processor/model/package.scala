@@ -7,14 +7,40 @@ import wvlet.airframe.ulid.ULID
 package object model {
 
   // -------------------------------------------------------------------------------------------------------------------
+  opaque type PersonId = ULID
+
+  object PersonId {
+    def apply(value: ULID): PersonId = value
+
+    extension (faceId: PersonId) {
+      def code: ULID       = faceId
+      def asString: String = faceId.toString
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   opaque type FaceId = ULID
 
   object FaceId {
     def apply(value: ULID): FaceId = value
 
+    @deprecated // TODO refactor to return a Try
+    def fromString(id: String): FaceId = FaceId(ULID(id))
+
     extension (faceId: FaceId) {
       def code: ULID       = faceId
       def asString: String = faceId.toString
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type PersonDescription = String
+
+  object PersonDescription {
+    def apply(description: String): PersonDescription = description
+
+    extension (description: PersonDescription) {
+      def text: String = description
     }
   }
 
@@ -90,5 +116,5 @@ package object model {
     }
   }
   // -------------------------------------------------------------------------------------------------------------------
-  
+
 }

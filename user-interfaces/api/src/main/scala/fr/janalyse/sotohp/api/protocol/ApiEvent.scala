@@ -1,8 +1,8 @@
 package fr.janalyse.sotohp.api.protocol
 
 import fr.janalyse.sotohp.model.{EventAttachment, EventDescription, EventId, EventName, Keyword, Location, OriginalId, ShootDateTime}
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 import fr.janalyse.sotohp.service.json.{*, given}
+import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 import sttp.tapir.Schema
 import sttp.tapir.Schema.annotations.encodedName
 
@@ -25,7 +25,7 @@ object ApiEvent {
     url => url.toString
   )
 
-  given JsonCodec[ApiEvent]              = DeriveJsonCodec.gen
+  given JsonCodec[ApiEvent] = DeriveJsonCodec.gen
 
   given apiEventSchema: Schema[ApiEvent] = Schema.derived[ApiEvent].name(Schema.SName("Event"))
 }

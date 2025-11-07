@@ -49,8 +49,8 @@ object Statistics extends CommonsCLI {
     for {
       state            <- MediaService.stateGet(media.original.id)
       place             = media.original.location
-      faces            <- MediaService.faces(media.original.id)
-      normalized       <- MediaService.normalized(media.original.id)
+      faces            <- MediaService.originalFaces(media.original.id)
+      normalized       <- MediaService.originalNormalized(media.original.id)
       hasNormalized     = normalized.exists(_.status.successful)
       shootingDate      = media.shootDateTime
                             .orElse(media.original.cameraShootDateTime)

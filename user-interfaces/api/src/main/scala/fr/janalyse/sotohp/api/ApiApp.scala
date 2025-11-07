@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.api
 
 import com.typesafe.config.ConfigFactory
+import fr.janalyse.sotohp.processor.model.FaceId
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
 import zio.json.*
@@ -56,7 +57,7 @@ object ApiApp extends ZIOAppDefault {
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
     // val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
-    val fmt     = LogFormat.annotations |-| LogFormat.line
+    // val fmt     = LogFormat.annotations |-| LogFormat.line
     // val logging = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
     val logging = zio.logging.slf4j.bridge.Slf4jBridge.initialize
 
@@ -80,12 +81,18 @@ object ApiApp extends ZIOAppDefault {
   def storeEndpoint(plurial: Boolean = false) = endpoint.in("api").in("store" + (if (plurial) "s" else "")).tag("Store")
   def ownerEndpoint(plurial: Boolean = false) = endpoint.in("api").in("owner" + (if (plurial) "s" else "")).tag("Owner")
   def eventEndpoint(plurial: Boolean = false) = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
+  def faceEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("face" + (if (plurial) "s" else "")).tag("Face")
 
   // -------------------------------------------------------------------------------------------------------------------
   def extractOwnerId(rawOwnerId: String) =
     ZIO
       .attempt(OwnerId.fromString(rawOwnerId))
       .mapError(err => ApiInvalidOrMissingInput("Invalid owner identifier"))
+
+  def extractFaceId(rawFaceId: String) =
+    ZIO
+      .attempt(FaceId.fromString(rawFaceId))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid face identifier"))
 
   def extractMediaAccessKey(rawMediaAccessKey: String) =
     ZIO
@@ -512,7 +519,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  val mediaGetOriginalEndpoint =
+  val mediaContentGetOriginalEndpoint =
     mediaEndpoint()
       .name("Get media original size image")
       .summary("Get media original size image content")
@@ -526,7 +533,7 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  val mediaGetNormalizedEndpoint =
+  val mediaContentGetNormalizedEndpoint =
     mediaEndpoint()
       .name("Get media normalized image")
       .summary("Get media normalized image content")
@@ -536,11 +543,11 @@ object ApiApp extends ZIOAppDefault {
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey =>mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Normalized))
+      .zServerLogic[ApiEnv](rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Normalized))
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  val mediaGetMiniatureEndpoint =
+  val mediaContentGetMiniatureEndpoint =
     mediaEndpoint()
       .name("Get media miniature image")
       .summary("Get media miniature image content")
@@ -667,6 +674,115 @@ object ApiApp extends ZIOAppDefault {
                      }
           taoMedia = media.transformInto[ApiMedia](using ApiMedia.transformer)
         } yield taoMedia
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def mediaFacesGetLogic(accessKey: MediaAccessKey): ZIO[ApiEnv, ApiIssue, ApiOriginalFaces] = {
+    val logic = for {
+      media           <- mediaGetLogic(accessKey)
+      originalFaces   <- MediaService
+                           .originalFaces(media.original.id)
+                           .logError("Couldn't get media faces")
+                           .mapError(err => ApiInternalError("Couldn't get media faces"))
+                           .someOrFail(ApiResourceNotFound("Couldn't find media faces"))
+      taoOriginalFaces = originalFaces.transformInto[ApiOriginalFaces](using ApiOriginalFaces.apiOriginalFacesTransformer)
+    } yield taoOriginalFaces
+
+    logic
+  }
+
+  val mediaFacesGetEndpoint =
+    mediaEndpoint()
+      .name("Get media faces")
+      .summary("Get media identified people faces for the given media access key")
+      .get
+      .in(path[String]("mediaAccessKey"))
+      .out(jsonBody[ApiOriginalFaces])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawMediaAccessKey =>
+        extractMediaAccessKey(rawMediaAccessKey)
+          .flatMap(mediaAccessKey => mediaFacesGetLogic(mediaAccessKey))
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  val faceListLogic: ZStream[MediaService, Throwable, ApiDetectedFace] = {
+    MediaService
+      .faceList()
+      .map(face => face.transformInto[ApiDetectedFace])
+      .mapError(err => ApiInternalError("Couldn't list detected faces"))
+  }
+
+  val faceListEndpoint =
+    faceEndpoint(true)
+      .name("List faces")
+      .summary("Stream people faces")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiDetectedFace.apiDetectedFaceSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Store JSON object per line)")
+          // .schema(summon[Schema[List[ApiDetectedFace]]])
+      ) // TODO how to provide information about the fact we want NDJSON output of ApiDetectedFace ?
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](_ =>
+        for {
+          ms        <- ZIO.service[MediaService]
+          byteStream = faceListLogic
+                         .map(_.toJson)
+                         .intersperse("\n")
+                         .via(ZPipeline.utf8Encode)
+                         .provideEnvironment(ZEnvironment(ms))
+        } yield byteStream
+      )
+
+  def faceGetLogic(faceId: FaceId): ZIO[ApiEnv, ApiIssue, ApiDetectedFace] = {
+    val logic = for {
+      face   <- MediaService
+                  .faceGet(faceId)
+                  .logError("Couldn't get face")
+                  .mapError(err => ApiInternalError("Couldn't get face"))
+                  .someOrFail(ApiResourceNotFound("Couldn't find face"))
+      taoFace = face.transformInto[ApiDetectedFace]
+    } yield taoFace
+
+    logic
+  }
+
+  val faceGetEndpoint =
+    faceEndpoint()
+      .name("Get face")
+      .summary("Get all face information for the given face identifier")
+      .get
+      .in(path[String]("faceId"))
+      .out(jsonBody[ApiDetectedFace])
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawFaceId =>
+        extractFaceId(rawFaceId)
+          .flatMap(id => faceGetLogic(id))
+      )
+
+  def faceGetImageBytesLogic(faceId: FaceId) = {
+    val byteStream = MediaService.faceRead(faceId)
+    for {
+      ms        <- ZIO.service[MediaService]
+      httpStream = byteStream.provideEnvironment(ZEnvironment(ms))
+    } yield (MediaType.ImageJpeg.toString, httpStream)
+  }
+
+  val faceContentGetEndpoint =
+    faceEndpoint()
+      .name("Get face image")
+      .summary("Get face image content")
+      .get
+      .in(path[String]("faceId"))
+      .in("content")
+      .out(header[String]("Content-Type"))
+      .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawFaceId =>
+        extractFaceId(rawFaceId)
+          .flatMap(id => faceGetImageBytesLogic(id))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -849,7 +965,8 @@ object ApiApp extends ZIOAppDefault {
       .out(
         streamBody(ZioStreams)(ApiEvent.apiEventSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Event JSON object per line)")
-      )
+          // .schema(summon[Schema[List[ApiEvent]]])
+      ) // TODO how to provide information about the fact we want NDJSON output of ApiEvent ?
       .errorOut(oneOf(statusForApiInternalError))
       .zServerLogic[ApiEnv](_ =>
         for {
@@ -938,9 +1055,15 @@ object ApiApp extends ZIOAppDefault {
     mediaGetEndpoint,
     mediaUpdateEndpoint,
     mediaUpdateStarredEndpoint,
-    mediaGetOriginalEndpoint,
-    mediaGetNormalizedEndpoint,
-    mediaGetMiniatureEndpoint,
+    mediaContentGetOriginalEndpoint,
+    mediaContentGetNormalizedEndpoint,
+    mediaContentGetMiniatureEndpoint,
+    // -------------------------
+    mediaFacesGetEndpoint,
+    // -------------------------
+    faceListEndpoint,
+    faceGetEndpoint,
+    faceContentGetEndpoint,
     // -------------------------
     eventListEndpoint,
     eventCreateEndpoint,

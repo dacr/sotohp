@@ -98,7 +98,9 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                                  } yield DetectedFace(
                                    box = box,
                                    path = DetectedFacePath(facePath),
-                                   faceId = faceId
+                                   faceId = faceId,
+                                   originalId = original.id,
+                                   identifiedPersonId = None
                                  )
                                })
       originalBufferedImage <- ZIO
