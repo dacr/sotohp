@@ -107,6 +107,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
       originalBufferedImage <- ZIO
                                  .attemptBlocking(BasicImaging.load(original.absoluteMediaPath))
                                  .mapError(th => FacesDetectionIssue("Unable to load original image", th))
+      // TODO rotation is missing see #30 - need to rebuild the cache for faces that requires original rotation
       _                     <- ZIO.foreachDiscard(detectedFaces)(face => cacheFaceImage(face, originalBufferedImage))
     } yield detectedFaces.filter(_.path.path.toFile.exists()) // filtering because already encounter saving issue - such as invalid colorspace errors
   }
