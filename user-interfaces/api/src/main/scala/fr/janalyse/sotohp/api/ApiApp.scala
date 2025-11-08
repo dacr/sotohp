@@ -707,6 +707,7 @@ object ApiApp extends ZIOAppDefault {
       .summary("Get media identified people faces for the given media access key")
       .get
       .in(path[String]("mediaAccessKey"))
+      .in("faces")
       .out(jsonBody[ApiOriginalFaces])
       .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
       .zServerLogic[ApiEnv](rawMediaAccessKey =>
