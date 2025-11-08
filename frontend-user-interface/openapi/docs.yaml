@@ -1330,6 +1330,7 @@ components:
       - faceId
       - originalId
       - box
+      - timestamp
       properties:
         faceId:
           type: string
@@ -1340,6 +1341,9 @@ components:
           $ref: '#/components/schemas/BoundingBox'
         identifiedPersonId:
           type: string
+        timestamp:
+          type: string
+          format: date-time
     Dimension:
       title: Dimension
       type: object

@@ -27,6 +27,14 @@ class ApiClient {
   async getOwner(ownerId) { const res = await this.http.get(`/api/owner/${encodeURIComponent(ownerId)}`); return res.data; }
   async updateOwner(ownerId, body) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}`, body); }
   async createOwner(body) { const res = await this.http.post('/api/owner', body); return res.data; }
+  // Persons
+  async listPersons() { return await this.#fetchNdjson('/api/persons'); }
+  async getPerson(personId) { const res = await this.http.get(`/api/person/${encodeURIComponent(personId)}`); return res.data; }
+  async createPerson(body) { const res = await this.http.post('/api/person', body); return res.data; }
+  async updatePerson(personId, body) { await this.http.put(`/api/person/${encodeURIComponent(personId)}`, body); }
+  async deletePerson(personId) { await this.http.delete(`/api/person/${encodeURIComponent(personId)}`); }
+  async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
+  faceImageUrl(faceId) { return `/api/face/${encodeURIComponent(faceId)}/content`; }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async getStore(storeId) { const res = await this.http.get(`/api/store/${encodeURIComponent(storeId)}`); return res.data; }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
@@ -200,6 +208,7 @@ function setActiveTab(name) {
       if (sec) setTimeout(() => { try { sec.focus({ preventScroll: true }); } catch { try { sec.focus(); } catch {} } }, 0);
     } catch {}
   }
+  if (name === 'persons') loadPersons();
   if (name === 'owners') loadOwners();
   if (name === 'stores') loadStores();
   if (name === 'settings') {
@@ -2818,6 +2827,241 @@ async function loadMosaic() {
   }
 }
 
+// Persons
+async function loadPersons() {
+  const list = document.getElementById('persons-list'); if (!list) return; list.innerHTML = '';
+  try {
+    const persons = await api.listPersons();
+
+    // Lazy load chosen face thumbnails
+    const limit = 6;
+    let inFlight = 0;
+    const pending = [];
+    const scheduled = new WeakSet();
+
+    async function resolveAndRenderPersonThumb(li, person) {
+      inFlight++;
+      try {
+        if (!person.chosenFaceId) return;
+        const img = new Image();
+        img.src = api.faceImageUrl(person.chosenFaceId);
+        img.alt = `${person.firstName} ${person.lastName}`;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'cover';
+        img.style.display = 'block';
+        img.onerror = () => { /* ignore */ };
+        const ph = li.querySelector('.person-thumb');
+        if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
+      } finally {
+        inFlight--; schedulePersonThumb();
+      }
+    }
+
+    function schedulePersonThumb() {
+      while (inFlight < limit && pending.length > 0) {
+        const item = pending.shift();
+        resolveAndRenderPersonThumb(item.li, item.person);
+      }
+    }
+
+    const tabSection = document.getElementById('tab-persons');
+    const observer = ('IntersectionObserver' in window)
+      ? new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              const li = entry.target; observer.unobserve(li);
+              if (scheduled.has(li)) continue;
+              const person = li.__person; scheduled.add(li);
+              if (person && person.chosenFaceId) { pending.push({ li, person }); schedulePersonThumb(); }
+            }
+          }
+        }, { root: tabSection, rootMargin: '200px 0px', threshold: 0.01 })
+      : null;
+
+    for (const p of persons) {
+      const li = document.createElement('li');
+      li.__person = p;
+      li.dataset.personId = p.id || '';
+      const birthStr = p.birthDate ? new Date(p.birthDate).toLocaleDateString() : '';
+      const desc = p.description || '';
+      li.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="person-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">${p.chosenFaceId ? 'Loading…' : 'No image'}</div>
+          <div style="flex:1;">
+            <h4 style="margin:0 0 4px 0;">${p.firstName} ${p.lastName}</h4>
+            <div style="font-size:12px;color:#555">id: ${p.id}${birthStr ? ' • birth: '+birthStr : ''}${desc ? ' • '+desc : ''}</div>
+          </div>
+          <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+          <button class="ev-del-btn" title="Delete">🗑 Delete</button>
+        </div>`;
+      list.appendChild(li);
+      const editBtn = li.querySelector('.ev-edit-btn');
+      if (editBtn) editBtn.onclick = (e) => { e.stopPropagation(); openPersonEditModal(p); };
+      const delBtn = li.querySelector('.ev-del-btn');
+      if (delBtn) delBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete person ${p.firstName} ${p.lastName}?`)) return;
+        try { await api.deletePerson(p.id); li.remove(); showSuccess('Person deleted'); }
+        catch { showError('Failed to delete person'); }
+      };
+
+      if (observer && p.chosenFaceId) observer.observe(li);
+      else if (p.chosenFaceId) { pending.push({ li, person: p }); schedulePersonThumb(); }
+    }
+  } catch (e) { list.innerHTML = '<li>Failed to load persons</li>'; }
+}
+
+function openPersonCreateModal() {
+  if (document.querySelector('.modal-overlay')) return;
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Create person</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>First name</label>
+            <input type="text" id="pc-first" value="">
+            <label style="margin-top:8px">Last name</label>
+            <input type="text" id="pc-last" value="">
+            <label style="margin-top:8px">Birthdate</label>
+            <input type="date" id="pc-birth" value="">
+            <label style="margin-top:8px">Description</label>
+            <input type="text" id="pc-desc" value="">
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#pc-first')||modal).focus(); }, 0);
+
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const firstName = modal.querySelector('#pc-first').value.trim();
+    const lastName  = modal.querySelector('#pc-last').value.trim();
+    const birth     = modal.querySelector('#pc-birth').value; // yyyy-mm-dd or ''
+    const desc      = modal.querySelector('#pc-desc').value.trim();
+    if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
+    const body = { firstName, lastName };
+    if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
+    if (desc) body.description = desc;
+    try {
+      await api.createPerson(body);
+      close();
+      await loadPersons();
+    } catch (e) {
+      showError('Failed to create person');
+    }
+  });
+}
+
+function refreshPersonTile(updated) {
+  const li = document.querySelector(`#persons-list li[data-person-id="${updated.id}"]`);
+  if (!li) return;
+  const birthStr = updated.birthDate ? new Date(updated.birthDate).toLocaleDateString() : '';
+  const desc = updated.description || '';
+  li.querySelector('h4').textContent = `${updated.firstName} ${updated.lastName}`;
+  const meta = li.querySelector('div[style*="font-size:12px"]');
+  if (meta) meta.textContent = `id: ${updated.id}${birthStr ? ' • birth: '+birthStr : ''}${desc ? ' • '+desc : ''}`;
+  const thumb = li.querySelector('.person-thumb');
+  if (thumb) {
+    thumb.innerHTML = updated.chosenFaceId ? 'Loading…' : 'No image';
+    if (updated.chosenFaceId) {
+      const img = new Image();
+      img.src = api.faceImageUrl(updated.chosenFaceId);
+      img.alt = `${updated.firstName} ${updated.lastName}`;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.style.width = '100%'; img.style.height = '100%'; img.style.objectFit = 'cover'; img.style.display = 'block';
+      thumb.innerHTML = ''; thumb.style.background = 'transparent'; thumb.appendChild(img);
+    }
+  }
+}
+
+function openPersonEditModal(person) {
+  if (!person) return;
+  if (document.querySelector('.modal-overlay')) return;
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  const birthVal = person.birthDate ? new Date(person.birthDate) : null;
+  const toDateInput = (d) => { try { if (!d) return ''; const yyyy=d.getFullYear(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${yyyy}-${mm}-${dd}`; } catch { return ''; } };
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Edit person</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label>First name</label>
+            <input type="text" id="pe-first" value="${(person.firstName||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Last name</label>
+            <input type="text" id="pe-last" value="${(person.lastName||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Birthdate</label>
+            <input type="date" id="pe-birth" value="${toDateInput(birthVal)}">
+            <label style="margin-top:8px">Description</label>
+            <input type="text" id="pe-desc" value="${(person.description||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <label style="margin-top:8px">Chosen face id</label>
+            <input type="text" id="pe-chosen" value="${(person.chosenFaceId||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#pe-first')||modal).focus(); }, 0);
+
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    const firstName = modal.querySelector('#pe-first').value.trim();
+    const lastName  = modal.querySelector('#pe-last').value.trim();
+    const birth     = modal.querySelector('#pe-birth').value;
+    const desc      = modal.querySelector('#pe-desc').value.trim();
+    const chosen    = modal.querySelector('#pe-chosen').value.trim();
+    if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
+    const body = { firstName, lastName };
+    body.birthDate = birth ? `${birth}T00:00:00Z` : null;
+    if (desc) body.description = desc; else body.description = null;
+    if (chosen) body.chosenFaceId = chosen; else body.chosenFaceId = null;
+    try {
+      await api.updatePerson(person.id, body);
+      close();
+      // Refetch person list to get canonical data and refresh tile
+      const persons = await api.listPersons();
+      const updated = persons.find(x => x.id === person.id) || { ...person, ...body };
+      refreshPersonTile(updated);
+    } catch (e) { showError('Failed to update person'); }
+  });
+}
+
+function initPersonsTab() {
+  const refreshBtn = document.getElementById('refresh-persons');
+  if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadPersons); refreshBtn.__wired = true; }
+  const createBtn = document.getElementById('create-person');
+  if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openPersonCreateModal()); createBtn.__wired = true; }
+}
+
 // Owners
 function refreshOwnerTile(updated) {
   const list = document.getElementById('owners-list'); if (!list) return;
@@ -3482,6 +3726,7 @@ function init() {
     cont.appendChild(btn);
   }
   initEventsTab();
+  initPersonsTab();
   initOwnersTab();
   initStoresTab();
   initSettings();

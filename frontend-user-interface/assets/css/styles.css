@@ -151,9 +151,14 @@ section#tab-mosaic.tab.active { display: flex; }
 
 /* Hover edit button on event tiles */
 .list li { position: relative; }
-.ev-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 4px 8px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-.list li:hover .ev-edit-btn { opacity: 1; transform: translateY(0); }
+.ev-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 4px 8px; font-size: 12px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.list li:hover .ev-edit-btn, .list li:focus-within .ev-edit-btn { opacity: 1; transform: translateY(0); }
 .ev-edit-btn:hover { background: #1d4ed8; }
+
+/* Hover delete button on list tiles (oval like edit button) */
+.ev-del-btn { position: absolute; right: 78px; bottom: 8px; background: rgba(185,28,28,0.92); color: #fff; border: none; border-radius: 16px; padding: 4px 8px; font-size: 12px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+.list li:hover .ev-del-btn, .list li:focus-within .ev-del-btn { opacity: 1; transform: translateY(0); }
+.ev-del-btn:hover { background: #991b1b; }
 
 /* Highlight effect when jumping to an event from the viewer */
 .list li.highlight {
