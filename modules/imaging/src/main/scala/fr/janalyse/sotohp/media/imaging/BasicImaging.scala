@@ -41,25 +41,28 @@ case object BasicImaging {
     originalImage: BufferedImage,
     angleDegree: Double
   ): BufferedImage = {
-    val angle     = toRadians(angleDegree)
-    val sin       = abs(Math.sin(angle))
-    val cos       = abs(Math.cos(angle))
-    val width     = originalImage.getWidth.toDouble
-    val height    = originalImage.getHeight.toDouble
-    val newWidth  = floor(width * cos + height * sin)
-    val newHeight = floor(height * cos + width * sin)
-    val newImage  = BufferedImage(newWidth.toInt, newHeight.toInt, BufferedImage.TYPE_INT_RGB)
-    val graphics  = newImage.createGraphics
-    try {
-      graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-      graphics.translate((newWidth - width) / 2d, (newHeight - height) / 2d)
-      graphics.rotate(angle, width / 2d, height / 2d)
-      graphics.drawImage(originalImage, 0, 0, null)
-      // graphics.setColor(Color.RED)
-      // graphics.drawRect(0, 0, newWidth - 1, newHeight - 1)
-      newImage
-    } finally {
-      graphics.dispose()
+    if (angleDegree == 0d) originalImage
+    else {
+      val angle = toRadians(angleDegree)
+      val sin = abs(Math.sin(angle))
+      val cos = abs(Math.cos(angle))
+      val width = originalImage.getWidth.toDouble
+      val height = originalImage.getHeight.toDouble
+      val newWidth = floor(width * cos + height * sin)
+      val newHeight = floor(height * cos + width * sin)
+      val newImage = BufferedImage(newWidth.toInt, newHeight.toInt, BufferedImage.TYPE_INT_RGB)
+      val graphics = newImage.createGraphics
+      try {
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+        graphics.translate((newWidth - width) / 2d, (newHeight - height) / 2d)
+        graphics.rotate(angle, width / 2d, height / 2d)
+        graphics.drawImage(originalImage, 0, 0, null)
+        // graphics.setColor(Color.RED)
+        // graphics.drawRect(0, 0, newWidth - 1, newHeight - 1)
+        newImage
+      } finally {
+        graphics.dispose()
+      }
     }
   }
 
