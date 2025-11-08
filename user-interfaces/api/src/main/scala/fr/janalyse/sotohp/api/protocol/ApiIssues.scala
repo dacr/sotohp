@@ -27,7 +27,7 @@ object ApiIssue {
 case class ApiInvalidOrMissingInput(message: String) extends Exception(message) with ApiIssue
 object ApiInvalidOrMissingInput {
   given JsonCodec[ApiInvalidOrMissingInput] = DeriveJsonCodec.gen
-  given Schema[ApiInvalidOrMissingInput]    = Schema.derived[ApiInvalidOrMissingInput].name(Schema.SName("ApiInvalidOrMissingInput"))
+  given Schema[ApiInvalidOrMissingInput]    = Schema.derived[ApiInvalidOrMissingInput].name(Schema.SName("InvalidOrMissingInput"))
 }
 
 case class ApiInternalError(message: String) extends Exception(message) with ApiIssue

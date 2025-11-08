@@ -111,7 +111,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -149,7 +149,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -187,7 +187,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -230,7 +230,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -273,7 +273,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -316,7 +316,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -372,7 +372,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -415,7 +415,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -432,8 +432,8 @@ paths:
     put:
       tags:
       - Face
-      summary: Update face identified person
-      operationId: Update face identified person
+      summary: Set or update face identified person
+      operationId: Set or update face identified person
       parameters:
       - name: faceId
         in: path
@@ -453,7 +453,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
+  /api/face/{faceId}/person:
+    delete:
+      tags:
+      - Face
+      summary: Remove face identified person
+      operationId: Remove face identified person
+      parameters:
+      - name: faceId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -540,7 +573,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -578,7 +611,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -610,7 +643,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -648,7 +681,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -735,7 +768,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -773,7 +806,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -805,7 +838,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -843,7 +876,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -930,7 +963,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -968,7 +1001,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -1006,7 +1039,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -1093,7 +1126,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -1131,7 +1164,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -1170,7 +1203,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiInvalidOrMissingInput'
+                $ref: '#/components/schemas/InvalidOrMissingInput'
         '404':
           description: Couldn't find the request resource
           content:
@@ -1269,14 +1302,6 @@ paths:
                 $ref: '#/components/schemas/ErrorInternal'
 components:
   schemas:
-    ApiInvalidOrMissingInput:
-      title: ApiInvalidOrMissingInput
-      type: object
-      required:
-      - message
-      properties:
-        message:
-          type: string
     BoundingBox:
       title: BoundingBox
       type: object
@@ -1442,6 +1467,14 @@ components:
         originalsCount:
           type: integer
           format: int64
+    InvalidOrMissingInput:
+      title: InvalidOrMissingInput
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
     Location:
       title: Location
       type: object

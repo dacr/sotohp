@@ -794,6 +794,62 @@ object ApiApp extends ZIOAppDefault {
           .flatMap(id => faceGetImageBytesLogic(id))
       )
 
+  val faceUpdatePersonEndpoint =
+    faceEndpoint()
+      .name("Set or update face identified person")
+      .summary("Set or update face identified person")
+      .put
+      .in(path[String]("faceId"))
+      .in("person")
+      .in(path[String]("personId"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv]((rawFaceId, rawPersonId) =>
+        for {
+          faceId   <- extractFaceId(rawFaceId)
+          personId <- extractPersonId(rawPersonId)
+          face     <- MediaService
+                        .faceGet(faceId)
+                        .logError("Couldn't get face")
+                        .mapError(err => ApiInternalError("Couldn't get face"))
+                        .someOrFail(ApiResourceNotFound("Couldn't find face"))
+          person   <- personGetLogic(personId)
+          _        <- MediaService
+                        .faceUpdate(
+                          faceId = faceId,
+                          face = face.copy(identifiedPersonId = Some(personId))
+                        )
+                        .logError("Couldn't update face identified person")
+                        .mapError(err => ApiInternalError("Couldn't update face identified person"))
+
+        } yield ()
+      )
+
+  val faceDeletePersonEndpoint =
+    faceEndpoint()
+      .name("Remove face identified person")
+      .summary("Remove face identified person")
+      .delete
+      .in(path[String]("faceId"))
+      .in("person")
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawFaceId =>
+        for {
+          faceId <- extractFaceId(rawFaceId)
+          face   <- MediaService
+                      .faceGet(faceId)
+                      .logError("Couldn't get face")
+                      .mapError(err => ApiInternalError("Couldn't get face"))
+                      .someOrFail(ApiResourceNotFound("Couldn't find face"))
+          _      <- MediaService
+                      .faceUpdate(
+                        faceId = faceId,
+                        face = face.copy(identifiedPersonId = None)
+                      )
+                      .logError("Couldn't remove face identified person")
+                      .mapError(err => ApiInternalError("Couldn't remove delete identified person"))
+        } yield ()
+      )
+
   // -------------------------------------------------------------------------------------------------------------------
 
   val adminSynchronizeEndpoint =
@@ -1230,6 +1286,8 @@ object ApiApp extends ZIOAppDefault {
     faceListEndpoint,
     faceGetEndpoint,
     faceContentGetEndpoint,
+    faceUpdatePersonEndpoint,
+    faceDeletePersonEndpoint,
     // -------------------------
     personListEndpoint,
     personCreateEndpoint,
