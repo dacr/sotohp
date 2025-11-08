@@ -100,6 +100,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                                    path = DetectedFacePath(facePath),
                                    faceId = faceId,
                                    originalId = original.id,
+                                   timestamp = original.timestamp,
                                    identifiedPersonId = None
                                  )
                                })

@@ -47,20 +47,34 @@ object MigrateFaces extends CommonsCLI {
 //  }
 
   // -------------------------------------------------------------------------------------------------------------------
-  def rewriteFacesToCleanupRemoveField(original: Original) = {
+//  def rewriteFacesToCleanupRemoveField(original: Original) = {
+//    for {
+//      originalFaces <- MediaService.originalFaces(original.id)
+//      facesCount     = originalFaces.map(_.faces.size).getOrElse(0)
+//      _             <- ZIO
+//                         .logInfo(s"Fix original faces ${original.mediaPath.path} -> $facesCount")
+//      _             <- MediaService
+//                         .originalFacesUpdate(original.id, originalFaces.map(_.faces.map(_.faceId)).getOrElse(Nil))
+//    } yield ()
+//  }
+  // -------------------------------------------------------------------------------------------------------------------
+  def refreshDetectedFaceTimestampField(media: Media) = {
     for {
-      originalFaces <- MediaService.originalFaces(original.id)
-      facesCount     = originalFaces.map(_.faces.size).getOrElse(0)
+      originalFaces <- MediaService.originalFaces(media.original.id)
+      timestamp      = media.timestamp
       _             <- ZIO
-                         .logInfo(s"Fix original faces ${original.mediaPath.path} -> $facesCount")
-      _             <- MediaService
-                         .originalFacesUpdate(original.id, originalFaces.map(_.faces.map(_.faceId)).getOrElse(Nil))
+                         .foreachDiscard(originalFaces.map(_.faces).getOrElse(Nil)) { detectedFace =>
+                           MediaService
+                             .faceUpdate(detectedFace.faceId, detectedFace.copy(timestamp = media.timestamp))
+                             .when(detectedFace.timestamp != media.timestamp)
+                         }
     } yield ()
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   val logic = ZIO.logSpan("Fix original media path from absolute to relative") {
-    MediaService.originalList().runForeach(rewriteFacesToCleanupRemoveField)
+    // MediaService.originalList().runForeach(rewriteFacesToCleanupRemoveField)
+    MediaService.mediaList().runForeach(refreshDetectedFaceTimestampField)
   }
 
 }
