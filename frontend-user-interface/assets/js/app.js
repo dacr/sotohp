@@ -84,6 +84,34 @@ let personsCache = null; // Map personId -> person object
 let mediaFacesSeq = 0; // sequence to cancel stale loads
 let slideshowPlaying = false;
 
+// Recent persons selection (LRU of up to 10 personIds) persisted in localStorage
+function getRecentPersonsIds() {
+  try {
+    const raw = localStorage.getItem('viewer.recentPersons') || '[]';
+    const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+    // Filter invalid and deduplicate while preserving order
+    const seen = new Set();
+    const out = [];
+    for (const id of arr) {
+      if (typeof id !== 'string') continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+      if (out.length >= 10) break;
+    }
+    return out;
+  } catch { return []; }
+}
+function pushRecentPersonId(personId) {
+  try {
+    if (!personId || typeof personId !== 'string') return;
+    const ids = getRecentPersonsIds();
+    const without = ids.filter(x => x !== personId);
+    const updated = [personId, ...without].slice(0, 10);
+    localStorage.setItem('viewer.recentPersons', JSON.stringify(updated));
+  } catch {}
+}
+
 // Global keyboard shortcuts for modals:
 // - Escape: close the topmost modal overlay
 // - Ctrl+Enter / Cmd+Enter: trigger the primary action (Save/Create) in the topmost modal
@@ -872,6 +900,11 @@ async function openFaceEditModal(face) {
             </div>
             <p class="muted" style="font-size:12px;color:#6b7280;margin-top:6px">Pick a person to set/update identification, or use Remove to clear it. Use arrow keys ↑/↓ to navigate suggestions, Enter to select.</p>
           </div>
+          <div class="recent-persons" id="fp-recents" aria-label="Recent persons">
+            <label style="display:block">Recent</label>
+            <div class="recent-list" id="fp-recents-list"></div>
+            <p class="muted" style="font-size:12px;color:#6b7280;margin-top:6px">Quick select one of your last choices.</p>
+          </div>
         </div>
       </div>
       <footer>
@@ -900,6 +933,47 @@ async function openFaceEditModal(face) {
 
   function personLabel(p) { return `${p.firstName||''} ${p.lastName||''}`.trim() || p.id || ''; }
   const personsIndex = Array.from(personsCache?.values?.()||[]).map(p => ({ id: p.id, first: (p.firstName||'').trim(), last: (p.lastName||'').trim(), label: personLabel(p) }));
+
+  // --- Recent persons quick-pick buttons ---
+  try {
+    const recWrap = modal.querySelector('#fp-recents');
+    const recList = modal.querySelector('#fp-recents-list');
+    if (recWrap && recList) {
+      const recIds = getRecentPersonsIds();
+      const recPersons = recIds
+        .map(id => personsCache?.get?.(id))
+        .filter(p => p && p.id)
+        .slice(0, 10);
+      if (recPersons.length === 0) {
+        recWrap.style.display = 'none';
+      } else {
+        recWrap.style.display = '';
+        recList.innerHTML = recPersons.map(p => {
+          const label = personLabel(p).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+          return `<button type="button" class="recent-pill" data-id="${p.id}" title="Quick select ${label}">${label}</button>`;
+        }).join('');
+        recList.querySelectorAll('button.recent-pill').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const personId = btn.getAttribute('data-id');
+            try {
+              await api.setFacePerson(face.faceId || face.id, personId);
+              const idx = currentFaces.findIndex(f => (f.faceId||f.id) === (face.faceId||face.id));
+              if (idx >= 0) currentFaces[idx].identifiedPersonId = personId; else face.identifiedPersonId = personId;
+              pushRecentPersonId(personId);
+              showSuccess('Face identification saved');
+              try { renderFaces(); } catch {}
+              // Close modal
+              try { overlay.remove(); } catch {}
+            } catch (err) {
+              console.error('Quick-pick failed', err);
+              showError('Failed to save identification');
+            }
+          });
+        });
+      }
+    }
+  } catch {}
 
   function updateButtons() {
     const pid = (hidden.value||'').trim();
@@ -1009,6 +1083,7 @@ async function openFaceEditModal(face) {
       // Optimistically update cache
       const p = personsCache?.get?.(personId);
       if (p) { p.chosenFaceId = face.faceId || face.id; }
+      try { pushRecentPersonId(personId); } catch {}
       showSuccess('Set as chosen face for the selected person');
     } catch (e) {
       showError('Failed to set chosen face');
@@ -1024,6 +1099,7 @@ async function openFaceEditModal(face) {
       // Update local state and re-render
       const idx = currentFaces.findIndex(f => (f.faceId||f.id) === (face.faceId||face.id));
       if (idx >= 0) currentFaces[idx].identifiedPersonId = personId; else face.identifiedPersonId = personId;
+      try { pushRecentPersonId(personId); } catch {}
       showSuccess('Face identification updated');
       await ensurePersonsCache();
       renderFaces();

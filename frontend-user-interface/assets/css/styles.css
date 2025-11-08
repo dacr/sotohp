@@ -336,3 +336,11 @@ section#tab-mosaic.tab.active { display: flex; }
   z-index: 10;
 }
 .mosaic-timeline .tooltip.show { display: block; }
+
+
+/* Identify Person modal: recent persons quick-pick */
+.recent-persons { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.recent-persons > label { font-size: 12px; color: #374151; margin-bottom: 2px; }
+.recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.recent-pill { background: #f3f4f6; border: 1px solid #e5e7eb; color: #111827; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.recent-pill:hover { background: #e5e7eb; }
