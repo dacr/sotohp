@@ -176,6 +176,17 @@ section#tab-mosaic.tab.active { display: flex; }
 .image-container:fullscreen .img-edit-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-edit-btn { display: none !important; }
 
+/* Faces overlay */
+.faces-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.face-box { position: absolute; border: 2px solid rgba(37,99,235,0.9); background: rgba(37,99,235,0.08); border-radius: 6px; pointer-events: auto; }
+.face-box .name-chip { position: absolute; right: 0; bottom: 0; transform: translate(2px, 2px); background: rgba(17,24,39,0.85); color: #fff; font-size: 11px; padding: 2px 6px; border-top-left-radius: 6px; border-bottom-right-radius: 6px; }
+.face-box .fb-edit { position: absolute; right: 4px; top: 4px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 14px; padding: 2px 6px; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(2px); transition: opacity 150ms ease, transform 150ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.face-box:hover .fb-edit, .face-box:focus-within .fb-edit { opacity: 1; transform: translateY(0); }
+.face-box .fb-edit:hover { background: #1d4ed8; }
+
+/* Active state for viewer controls button */
+.controls button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
 /* Modal styles */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal { width: min(900px, 96vw); max-height: 90vh; background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); overflow: hidden; display: flex; flex-direction: column; }
@@ -186,6 +197,13 @@ section#tab-mosaic.tab.active { display: flex; }
 .modal label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; }
 .modal input[type="text"], .modal textarea, .modal input[type="datetime-local"], .modal input[type="url"] { width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }
 .modal textarea { min-height: 70px; resize: vertical; }
+
+/* Simple combobox styles used in Identify Person modal */
+.combo { position: relative; }
+.combo-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; max-height: 240px; overflow: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 10; padding: 4px; display: none; }
+.combo[aria-expanded="true"] .combo-list { display: block; }
+.combo-option { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.combo-option[aria-selected="true"], .combo-option:hover { background: #eff6ff; }
 
 /* Keywords chips */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; }

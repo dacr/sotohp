@@ -2,6 +2,7 @@
 // Uses axios (via CDN) and Leaflet (via CDN). ES module for clarity.
 
 class ApiClient {
+  // Faces & persons overlay support added
   constructor(baseURL = '') { this.http = axios.create({ baseURL }); }
   async getMedia(select, referenceMediaAccessKey, referenceMediaTimestamp) {
     const params = { select };
@@ -35,6 +36,11 @@ class ApiClient {
   async deletePerson(personId) { await this.http.delete(`/api/person/${encodeURIComponent(personId)}`); }
   async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
   faceImageUrl(faceId) { return `/api/face/${encodeURIComponent(faceId)}/content`; }
+  // Faces endpoints
+  async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
+  async getFace(faceId) { const res = await this.http.get(`/api/face/${encodeURIComponent(faceId)}`); return res.data; }
+  async setFacePerson(faceId, personId) { await this.http.put(`/api/face/${encodeURIComponent(faceId)}/person/${encodeURIComponent(personId)}`); }
+  async removeFacePerson(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}/person`); }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async getStore(storeId) { const res = await this.http.get(`/api/store/${encodeURIComponent(storeId)}`); return res.data; }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
@@ -71,6 +77,11 @@ class ApiClient {
 const api = new ApiClient('');
 let currentMedia = null;
 let slideshowTimer = null;
+let facesEnabled = false;
+let facesOverlay = null; // overlay container element
+let currentFaces = []; // array of faces for current media
+let personsCache = null; // Map personId -> person object
+let mediaFacesSeq = 0; // sequence to cancel stale loads
 let slideshowPlaying = false;
 
 // Global keyboard shortcuts for modals:
@@ -242,12 +253,16 @@ function showMedia(media) {
   if (img) {
     // Determine which size to use: original only in fullscreen, otherwise normalized
     const cont = document.querySelector('.image-container');
+    // Clear faces overlay immediately while new image loads to avoid misaligned boxes
+    if (facesEnabled) { clearFacesOverlay(); }
     const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
     const srcUrl = (isFs ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey)) + `?t=${Date.now()}`;
     // Smooth fade transition for image swaps
     try { img.style.opacity = '0'; } catch {}
     // Start zoom exactly when the new image is displayed
     img.onload = () => {
+      // When the image is displayed, re-render faces overlay to match actual size
+      if (facesEnabled) { try { renderFaces(); } catch {} }
       try { img.style.opacity = '1'; } catch {}
       try {
         // Update zoom duration from slideshow controls (fallback 20s)
@@ -269,6 +284,8 @@ function showMedia(media) {
     };
     img.src = srcUrl; // cache bust
   }
+  // Load faces for this media if overlay is enabled
+  if (facesEnabled) { try { loadFacesForCurrentMedia(); } catch {} }
   const date = media.shootDateTime || media.original?.cameraShootDateTime || '-';
   const dateStr = date ? new Date(date).toLocaleString() : '-';
   const ev0 = (media.events && media.events.length > 0) ? media.events[0] : null;
@@ -697,6 +714,354 @@ function openMediaEditModal(media) {
   });
 }
 
+function ensureFacesOverlay() {
+  try {
+    const cont = document.querySelector('.image-container');
+    if (!cont) return null;
+    let ov = cont.querySelector('.faces-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.className = 'faces-overlay';
+      cont.appendChild(ov);
+    }
+    return ov;
+  } catch { return null; }
+}
+
+function getRenderedImageRect() {
+  const cont = document.querySelector('.image-container');
+  const img = document.getElementById('main-image');
+  if (!cont || !img || !img.naturalWidth || !img.naturalHeight) return { left: 0, top: 0, width: 0, height: 0 };
+  const cw = cont.clientWidth || 0;
+  const ch = cont.clientHeight || 0;
+  if (cw <= 0 || ch <= 0) return { left: 0, top: 0, width: 0, height: 0 };
+  const nw = img.naturalWidth;
+  const nh = img.naturalHeight;
+  const scale = Math.min(cw / nw, ch / nh);
+  const w = Math.max(0, Math.round(nw * scale));
+  const h = Math.max(0, Math.round(nh * scale));
+  const left = Math.round((cw - w) / 2);
+  const top = Math.round((ch - h) / 2);
+  return { left, top, width: w, height: h };
+}
+
+function clearFacesOverlay() {
+  const ov = ensureFacesOverlay();
+  if (ov) ov.innerHTML = '';
+}
+
+function personsName(personId) {
+  try {
+    const p = personsCache && personsCache.get(personId);
+    if (!p) return { first: '', full: '' };
+    const first = (p.firstName || '').trim();
+    const last = (p.lastName || '').trim();
+    return { first, full: `${first}${last ? ' ' + last : ''}` };
+  } catch { return { first: '', full: '' }; }
+}
+
+async function ensurePersonsCache() {
+  if (personsCache) return personsCache;
+  try {
+    const items = await api.listPersons();
+    const map = new Map();
+    for (const p of items) { if (p && p.id) map.set(p.id, p); }
+    personsCache = map;
+    return personsCache;
+  } catch { personsCache = new Map(); return personsCache; }
+}
+
+function renderFaces() {
+  if (!facesEnabled) { clearFacesOverlay(); return; }
+  const ov = ensureFacesOverlay();
+  if (!ov) return;
+  ov.innerHTML = '';
+  const rect = getRenderedImageRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  for (const face of currentFaces) {
+    try {
+      const b = face.box || face.boundingBox || face;
+      const x = Math.max(0, Math.min(1, b.x || 0));
+      const y = Math.max(0, Math.min(1, b.y || 0));
+      const w = Math.max(0, Math.min(1, b.width || 0));
+      const h = Math.max(0, Math.min(1, b.height || 0));
+      const left = rect.left + Math.round(x * rect.width);
+      const top = rect.top + Math.round(y * rect.height);
+      const pxw = Math.round(w * rect.width);
+      const pxh = Math.round(h * rect.height);
+      const box = document.createElement('div');
+      box.className = 'face-box';
+      box.style.left = left + 'px';
+      box.style.top = top + 'px';
+      box.style.width = pxw + 'px';
+      box.style.height = pxh + 'px';
+      box.tabIndex = 0;
+      box.dataset.faceId = face.faceId || face.id || '';
+
+      const pid = face.identifiedPersonId || null;
+      if (pid) {
+        const { first, full } = personsName(pid);
+        if (full) box.title = full;
+        if (first) {
+          const chip = document.createElement('div');
+          chip.className = 'name-chip';
+          chip.textContent = first;
+          box.appendChild(chip);
+        }
+      }
+
+      const eb = document.createElement('button');
+      eb.className = 'fb-edit';
+      eb.type = 'button';
+      eb.title = 'Edit identification';
+      eb.textContent = '✎';
+      eb.addEventListener('click', (e) => { e.stopPropagation(); openFaceEditModal(face); });
+      box.appendChild(eb);
+
+      ov.appendChild(box);
+    } catch {}
+  }
+}
+
+async function loadFacesForCurrentMedia() {
+  const media = currentMedia; if (!media || !media.accessKey) { currentFaces = []; clearFacesOverlay(); return; }
+  const seq = ++mediaFacesSeq;
+  try {
+    const facesList = await api.getMediaFaces(media.accessKey);
+    if (seq !== mediaFacesSeq) return; // stale
+    // facesList is OriginalFaces with facesIds
+    const ids = Array.isArray(facesList?.facesIds) ? facesList.facesIds : [];
+    const detailPromises = ids.map(id => api.getFace(id).catch(()=>null));
+    const details = (await Promise.all(detailPromises)).filter(Boolean);
+    currentFaces = details;
+    await ensurePersonsCache();
+    renderFaces();
+  } catch (e) {
+    currentFaces = [];
+    clearFacesOverlay();
+  }
+}
+
+async function openFaceEditModal(face) {
+  if (!face) return;
+  if (document.querySelector('.modal-overlay')) return;
+  await ensurePersonsCache();
+  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
+  const currentPid = face.identifiedPersonId || '';
+  // Build options HTML
+  const options = Array.from(personsCache?.values?.() || []).map(p => {
+    const id = (p.id||'');
+    const name = `${p.firstName||''} ${p.lastName||''}`.trim();
+    const selected = id === currentPid ? ' selected' : '';
+    return `<option value="${id}"${selected}>${name || id}</option>`;
+  }).join('');
+  overlay.innerHTML = `
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+      <header>
+        <div>Identify person for face</div>
+        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div>
+            <label for="fp-person-input">Person</label>
+            <div class="combo" role="combobox" aria-expanded="false" aria-owns="fp-person-list" aria-haspopup="listbox">
+              <input type="text" id="fp-person-input" autocomplete="off" placeholder="Type a name to filter…" aria-autocomplete="list" aria-controls="fp-person-list" aria-activedescendant="" style="width:100%; padding:8px; border:1px solid #e5e7eb; border-radius:6px;">
+              <input type="hidden" id="fp-person-id" value="${currentPid}">
+              <div id="fp-person-list" class="combo-list" role="listbox" tabindex="-1"></div>
+            </div>
+            <p class="muted" style="font-size:12px;color:#6b7280;margin-top:6px">Pick a person to set/update identification, or use Remove to clear it. Use arrow keys ↑/↓ to navigate suggestions, Enter to select.</p>
+          </div>
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="cancel">Cancel</button>
+        <button type="button" class="remove" ${currentPid ? '' : 'disabled title="No identified person to remove"'}>Remove</button>
+        <button type="button" class="use-chosen" title="Set selected person face thumbnail from this face" style="background:#059669;color:#fff;border:1px solid #047857;border-radius:6px;padding:6px 10px;">Use as chosen face</button>
+        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+  const modal = overlay.querySelector('.modal');
+  const close = () => { overlay.remove(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('button.close')?.addEventListener('click', close);
+  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
+  setTimeout(()=>{ (modal.querySelector('#fp-person-input')||modal).focus(); }, 0);
+
+  // --- Typeahead combo wiring ---
+  const input = modal.querySelector('#fp-person-input');
+  const hidden = modal.querySelector('#fp-person-id');
+  const list = modal.querySelector('#fp-person-list');
+  const combo = modal.querySelector('.combo');
+  const saveBtn = overlay.querySelector('button.save');
+  const useChosenBtn = overlay.querySelector('button.use-chosen');
+  const removeBtn = overlay.querySelector('button.remove');
+
+  function personLabel(p) { return `${p.firstName||''} ${p.lastName||''}`.trim() || p.id || ''; }
+  const personsIndex = Array.from(personsCache?.values?.()||[]).map(p => ({ id: p.id, first: (p.firstName||'').trim(), last: (p.lastName||'').trim(), label: personLabel(p) }));
+
+  function updateButtons() {
+    const pid = (hidden.value||'').trim();
+    if (saveBtn) saveBtn.disabled = !pid;
+    if (useChosenBtn) useChosenBtn.disabled = !pid;
+  }
+  updateButtons();
+
+  // Initialize input from current selection if any
+  if (hidden.value) {
+    const p = personsIndex.find(x => x.id === hidden.value);
+    if (p && input) input.value = p.label;
+  }
+
+  let activeIndex = -1;
+  let currentItems = [];
+  const MAX_ITEMS = 50;
+
+  function renderList(items) {
+    currentItems = items.slice(0, MAX_ITEMS);
+    list.innerHTML = currentItems.map((it, idx) => `<div class="combo-option" role="option" id="fp-opt-${idx}" data-id="${it.id}" aria-selected="${idx===activeIndex?'true':'false'}">${it.label}</div>`).join('');
+    // Wire click handlers
+    list.querySelectorAll('.combo-option').forEach((el, idx) => {
+      el.addEventListener('mousedown', (e) => { // mousedown to avoid input blur before click
+        e.preventDefault();
+        chooseIndex(idx);
+      });
+    });
+  }
+
+  function openList() { combo?.setAttribute('aria-expanded','true'); }
+  function closeList() { combo?.setAttribute('aria-expanded','false'); activeIndex = -1; }
+
+  function filterItems(q) {
+    const s = (q||'').trim().toLowerCase();
+    if (!s) return personsIndex;
+    return personsIndex.filter(p => p.first.toLowerCase().includes(s) || p.last.toLowerCase().includes(s) || p.label.toLowerCase().includes(s));
+  }
+
+  function setSelectionById(id) {
+    hidden.value = id || '';
+    updateButtons();
+  }
+
+  function chooseIndex(idx) {
+    if (idx < 0 || idx >= currentItems.length) return;
+    const it = currentItems[idx];
+    if (input) input.value = it.label;
+    setSelectionById(it.id);
+    closeList();
+  }
+
+  let debounceTimer = null;
+  function scheduleFilter() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const q = input.value;
+      const items = filterItems(q);
+      openList();
+      activeIndex = -1;
+      renderList(items);
+      // If the typed value matches exactly one label, auto-select id but keep list open
+      const exact = personsIndex.find(p => p.label.toLowerCase() === (q||'').trim().toLowerCase());
+      if (exact) setSelectionById(exact.id); else setSelectionById('');
+    }, 80);
+  }
+
+  input.addEventListener('input', scheduleFilter);
+  input.addEventListener('focus', scheduleFilter);
+  input.addEventListener('keydown', (e) => {
+    const expanded = combo?.getAttribute('aria-expanded') === 'true';
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!expanded) { openList(); renderList(filterItems(input.value)); }
+      activeIndex = Math.min((activeIndex < 0 ? -1 : activeIndex) + 1, currentItems.length - 1);
+      renderList(currentItems);
+      const activeEl = document.getElementById(`fp-opt-${activeIndex}`);
+      if (activeEl) { activeEl.scrollIntoView({ block: 'nearest' }); input.setAttribute('aria-activedescendant', activeEl.id); }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!expanded) { openList(); renderList(filterItems(input.value)); }
+      activeIndex = Math.max(activeIndex - 1, 0);
+      renderList(currentItems);
+      const activeEl = document.getElementById(`fp-opt-${activeIndex}`);
+      if (activeEl) { activeEl.scrollIntoView({ block: 'nearest' }); input.setAttribute('aria-activedescendant', activeEl.id); }
+    } else if (e.key === 'Enter') {
+      if (expanded && activeIndex >= 0) {
+        e.preventDefault();
+        chooseIndex(activeIndex);
+      }
+    } else if (e.key === 'Escape') {
+      if (expanded) { e.preventDefault(); closeList(); }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!overlay.contains(e.target)) return; // outer already handled by overlay click
+    if (combo && !combo.contains(e.target)) closeList();
+  });
+
+  // Use as chosen face
+  overlay.querySelector('button.use-chosen')?.addEventListener('click', async () => {
+    const personId = (hidden.value||'').trim();
+    if (!personId) { showWarning('Please select a person first'); return; }
+    try {
+      await api.updatePersonFace(personId, face.faceId || face.id);
+      // Optimistically update cache
+      const p = personsCache?.get?.(personId);
+      if (p) { p.chosenFaceId = face.faceId || face.id; }
+      showSuccess('Set as chosen face for the selected person');
+    } catch (e) {
+      showError('Failed to set chosen face');
+    }
+  });
+
+  // Save (set/update)
+  overlay.querySelector('button.save')?.addEventListener('click', async () => {
+    try {
+      const personId = (hidden.value || '').trim();
+      if (!personId) { showWarning('Please select a person'); return; }
+      await api.setFacePerson(face.faceId || face.id, personId);
+      // Update local state and re-render
+      const idx = currentFaces.findIndex(f => (f.faceId||f.id) === (face.faceId||face.id));
+      if (idx >= 0) currentFaces[idx].identifiedPersonId = personId; else face.identifiedPersonId = personId;
+      showSuccess('Face identification updated');
+      await ensurePersonsCache();
+      renderFaces();
+      close();
+    } catch (e) {
+      showError('Failed to update face identification');
+    }
+  });
+
+  // Remove
+  overlay.querySelector('button.remove')?.addEventListener('click', async () => {
+    if (!face.identifiedPersonId) return; // safety
+    try {
+      await api.removeFacePerson(face.faceId || face.id);
+      const idx = currentFaces.findIndex(f => (f.faceId||f.id) === (face.faceId||face.id));
+      if (idx >= 0) currentFaces[idx].identifiedPersonId = null; else face.identifiedPersonId = null;
+      showSuccess('Face identification removed');
+      renderFaces();
+      close();
+    } catch (e) {
+      showError('Failed to remove face identification');
+    }
+  });
+}
+
+function setFacesEnabled(state) {
+  facesEnabled = !!state;
+  try { localStorage.setItem('viewer.facesEnabled', facesEnabled ? '1' : '0'); } catch {}
+  const btn = document.getElementById('btn-faces');
+  if (btn) { btn.classList.toggle('active', facesEnabled); btn.setAttribute('aria-pressed', facesEnabled ? 'true' : 'false'); btn.title = facesEnabled ? 'Hide faces' : 'Show faces'; }
+  if (facesEnabled) {
+    loadFacesForCurrentMedia();
+  } else {
+    currentFaces = [];
+    clearFacesOverlay();
+  }
+}
+
 function initViewerControls() {
   $('#btn-first').addEventListener('click', () => loadMedia('first'));
   $('#btn-last').addEventListener('click', () => loadMedia('last'));
@@ -707,6 +1072,16 @@ function initViewerControls() {
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });
+  // Faces toggle wiring
+  const facesBtn = document.getElementById('btn-faces');
+  if (facesBtn && !facesBtn.__wired) {
+    facesBtn.addEventListener('click', () => setFacesEnabled(!facesEnabled));
+    facesBtn.__wired = true;
+  }
+  // Restore persisted faces toggle
+  try { const saved = localStorage.getItem('viewer.facesEnabled'); if (saved != null) facesEnabled = saved === '1'; } catch {}
+  setFacesEnabled(facesEnabled);
+
   // Click zones on the image to navigate (left 1/4 prev, right 1/4 next, middle random)
   const imgContainer = document.querySelector('.image-container');
   let clickTimer = null;
@@ -730,6 +1105,9 @@ function initViewerControls() {
       }
     }, 220);
   });
+  // Re-render faces overlay on window resize
+  window.addEventListener('resize', () => { if (facesEnabled) { try { renderFaces(); } catch {} } });
+
   // Toggle fullscreen on double click on the image/container
   imgContainer?.addEventListener('dblclick', () => {
     // Cancel pending single-click action
@@ -762,9 +1140,11 @@ function initViewerControls() {
         } else {
           img.classList.remove('zooming');
         }
+        if (facesEnabled) setTimeout(renderFaces, 0);
         img.onload = null;
       };
       img.src = newUrl;
+      if (facesEnabled) setTimeout(renderFaces, 0);
     } catch {}
   });
 
