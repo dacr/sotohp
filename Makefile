@@ -3,6 +3,9 @@ all: test
 run-api: ui
 	mill user-interfaces.api.run
 
+run-face-inference:
+	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference
+
 run-viewer:
 	mill user-interfaces.gui.run
 
