@@ -829,7 +829,6 @@ async function confirmAllInferredFaces(btnRef) {
   const targets = (currentFaces || []).filter(f => (!f.identifiedPersonId) && f.inferredIdentifiedPersonId);
   if (!targets || targets.length === 0) { updateConfirmAllButtonVisibility(); return; }
   const namesCount = targets.length;
-  if (!confirm(`Confirm ${namesCount} inferred face${namesCount>1?'s':''}?`)) return;
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Confirming…'; }
   } catch {}
