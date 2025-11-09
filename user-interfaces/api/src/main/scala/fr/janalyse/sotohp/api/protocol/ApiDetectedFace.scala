@@ -13,6 +13,7 @@ case class ApiDetectedFace(
   originalId: OriginalId,
   box: ApiBoundingBox,
   identifiedPersonId: Option[PersonId],
+  inferredIdentifiedPersonId: Option[PersonId],
   timestamp: OffsetDateTime
 )
 

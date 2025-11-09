@@ -129,7 +129,9 @@ object `user-interfaces` extends Module {
     def mvnDeps      = Seq(
       mvn"dev.zio::zio-logging:2.5.1",
       mvn"dev.zio::zio-logging-slf4j2-bridge:2.5.1",
-      mvn"ch.qos.logback:logback-classic:1.5.19"
+      mvn"ch.qos.logback:logback-classic:1.5.19",
+      //mvn"com.github.haifengl:smile-core:5.0.0"
+      mvn"com.github.haifengl:smile-core:4.4.2"
     )
   }
 

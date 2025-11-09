@@ -176,10 +176,20 @@ section#tab-mosaic.tab.active { display: flex; }
 .image-container:fullscreen .img-edit-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-edit-btn { display: none !important; }
 
+/* Confirm-all inferred faces button (Viewer) */
+.img-confirm-btn { position: absolute; right: 92px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
+.image-container:hover .img-confirm-btn { opacity: 1; transform: translateY(0); }
+.img-confirm-btn:hover { background: rgba(245,158,11,1); }
+/* Hide confirm-all button in fullscreen mode (same as edit) */
+.image-container:fullscreen .img-confirm-btn { display: none !important; }
+.image-container:-webkit-full-screen .img-confirm-btn { display: none !important; }
+
 /* Faces overlay */
 .faces-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
 .face-box { position: absolute; border: 2px solid rgba(37,99,235,0.9); background: rgba(37,99,235,0.08); border-radius: 6px; pointer-events: auto; }
 .face-box .name-chip { position: absolute; right: 0; bottom: 0; transform: translate(2px, 2px); background: rgba(17,24,39,0.85); color: #fff; font-size: 11px; padding: 2px 6px; border-top-left-radius: 6px; border-bottom-right-radius: 6px; }
+.face-box .name-chip.inferred { background: rgba(245,158,11,0.92); color: #111827; cursor: pointer; border: none; }
+.face-box .name-chip.inferred:hover, .face-box .name-chip.inferred:focus { background: rgba(245,158,11,1); box-shadow: 0 0 0 2px rgba(0,0,0,0.1); }
 .face-box .fb-edit { position: absolute; right: 4px; top: 4px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 14px; padding: 2px 6px; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(2px); transition: opacity 150ms ease, transform 150ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .face-box:hover .fb-edit, .face-box:focus-within .fb-edit { opacity: 1; transform: translateY(0); }
 .face-box .fb-edit:hover { background: #1d4ed8; }

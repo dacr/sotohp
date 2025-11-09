@@ -101,7 +101,8 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                                    faceId = faceId,
                                    originalId = original.id,
                                    timestamp = original.timestamp,
-                                   identifiedPersonId = None
+                                   identifiedPersonId = None,
+                                   inferredIdentifiedPersonId = None
                                  )
                                })
       originalBufferedImage <- ZIO

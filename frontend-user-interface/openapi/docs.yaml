@@ -1378,6 +1378,8 @@ components:
           $ref: '#/components/schemas/BoundingBox'
         identifiedPersonId:
           type: string
+        inferredIdentifiedPersonId:
+          type: string
         timestamp:
           type: string
           format: date-time

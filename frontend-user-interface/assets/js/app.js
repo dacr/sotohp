@@ -776,6 +776,95 @@ function getRenderedImageRect() {
 function clearFacesOverlay() {
   const ov = ensureFacesOverlay();
   if (ov) ov.innerHTML = '';
+  try { updateConfirmAllButtonVisibility(); } catch {}
+}
+
+// Confirm-all inferred faces button lifecycle ------------------------------------------------------
+function hasInferredPending() {
+  try {
+    if (!Array.isArray(currentFaces) || currentFaces.length === 0) return false;
+    return currentFaces.some(f => (!f.identifiedPersonId) && !!f.inferredIdentifiedPersonId);
+  } catch { return false; }
+}
+
+function ensureConfirmAllButton() {
+  try {
+    const cont = document.querySelector('.image-container');
+    if (!cont) return null;
+    let btn = cont.querySelector('.img-confirm-btn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'img-confirm-btn';
+      btn.title = 'Confirm all inferred faces';
+      btn.setAttribute('aria-label', 'Confirm all inferred faces');
+      btn.textContent = 'Confirm all';
+      btn.style.display = 'none';
+      cont.appendChild(btn);
+      // Wire click handler once
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        await confirmAllInferredFaces(btn);
+      });
+    }
+    return btn;
+  } catch { return null; }
+}
+
+function updateConfirmAllButtonVisibility() {
+  const btn = ensureConfirmAllButton();
+  try {
+    if (!btn) return;
+    const shouldShow = !!facesEnabled && hasInferredPending();
+    btn.style.display = shouldShow ? 'inline-flex' : 'none';
+    btn.disabled = !shouldShow;
+    btn.textContent = 'Confirm all';
+    btn.title = 'Confirm all inferred faces';
+  } catch {}
+}
+
+async function confirmAllInferredFaces(btnRef) {
+  const cont = document.querySelector('.image-container');
+  const btn = btnRef || (cont && cont.querySelector('.img-confirm-btn'));
+  const targets = (currentFaces || []).filter(f => (!f.identifiedPersonId) && f.inferredIdentifiedPersonId);
+  if (!targets || targets.length === 0) { updateConfirmAllButtonVisibility(); return; }
+  const namesCount = targets.length;
+  if (!confirm(`Confirm ${namesCount} inferred face${namesCount>1?'s':''}?`)) return;
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Confirming…'; }
+  } catch {}
+  let ok = 0, ko = 0;
+  // Simple limited concurrency runner
+  const limit = 6;
+  let index = 0;
+  const runNext = async () => {
+    if (index >= targets.length) return;
+    const f = targets[index++];
+    try {
+      await api.setFacePerson(f.faceId || f.id, f.inferredIdentifiedPersonId);
+      const faceId = f.faceId || f.id;
+      const idx = currentFaces.findIndex(x => (x.faceId||x.id) === faceId);
+      const pid = f.inferredIdentifiedPersonId;
+      if (idx >= 0) { currentFaces[idx].identifiedPersonId = pid; currentFaces[idx].inferredIdentifiedPersonId = null; }
+      else { f.identifiedPersonId = pid; f.inferredIdentifiedPersonId = null; }
+      try { if (pid) pushRecentPersonId(pid); } catch {}
+      ok++;
+    } catch (e) {
+      console.warn('Confirm-all failed for face', f, e);
+      ko++;
+    }
+    await runNext();
+  };
+  const workers = [];
+  for (let i=0;i<Math.min(limit, targets.length);i++) workers.push(runNext());
+  await Promise.all(workers);
+  try { await ensurePersonsCache(); } catch {}
+  renderFaces();
+  updateConfirmAllButtonVisibility();
+  if (btn) { btn.disabled = false; btn.textContent = 'Confirm all'; }
+  if (ko === 0) showSuccess(`Confirmed ${ok} face${ok>1?'s':''}`);
+  else if (ok === 0) showError('Failed to confirm inferred faces');
+  else showWarning(`Confirmed ${ok}, failed ${ko}`);
 }
 
 function personsName(personId) {
@@ -827,6 +916,7 @@ function renderFaces() {
       box.dataset.faceId = face.faceId || face.id || '';
 
       const pid = face.identifiedPersonId || null;
+      const inferredPid = (!pid && (face.inferredIdentifiedPersonId || null)) ? (face.inferredIdentifiedPersonId || null) : null;
       if (pid) {
         const { first, full } = personsName(pid);
         if (full) box.title = full;
@@ -834,6 +924,36 @@ function renderFaces() {
           const chip = document.createElement('div');
           chip.className = 'name-chip';
           chip.textContent = first;
+          box.appendChild(chip);
+        }
+      } else if (inferredPid) {
+        const { first, full } = personsName(inferredPid);
+        if (full) box.title = `${full} (inferred)`;
+        if (first) {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'name-chip inferred';
+          chip.title = full ? `${full} (click to confirm)` : 'Click to confirm';
+          chip.textContent = `${first}?`;
+          chip.tabIndex = 0;
+          const confirm = async (e) => {
+            try {
+              e?.preventDefault?.(); e?.stopPropagation?.();
+              await api.setFacePerson(face.faceId || face.id, inferredPid);
+              const idx = currentFaces.findIndex(f => (f.faceId||f.id) === (face.faceId||face.id));
+              if (idx >= 0) { currentFaces[idx].identifiedPersonId = inferredPid; currentFaces[idx].inferredIdentifiedPersonId = null; }
+              else { face.identifiedPersonId = inferredPid; face.inferredIdentifiedPersonId = null; }
+              try { pushRecentPersonId(inferredPid); } catch {}
+              showSuccess('Confirmed inferred person for this face');
+              await ensurePersonsCache();
+              renderFaces();
+            } catch (err) {
+              console.error('Failed to confirm inferred person', err);
+              showError('Failed to confirm inferred person');
+            }
+          };
+          chip.addEventListener('click', confirm);
+          chip.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { confirm(ev); } });
           box.appendChild(chip);
         }
       }
@@ -849,6 +969,7 @@ function renderFaces() {
       ov.appendChild(box);
     } catch {}
   }
+  try { updateConfirmAllButtonVisibility(); } catch {}
 }
 
 async function loadFacesForCurrentMedia() {
