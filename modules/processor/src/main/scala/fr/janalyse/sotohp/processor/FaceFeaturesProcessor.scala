@@ -11,9 +11,9 @@ import zio.*
 import zio.ZIOAspect.*
 
 import java.awt.image.BufferedImage
-
-case class FaceFeaturesIssue(message: String)                        extends Exception(message) with CoreIssue
-case class FaceFeaturesExtractIssue(message: String, err: Throwable) extends Exception(message, err) with CoreIssue
+trait FaceFeaturesIssue(message: String, mayByErr: Option[Throwable]) extends Exception with CoreIssue
+case class FaceFeaturesGeneralIssue(message: String)                  extends FaceFeaturesIssue(message, None)
+case class FaceFeaturesExtractIssue(message: String, err: Throwable)  extends FaceFeaturesIssue(message, Some(err))
 
 class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends Processor {
 
@@ -57,7 +57,6 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
                             .mapError(err => FaceFeaturesExtractIssue("Couldn't predict face features", err))
       faceFeatures      = FaceFeatures(
                             faceId = face.faceId,
-                            box = face.box,
                             features = features
                           )
     } yield faceFeatures
@@ -83,7 +82,7 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
                                extractFaceFeatures(face, originalImage) @@ annotated("faceId" -> face.faceId.toString)
                              }
                              .logError("Face features issue")
-                             .mapError(err => FaceFeaturesIssue(s"Unable to compute face features: $err"))
+                             .mapError(err => FaceFeaturesGeneralIssue(s"Unable to compute face features: $err"))
                              .option
       status             = ProcessedStatus(successful = mayBeFaceFeatures.isDefined, timestamp = now)
       features           = mayBeFaceFeatures.getOrElse(Nil)

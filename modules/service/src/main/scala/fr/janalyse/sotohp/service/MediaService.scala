@@ -5,7 +5,7 @@ import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.processor.model.{DetectedFace, FaceId, OriginalClassifications, OriginalDetectedObjects, OriginalFaces, OriginalMiniatures, OriginalNormalized, Person, PersonDescription, PersonId}
+import fr.janalyse.sotohp.processor.model.{DetectedFace, FaceFeatures, FaceId, OriginalClassifications, OriginalDetectedObjects, OriginalFaceFeatures, OriginalFaces, OriginalMiniatures, OriginalNormalized, Person, PersonDescription, PersonId}
 import fr.janalyse.sotohp.service.model.{KeywordRules, SynchronizeAction, SynchronizeStatus}
 import zio.lmdb.LMDB
 
@@ -46,6 +46,7 @@ trait MediaService {
   // -------------------------------------------------------------------------------------------------------------------
   def originalClassifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]]
   def originalFaces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]]
+  def originalFacesFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]]
   def originalObjects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]]
   def originalNormalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
   def originalMiniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
@@ -63,6 +64,10 @@ trait MediaService {
     face: DetectedFace // may contain and updated id
   ): IO[ServiceIssue, DetectedFace]
   def faceRead(faceId: FaceId): Stream[ServiceStreamIssue, Byte]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def faceFeaturesList(): Stream[ServiceStreamIssue, FaceFeatures]
+  def faceFeaturesGet(faceId: FaceId): IO[ServiceIssue, Option[FaceFeatures]]
 
   // -------------------------------------------------------------------------------------------------------------------
   def personList(): Stream[ServiceStreamIssue, Person]
@@ -222,6 +227,7 @@ object MediaService {
   // -------------------------------------------------------------------------------------------------------------------
   def originalClassifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalClassifications]] = ZIO.serviceWithZIO(_.originalClassifications(originalId))
   def originalFaces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaces]]                     = ZIO.serviceWithZIO(_.originalFaces(originalId))
+  def originalFacesFeatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]]      = ZIO.serviceWithZIO(_.originalFacesFeatures(originalId))
   def originalObjects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.originalObjects(originalId))
   def originalNormalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.originalNormalized(originalId))
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))
@@ -239,6 +245,10 @@ object MediaService {
     face: DetectedFace // may contain and updated id
   ): ZIO[MediaService, ServiceIssue, DetectedFace] = ZIO.serviceWithZIO(_.faceUpdate(faceId, face))
   def faceRead(faceId: FaceId): ZStream[MediaService, ServiceStreamIssue, Byte]      = ZStream.serviceWithStream(_.faceRead(faceId))
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def faceFeaturesList(): ZStream[MediaService, ServiceStreamIssue, FaceFeatures]            = ZStream.serviceWithStream(_.faceFeaturesList())
+  def faceFeaturesGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[FaceFeatures]] = ZIO.serviceWithZIO(_.faceFeaturesGet(faceId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                = ZStream.serviceWithStream(_.personList())

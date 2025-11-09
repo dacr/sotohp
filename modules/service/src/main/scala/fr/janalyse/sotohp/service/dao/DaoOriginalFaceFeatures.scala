@@ -4,16 +4,14 @@ import fr.janalyse.sotohp.model.{Original, OriginalId}
 import fr.janalyse.sotohp.processor.model.FaceId
 import fr.janalyse.sotohp.service
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{given, *}
 
 case class DaoFaceFeatures(
   faceId: FaceId,
-  box: DaoBoundingBox,
   features: Array[Float]
 ) derives LMDBCodecJson
 
-case class OriginalFaceFeatures(
+case class DaoOriginalFaceFeatures(
   originalId: OriginalId,
-  status: DaoProcessedStatus,
-  features: List[DaoFaceFeatures]
+  status: DaoProcessedStatus
 ) derives LMDBCodecJson

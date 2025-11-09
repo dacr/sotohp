@@ -2,7 +2,18 @@ package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder}
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
+import fr.janalyse.sotohp.processor.{
+  ClassificationIssue,
+  ClassificationProcessor,
+  FaceFeaturesIssue,
+  FaceFeaturesProcessor,
+  FacesDetectionIssue,
+  FacesProcessor,
+  MiniaturizeProcessor,
+  NormalizeProcessor,
+  ObjectsDetectionIssue,
+  ObjectsDetectionProcessor
+}
 import fr.janalyse.sotohp.processor.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.search.model.MediaBag
@@ -41,7 +52,9 @@ class MediaServiceLive private (
   keywordRulesColl: LMDBCollection[StoreId, DaoKeywordRules],
   classificationsColl: LMDBCollection[OriginalId, DaoOriginalClassifications],
   detectedFaceColl: LMDBCollection[FaceId, DaoDetectedFace],
-  originalFoundFacesColl: LMDBCollection[OriginalId, DaoOriginalFaces],
+  originalFacesColl: LMDBCollection[OriginalId, DaoOriginalFaces],
+  faceFeaturesColl: LMDBCollection[FaceId, DaoFaceFeatures],
+  originalFaceFeaturesColl: LMDBCollection[OriginalId, DaoOriginalFaceFeatures],
   objectsColl: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
   miniaturesColl: LMDBCollection[OriginalId, DaoOriginalMiniatures],
   normalizedColl: LMDBCollection[OriginalId, DaoOriginalNormalized],
@@ -49,6 +62,7 @@ class MediaServiceLive private (
   // ------------------------
   classificationProcessorEffect: IO[ClassificationIssue, ClassificationProcessor],
   facesProcessorEffect: IO[FacesDetectionIssue, FacesProcessor],
+  faceFeaturesProcessor: IO[FaceFeaturesIssue, FaceFeaturesProcessor],
   objectsProcessorEffect: IO[ObjectsDetectionIssue, ObjectsDetectionProcessor],
   // ------------------------
   synchronizeStatusRef: Ref[SynchronizeStatus],
@@ -320,6 +334,22 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  def faceFeaturesList(): Stream[ServiceStreamIssue, FaceFeatures] = {
+    faceFeaturesColl
+      .stream()
+      .map(_.transformInto[FaceFeatures])
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect face features : $err"))
+  }
+
+  def faceFeaturesGet(faceId: FaceId): IO[ServiceIssue, Option[FaceFeatures]] = {
+    faceFeaturesColl
+      .fetch(faceId)
+      .map(_.map(_.transformInto[FaceFeatures]))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch face features : $err"))
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+
   def personList(): Stream[ServiceStreamIssue, Person] = {
     personsColl
       .stream()
@@ -452,7 +482,7 @@ class MediaServiceLive private (
       computed  <- processor
                      .extractFaces(original)
                      .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces : $err"))
-      _         <- originalFoundFacesColl
+      _         <- originalFacesColl
                      .upsertOverwrite(originalId, computed.into[DaoOriginalFaces].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
       _         <- ZIO.foreachDiscard(computed.faces)(face =>
@@ -466,12 +496,63 @@ class MediaServiceLive private (
 
   override def originalFaces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]] = {
     for {
-      stored <- originalFoundFacesColl
+      stored <- originalFacesColl
                   .fetch(originalId)
                   .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoFacesToFaces))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
       // .tap(stored => Console.printLine(s"Stored : $stored").orDie)
       result <- computeFaces(originalId).when(stored.isEmpty)
+    } yield stored.orElse(result)
+  }
+
+  def computeFaceFeatures(originalId: OriginalId): IO[ServiceIssue, OriginalFaceFeatures] = {
+    // TODO transaction required
+    val logic = for {
+      originalFaces <- originalFaces(originalId)
+                         .someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      processor     <- faceFeaturesProcessor
+                         .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces features processor : $err"))
+      computed      <- processor
+                         .extractFaceFeatures(originalFaces)
+                         .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces features : $err"))
+      _             <- ZIO.foreachDiscard(computed.features)(face =>
+                         faceFeaturesColl
+                           .upsertOverwrite(face.faceId, face.into[DaoFaceFeatures].transform)
+                           .mapError(err => ServiceDatabaseIssue(s"Unable to store computed detected face : $err"))
+                       )
+      _             <- originalFaceFeaturesColl
+                         .upsertOverwrite(
+                           originalId,
+                           computed
+                             .into[DaoOriginalFaceFeatures]
+                             .withFieldComputed(_.originalId, _.original.id)
+                             .transform
+                         )
+                         .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
+    } yield computed
+    logic.uninterruptible
+  }
+
+  def daoFacesFeaturesToFacesFeatures(input: DaoOriginalFaceFeatures): IO[ServiceIssue, OriginalFaceFeatures] = {
+    for {
+      original      <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      originalFaces <- originalFaces(original.id).map(_.map(_.faces).getOrElse(Nil))
+      facesFeatures <- ZIO.foreach(originalFaces)(face => faceFeaturesGet(face.faceId))
+      result         = input
+                         .into[OriginalFaceFeatures]
+                         .withFieldConst(_.original, original)
+                         .withFieldConst(_.features, facesFeatures.flatten)
+                         .transform
+    } yield result
+  }
+
+  override def originalFacesFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
+    for {
+      stored <- originalFaceFeaturesColl
+                  .fetch(originalId)
+                  .flatMap(gotten => ZIO.foreach(gotten)(daoFacesFeaturesToFacesFeatures))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
+      result <- computeFaceFeatures(originalId).when(stored.isEmpty)
     } yield stored.orElse(result)
   }
 
@@ -581,7 +662,7 @@ class MediaServiceLive private (
 
   override def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): IO[ServiceIssue, Unit] = {
     for {
-      originalFacesDao <- originalFoundFacesColl
+      originalFacesDao <- originalFacesColl
                             .update(originalId, previous => previous.copy(facesIds = facesIds))
                             .mapError(err => ServiceDatabaseIssue(s"Unable to update computed faces : $err"))
     } yield ()
@@ -943,6 +1024,7 @@ class MediaServiceLive private (
       _                         <- originalNormalized(input.media.original.id)                   // required to optimize AI work so not launched in background
       fiberMiniaturesFiber      <- originalMiniatures(input.media.original.id)                   // .fork
       fiberFacesFiber           <- originalFaces(input.media.original.id).ignoreLogged           // .fork
+      fiberFeaturesFiber        <- originalFacesFeatures(input.media.original.id).ignoreLogged   // .fork
       fiberClassificationsFiber <- originalClassifications(input.media.original.id).ignoreLogged // .fork
       fiberObjectsFiber         <- originalObjects(input.media.original.id).ignoreLogged         // .fork
       // TODO investigate why this is not working
@@ -1341,20 +1423,22 @@ object MediaServiceLive {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  private val originalsCollectionName       = "originals"
-  private val statesCollectionName          = "states"
-  private val eventsCollectionName          = "events"
-  private val mediasCollectionName          = "medias"
-  private val ownersCollectionName          = "owners"
-  private val storesCollectionName          = "stores"
-  private val keywordRulesCollectionName    = "keywordRules"
-  private val classificationsCollectionName = "classifications"
-  private val detectedFacesCollectionName   = "detectedFaces"
-  private val facesCollectionName           = "faces"
-  private val objectsCollectionName         = "objects"
-  private val miniaturesCollectionName      = "miniatures"
-  private val normalizedCollectionName      = "normalized"
-  private val personsCollectionName         = "persons"
+  private val originalsCollectionName            = "originals"
+  private val statesCollectionName               = "states"
+  private val eventsCollectionName               = "events"
+  private val mediasCollectionName               = "medias"
+  private val ownersCollectionName               = "owners"
+  private val storesCollectionName               = "stores"
+  private val keywordRulesCollectionName         = "keywordRules"
+  private val classificationsCollectionName      = "classifications"
+  private val detectedFacesCollectionName        = "detectedFaces"
+  private val facesCollectionName                = "faces"
+  private val detectedFaceFeaturesCollectionName = "detectedFaceFeatures"
+  private val faceFeaturesCollectionName         = "faceFeatures"
+  private val objectsCollectionName              = "objects"
+  private val miniaturesCollectionName           = "miniatures"
+  private val normalizedCollectionName           = "normalized"
+  private val personsCollectionName              = "persons"
 
   private val allCollections = List(
     originalsCollectionName,
@@ -1367,6 +1451,8 @@ object MediaServiceLive {
     classificationsCollectionName,
     detectedFacesCollectionName,
     facesCollectionName,
+    detectedFaceFeaturesCollectionName,
+    faceFeaturesCollectionName,
     objectsCollectionName,
     miniaturesCollectionName,
     normalizedCollectionName,
@@ -1385,12 +1471,15 @@ object MediaServiceLive {
     classificationsColl        <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
     detectedFacesColl          <- lmdb.collectionGet[FaceId, DaoDetectedFace](detectedFacesCollectionName)
     originalFoundFacesColl     <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
+    faceFeaturesColl           <- lmdb.collectionGet[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName)
+    originalFaceFeaturesColl   <- lmdb.collectionGet[OriginalId, DaoOriginalFaceFeatures](faceFeaturesCollectionName)
     objectsColl                <- lmdb.collectionGet[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName)
     miniaturesColl             <- lmdb.collectionGet[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName)
     normalizedColl             <- lmdb.collectionGet[OriginalId, DaoOriginalNormalized](normalizedCollectionName)
     personsColl                <- lmdb.collectionGet[PersonId, DaoPerson](personsCollectionName)
     classificationProcessor    <- ClassificationProcessor.allocate().memoize
     facesProcessor             <- FacesProcessor.allocate().memoize
+    featuresProcessor          <- FaceFeaturesProcessor.allocate().memoize
     objectsProcessor           <- ObjectsDetectionProcessor.allocate().memoize
     synchronizeStatusReference <- Ref.make(SynchronizeStatus.empty)
     synchronizeFiberReference  <- Ref.make(Option.empty[Fiber[Nothing, Unit]])
@@ -1408,6 +1497,8 @@ object MediaServiceLive {
     classificationsColl,
     detectedFacesColl,
     originalFoundFacesColl,
+    faceFeaturesColl,
+    originalFaceFeaturesColl,
     objectsColl,
     miniaturesColl,
     normalizedColl,
@@ -1415,6 +1506,7 @@ object MediaServiceLive {
     // ------------------------
     classificationProcessor,
     facesProcessor,
+    featuresProcessor,
     objectsProcessor,
     // ------------------------
     synchronizeStatusReference,

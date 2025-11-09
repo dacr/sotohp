@@ -4,7 +4,6 @@ import fr.janalyse.sotohp.model.{Original, OriginalId}
 
 case class FaceFeatures(
   faceId: FaceId,
-  box: BoundingBox,
   features: Array[Float]
 )
 
