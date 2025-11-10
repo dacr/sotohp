@@ -90,6 +90,7 @@ trait MediaService {
     description: Option[PersonDescription],
     chosenFaceId: Option[FaceId]
   ): IO[ServiceIssue, Option[Person]]
+  def personFaceList(personId: PersonId): Stream[ServiceStreamIssue, DetectedFace]
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): Stream[ServiceStreamIssue, Original]
@@ -251,11 +252,11 @@ object MediaService {
   def faceFeaturesGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[FaceFeatures]] = ZIO.serviceWithZIO(_.faceFeaturesGet(faceId))
 
   // -------------------------------------------------------------------------------------------------------------------
-  def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                = ZStream.serviceWithStream(_.personList())
-  def personCount(): ZIO[MediaService, ServiceIssue, Long]                           = ZIO.serviceWithZIO(_.personCount())
-  def personGet(personId: PersonId): ZIO[MediaService, ServiceIssue, Option[Person]] = ZIO.serviceWithZIO(_.personGet(personId))
-  def personExists(personId: PersonId): ZIO[MediaService, ServiceIssue, Boolean]     = ZIO.serviceWithZIO(_.personExists(personId))
-  def personDelete(personId: PersonId): ZIO[MediaService, ServiceIssue, Unit]        = ZIO.serviceWithZIO(_.personDelete(personId))
+  def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                             = ZStream.serviceWithStream(_.personList())
+  def personCount(): ZIO[MediaService, ServiceIssue, Long]                                        = ZIO.serviceWithZIO(_.personCount())
+  def personGet(personId: PersonId): ZIO[MediaService, ServiceIssue, Option[Person]]              = ZIO.serviceWithZIO(_.personGet(personId))
+  def personExists(personId: PersonId): ZIO[MediaService, ServiceIssue, Boolean]                  = ZIO.serviceWithZIO(_.personExists(personId))
+  def personDelete(personId: PersonId): ZIO[MediaService, ServiceIssue, Unit]                     = ZIO.serviceWithZIO(_.personDelete(personId))
   def personCreate(
     id: Option[PersonId],
     firstName: FirstName,
@@ -271,6 +272,7 @@ object MediaService {
     description: Option[PersonDescription],
     chosenFaceId: Option[FaceId]
   ): ZIO[MediaService, ServiceIssue, Option[Person]] = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthDate, description, chosenFaceId))
+  def personFaceList(personId: PersonId): ZStream[MediaService, ServiceStreamIssue, DetectedFace] = ZStream.serviceWithStream(_.personFaceList(personId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def originalList(): ZStream[MediaService, ServiceStreamIssue, Original]                    = ZStream.serviceWithStream(_.originalList())

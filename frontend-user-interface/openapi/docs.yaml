@@ -731,6 +731,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/persons/{personId}/faces:
+    get:
+      tags:
+      - Person
+      summary: Stream all defined person faces
+      operationId: List person faces
+      parameters:
+      - name: personId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: NDJSON (one Person JSON object per line)
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/DetectedFace'
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/events:
     get:
       tags:

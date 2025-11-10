@@ -423,6 +423,15 @@ class MediaServiceLive private (
     } yield maybeDaoPerson.map(_.transformInto[Person])
   }
 
+  def personFaceList(personId: PersonId): Stream[ServiceStreamIssue, DetectedFace] = {
+    detectedFaceColl
+      .stream()
+      .filter(df => df.identifiedPersonId.contains(personId) || df.inferredIdentifiedPersonId.contains(personId))
+      .map(_.transformInto[DetectedFace])
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect faces for person $personId : $err"))
+  }
+
+
   // -------------------------------------------------------------------------------------------------------------------
   def daoClassificationsToClassifications(input: DaoOriginalClassifications): IO[ServiceIssue, OriginalClassifications] = {
     for {

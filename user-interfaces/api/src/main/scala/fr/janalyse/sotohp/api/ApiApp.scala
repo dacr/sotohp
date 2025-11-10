@@ -1039,6 +1039,38 @@ object ApiApp extends ZIOAppDefault {
           .flatMap(personId => personDeleteLogic(personId))
       )
 
+  def personFaceListLogic(personId: PersonId): ZStream[MediaService, Throwable, ApiDetectedFace] = {
+    MediaService
+      .personFaceList(personId)
+      .map(_.transformInto[ApiDetectedFace])
+      .mapError(err => ApiInternalError(s"Couldn't list person faces for ${personId}"))
+  }
+
+  val personFaceListEndpoint =
+    personEndpoint()
+      .name("List person faces")
+      .summary("Stream all defined person faces")
+      .get
+      .in(path[String]("personId"))
+      .in("faces")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiDetectedFace.apiDetectedFaceSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Person JSON object per line)")
+      )
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv](rawPersonId =>
+        for {
+          personId  <- extractPersonId(rawPersonId)
+          ms        <- ZIO.service[MediaService]
+          byteStream = personFaceListLogic(personId)
+                         .map(_.toJson)
+                         .intersperse("\n")
+                         .via(ZPipeline.utf8Encode)
+                         .provideEnvironment(ZEnvironment(ms))
+        } yield byteStream
+      )
+
   // -------------------------------------------------------------------------------------------------------------------
 
   def eventGetLogic(eventId: EventId): ZIO[ApiEnv, ApiIssue, ApiEvent] = {
@@ -1296,6 +1328,7 @@ object ApiApp extends ZIOAppDefault {
     personUpdateEndpoint,
     personUpdateFaceEndpoint,
     personDeleteEndpoint,
+    personFaceListEndpoint,
     // -------------------------
     eventListEndpoint,
     eventCreateEndpoint,
