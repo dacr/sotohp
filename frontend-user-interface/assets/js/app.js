@@ -3461,12 +3461,16 @@ async function loadPersons() {
       li.dataset.personId = p.id || '';
       const birthStr = p.birthDate ? new Date(p.birthDate).toLocaleDateString() : '';
       const desc = p.description || '';
+      const metaParts = [];
+      if (birthStr) metaParts.push('birth: ' + birthStr);
+      if (desc) metaParts.push(desc);
+      const meta = metaParts.join(' • ');
       li.innerHTML = `
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="person-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">${p.chosenFaceId ? 'Loading…' : 'No image'}</div>
           <div style="flex:1;">
             <h4 style="margin:0 0 4px 0;">${p.firstName} ${p.lastName}</h4>
-            <div style="font-size:12px;color:#555">id: ${p.id}${birthStr ? ' • birth: '+birthStr : ''}${desc ? ' • '+desc : ''}</div>
+            <div style="font-size:12px;color:#555">${meta}</div>
           </div>
           <button class="ev-edit-btn" title="Edit">✎ Edit</button>
           <button class="ev-del-btn" title="Delete">🗑 Delete</button>
@@ -3534,6 +3538,22 @@ async function openPersonFacesView(person) {
   renderPersonFacesGrid(view, person, faces);
 }
 
+async function goToViewerForFace(face) {
+  try {
+    const originalId = face.originalId || (face.original && face.original.id);
+    if (!originalId) { showWarning('No linked photo for this face'); return; }
+    const st = await api.getState(originalId);
+    const key = (st && (st.mediaAccessKey || st.accessKey)) || null;
+    const accessKey = key || (st && st.media && st.media.accessKey) || null;
+    if (!accessKey) { showWarning('Unable to resolve photo for this face'); return; }
+    const media = await api.getMediaByKey(accessKey);
+    setActiveTab('viewer');
+    showMedia(media);
+  } catch (e) {
+    console.warn('goToViewerForFace failed', e);
+    showError('Failed to open the viewer for this face');
+  }
+}
 function renderPersonFacesGrid(view, person, faces) {
   const grid = view.querySelector('#person-faces-grid'); if (!grid) return;
   if (!faces || faces.length === 0) { grid.innerHTML = '<div class="status muted">No faces found for this person</div>'; return; }
@@ -3547,6 +3567,17 @@ function renderPersonFacesGrid(view, person, faces) {
     `;
     const img = tile.querySelector('img.face-img');
     if (img) img.src = api.faceImageUrl(face.faceId || face.id);
+
+    // Make tile navigable to Viewer on click/keyboard
+    try {
+      tile.style.cursor = 'pointer';
+      tile.title = 'Open photo in Viewer';
+      if (!tile.hasAttribute('tabindex')) tile.tabIndex = 0;
+      tile.addEventListener('click', (e) => { e.preventDefault(); goToViewerForFace(face); });
+      tile.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToViewerForFace(face); }
+      });
+    } catch {}
 
     // Inferred-only badge when applicable
     const isIdentified = !!face.identifiedPersonId;
