@@ -426,7 +426,7 @@ class MediaServiceLive private (
   def personFaceList(personId: PersonId): Stream[ServiceStreamIssue, DetectedFace] = {
     detectedFaceColl
       .stream()
-      .filter(df => df.identifiedPersonId.contains(personId) || df.inferredIdentifiedPersonId.contains(personId))
+      .filter(df => df.identifiedPersonId.contains(personId) || (df.identifiedPersonId.isEmpty && df.inferredIdentifiedPersonId.contains(personId)))
       .map(_.transformInto[DetectedFace])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect faces for person $personId : $err"))
   }
