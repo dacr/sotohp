@@ -55,24 +55,29 @@ object FaceInference extends CommonsCLI {
   // -------------------------------------------------------------------------------------------------------------------
   val logic = ZIO.logSpan("Infer person identification from faces features and already identified faces") {
     for {
-      knownFaces   <- featuresForIdentifiedFaces()
-      unknownFaces <- featuresForUnknowFaces()
-      alreadyInferred = unknownFaces.filter((face,_)=>face.inferredIdentifiedPersonId.isDefined)
+      knownFaces     <- featuresForIdentifiedFaces()
+      unknownFaces   <- featuresForUnknowFaces()
+      alreadyInferred = unknownFaces.filter((face, _) => face.inferredIdentifiedPersonId.isDefined)
       // tocheck      = unknownFaces.filter((face, _) => face.originalId.asString == "a344f244-7ee5-5946-b37e-3b9c05f30f2c") // unknown people - 0.87 / 0.74
       // tocheck      = unknownFaces.filter((face, _) => face.originalId.asString == "98032e8e-b3c1-5a18-b046-cffe63249c47") // clo - 0.80
       // tocheck      = unknownFaces.filter((face, _) => face.originalId.asString == "148f95cf-9b4e-5d2c-a455-618b89534cf1") // chr - 0.62
       // tocheck       = unknownFaces.filter((face, _) => face.originalId.asString == "d4cd0c50-ec64-5475-a92c-d7b92ba40d52") // chr & agn - 0.57 / 0.51
       // tocheck       = unknownFaces.filter((face, _) => face.originalId.asString == "1a049ac1-b8ce-520e-80a2-ff633a76dd53") // bri & clo - 0.83 / 0.76
-      tocheck       = unknownFaces
-      _            <- Console.printLine(s"${knownFaces.size} known faces")
-      _            <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} already inferred")
-      _            <- ZIO.foreachDiscard(tocheck) { (face, faceFeatures) =>
-                        val (knownFace, knownFaceFeature) = knownFaces.minBy((knownFace, knownFaceFeatures) => distance.d(faceFeatures.features, knownFaceFeatures.features))
-                        val foundDistance = distance.d(faceFeatures.features, knownFaceFeature.features)
-                        MediaService
-                          .faceUpdate(face.faceId, face.copy(inferredIdentifiedPersonId = knownFace.identifiedPersonId))
-                          .when(foundDistance < 0.9)
-                      }
+      tocheck         = unknownFaces
+      _              <- Console.printLine(s"${knownFaces.size} known faces")
+      _              <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} already inferred")
+      _              <- ZIO.foreachDiscard(tocheck) { (face, faceFeatures) =>
+                          val (knownFace, knownFaceFeature) = knownFaces.minBy((knownFace, knownFaceFeatures) => distance.d(faceFeatures.features, knownFaceFeatures.features))
+                          val foundDistance                 = distance.d(faceFeatures.features, knownFaceFeature.features)
+                          MediaService
+                            .faceUpdate(
+                              face.faceId,
+                              face.copy(
+                                inferredIdentifiedPersonId = knownFace.identifiedPersonId
+                                  .filter(_ => foundDistance < 0.65)
+                              )
+                            )
+                        }
     } yield ()
   }
 
