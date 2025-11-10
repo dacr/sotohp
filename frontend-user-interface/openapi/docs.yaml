@@ -731,7 +731,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
-  /api/persons/{personId}/faces:
+  /api/person/{personId}/faces:
     get:
       tags:
       - Person

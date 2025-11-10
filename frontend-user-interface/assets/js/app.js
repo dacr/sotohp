@@ -35,6 +35,7 @@ class ApiClient {
   async updatePerson(personId, body) { await this.http.put(`/api/person/${encodeURIComponent(personId)}`, body); }
   async deletePerson(personId) { await this.http.delete(`/api/person/${encodeURIComponent(personId)}`); }
   async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
+  async listPersonFaces(personId) { return await this.#fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`); }
   faceImageUrl(faceId) { return `/api/face/${encodeURIComponent(faceId)}/content`; }
   // Faces endpoints
   async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
@@ -990,19 +991,13 @@ async function loadFacesForCurrentMedia() {
   }
 }
 
-async function openFaceEditModal(face) {
+async function openFaceEditModal(face, options) {
   if (!face) return;
   if (document.querySelector('.modal-overlay')) return;
   await ensurePersonsCache();
   const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
   const currentPid = face.identifiedPersonId || '';
-  // Build options HTML
-  const options = Array.from(personsCache?.values?.() || []).map(p => {
-    const id = (p.id||'');
-    const name = `${p.firstName||''} ${p.lastName||''}`.trim();
-    const selected = id === currentPid ? ' selected' : '';
-    return `<option value="${id}"${selected}>${name || id}</option>`;
-  }).join('');
+  // Build options HTML (legacy select removed; using typeahead combobox)
   overlay.innerHTML = `
     <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
       <header>
@@ -1083,6 +1078,7 @@ async function openFaceEditModal(face) {
               pushRecentPersonId(personId);
               showSuccess('Face identification saved');
               try { renderFaces(); } catch {}
+              try { options && typeof options.onChanged === 'function' && options.onChanged({ ...face, identifiedPersonId: personId, inferredIdentifiedPersonId: null }); } catch {}
               // Close modal
               try { overlay.remove(); } catch {}
             } catch (err) {
@@ -1221,8 +1217,9 @@ async function openFaceEditModal(face) {
       if (idx >= 0) currentFaces[idx].identifiedPersonId = personId; else face.identifiedPersonId = personId;
       try { pushRecentPersonId(personId); } catch {}
       showSuccess('Face identification updated');
-      await ensurePersonsCache();
-      renderFaces();
+      try { await ensurePersonsCache(); } catch {}
+      try { renderFaces(); } catch {}
+      try { options && typeof options.onChanged === 'function' && options.onChanged({ ...face, identifiedPersonId: personId, inferredIdentifiedPersonId: null }); } catch {}
       close();
     } catch (e) {
       showError('Failed to update face identification');
@@ -1237,7 +1234,8 @@ async function openFaceEditModal(face) {
       const idx = currentFaces.findIndex(f => (f.faceId||f.id) === (face.faceId||face.id));
       if (idx >= 0) currentFaces[idx].identifiedPersonId = null; else face.identifiedPersonId = null;
       showSuccess('Face identification removed');
-      renderFaces();
+      try { renderFaces(); } catch {}
+      try { options && typeof options.onChanged === 'function' && options.onChanged({ ...face, identifiedPersonId: null }); } catch {}
       close();
     } catch (e) {
       showError('Failed to remove face identification');
@@ -3483,11 +3481,115 @@ async function loadPersons() {
         try { await api.deletePerson(p.id); li.remove(); showSuccess('Person deleted'); }
         catch { showError('Failed to delete person'); }
       };
+      // Navigate to person faces view when clicking the tile background
+      li.addEventListener('click', () => openPersonFacesView(p));
 
       if (observer && p.chosenFaceId) observer.observe(li);
       else if (p.chosenFaceId) { pending.push({ li, person: p }); schedulePersonThumb(); }
     }
   } catch (e) { list.innerHTML = '<li>Failed to load persons</li>'; }
+}
+
+// Persons → Person Faces subview
+async function openPersonFacesView(person) {
+  const tab = document.getElementById('tab-persons'); if (!tab) return;
+  // Hide default list and actions
+  const actions = tab.querySelector('.list-actions'); const list = tab.querySelector('#persons-list');
+  if (actions) actions.style.display = 'none'; if (list) list.style.display = 'none';
+  // Create view container
+  let view = tab.querySelector('.person-faces-view');
+  if (view) view.remove();
+  view = document.createElement('div');
+  view.className = 'person-faces-view';
+  view.innerHTML = `
+    <div class="person-faces-header">
+      <button type="button" class="back" title="Back to persons" aria-label="Back">← Back</button>
+      <div class="title">${(person.firstName||'') + ' ' + (person.lastName||'')}</div>
+      <div class="spacer"></div>
+    </div>
+    <div class="person-faces-grid" id="person-faces-grid">
+      <div class="status muted">Loading faces…</div>
+    </div>
+  `;
+  tab.appendChild(view);
+  const backBtn = view.querySelector('button.back');
+  if (backBtn && !backBtn.__wired) {
+    backBtn.addEventListener('click', () => {
+      try { view.remove(); } catch {}
+      if (actions) actions.style.display = '';
+      if (list) { list.style.display = ''; try { list.scrollIntoView({ block: 'nearest' }); } catch {} }
+    });
+    backBtn.__wired = true;
+  }
+  // Load faces
+  let faces = [];
+  try {
+    faces = await api.listPersonFaces(person.id);
+    faces.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  } catch (e) {
+    const grid = view.querySelector('#person-faces-grid');
+    if (grid) grid.innerHTML = `<div class="status error">Failed to load faces</div>`;
+    return;
+  }
+  renderPersonFacesGrid(view, person, faces);
+}
+
+function renderPersonFacesGrid(view, person, faces) {
+  const grid = view.querySelector('#person-faces-grid'); if (!grid) return;
+  if (!faces || faces.length === 0) { grid.innerHTML = '<div class="status muted">No faces found for this person</div>'; return; }
+  const nodes = [];
+  for (const face of faces) {
+    const tile = document.createElement('div');
+    tile.className = 'face-tile';
+    tile.innerHTML = `
+      <img class="face-img" alt="face" loading="lazy" decoding="async" />
+      <button type="button" class="ft-edit" title="Edit face person" aria-label="Edit">✎</button>
+    `;
+    const img = tile.querySelector('img.face-img');
+    if (img) img.src = api.faceImageUrl(face.faceId || face.id);
+
+    // Inferred-only badge when applicable
+    const isIdentified = !!face.identifiedPersonId;
+    const isInferredForThis = !isIdentified && (face.inferredIdentifiedPersonId === person.id);
+    if (isInferredForThis) {
+      const badge = document.createElement('button');
+      badge.type = 'button';
+      badge.className = 'face-badge inferred';
+      badge.textContent = 'inferred';
+      badge.title = 'Click to confirm identification';
+      badge.addEventListener('click', async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        try {
+          await api.setFacePerson(face.faceId || face.id, person.id);
+          face.identifiedPersonId = person.id;
+          face.inferredIdentifiedPersonId = null;
+          try { pushRecentPersonId(person.id); } catch {}
+          showSuccess('Face identification confirmed');
+          renderPersonFacesGrid(view, person, faces);
+        } catch (err) {
+          showError('Failed to confirm face');
+        }
+      });
+      tile.appendChild(badge);
+    }
+
+    // Edit button opens existing modal
+    const editBtn = tile.querySelector('.ft-edit');
+    if (editBtn) editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openFaceEditModal(face, { onChanged: (updated) => {
+        // Merge updates and re-render this tile
+        try {
+          face.identifiedPersonId = updated?.identifiedPersonId ?? face.identifiedPersonId ?? null;
+          face.inferredIdentifiedPersonId = updated?.inferredIdentifiedPersonId ?? face.inferredIdentifiedPersonId ?? null;
+        } catch {}
+        renderPersonFacesGrid(view, person, faces);
+      }});
+    });
+
+    nodes.push(tile);
+  }
+  try { grid.replaceChildren(...nodes); } catch { grid.innerHTML = ''; nodes.forEach(n => grid.appendChild(n)); }
 }
 
 function openPersonCreateModal() {

@@ -354,3 +354,25 @@ section#tab-mosaic.tab.active { display: flex; }
 .recent-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .recent-pill { background: #f3f4f6; border: 1px solid #e5e7eb; color: #111827; border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .recent-pill:hover { background: #e5e7eb; }
+
+
+/* Persons → Person Faces subview */
+.person-faces-view { padding: 0.75rem; }
+.person-faces-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.person-faces-header .back { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.person-faces-header .back:hover { background: #e5e7eb; }
+.person-faces-header .title { font-weight: 600; font-size: 16px; }
+.person-faces-header .spacer { flex: 1; }
+
+.person-faces-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.person-faces-grid .status { padding: 1rem; color: #6b7280; }
+.person-faces-grid .status.error { color: #b91c1c; }
+
+.face-tile { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; background: #f3f4f6; }
+.face-tile .face-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.face-tile .ft-edit { position: absolute; right: 6px; top: 6px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 14px; padding: 2px 6px; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(2px); transition: opacity 150ms ease, transform 150ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.face-tile:hover .ft-edit, .face-tile:focus-within .ft-edit { opacity: 1; transform: translateY(0); }
+.face-tile .ft-edit:hover { background: #1d4ed8; }
+
+.face-badge.inferred { position: absolute; left: 6px; bottom: 6px; background: rgba(245,158,11,0.92); color: #111827; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.face-badge.inferred:hover, .face-badge.inferred:focus { background: rgba(245,158,11,1); }
