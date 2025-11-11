@@ -422,6 +422,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+    delete:
+      tags:
+      - Face
+      summary: Delete face for the given face identifier
+      operationId: Delete face
+      parameters:
+      - name: faceId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+        '400':
+          description: Invalid identifier provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidOrMissingInput'
+        '404':
+          description: Couldn't find the request resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResourceNotFound'
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/face/{faceId}/content:
     get:
       tags:

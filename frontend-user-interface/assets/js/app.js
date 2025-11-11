@@ -42,6 +42,7 @@ class ApiClient {
   async getFace(faceId) { const res = await this.http.get(`/api/face/${encodeURIComponent(faceId)}`); return res.data; }
   async setFacePerson(faceId, personId) { await this.http.put(`/api/face/${encodeURIComponent(faceId)}/person/${encodeURIComponent(personId)}`); }
   async removeFacePerson(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}/person`); }
+  async deleteFace(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}`); }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async getStore(storeId) { const res = await this.http.get(`/api/store/${encodeURIComponent(storeId)}`); return res.data; }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
@@ -1025,6 +1026,7 @@ async function openFaceEditModal(face, options) {
       <footer>
         <button type="button" class="cancel">Cancel</button>
         <button type="button" class="remove" ${currentPid ? '' : 'disabled title="No identified person to remove"'}>Remove</button>
+        <button type="button" class="delete-face" title="Delete this face" style="background:#b91c1c;color:#fff;border:1px solid #991b1b;border-radius:6px;padding:6px 10px;">Delete face</button>
         <button type="button" class="use-chosen" title="Set selected person face thumbnail from this face" style="background:#059669;color:#fff;border:1px solid #047857;border-radius:6px;padding:6px 10px;">Use as chosen face</button>
         <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
       </footer>
@@ -1045,6 +1047,7 @@ async function openFaceEditModal(face, options) {
   const saveBtn = overlay.querySelector('button.save');
   const useChosenBtn = overlay.querySelector('button.use-chosen');
   const removeBtn = overlay.querySelector('button.remove');
+  const deleteBtn = overlay.querySelector('button.delete-face');
 
   function personLabel(p) { return `${p.firstName||''} ${p.lastName||''}`.trim() || p.id || ''; }
   const personsIndex = Array.from(personsCache?.values?.()||[]).map(p => ({ id: p.id, first: (p.firstName||'').trim(), last: (p.lastName||'').trim(), label: personLabel(p) }));
@@ -1226,7 +1229,7 @@ async function openFaceEditModal(face, options) {
     }
   });
 
-  // Remove
+  // Remove identification only
   overlay.querySelector('button.remove')?.addEventListener('click', async () => {
     if (!face.identifiedPersonId) return; // safety
     try {
@@ -1239,6 +1242,28 @@ async function openFaceEditModal(face, options) {
       close();
     } catch (e) {
       showError('Failed to remove face identification');
+    }
+  });
+
+  // Delete face (destructive)
+  overlay.querySelector('button.delete-face')?.addEventListener('click', async () => {
+    const fid = face.faceId || face.id;
+    if (!fid) { close(); return; }
+    try {
+      await api.deleteFace(fid);
+      // Remove from currentFaces (Viewer)
+      try {
+        const i = currentFaces.findIndex(f => (f.faceId||f.id) === fid);
+        if (i >= 0) currentFaces.splice(i, 1);
+      } catch {}
+      try { renderFaces(); } catch {}
+      // Notify caller (Persons faces grid) so it can update its list
+      try { options && typeof options.onDeleted === 'function' && options.onDeleted(fid); } catch {}
+      showSuccess('Face deleted');
+      close();
+    } catch (e) {
+      console.error('Failed to delete face', e);
+      showError('Failed to delete face');
     }
   });
 }
@@ -3613,6 +3638,13 @@ function renderPersonFacesGrid(view, person, faces) {
         try {
           face.identifiedPersonId = updated?.identifiedPersonId ?? face.identifiedPersonId ?? null;
           face.inferredIdentifiedPersonId = updated?.inferredIdentifiedPersonId ?? face.inferredIdentifiedPersonId ?? null;
+        } catch {}
+        renderPersonFacesGrid(view, person, faces);
+      }, onDeleted: (deletedFaceId) => {
+        // Remove from faces list and re-render grid
+        try {
+          const idx = faces.findIndex(f => (f.faceId||f.id) === deletedFaceId);
+          if (idx >= 0) faces.splice(idx, 1);
         } catch {}
         renderPersonFacesGrid(view, person, faces);
       }});
