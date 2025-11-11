@@ -6,6 +6,9 @@ run-api: ui
 run-face-inference:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference
 
+run-face-fix:
+	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FacesFix
+
 run-viewer:
 	mill user-interfaces.gui.run
 
