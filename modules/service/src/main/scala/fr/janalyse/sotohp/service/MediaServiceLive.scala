@@ -290,10 +290,17 @@ class MediaServiceLive private (
   }
 
   def faceDelete(faceId: FaceId): IO[ServiceIssue, Unit] = {
-    detectedFaceColl
-      .delete(faceId)
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete face : $err"))
-      .unit
+    // TODO require transactions
+    // TODO to be optimized too much serdes but ok as it is a low frequency operation
+    for {
+      face                <- faceGet(faceId).some.orElseFail(ServiceUserIssue(s"Couldn't find face to delete : $faceId"))
+      originalFaces       <- originalFaces(face.originalId)
+      updatedOriginalFaces = originalFaces.map(_.faces.map(_.faceId)).getOrElse(Nil).filterNot(_ == faceId)
+      _                   <- originalFacesUpdate(face.originalId, updatedOriginalFaces)
+      _                   <- detectedFaceColl
+                               .delete(faceId)
+                               .mapError(err => ServiceDatabaseIssue(s"Couldn't delete face : $err"))
+    } yield ()
   }
 
   def faceUpdate(

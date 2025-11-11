@@ -772,6 +772,22 @@ object ApiApp extends ZIOAppDefault {
           .flatMap(id => faceGetLogic(id))
       )
 
+  val faceDeleteEndpoint =
+    faceEndpoint()
+      .name("Delete face")
+      .summary("Delete face for the given face identifier")
+      .delete
+      .in(path[String]("faceId"))
+      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
+      .zServerLogic[ApiEnv] { rawFaceId =>
+        for {
+          faceId <- extractFaceId(rawFaceId)
+          _      <- MediaService
+                      .faceDelete(faceId)
+                      .mapError(err => ApiInternalError("Couldn't delete face"))
+        } yield ()
+      }
+
   def faceGetImageBytesLogic(faceId: FaceId) = {
     val byteStream = MediaService.faceRead(faceId)
     for {
@@ -1318,6 +1334,7 @@ object ApiApp extends ZIOAppDefault {
     // -------------------------
     faceListEndpoint,
     faceGetEndpoint,
+    faceDeleteEndpoint,
     faceContentGetEndpoint,
     faceUpdatePersonEndpoint,
     faceDeletePersonEndpoint,
