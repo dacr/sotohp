@@ -19,9 +19,9 @@ lock.mdb
 .env/
 
 # IDE or build tool related
-.bsp/
+.bsp*/
 .metals/
-.bloop/
+.bloop*/
 .vscode/
 .idea*/
 target/

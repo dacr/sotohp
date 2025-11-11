@@ -74,7 +74,7 @@ object FaceInference extends CommonsCLI {
                               face.faceId,
                               face.copy(
                                 inferredIdentifiedPersonId = knownFace.identifiedPersonId
-                                  .filter(_ => foundDistance < 0.65)
+                                  .filter(_ => foundDistance < 0.625)
                               )
                             )
                         }

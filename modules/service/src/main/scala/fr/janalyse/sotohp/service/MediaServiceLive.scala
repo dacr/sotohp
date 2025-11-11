@@ -431,7 +431,6 @@ class MediaServiceLive private (
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect faces for person $personId : $err"))
   }
 
-
   // -------------------------------------------------------------------------------------------------------------------
   def daoClassificationsToClassifications(input: DaoOriginalClassifications): IO[ServiceIssue, OriginalClassifications] = {
     for {
