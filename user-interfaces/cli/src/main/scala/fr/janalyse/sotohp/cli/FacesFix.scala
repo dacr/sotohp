@@ -84,8 +84,22 @@ object FacesFix extends CommonsCLI {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  val logic = ZIO.logSpan("Fix rotation for faces extracted from originals") {
-    MediaService.mediaList().runForeach(facesRotationFix)
+
+  def checkFaceIsInOriginalFaces(face: DetectedFace) = {
+    for {
+      originalFaces <- MediaService.originalFaces(face.originalId).map(_.map(_.faces).getOrElse(Nil))
+      faceIds        = originalFaces.map(_.faceId)
+      _             <- MediaService
+                         .originalFacesUpdate(face.originalId, face.faceId :: faceIds)
+                         .tap(_ => ZIO.logInfo(s"Face ${face.faceId} added to original faces ${face.originalId}"))
+                         .when(!faceIds.contains(face.faceId))
+    } yield ()
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  val logic = ZIO.logSpan("Fix faces") {
+    // MediaService.mediaList().runForeach(facesRotationFix)
+    MediaService.faceList().runForeach(checkFaceIsInOriginalFaces)
   }
 
 }
