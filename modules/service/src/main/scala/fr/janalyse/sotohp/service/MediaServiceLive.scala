@@ -309,23 +309,26 @@ class MediaServiceLive private (
   def faceCreate(faceId: Option[FaceId], originalId: OriginalId, box: BoundingBox): IO[ServiceIssue, DetectedFace] = {
     // TODO require transactions
     for {
-      original       <- originalGet(originalId)
-                          .someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
-                          .logError(s"Couldn't find original : $originalId")
-      facesProcessor <- facesProcessorEffect
-                          .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces processor : $err"))
-      builtFace      <- facesProcessor
-                          .buildDetectedFace(original, box)
-                          .mapError(err => ServiceInternalIssue(s"Couldn't build face : $err"))
-      bufferedImage  <- facesProcessor
-                          .getOriginalBufferedImage(original)
-                          .mapError(err => ServiceInternalIssue(s"Couldn't get original image : $err"))
-      _              <- facesProcessor
-                          .extractThenCacheFaceImageFromOriginal(builtFace, bufferedImage)
-                          .mapError(err => ServiceInternalIssue(s"Couldn't extract face image : $err"))
-      _              <- detectedFaceColl
-                          .upsertOverwrite(builtFace.faceId, builtFace.into[DaoDetectedFace].transform)
-                          .mapError(err => ServiceDatabaseIssue(s"Couldn't create face : $err"))
+      original            <- originalGet(originalId)
+                               .someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+                               .logError(s"Couldn't find original : $originalId")
+      facesProcessor      <- facesProcessorEffect
+                               .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces processor : $err"))
+      builtFace           <- facesProcessor
+                               .buildDetectedFace(original, box)
+                               .mapError(err => ServiceInternalIssue(s"Couldn't build face : $err"))
+      bufferedImage       <- facesProcessor
+                               .getOriginalBufferedImage(original)
+                               .mapError(err => ServiceInternalIssue(s"Couldn't get original image : $err"))
+      _                   <- facesProcessor
+                               .extractThenCacheFaceImageFromOriginal(builtFace, bufferedImage)
+                               .mapError(err => ServiceInternalIssue(s"Couldn't extract face image : $err"))
+      _                   <- detectedFaceColl
+                               .upsertOverwrite(builtFace.faceId, builtFace.into[DaoDetectedFace].transform)
+                               .mapError(err => ServiceDatabaseIssue(s"Couldn't create face : $err"))
+      originalFaces       <- originalFaces(original.id)
+      updatedOriginalFaces = builtFace.faceId :: originalFaces.map(_.faces.map(_.faceId)).getOrElse(Nil)
+      _                   <- originalFacesUpdate(originalId, updatedOriginalFaces)
     } yield builtFace
   }
 
