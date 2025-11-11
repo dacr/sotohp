@@ -12,6 +12,9 @@ run-viewer:
 run-stats:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
+check-updates:
+	mill mill.javalib.Dependency/showUpdates
+
 api-jar:
 	mill -i user-interfaces.api.jar
 
