@@ -17,7 +17,7 @@ import zio.logging.LogFormat
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.{*, given}
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.PersonId
+import fr.janalyse.sotohp.processor.model.{PersonId, BoundingBox}
 import fr.janalyse.sotohp.api.protocol.{ApiPersonCreate, ApiPersonUpdate}
 import wvlet.airframe.ulid.ULID
 import fr.janalyse.sotohp.service.model.SynchronizeAction
@@ -746,6 +746,25 @@ object ApiApp extends ZIOAppDefault {
         } yield byteStream
       )
 
+  def faceCreateLogic(toCreate: ApiFaceCreate): ZIO[ApiEnv, ApiInternalError, ApiFace] = {
+    for {
+      face   <- MediaService
+                  .faceCreate(None, toCreate.originalId, toCreate.box.transformInto[BoundingBox])
+                  .mapError(err => ApiInternalError("Couldn't create face"))
+      apiFace = face.transformInto[ApiFace]
+    } yield apiFace
+  }
+
+  val faceCreateEndpoint =
+    faceEndpoint()
+      .name("Create a face")
+      .summary("Create a new face within the given original")
+      .post
+      .in(jsonBody[ApiFaceCreate])
+      .out(jsonBody[ApiFace])
+      .errorOut(oneOf(statusForApiInternalError))
+      .zServerLogic[ApiEnv](toCreate => faceCreateLogic(toCreate))
+
   def faceGetLogic(faceId: FaceId): ZIO[ApiEnv, ApiIssue, ApiDetectedFace] = {
     val logic = for {
       face   <- MediaService
@@ -1333,6 +1352,7 @@ object ApiApp extends ZIOAppDefault {
     mediaFacesGetEndpoint,
     // -------------------------
     faceListEndpoint,
+    faceCreateEndpoint,
     faceGetEndpoint,
     faceDeleteEndpoint,
     faceContentGetEndpoint,

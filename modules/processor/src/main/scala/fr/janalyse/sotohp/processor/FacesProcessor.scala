@@ -36,7 +36,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     FaceId(ULID.ofMillis(original.timestamp.toInstant.toEpochMilli))
   }
 
-  private def cacheFaceImage(
+  def extractThenCacheFaceImageFromOriginal(
     face: DetectedFace,
     originalImage: BufferedImage
   ): IO[FacesDetectionIssue, Unit] = {
@@ -58,6 +58,41 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
           .mapError(err => FacesDetectionIssue(s"Couldn't save selected face from image [$fixedX, $fixedY, $fixedWidth, $fixedHeight]", err))
           .logError("Faces caching issue")
       )
+  }
+
+  def getOriginalBufferedImage(original: Original): IO[FacesDetectionIssue, BufferedImage] = {
+    for {
+      originalBufferedImage <- ZIO
+                                 .attemptBlocking(BasicImaging.load(original.absoluteMediaPath))
+                                 .mapError(th => FacesDetectionIssue("Unable to load original image", th))
+      originalBufferedImage <- ZIO
+                                 .attemptBlocking(
+                                   BasicImaging.rotate(
+                                     originalBufferedImage,
+                                     original.orientation.map(_.rotationDegrees).getOrElse(0)
+                                   )
+                                 )
+                                 .mapError(th => FacesDetectionIssue("Unable to rotate the image", th))
+    } yield originalBufferedImage
+  }
+
+  def buildDetectedFace(original: Original, box: BoundingBox): IO[FacesDetectionIssue, DetectedFace] = {
+    val faceId = makeFaceId(original)
+    for {
+      facePath <- getOriginalFaceFilePath(original, faceId)
+                    .mapError(th => FacesDetectionIssue("Unable to get face cache path", th))
+      _        <- ZIO
+                    .attempt(facePath.toFile.getParentFile.mkdirs()) // TODO not optimal !!
+                    .mapError(th => FacesDetectionIssue("Unable to create face path", th))
+    } yield DetectedFace(
+      box = box,
+      path = DetectedFacePath(facePath),
+      faceId = faceId,
+      originalId = original.id,
+      timestamp = original.timestamp,
+      identifiedPersonId = None,
+      inferredIdentifiedPersonId = None
+    )
   }
 
   private def doDetectFaces(original: Original, path: Path): IO[FacesDetectionIssue, List[DetectedFace]] = {
@@ -82,41 +117,16 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
                                  }
                                  .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
       detectedFaces         <- ZIO.foreach(detectedObjects)(ob => {
-                                 val faceId = makeFaceId(original)
-                                 val box    = BoundingBox(
+                                 val box = BoundingBox(
                                    x = XAxis(ob.getBoundingBox.getBounds.getX),
                                    y = YAxis(ob.getBoundingBox.getBounds.getY),
                                    width = BoxWidth(ob.getBoundingBox.getBounds.getWidth),
                                    height = BoxHeight(ob.getBoundingBox.getBounds.getHeight)
                                  )
-                                 for {
-                                   facePath <- getOriginalFaceFilePath(original, faceId)
-                                                 .mapError(th => FacesDetectionIssue("Unable to get face cache path", th))
-                                   _        <- ZIO
-                                                 .attempt(facePath.toFile.getParentFile.mkdirs()) // TODO not optimal !!
-                                                 .mapError(th => FacesDetectionIssue("Unable to create face path", th))
-                                 } yield DetectedFace(
-                                   box = box,
-                                   path = DetectedFacePath(facePath),
-                                   faceId = faceId,
-                                   originalId = original.id,
-                                   timestamp = original.timestamp,
-                                   identifiedPersonId = None,
-                                   inferredIdentifiedPersonId = None
-                                 )
+                                 buildDetectedFace(original, box)
                                })
-      originalBufferedImage <- ZIO
-                                 .attemptBlocking(BasicImaging.load(original.absoluteMediaPath))
-                                 .mapError(th => FacesDetectionIssue("Unable to load original image", th))
-      originalBufferedImage <- ZIO
-                                 .attemptBlocking(
-                                   BasicImaging.rotate(
-                                     originalBufferedImage,
-                                     original.orientation.map(_.rotationDegrees).getOrElse(0)
-                                   )
-                                 )
-                                 .mapError(th => FacesDetectionIssue("Unable to rotate the image", th))
-      _                     <- ZIO.foreachDiscard(detectedFaces)(face => cacheFaceImage(face, originalBufferedImage))
+      originalBufferedImage <- getOriginalBufferedImage(original)
+      _                     <- ZIO.foreachDiscard(detectedFaces)(face => extractThenCacheFaceImageFromOriginal(face, originalBufferedImage))
     } yield detectedFaces.filter(_.path.path.toFile.exists()) // filtering because already encounter saving issue - such as invalid colorspace errors
   }
 

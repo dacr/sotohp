@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.api.protocol
 
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{BoundingBox, FaceId}
+import fr.janalyse.sotohp.processor.model.{BoundingBox, BoxHeight, FaceId, XAxis, YAxis, BoxWidth}
 import fr.janalyse.sotohp.service.json.{*, given}
 import io.scalaland.chimney.*
 import io.scalaland.chimney.dsl.*
@@ -28,6 +28,15 @@ object ApiBoundingBox {
       .withFieldComputed(_.y, _.y.value)
       .withFieldComputed(_.width, _.width.value)
       .withFieldComputed(_.height, _.height.value)
+      .buildTransformer
+
+  implicit val boundingBoxTransformerReverted: Transformer[ApiBoundingBox, BoundingBox] =
+    Transformer
+      .define[ApiBoundingBox, BoundingBox]
+      .withFieldComputed(_.x, v => XAxis.apply(v.x))
+      .withFieldComputed(_.y, v => YAxis.apply(v.y))
+      .withFieldComputed(_.width, v => BoxWidth.apply(v.width))
+      .withFieldComputed(_.height, v => BoxHeight.apply(v.height))
       .buildTransformer
 }
 

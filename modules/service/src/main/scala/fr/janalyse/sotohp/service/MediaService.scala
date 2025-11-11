@@ -5,7 +5,21 @@ import zio.*
 import zio.stream.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.processor.model.{DetectedFace, FaceFeatures, FaceId, OriginalClassifications, OriginalDetectedObjects, OriginalFaceFeatures, OriginalFaces, OriginalMiniatures, OriginalNormalized, Person, PersonDescription, PersonId}
+import fr.janalyse.sotohp.processor.model.{
+  BoundingBox,
+  DetectedFace,
+  FaceFeatures,
+  FaceId,
+  OriginalClassifications,
+  OriginalDetectedObjects,
+  OriginalFaceFeatures,
+  OriginalFaces,
+  OriginalMiniatures,
+  OriginalNormalized,
+  Person,
+  PersonDescription,
+  PersonId
+}
 import fr.janalyse.sotohp.service.model.{KeywordRules, SynchronizeAction, SynchronizeStatus}
 import zio.lmdb.LMDB
 
@@ -59,6 +73,7 @@ trait MediaService {
   def faceGet(faceId: FaceId): IO[ServiceIssue, Option[DetectedFace]]
   def faceExists(faceId: FaceId): IO[ServiceIssue, Boolean]
   def faceDelete(faceId: FaceId): IO[ServiceIssue, Unit]
+  def faceCreate(faceId: Option[FaceId], originalId: OriginalId, box: BoundingBox): IO[ServiceIssue, DetectedFace]
   def faceUpdate(
     faceId: FaceId, // current face id
     face: DetectedFace // may contain and updated id
@@ -241,6 +256,11 @@ object MediaService {
   def faceGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[DetectedFace]] = ZIO.serviceWithZIO(_.faceGet(faceId))
   def faceExists(faceId: FaceId): ZIO[MediaService, ServiceIssue, Boolean]           = ZIO.serviceWithZIO(_.faceExists(faceId))
   def faceDelete(faceId: FaceId): ZIO[MediaService, ServiceIssue, Unit]              = ZIO.serviceWithZIO(_.faceDelete(faceId))
+  def faceCreate(
+    faceId: Option[FaceId],
+    originalId: OriginalId,
+    box: BoundingBox
+  ): ZIO[MediaService, ServiceIssue, DetectedFace] = ZIO.serviceWithZIO(_.faceCreate(faceId, originalId, box))
   def faceUpdate(
     faceId: FaceId, // current face id
     face: DetectedFace // may contain and updated id

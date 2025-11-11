@@ -385,6 +385,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorInternal'
+  /api/face:
+    post:
+      tags:
+      - Face
+      summary: Create a new face within the given original
+      operationId: Create a face
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaceCreate'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Face'
+        '400':
+          description: 'Invalid value for: body'
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Something went wrong with the backend
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorInternal'
   /api/face/{faceId}:
     get:
       tags:
@@ -1560,6 +1591,33 @@ components:
         denominator:
           type: integer
           format: int64
+    Face:
+      title: Face
+      type: object
+      required:
+      - originalId
+      - faceId
+      - box
+      properties:
+        originalId:
+          type: string
+          format: uuid
+        faceId:
+          type: string
+        box:
+          $ref: '#/components/schemas/BoundingBox'
+    FaceCreate:
+      title: FaceCreate
+      type: object
+      required:
+      - originalId
+      - box
+      properties:
+        originalId:
+          type: string
+          format: uuid
+        box:
+          $ref: '#/components/schemas/BoundingBox'
     Info:
       title: Info
       type: object
