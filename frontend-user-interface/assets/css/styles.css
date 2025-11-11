@@ -176,13 +176,23 @@ section#tab-mosaic.tab.active { display: flex; }
 .image-container:fullscreen .img-edit-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-edit-btn { display: none !important; }
 
+/* Add face button (Viewer) */
+.img-add-btn { position: absolute; right: 92px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.image-container:hover .img-add-btn { opacity: 1; transform: translateY(0); }
+.img-add-btn:hover { background: #1d4ed8; }
+.image-container:fullscreen .img-add-btn { display: none !important; }
+.image-container:-webkit-full-screen .img-add-btn { display: none !important; }
+
 /* Confirm-all inferred faces button (Viewer) */
-.img-confirm-btn { position: absolute; right: 92px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
+.img-confirm-btn { position: absolute; right: 176px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
 .image-container:hover .img-confirm-btn { opacity: 1; transform: translateY(0); }
 .img-confirm-btn:hover { background: rgba(245,158,11,1); }
 /* Hide confirm-all button in fullscreen mode (same as edit) */
 .image-container:fullscreen .img-confirm-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-confirm-btn { display: none !important; }
+
+/* Temporary draw rectangle for Add Face */
+.draw-rect { position: absolute; border: 2px dashed rgba(37,99,235,0.95); background: rgba(37,99,235,0.12); pointer-events: none; z-index: 6; border-radius: 6px; }
 
 /* Faces overlay */
 .faces-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 4; }

@@ -43,6 +43,7 @@ class ApiClient {
   async setFacePerson(faceId, personId) { await this.http.put(`/api/face/${encodeURIComponent(faceId)}/person/${encodeURIComponent(personId)}`); }
   async removeFacePerson(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}/person`); }
   async deleteFace(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}`); }
+  async createFace(body) { const res = await this.http.post('/api/face', body); return res.data; }
   async listStores() { return await this.#fetchNdjson('/api/stores'); }
   async getStore(storeId) { const res = await this.http.get(`/api/store/${encodeURIComponent(storeId)}`); return res.data; }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
@@ -80,6 +81,12 @@ const api = new ApiClient('');
 let currentMedia = null;
 let slideshowTimer = null;
 let facesEnabled = false;
+// Add Face draw mode state
+let addFaceMode = false;
+let addFaceStart = null; // {x,y} in container coords
+let addFaceRectEl = null;
+let addFacePosting = false; // single-shot guard to avoid duplicate creation on mouseup
+function isAddFaceModeActive() { return !!addFaceMode; }
 let facesOverlay = null; // overlay container element
 let currentFaces = []; // array of faces for current media
 let personsCache = null; // Map personId -> person object
@@ -817,13 +824,171 @@ function updateConfirmAllButtonVisibility() {
   const btn = ensureConfirmAllButton();
   try {
     if (!btn) return;
-    const shouldShow = !!facesEnabled && hasInferredPending();
+    const shouldShow = !!facesEnabled && hasInferredPending() && !isAddFaceModeActive();
     btn.style.display = shouldShow ? 'inline-flex' : 'none';
     btn.disabled = !shouldShow;
     btn.textContent = 'Confirm all';
     btn.title = 'Confirm all inferred faces';
   } catch {}
 }
+
+// Add Face draw mode ---------------------------------------------------------------------------------
+function toggleAddFaceMode(on) {
+  const cont = document.querySelector('.image-container');
+  if (!cont) return;
+  if (on && addFaceMode) return; // already on
+  if (!on && !addFaceMode) return; // already off
+  if (on) {
+    if (!currentMedia) { showWarning('No media to add a face to'); return; }
+    addFaceMode = true;
+    addFacePosting = false;
+    try { cont.style.cursor = 'crosshair'; } catch {}
+    try { ensureFacesOverlay(); } catch {}
+    // Key ESC to cancel
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cancelAddFaceMode(); }
+    };
+    document.addEventListener('keydown', onKey, { capture: true });
+    cont.__addFaceOnKey = onKey;
+    // Cancel on fullscreen change or tab switch resize
+    const onFs = () => cancelAddFaceMode();
+    document.addEventListener('fullscreenchange', onFs);
+    cont.__addFaceOnFs = onFs;
+    const onResize = () => cancelAddFaceMode();
+    window.addEventListener('resize', onResize);
+    cont.__addFaceOnResize = onResize;
+    updateConfirmAllButtonVisibility();
+    showInfo('Add face: drag on the photo, release to create. Press Esc to cancel.');
+  } else {
+    cancelAddFaceMode();
+  }
+}
+function cancelAddFaceMode() {
+  const cont = document.querySelector('.image-container');
+  addFaceMode = false;
+  addFaceStart = null;
+  addFacePosting = false;
+  try { if (addFaceRectEl && addFaceRectEl.parentNode) addFaceRectEl.parentNode.removeChild(addFaceRectEl); } catch {}
+  addFaceRectEl = null;
+  if (cont) {
+    try { cont.style.cursor = ''; } catch {}
+    if (cont.__addFaceOnKey) { document.removeEventListener('keydown', cont.__addFaceOnKey, { capture: true }); cont.__addFaceOnKey = null; }
+    if (cont.__addFaceOnFs) { document.removeEventListener('fullscreenchange', cont.__addFaceOnFs); cont.__addFaceOnFs = null; }
+    if (cont.__addFaceOnResize) { window.removeEventListener('resize', cont.__addFaceOnResize); cont.__addFaceOnResize = null; }
+  }
+  updateConfirmAllButtonVisibility();
+}
+
+function handleAddFacePointerDown(ev) {
+  if (!isAddFaceModeActive()) return;
+  const cont = document.querySelector('.image-container');
+  const imgRect = getRenderedImageRect();
+  const contRect = cont.getBoundingClientRect();
+  const x = (ev.clientX ?? 0) - contRect.left;
+  const y = (ev.clientY ?? 0) - contRect.top;
+  // Must start inside the image rect
+  if (x < imgRect.left || y < imgRect.top || x > imgRect.left + imgRect.width || y > imgRect.top + imgRect.height) {
+    showWarning('Start dragging inside the photo area');
+    return;
+  }
+  addFaceStart = { x, y };
+  if (!addFaceRectEl) {
+    addFaceRectEl = document.createElement('div');
+    addFaceRectEl.className = 'draw-rect';
+    addFaceRectEl.style.left = `${x}px`;
+    addFaceRectEl.style.top = `${y}px`;
+    addFaceRectEl.style.width = '0px';
+    addFaceRectEl.style.height = '0px';
+    cont.appendChild(addFaceRectEl);
+  }
+  ev.preventDefault(); ev.stopPropagation();
+}
+function handleAddFacePointerMove(ev) {
+  if (!isAddFaceModeActive() || !addFaceStart || !addFaceRectEl) return;
+  const cont = document.querySelector('.image-container');
+  const contRect = cont.getBoundingClientRect();
+  const imgRect = getRenderedImageRect();
+  let x = (ev.clientX ?? 0) - contRect.left;
+  let y = (ev.clientY ?? 0) - contRect.top;
+  // Clamp inside image rect
+  x = Math.max(imgRect.left, Math.min(imgRect.left + imgRect.width, x));
+  y = Math.max(imgRect.top, Math.min(imgRect.top + imgRect.height, y));
+  const sx = Math.max(imgRect.left, Math.min(imgRect.left + imgRect.width, addFaceStart.x));
+  const sy = Math.max(imgRect.top, Math.min(imgRect.top + imgRect.height, addFaceStart.y));
+  const left = Math.min(sx, x);
+  const top = Math.min(sy, y);
+  const width = Math.abs(x - sx);
+  const height = Math.abs(y - sy);
+  addFaceRectEl.style.left = `${left}px`;
+  addFaceRectEl.style.top = `${top}px`;
+  addFaceRectEl.style.width = `${width}px`;
+  addFaceRectEl.style.height = `${height}px`;
+  ev.preventDefault();
+}
+async function handleAddFacePointerUp(ev) {
+  if (!isAddFaceModeActive() || !addFaceStart) return;
+  if (addFacePosting) { ev.preventDefault?.(); ev.stopPropagation?.(); return; }
+  addFacePosting = true;
+  const cont = document.querySelector('.image-container');
+  const contRect = cont.getBoundingClientRect();
+  const imgRect = getRenderedImageRect();
+  let x2 = (ev.clientX ?? 0) - contRect.left;
+  let y2 = (ev.clientY ?? 0) - contRect.top;
+  // Clamp end inside image
+  x2 = Math.max(imgRect.left, Math.min(imgRect.left + imgRect.width, x2));
+  y2 = Math.max(imgRect.top, Math.min(imgRect.top + imgRect.height, y2));
+  const sx = Math.max(imgRect.left, Math.min(imgRect.left + imgRect.width, addFaceStart.x));
+  const sy = Math.max(imgRect.top, Math.min(imgRect.top + imgRect.height, addFaceStart.y));
+  const left = Math.min(sx, x2);
+  const top = Math.min(sy, y2);
+  const widthPx = Math.abs(x2 - sx);
+  const heightPx = Math.abs(y2 - sy);
+  // Minimum size check (at least 8px and 0.005 relative)
+  const minPx = 8;
+  const minRel = 0.005;
+  const wRel = imgRect.width > 0 ? widthPx / imgRect.width : 0;
+  const hRel = imgRect.height > 0 ? heightPx / imgRect.height : 0;
+  if (widthPx < minPx || heightPx < minPx || wRel < minRel || hRel < minRel) {
+    cancelAddFaceMode();
+    showWarning('Box too small, canceled');
+    addFacePosting = false;
+    return;
+  }
+  // Compute normalized box relative to the image top-left
+  const nx = imgRect.width > 0 ? (left - imgRect.left) / imgRect.width : 0;
+  const ny = imgRect.height > 0 ? (top - imgRect.top) / imgRect.height : 0;
+  const nw = imgRect.width > 0 ? widthPx / imgRect.width : 0;
+  const nh = imgRect.height > 0 ? heightPx / imgRect.height : 0;
+  const box = { x: clamp01(nx), y: clamp01(ny), width: clamp01(nw), height: clamp01(nh) };
+  // Get originalId
+  const originalId = currentMedia?.original?.id;
+  if (!originalId) {
+    cancelAddFaceMode();
+    showError('Unable to resolve original photo id for this media');
+    addFacePosting = false;
+    return;
+  }
+  try {
+    // Create the face
+    const created = await api.createFace({ originalId, box });
+    // Push into currentFaces and re-render (avoid duplicates)
+    try {
+      const newId = created.faceId || created.id;
+      const exists = currentFaces.some(f => (f.faceId||f.id) === newId);
+      if (!exists) currentFaces.push(created);
+    } catch {}
+    try { renderFaces(); } catch {}
+    showSuccess('Face created');
+  } catch (err) {
+    console.error('Failed to create face', err);
+    showError('Failed to create face');
+  } finally {
+    addFacePosting = false;
+    cancelAddFaceMode();
+  }
+  ev.preventDefault?.(); ev.stopPropagation?.();
+}
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
 async function confirmAllInferredFaces(btnRef) {
   const cont = document.querySelector('.image-container');
@@ -1301,39 +1466,19 @@ function initViewerControls() {
   try { const saved = localStorage.getItem('viewer.facesEnabled'); if (saved != null) facesEnabled = saved === '1'; } catch {}
   setFacesEnabled(facesEnabled);
 
-  // Click zones on the image to navigate (left 1/4 prev, right 1/4 next, middle random)
+  // Image click navigation disabled to avoid conflicts with other operations
   const imgContainer = document.querySelector('.image-container');
   let clickTimer = null;
-  imgContainer?.addEventListener('click', (ev) => {
-    // Delay to differentiate from double-click
-    if (clickTimer) clearTimeout(clickTimer);
-    clickTimer = setTimeout(() => {
-      clickTimer = null;
-      const rect = imgContainer.getBoundingClientRect();
-      const x = (ev.clientX ?? 0) - rect.left;
-      const ratio = rect.width > 0 ? x / rect.width : 0.5;
-      if (ratio <= 0.25) {
-        // Left quarter → previous
-        if (currentMedia) loadMedia('previous', currentMedia.accessKey); else loadMedia('last');
-      } else if (ratio >= 0.75) {
-        // Right quarter → next
-        if (currentMedia) loadMedia('next', currentMedia.accessKey); else loadMedia('first');
-      } else {
-        // Middle → random
-        loadMedia('random');
-      }
-    }, 220);
-  });
   // Re-render faces overlay on window resize
   window.addEventListener('resize', () => { if (facesEnabled) { try { renderFaces(); } catch {} } });
 
-  // Toggle fullscreen on double click on the image/container
-  imgContainer?.addEventListener('dblclick', () => {
-    // Cancel pending single-click action
-    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-    const cont = document.querySelector('.image-container');
-    if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
-  });
+
+  // Add Face drawing event listeners
+  imgContainer?.addEventListener('mousedown', handleAddFacePointerDown);
+  imgContainer?.addEventListener('mousemove', handleAddFacePointerMove);
+  // Mouseup handled at window level to avoid duplicate events
+  // Also listen on window to catch mouseup outside container
+  window.addEventListener('mouseup', (e) => { if (isAddFaceModeActive()) handleAddFacePointerUp(e); });
 
   // Swap image source when entering/exiting fullscreen: original in fullscreen, normalized otherwise
   document.addEventListener('fullscreenchange', () => {
@@ -4465,6 +4610,18 @@ function init() {
     btn.textContent = '✎ Edit';
     btn.addEventListener('click', (e) => { e.stopPropagation(); if (currentMedia) openMediaEditModal(currentMedia); else alert('No media loaded'); });
     cont.appendChild(btn);
+  }
+  // Inject Add Face button near the edit button
+  if (cont && !document.getElementById('img-add-btn')) {
+    const addBtn = document.createElement('button');
+    addBtn.id = 'img-add-btn';
+    addBtn.className = 'img-add-btn';
+    addBtn.type = 'button';
+    addBtn.title = 'Add face (drag on photo)';
+    addBtn.setAttribute('aria-label', 'Add face');
+    addBtn.textContent = '+ Add face';
+    addBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); try { toggleAddFaceMode(true); } catch (err) { console.warn('toggleAddFaceMode failed', err); } });
+    cont.appendChild(addBtn);
   }
   initEventsTab();
   initPersonsTab();
