@@ -3572,95 +3572,123 @@ async function loadMosaic() {
 }
 
 // Persons
+let personsAll = [];
+let personsFilter = '';
+
+function comparePersons(a, b) {
+  // Sort by lastName first, then firstName (case-insensitive, null-safe)
+  const al = ((a?.lastName) || '').toLowerCase();
+  const bl = ((b?.lastName) || '').toLowerCase();
+  if (al < bl) return -1; if (al > bl) return 1;
+  const af = ((a?.firstName) || '').toLowerCase();
+  const bf = ((b?.firstName) || '').toLowerCase();
+  if (af < bf) return -1; if (af > bf) return 1;
+  return 0;
+}
+
+function matchesPersonFilter(p, q) {
+  if (!q) return true;
+  const s = q.toLowerCase();
+  const fields = [p.firstName||'', p.lastName||'', p.description||''];
+  for (const f of fields) { if (String(f).toLowerCase().includes(s)) return true; }
+  return false;
+}
+
+function renderPersonsList() {
+  const list = document.getElementById('persons-list'); if (!list) return; list.innerHTML = '';
+  const filtered = personsAll.filter(p => matchesPersonFilter(p, personsFilter)).sort(comparePersons);
+
+  // Lazy load chosen face thumbnails
+  const limit = 6;
+  let inFlight = 0;
+  const pending = [];
+  const scheduled = new WeakSet();
+
+  async function resolveAndRenderPersonThumb(li, person) {
+    inFlight++;
+    try {
+      if (!person.chosenFaceId) return;
+      const img = new Image();
+      img.src = api.faceImageUrl(person.chosenFaceId);
+      img.alt = `${person.firstName} ${person.lastName}`;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      img.style.display = 'block';
+      img.onerror = () => { /* ignore */ };
+      const ph = li.querySelector('.person-thumb');
+      if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
+    } finally {
+      inFlight--; schedulePersonThumb();
+    }
+  }
+
+  function schedulePersonThumb() {
+    while (inFlight < limit && pending.length > 0) {
+      const item = pending.shift();
+      resolveAndRenderPersonThumb(item.li, item.person);
+    }
+  }
+
+  const tabSection = document.getElementById('tab-persons');
+  const observer = ('IntersectionObserver' in window)
+    ? new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const li = entry.target; observer.unobserve(li);
+            if (scheduled.has(li)) continue;
+            const person = li.__person; scheduled.add(li);
+            if (person && person.chosenFaceId) { pending.push({ li, person }); schedulePersonThumb(); }
+          }
+        }
+      }, { root: tabSection, rootMargin: '200px 0px', threshold: 0.01 })
+    : null;
+
+  for (const p of filtered) {
+    const li = document.createElement('li');
+    li.__person = p;
+    li.dataset.personId = p.id || '';
+    const birthStr = p.birthDate ? new Date(p.birthDate).toLocaleDateString() : '';
+    const desc = p.description || '';
+    const metaParts = [];
+    if (birthStr) metaParts.push('birth: ' + birthStr);
+    if (desc) metaParts.push(desc);
+    const meta = metaParts.join(' • ');
+    li.innerHTML = `
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div class="person-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">${p.chosenFaceId ? 'Loading…' : 'No image'}</div>
+        <div style="flex:1;">
+          <h4 style="margin:0 0 4px 0;">${p.firstName} ${p.lastName}</h4>
+          <div style="font-size:12px;color:#555">${meta}</div>
+        </div>
+        <button class="ev-edit-btn" title="Edit">✎ Edit</button>
+        <button class="ev-del-btn" title="Delete">🗑 Delete</button>
+      </div>`;
+    list.appendChild(li);
+    const editBtn = li.querySelector('.ev-edit-btn');
+    if (editBtn) editBtn.onclick = (e) => { e.stopPropagation(); openPersonEditModal(p); };
+    const delBtn = li.querySelector('.ev-del-btn');
+    if (delBtn) delBtn.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete person ${p.firstName} ${p.lastName}?`)) return;
+      try { await api.deletePerson(p.id); showSuccess('Person deleted'); await loadPersons(); }
+      catch { showError('Failed to delete person'); }
+    };
+    // Navigate to person faces view when clicking the tile background
+    li.addEventListener('click', () => openPersonFacesView(p));
+
+    if (observer && p.chosenFaceId) observer.observe(li);
+    else if (p.chosenFaceId) { pending.push({ li, person: p }); schedulePersonThumb(); }
+  }
+}
+
 async function loadPersons() {
   const list = document.getElementById('persons-list'); if (!list) return; list.innerHTML = '';
   try {
-    const persons = await api.listPersons();
-
-    // Lazy load chosen face thumbnails
-    const limit = 6;
-    let inFlight = 0;
-    const pending = [];
-    const scheduled = new WeakSet();
-
-    async function resolveAndRenderPersonThumb(li, person) {
-      inFlight++;
-      try {
-        if (!person.chosenFaceId) return;
-        const img = new Image();
-        img.src = api.faceImageUrl(person.chosenFaceId);
-        img.alt = `${person.firstName} ${person.lastName}`;
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.style.width = '100%';
-        img.style.height = '100%';
-        img.style.objectFit = 'cover';
-        img.style.display = 'block';
-        img.onerror = () => { /* ignore */ };
-        const ph = li.querySelector('.person-thumb');
-        if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
-      } finally {
-        inFlight--; schedulePersonThumb();
-      }
-    }
-
-    function schedulePersonThumb() {
-      while (inFlight < limit && pending.length > 0) {
-        const item = pending.shift();
-        resolveAndRenderPersonThumb(item.li, item.person);
-      }
-    }
-
-    const tabSection = document.getElementById('tab-persons');
-    const observer = ('IntersectionObserver' in window)
-      ? new IntersectionObserver((entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              const li = entry.target; observer.unobserve(li);
-              if (scheduled.has(li)) continue;
-              const person = li.__person; scheduled.add(li);
-              if (person && person.chosenFaceId) { pending.push({ li, person }); schedulePersonThumb(); }
-            }
-          }
-        }, { root: tabSection, rootMargin: '200px 0px', threshold: 0.01 })
-      : null;
-
-    for (const p of persons) {
-      const li = document.createElement('li');
-      li.__person = p;
-      li.dataset.personId = p.id || '';
-      const birthStr = p.birthDate ? new Date(p.birthDate).toLocaleDateString() : '';
-      const desc = p.description || '';
-      const metaParts = [];
-      if (birthStr) metaParts.push('birth: ' + birthStr);
-      if (desc) metaParts.push(desc);
-      const meta = metaParts.join(' • ');
-      li.innerHTML = `
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div class="person-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">${p.chosenFaceId ? 'Loading…' : 'No image'}</div>
-          <div style="flex:1;">
-            <h4 style="margin:0 0 4px 0;">${p.firstName} ${p.lastName}</h4>
-            <div style="font-size:12px;color:#555">${meta}</div>
-          </div>
-          <button class="ev-edit-btn" title="Edit">✎ Edit</button>
-          <button class="ev-del-btn" title="Delete">🗑 Delete</button>
-        </div>`;
-      list.appendChild(li);
-      const editBtn = li.querySelector('.ev-edit-btn');
-      if (editBtn) editBtn.onclick = (e) => { e.stopPropagation(); openPersonEditModal(p); };
-      const delBtn = li.querySelector('.ev-del-btn');
-      if (delBtn) delBtn.onclick = async (e) => {
-        e.stopPropagation();
-        if (!confirm(`Delete person ${p.firstName} ${p.lastName}?`)) return;
-        try { await api.deletePerson(p.id); li.remove(); showSuccess('Person deleted'); }
-        catch { showError('Failed to delete person'); }
-      };
-      // Navigate to person faces view when clicking the tile background
-      li.addEventListener('click', () => openPersonFacesView(p));
-
-      if (observer && p.chosenFaceId) observer.observe(li);
-      else if (p.chosenFaceId) { pending.push({ li, person: p }); schedulePersonThumb(); }
-    }
+    personsAll = await api.listPersons();
+    renderPersonsList();
   } catch (e) { list.innerHTML = '<li>Failed to load persons</li>'; }
 }
 
@@ -3946,6 +3974,14 @@ function initPersonsTab() {
   if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadPersons); refreshBtn.__wired = true; }
   const createBtn = document.getElementById('create-person');
   if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openPersonCreateModal()); createBtn.__wired = true; }
+  const filterInput = document.getElementById('persons-filter');
+  if (filterInput && !filterInput.__wired) {
+    filterInput.addEventListener('input', (e) => {
+      personsFilter = String(e.target.value || '').trim();
+      renderPersonsList();
+    });
+    filterInput.__wired = true;
+  }
 }
 
 // Owners
