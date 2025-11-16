@@ -303,6 +303,9 @@ class MediaServiceLive private (
       _                   <- detectedFaceColl
                                .delete(faceId)
                                .mapError(err => ServiceDatabaseIssue(s"Couldn't delete face : $err"))
+      _                   <- faceFeaturesColl
+                               .delete(faceId)
+                               .mapError(err => ServiceDatabaseIssue(s"Couldn't delete face features"))
     } yield ()
   }
 
@@ -329,6 +332,7 @@ class MediaServiceLive private (
       originalFaces       <- originalFaces(original.id)
       updatedOriginalFaces = builtFace.faceId :: originalFaces.map(_.faces.map(_.faceId)).getOrElse(Nil)
       _                   <- originalFacesUpdate(originalId, updatedOriginalFaces)
+      _                   <- originalFacesFeatures(originalId)
     } yield builtFace
   }
 
@@ -596,7 +600,9 @@ class MediaServiceLive private (
                   .fetch(originalId)
                   .flatMap(gotten => ZIO.foreach(gotten)(daoFacesFeaturesToFacesFeatures))
                   .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
-      result <- computeFaceFeatures(originalId).when(stored.isEmpty)
+      result <- computeFaceFeatures(originalId)
+                  .tap(feats => ZIO.logInfo(s"Computed face features for original $originalId : ${feats.features.size}"))
+                  .when(stored.isEmpty)
     } yield stored.orElse(result)
   }
 
