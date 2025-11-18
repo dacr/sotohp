@@ -71,7 +71,7 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
     *   an `IO` effect resulting in either a `CoreIssue` (in case of an error) or an `OriginalFaceFeatures` containing the processed face features
     */
   def extractFaceFeatures(faces: OriginalFaces): IO[CoreIssue, OriginalFaceFeatures] = {
-    val minRatio = 80d / 1600d // TODO use config parameter
+    val minRatio = 70d / 1900d // TODO use config parameter
     val logic    = for {
       now               <- Clock.currentDateTime
       originalImage     <- loadOriginalBestInputFileForProcessors(faces.original)

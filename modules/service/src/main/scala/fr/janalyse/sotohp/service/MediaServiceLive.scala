@@ -596,14 +596,16 @@ class MediaServiceLive private (
 
   override def originalFacesFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
     for {
-      stored <- originalFaceFeaturesColl
-                  .fetch(originalId)
-                  .flatMap(gotten => ZIO.foreach(gotten)(daoFacesFeaturesToFacesFeatures))
-                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
-      result <- computeFaceFeatures(originalId)
-                  .tap(feats => ZIO.logInfo(s"Computed face features for original $originalId : ${feats.features.size}"))
-                  .when(stored.isEmpty)
-    } yield stored.orElse(result)
+      faceIds            <- originalFaces(originalId).map(_.map(_.faces.map(_.faceId).toSet).getOrElse(Set.empty))
+      faceFeatures       <- originalFaceFeaturesColl
+                              .fetch(originalId)
+                              .flatMap(gotten => ZIO.foreach(gotten)(daoFacesFeaturesToFacesFeatures))
+                              .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
+      faceFeaturesFaceIds = faceFeatures.map(_.features.map(_.faceId).toSet).getOrElse(Set.empty)
+      result             <- computeFaceFeatures(originalId)
+                              .tap(feats => ZIO.logInfo(s"Computed face features for original $originalId : ${feats.features.size}"))
+                              .when(faceFeatures.isEmpty || faceFeaturesFaceIds != faceIds)
+    } yield faceFeatures.orElse(result)
   }
 
   // -------------------------------------------------------------------------------------------------------------------

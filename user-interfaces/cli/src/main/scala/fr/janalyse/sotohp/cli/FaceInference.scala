@@ -88,7 +88,7 @@ object FaceInference extends CommonsCLI {
   // -------------------------------------------------------------------------------------------------------------------
   val logic = ZIO.logSpan("Infer person identification from faces features and already identified faces") {
     for {
-      _              <- fixFaceWithMissingFeatures()
+      //_              <- fixFaceWithMissingFeatures()
       knownFaces     <- featuresForIdentifiedFaces()
       unknownFaces   <- featuresForUnknowFaces()
       alreadyInferred = unknownFaces.filter((face, _) => face.inferredIdentifiedPersonId.isDefined && face.identifiedPersonId.isEmpty)

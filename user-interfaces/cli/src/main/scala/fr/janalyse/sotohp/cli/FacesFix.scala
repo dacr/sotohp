@@ -6,7 +6,7 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.{FacesDetectionIssue, NormalizeProcessor}
 import fr.janalyse.sotohp.processor.model.DetectedFace
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.service.MediaService
+import fr.janalyse.sotohp.service.{MediaService, ServiceIssue}
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
@@ -85,21 +85,40 @@ object FacesFix extends CommonsCLI {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def checkFaceIsInOriginalFaces(face: DetectedFace) = {
+  def checkFaceIsInOriginalFaces(originalId: OriginalId, foundFaces: Chunk[DetectedFace]): ZIO[MediaService, ServiceIssue, Unit] = {
     for {
-      originalFaces <- MediaService.originalFaces(face.originalId).map(_.map(_.faces).getOrElse(Nil))
-      faceIds        = originalFaces.map(_.faceId)
-      _             <- MediaService
-                         .originalFacesUpdate(face.originalId, face.faceId :: faceIds)
-                         .tap(_ => ZIO.logInfo(s"Face ${face.faceId} added to original faces ${face.originalId}"))
-                         .when(!faceIds.contains(face.faceId))
+      currentFaces   <- MediaService.originalFaces(originalId).map(_.map(_.faces).getOrElse(Nil))
+      currentFacesIds = currentFaces.map(_.faceId)
+      foundFacesIds   = foundFaces.map(_.faceId).toList
+      _              <- MediaService
+                          .originalFacesUpdate(originalId, foundFacesIds)
+                          .tap(_ => ZIO.logInfo(s"Original faces identifiers updated $originalId - ${currentFacesIds.size}->${foundFacesIds.size} faces"))
+                          .when(currentFacesIds.size != foundFacesIds.size)
     } yield ()
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   val logic = ZIO.logSpan("Fix faces") {
     // MediaService.mediaList().runForeach(facesRotationFix)
-    MediaService.faceList().runForeach(checkFaceIsInOriginalFaces)
+
+    for {
+      faces          <- MediaService.faceList().runCollect
+      facesByOriginal = faces.groupBy(_.originalId)
+      _              <- ZIO.logInfo("----------- Originals faces data coherency -----------")
+      originalsIds    = faces.map(_.originalId).distinct
+      _              <- ZIO.foreachDiscard(facesByOriginal) { (id, faces) =>
+                          checkFaceIsInOriginalFaces(id, faces)
+                        }
+      _              <- ZIO.logInfo("----------- Faces path coherency -----------")
+      _              <- ZIO.foreachDiscard(faces.filterNot(_.path.path.toFile.exists())) { face =>
+                          ZIO.logInfo(s"Face ${face.faceId} is orphan of its file : ${face.path.path}") *>
+                            MediaService.faceDelete(face.faceId)
+                        }
+      _              <- ZIO.logInfo("----------- Faces features fix -----------")
+      _              <- ZIO.foreachDiscard(originalsIds) { originalId =>
+                          MediaService.originalFacesFeatures(originalId)
+                        }
+    } yield ()
   }
 
 }
