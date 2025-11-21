@@ -117,7 +117,6 @@
     - if something is missing ask me
 - all the source files are in the `frontend-user-interface` folder`
 - build the front end user interface sources into the `frontend-user-interface-dist` folder
+  - `make ui` to build the sources into the `frontend-user-interface-dist` folder
 - use **typescript** programming language associated and those kind of libraries/frameworks
-  - angular framework
   - axios openapi client
-- use the global makefile to build the front end user interface sources
