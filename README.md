@@ -39,6 +39,8 @@ Once again this project has first started as just [a "small" script][photosc], f
 - ⚠️ keep in mind that this software is currently designed for use in **private home network**,
   do not expose it directly to the internet without configuring a secured reverse proxy, know
   what you do!
+- ⚠️ automated face recognition is still a batch process, done by this command [FaceInference](user-interfaces/cli/src/main/scala/fr/janalyse/sotohp/cli/FaceInference.scala)
+  - the current implementation is basic: shortest Euclidean distance on face features 
 
 ## User interfaces
 
