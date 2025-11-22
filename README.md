@@ -4,8 +4,8 @@ A software to easily and quickly manage and annotate a huge number of photos.
 
 Why? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events.
 
-My two favorite features are the diaporama and the ability to enrich photo descriptions,
-adjust locations with family members or friends from anywhere.
+My favorite features are, of course, the diaporama, but also **people face identification**, **location fix**, ...
+All of this achieved interactively with family members or friends from anywhere.
 
 ![](docs/screenshots/00-diaporama.png)
 
@@ -31,6 +31,7 @@ Once again this project has first started as just [a "small" script][photosc], f
     - photos diaporama,
     - timeline mosaic browsing,
     - customizing locations, dates, keywords, descriptions, ...
+    - people faces management and identification, 
     - managing events,
     - managing owners and storage directories,
     - synchronize originals from multiple storage directories,
@@ -45,6 +46,8 @@ The web user interface is quite fast, user-friendly and feature-rich, with behin
 
 ![](docs/screenshots/10-viewer.png)
 
+![](docs/screenshots/13-viewer-with-faces-and-names.png)
+
 ![](docs/screenshots/15-viewer-edit.png)
 
 ![](docs/screenshots/30-mosaic.png)
@@ -54,6 +57,14 @@ The web user interface is quite fast, user-friendly and feature-rich, with behin
 ![](docs/screenshots/45-events-edit.png)
 
 ![](docs/screenshots/60-maps.png)
+
+![](docs/screenshots/63-persons.png)
+
+![](docs/screenshots/64-person-faces.png)
+
+![](docs/screenshots/65-person-faces-validating.png)
+
+![](docs/screenshots/66-person-face-edit.png)
 
 ![](docs/screenshots/70-settings.png)
 
