@@ -3724,6 +3724,11 @@ async function openPersonFacesView(person) {
       <div class="spacer"></div>
       <div class="pf-actions">
         <div class="pf-left-actions">
+          <div class="pf-size" role="group" aria-label="Face size">
+            <button type="button" class="pf-size-small" data-size="small" title="Small">Small</button>
+            <button type="button" class="pf-size-medium" data-size="medium" title="Medium">Medium</button>
+            <button type="button" class="pf-size-max" data-size="max" title="Maximum">Maximum</button>
+          </div>
           <button type="button" class="confirm-all" title="Confirm all shown faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm all</button>
           <button type="button" class="confirm-selected" title="Confirm selected faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm selected</button>
         </div>
@@ -3766,6 +3771,40 @@ async function openPersonFacesView(person) {
   const toggleBtn = view.querySelector('.toggle-validate');
   const confirmAllBtn = view.querySelector('.confirm-all');
   const confirmSelBtn = view.querySelector('.confirm-selected');
+  const sizeCtl = view.querySelector('.pf-size');
+  const sizeBtns = sizeCtl ? Array.from(sizeCtl.querySelectorAll('button')) : [];
+
+  // Initialize face size from sessionStorage (default to 'max')
+  const SIZE_STORAGE_KEY = 'personFaces.size';
+  function getStoredSize() {
+    try { return sessionStorage.getItem(SIZE_STORAGE_KEY) || 'max'; } catch { return 'max'; }
+  }
+  function setStoredSize(sz) {
+    try { sessionStorage.setItem(SIZE_STORAGE_KEY, sz); } catch {}
+  }
+  function applySizeClass(sz) {
+    // remove previous classes
+    view.classList.remove('size-small', 'size-medium', 'size-max');
+    const cls = sz === 'small' ? 'size-small' : (sz === 'medium' ? 'size-medium' : 'size-max');
+    view.classList.add(cls);
+    // update active button state
+    sizeBtns.forEach(b => b.classList.toggle('active', b.getAttribute('data-size') === sz));
+  }
+  const initialSize = getStoredSize();
+  applySizeClass(initialSize);
+  // Wire size control buttons
+  sizeBtns.forEach(btn => {
+    if (btn.__wired) return;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const sz = btn.getAttribute('data-size') || 'max';
+      setStoredSize(sz);
+      applySizeClass(sz);
+      // No need to re-render; CSS grid reacts to class change. Keep header states in sync just in case.
+      try { if (typeof view.__updateActions === 'function') view.__updateActions(); } catch {}
+    });
+    btn.__wired = true;
+  });
 
   // Helper: refetch the latest faces for this person and refresh UI
   async function refetchFacesAndRefresh({ keepMode = true } = {}) {

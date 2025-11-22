@@ -394,3 +394,20 @@ section#tab-mosaic.tab.active { display: flex; }
 
 .face-badge.inferred { position: absolute; left: 6px; bottom: 6px; background: rgba(245,158,11,0.92); color: #111827; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .face-badge.inferred:hover, .face-badge.inferred:focus { background: rgba(245,158,11,1); }
+
+/* Person Faces: size control segmented buttons */
+.pf-size { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #f9fafb; }
+.pf-size button { background: transparent; border: none; padding: 4px 8px; font-size: 12px; cursor: pointer; color: #111827; }
+.pf-size button:hover { background: #eef2ff; }
+.pf-size button.active { background: #2563eb; color: #fff; }
+
+/* Grid sizing variants */
+.person-faces-view.size-small .person-faces-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; }
+.person-faces-view.size-medium .person-faces-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.person-faces-view.size-max .person-faces-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+
+/* Adjust on-tile controls slightly for small size */
+.person-faces-view.size-small .face-tile .ft-edit,
+.person-faces-view.size-small .face-tile .ft-view { font-size: 10px; padding: 2px 5px; right: 4px; top: 4px; }
+.person-faces-view.size-small .face-tile .ft-view { right: 30px; }
+.person-faces-view.size-small .face-badge.inferred { font-size: 10px; padding: 2px 6px; left: 4px; bottom: 4px; }
