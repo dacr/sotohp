@@ -42,34 +42,48 @@ Once again this project has first started as just [a "small" script][photosc], f
 
 ## User interfaces
 
-The web user interface is quite fast, user-friendly and feature-rich, with behind the scene a REST API:
+The web user interface is quite fast, user-friendly and feature-rich, with behind the scene a REST API.
 
+### The viewer
 ![](docs/screenshots/10-viewer.png)
 
+### The viewer with faces and names enabled
 ![](docs/screenshots/13-viewer-with-faces-and-names.png)
 
+### The viewer editing capabilities
 ![](docs/screenshots/15-viewer-edit.png)
 
+### The timeline mosaic
 ![](docs/screenshots/30-mosaic.png)
 
+### The events management
 ![](docs/screenshots/40-events.png)
 
+### The events editing capabilities
 ![](docs/screenshots/45-events-edit.png)
 
+### Viewing photos on a zoomable world map
 ![](docs/screenshots/60-maps.png)
 
+### The people management
 ![](docs/screenshots/63-persons.png)
 
+### The people faces management
 ![](docs/screenshots/64-person-faces.png)
 
+### The people faces validation
 ![](docs/screenshots/65-person-faces-validating.png)
 
+### The people faces editing capabilities
 ![](docs/screenshots/66-person-face-edit.png)
 
+### The settings
 ![](docs/screenshots/70-settings.png)
 
+### The REST API
 ![](docs/screenshots/80-openapi.png)
 
+### The dashboard when opensearhc is enabled
 ![](docs/screenshots/99-dashboard.png)
 
 ## Configuration
