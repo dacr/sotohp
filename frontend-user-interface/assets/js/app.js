@@ -4311,6 +4311,8 @@ function openPersonCreateModal() {
     try {
       await api.createPerson(body);
       close();
+      // Invalidate Viewer persons cache so newly created person appears in the Viewer face edit modal without full page reload
+      try { personsCache = null; } catch {}
       await loadPersons();
     } catch (e) {
       showError('Failed to create person');
@@ -4396,6 +4398,8 @@ function openPersonEditModal(person) {
     try {
       await api.updatePerson(person.id, body);
       close();
+      // Invalidate Viewer persons cache so edits are reflected in Viewer face edit modal (typeahead)
+      try { personsCache = null; } catch {}
       // Refetch person list to get canonical data and refresh tile
       const persons = await api.listPersons();
       const updated = persons.find(x => x.id === person.id) || { ...person, ...body };

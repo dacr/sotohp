@@ -71,31 +71,41 @@ object FaceInference extends CommonsCLI {
     } yield featureByFace.flatten
   }
 
-  def identifyFace(knownFaces: Chunk[(DetectedFace, FaceFeatures)])(face: DetectedFace, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Unit] = {
+  def identifyFace(knownFaces: Chunk[(DetectedFace, FaceFeatures)])(face: DetectedFace, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     val (knownFace, knownFaceFeature) = knownFaces.minBy((knownFace, knownFaceFeatures) => distance.d(faceFeatures.features, knownFaceFeatures.features))
     val foundDistance                 = distance.d(faceFeatures.features, knownFaceFeature.features)
+
+    val updatedFace         = face.copy(
+      inferredIdentifiedPersonId = knownFace.identifiedPersonId
+        .filter(_ => foundDistance < 0.625)
+    )
+    val isFreshlyIdentified = (
+      updatedFace.inferredIdentifiedPersonId.isDefined
+        && face.identifiedPersonId.isEmpty
+        && face.inferredIdentifiedPersonId.isEmpty
+    )
+
     MediaService
-      .faceUpdate(
-        face.faceId,
-        face.copy(
-          inferredIdentifiedPersonId = knownFace.identifiedPersonId
-            .filter(_ => foundDistance < 0.625)
-        )
-      )
-      .unit
+      .faceUpdate(face.faceId, updatedFace)
+      .as(isFreshlyIdentified)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
   val logic = ZIO.logSpan("Infer person identification from faces features and already identified faces") {
     for {
-      //_              <- fixFaceWithMissingFeatures()
-      knownFaces     <- featuresForIdentifiedFaces()
-      unknownFaces   <- featuresForUnknowFaces()
-      alreadyInferred = unknownFaces.filter((face, _) => face.inferredIdentifiedPersonId.isDefined && face.identifiedPersonId.isEmpty)
-      tocheck         = unknownFaces
-      _              <- Console.printLine(s"${knownFaces.size} known faces")
-      _              <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
-      _              <- ZIO.foreachDiscard(tocheck) { (face, faceFeatures) => identifyFace(knownFaces)(face, faceFeatures) }
+      // _              <- fixFaceWithMissingFeatures()
+      knownFaces         <- featuresForIdentifiedFaces()
+      unknownFaces       <- featuresForUnknowFaces()
+      alreadyInferred     = unknownFaces.filter((face, _) => face.inferredIdentifiedPersonId.isDefined && face.identifiedPersonId.isEmpty)
+      tocheck             = unknownFaces
+      _                  <- Console.printLine(s"${knownFaces.size} known faces")
+      _                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
+      newIdentifiedCount <- zio.stream.ZStream
+                              .from(tocheck)
+                              .mapZIO((face, faceFeatures) => identifyFace(knownFaces)(face, faceFeatures))
+                              .filter(_ == true)
+                              .runCount
+      _                  <- ZIO.logInfo(s"done, identified $newIdentifiedCount new faces")
     } yield ()
   }
 
