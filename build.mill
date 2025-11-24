@@ -33,7 +33,7 @@ trait SotohpModule extends SbtModule {
   def scalacOptions = Seq("-deprecation")
   object test extends SbtTests, TestModule.ZioTest {
     def forkArgs       = lmdbJavaOptions
-    def zioTestVersion = "2.1.21"
+    def zioTestVersion = "2.1.22"
   }
   def repositories = Seq("https://central.sonatype.com/repository/maven-snapshots")
 }
@@ -96,7 +96,7 @@ object modules extends Module {
     def artifactName = "sotohp-service"
     def moduleDeps   = Seq(core, search, processor)
     def mvnDeps      = Seq(
-      mvn"fr.janalyse::zio-lmdb:2.1.4",
+      mvn"fr.janalyse::zio-lmdb:2.1.5",
       mvn"io.scalaland::chimney:1.8.2"
     )
   }
@@ -113,10 +113,10 @@ object `user-interfaces` extends Module {
       //mvn"dev.zio::zio-logging-slf4j2:2.5.1",
       //mvn"dev.zio::zio-logging-slf4j2-bridge:2.5.1",
       //mvn"ch.qos.logback:logback-classic:1.5.21",
-      mvn"com.softwaremill.sttp.tapir::tapir-zio:1.12.3",
-      mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:1.12.3",
-      mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.12.3",
-      mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.12.3"
+      mvn"com.softwaremill.sttp.tapir::tapir-zio:1.12.4",
+      mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:1.12.4",
+      mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.12.4",
+      mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.12.4"
     )
 
     override def packageVersion = publishVersion
