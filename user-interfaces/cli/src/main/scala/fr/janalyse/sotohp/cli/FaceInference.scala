@@ -77,7 +77,7 @@ object FaceInference extends CommonsCLI {
 
     val updatedFace         = face.copy(
       inferredIdentifiedPersonId = knownFace.identifiedPersonId
-        .filter(_ => foundDistance < 0.625)
+        .filter(_ => foundDistance < 0.65)
     )
     val isFreshlyIdentified = (
       updatedFace.inferredIdentifiedPersonId.isDefined
@@ -98,14 +98,16 @@ object FaceInference extends CommonsCLI {
       unknownFaces       <- featuresForUnknowFaces()
       alreadyInferred     = unknownFaces.filter((face, _) => face.inferredIdentifiedPersonId.isDefined && face.identifiedPersonId.isEmpty)
       tocheck             = unknownFaces
-      _                  <- Console.printLine(s"${knownFaces.size} known faces")
+      _                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")
       _                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
       newIdentifiedCount <- zio.stream.ZStream
                               .from(tocheck)
+                              //.filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
                               .mapZIO((face, faceFeatures) => identifyFace(knownFaces)(face, faceFeatures))
                               .filter(_ == true)
                               .runCount
-      _                  <- ZIO.logInfo(s"done, identified $newIdentifiedCount new faces")
+      _                  <- Console.printLine(s"$newIdentifiedCount new faces inferred")
+      _                  <- ZIO.logInfo(s"done")
     } yield ()
   }
 
