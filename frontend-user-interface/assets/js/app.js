@@ -4086,6 +4086,41 @@ function renderPersonFacesGrid(view, person, faces, opts) {
     try { const d = new Date(ts); return d.toLocaleString(); } catch { return String(ts); }
   }
 
+  // Tooltip helper for faces
+  let faceTooltip = document.getElementById('person-faces-tooltip');
+  if (!faceTooltip) {
+    faceTooltip = document.createElement('div');
+    faceTooltip.id = 'person-faces-tooltip';
+    faceTooltip.className = 'mosaic-photo-tooltip';
+    faceTooltip.style.position = 'fixed';
+    faceTooltip.style.zIndex = '9999';
+    faceTooltip.style.display = 'none';
+    document.body.appendChild(faceTooltip);
+  }
+  function hideFaceTooltip() { 
+    if (faceTooltip) {
+      faceTooltip.classList.remove('show');
+      faceTooltip.style.display = 'none'; 
+    }
+  }
+  function showFaceTooltip(html, x, y) {
+    if (!faceTooltip) return;
+    faceTooltip.innerHTML = html;
+    faceTooltip.style.display = 'block';
+    // Force reflow to enable transition if needed, but here we just want it visible
+    requestAnimationFrame(() => faceTooltip.classList.add('show'));
+    
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const rect = faceTooltip.getBoundingClientRect();
+    let left = x + 14;
+    let top = y + 12;
+    if (left + rect.width > vw) left = x - rect.width - 14;
+    if (top + rect.height > vh) top = y - rect.height - 12;
+    faceTooltip.style.left = Math.max(0, left) + 'px';
+    faceTooltip.style.top = Math.max(0, top) + 'px';
+  }
+
   for (const face of faces) {
     const tile = document.createElement('div');
     tile.className = 'face-tile';
@@ -4098,7 +4133,77 @@ function renderPersonFacesGrid(view, person, faces, opts) {
     const img = tile.querySelector('img.face-img');
     if (img) {
       img.src = api.faceImageUrl(face.faceId || face.id);
-      img.title = tsLabel(face.timestamp); // tooltip with timestamp
+      // img.title = tsLabel(face.timestamp); // tooltip with timestamp
+      
+      // Enhanced tooltip with miniature (delayed)
+      let hoverTimer = null;
+      
+      const showTip = (e) => {
+        const hint = (mode === 'validate') 
+          ? 'Click to select<br>Shift-click range<br>Drag to multi-select' 
+          : 'Click to open in Viewer';
+        const baseHtml = `
+          <div class="title">${tsLabel(face.timestamp)}</div>
+          <div class="subtitle" style="font-size:0.85em;opacity:0.8;margin-top:4px">${hint}</div>
+        `;
+        
+        // Capture coordinates for the delayed show
+        const startX = e.clientX;
+        const startY = e.clientY;
+
+        hoverTimer = setTimeout(async () => {
+             showFaceTooltip(baseHtml, startX, startY);
+             
+             // Fetch key if missing
+             if (!face.__mediaAccessKey) {
+                 try {
+                     const oid = face.originalId || (face.original && face.original.id);
+                     if (oid) {
+                         const st = await api.getState(oid);
+                         if (st && (st.mediaAccessKey || st.accessKey)) {
+                             face.__mediaAccessKey = st.mediaAccessKey || st.accessKey;
+                         }
+                     }
+                 } catch {}
+             }
+             
+             if (face.__mediaAccessKey) {
+                 const url = api.mediaMiniatureUrl(face.__mediaAccessKey);
+                 // Preload image to avoid layout jump
+                 const preload = new Image();
+                 preload.onload = () => {
+                     // Only update if tooltip is still shown and we are still hovering this face (timer not cleared/reset)
+                     if (faceTooltip && faceTooltip.style.display !== 'none') {
+                         const fullHtml = `
+                           <div class="title">${tsLabel(face.timestamp)}</div>
+                           <div style="margin:6px 0"><img src="${url}" style="max-width:250px;max-height:250px;border-radius:4px;display:block;object-fit:contain;background:#000"></div>
+                           <div class="subtitle" style="font-size:0.85em;opacity:0.8">${hint}</div>
+                         `;
+                         showFaceTooltip(fullHtml, startX, startY);
+                     }
+                 };
+                 preload.src = url;
+             }
+        }, 600); // 600ms delay
+      };
+
+      img.addEventListener('mouseenter', showTip);
+      img.addEventListener('mouseleave', () => {
+          if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+          hideFaceTooltip();
+      });
+      img.addEventListener('mousemove', (e) => {
+         // If tooltip is already visible, just move it
+         if (faceTooltip && faceTooltip.style.display !== 'none') {
+            showFaceTooltip(faceTooltip.innerHTML, e.clientX, e.clientY);
+         } else {
+            // If waiting for delay, reset timer on significant move, or keep it? 
+            // Standard UX: reset timer if mouse keeps moving to avoid popping up while traversing
+            if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+            showTip(e);
+         }
+      });
+
       if (mode === 'validate') {
         // Avoid native image drag which can interfere with selection dragging
         try { img.draggable = false; } catch {}
@@ -4121,7 +4226,7 @@ function renderPersonFacesGrid(view, person, faces, opts) {
         // Selection & range selection
         const fid = face.faceId || face.id;
         tile.style.cursor = 'crosshair';
-        tile.title = 'Click to select; Shift-click for range; Drag to multi-select';
+        // tile.title = 'Click to select; Shift-click for range; Drag to multi-select'; // Disabled to use custom tooltip
         if (!tile.hasAttribute('tabindex')) tile.tabIndex = 0;
         // In validation mode, selection is handled on mousedown/drag; prevent click default to avoid double toggling
         tile.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
@@ -4143,7 +4248,7 @@ function renderPersonFacesGrid(view, person, faces, opts) {
         updateTileSelection(tile, !!(view.__selected && view.__selected.has(fid)));
       } else {
         tile.style.cursor = 'pointer';
-        tile.title = 'Open photo in Viewer';
+        // tile.title = 'Open photo in Viewer'; // Disabled to use custom tooltip
         if (!tile.hasAttribute('tabindex')) tile.tabIndex = 0;
         tile.addEventListener('click', (e) => { e.preventDefault(); goToViewerForFace(face); });
         tile.addEventListener('keydown', (e) => {
