@@ -50,9 +50,9 @@ object modules extends Module {
     def artifactName = "sotohp-core"
     def moduleDeps   = Seq(model)
     def mvnDeps      = Seq(
-      mvn"dev.zio::zio-config:4.0.5",
-      mvn"dev.zio::zio-config-typesafe:4.0.5",
-      mvn"dev.zio::zio-config-magnolia:4.0.5",
+      mvn"dev.zio::zio-config:4.0.6",
+      mvn"dev.zio::zio-config-typesafe:4.0.6",
+      mvn"dev.zio::zio-config-magnolia:4.0.6",
       mvn"com.fasterxml.uuid:java-uuid-generator:5.1.1",
       mvn"com.drewnoakes:metadata-extractor:2.19.0"
     )
@@ -67,18 +67,18 @@ object modules extends Module {
     def artifactName = "sotohp-processor"
     def moduleDeps   = Seq(core, imaging)
     def mvnDeps      = Seq(
-      mvn"ai.djl:api:0.34.0",
-      mvn"ai.djl:basicdataset:0.34.0",
-      mvn"ai.djl:model-zoo:0.34.0",
-      mvn"ai.djl.huggingface:tokenizers:0.34.0",
-      mvn"ai.djl.mxnet:mxnet-engine:0.34.0",
-      mvn"ai.djl.mxnet:mxnet-model-zoo:0.34.0",
-      mvn"ai.djl.pytorch:pytorch-engine:0.34.0",
-      mvn"ai.djl.pytorch:pytorch-model-zoo:0.34.0",
-      mvn"ai.djl.tensorflow:tensorflow-engine:0.34.0",
-      mvn"ai.djl.tensorflow:tensorflow-model-zoo:0.34.0",
-      mvn"ai.djl.onnxruntime:onnxruntime-engine:0.34.0",
-      mvn"net.java.dev.jna:jna:5.17.0"
+      mvn"ai.djl:api:0.35.0",
+      mvn"ai.djl:basicdataset:0.35.0",
+      mvn"ai.djl:model-zoo:0.35.0",
+      mvn"ai.djl.huggingface:tokenizers:0.35.0",
+      mvn"ai.djl.mxnet:mxnet-engine:0.35.0",
+      mvn"ai.djl.mxnet:mxnet-model-zoo:0.35.0",
+      mvn"ai.djl.pytorch:pytorch-engine:0.35.0",
+      mvn"ai.djl.pytorch:pytorch-model-zoo:0.35.0",
+      mvn"ai.djl.tensorflow:tensorflow-engine:0.35.0",
+      mvn"ai.djl.tensorflow:tensorflow-model-zoo:0.35.0",
+      mvn"ai.djl.onnxruntime:onnxruntime-engine:0.35.0",
+      mvn"net.java.dev.jna:jna:5.18.1"
     )
   }
 
@@ -109,14 +109,14 @@ object `user-interfaces` extends Module {
     def forkArgs     = Seq("-Xms512m", "-Xmx512m") ++ lmdbJavaOptions
     def mainClass    = Some("fr.janalyse.sotohp.api.ApiApp")
     def mvnDeps      = Seq(
-      mvn"dev.zio::zio-logging:2.5.1",
+      mvn"dev.zio::zio-logging:2.5.2",
       //mvn"dev.zio::zio-logging-slf4j2:2.5.1",
       //mvn"dev.zio::zio-logging-slf4j2-bridge:2.5.1",
       //mvn"ch.qos.logback:logback-classic:1.5.21",
-      mvn"com.softwaremill.sttp.tapir::tapir-zio:1.12.4",
-      mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:1.12.4",
-      mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.12.4",
-      mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.12.4"
+      mvn"com.softwaremill.sttp.tapir::tapir-zio:1.12.5",
+      mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:1.12.5",
+      mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.12.5",
+      mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.12.5"
     )
 
     override def packageVersion = publishVersion
@@ -127,12 +127,12 @@ object `user-interfaces` extends Module {
     def moduleDeps   = Seq(modules.service)
     def forkArgs     = lmdbJavaOptions
     def mvnDeps      = Seq(
-      mvn"dev.zio::zio-logging:2.5.1",
+      mvn"dev.zio::zio-logging:2.5.2",
       //mvn"dev.zio::zio-logging-slf4j2:2.5.1",
       //mvn"dev.zio::zio-logging-slf4j2-bridge:2.5.1",
       //mvn"ch.qos.logback:logback-classic:1.5.21",
       //mvn"com.github.haifengl:smile-core:5.0.0"
-      mvn"com.github.haifengl:smile-core:4.4.2"
+      mvn"com.github.haifengl:smile-core:5.0.0"
     )
   }
 
