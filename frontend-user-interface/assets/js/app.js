@@ -4174,8 +4174,11 @@ function renderPersonFacesGrid(view, person, faces, opts) {
                  preload.onload = () => {
                      // Only update if tooltip is still shown and we are still hovering this face (timer not cleared/reset)
                      if (faceTooltip && faceTooltip.style.display !== 'none') {
+                         const conf = (face.inferredIdentifiedPersonConfidence != null)
+                           ? ` <span style="opacity:0.7;font-size:0.9em">(${(face.inferredIdentifiedPersonConfidence * 100).toFixed(0)}%)</span>`
+                           : '';
                          const fullHtml = `
-                           <div class="title">${tsLabel(face.timestamp)}</div>
+                           <div class="title">${tsLabel(face.timestamp)}${conf}</div>
                            <div style="margin:6px 0"><img src="${url}" style="max-width:250px;max-height:250px;border-radius:4px;display:block;object-fit:contain;background:#000"></div>
                            <div class="subtitle" style="font-size:0.85em;opacity:0.8">${hint}</div>
                          `;
