@@ -952,7 +952,7 @@ object ApiApp extends ZIOAppDefault {
   def personCreateLogic(toCreate: ApiPersonCreate): ZIO[ApiEnv, ApiInternalError, ApiPerson] = {
     for {
       person   <- MediaService
-                    .personCreate(None, toCreate.firstName, toCreate.lastName, toCreate.birthDate, toCreate.description)
+                    .personCreate(None, toCreate.firstName, toCreate.lastName, toCreate.birthDate, toCreate.email, toCreate.description)
                     .mapError(err => ApiInternalError("Couldn't create person"))
       apiPerson = person.transformInto[ApiPerson]
     } yield apiPerson
@@ -1000,6 +1000,7 @@ object ApiApp extends ZIOAppDefault {
                toUpdate.firstName,
                toUpdate.lastName,
                toUpdate.birthDate,
+               toUpdate.email,
                toUpdate.description,
                toUpdate.chosenFaceId
              )
@@ -1050,6 +1051,7 @@ object ApiApp extends ZIOAppDefault {
                           firstName = person.firstName,
                           lastName = person.lastName,
                           birthDate = person.birthDate,
+                          email = person.email,
                           description = person.description,
                           chosenFaceId = Some(faceId)
                         )

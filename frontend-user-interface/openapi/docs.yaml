@@ -1880,6 +1880,8 @@ components:
         birthDate:
           type: string
           format: date-time
+        email:
+          type: string
         description:
           type: string
     PersonUpdate:
@@ -1896,6 +1898,8 @@ components:
         birthDate:
           type: string
           format: date-time
+        email:
+          type: string
         description:
           type: string
         chosenFaceId:

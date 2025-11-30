@@ -18,6 +18,7 @@ import fr.janalyse.sotohp.processor.model.{
   OriginalNormalized,
   Person,
   PersonDescription,
+  PersonEmail,
   PersonId
 }
 import fr.janalyse.sotohp.service.model.{KeywordRules, SynchronizeAction, SynchronizeStatus}
@@ -95,6 +96,7 @@ trait MediaService {
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
+    email: Option[PersonEmail],
     description: Option[PersonDescription]
   ): IO[ServiceIssue, Person]
   def personUpdate(
@@ -102,6 +104,7 @@ trait MediaService {
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
+    email: Option[PersonEmail],
     description: Option[PersonDescription],
     chosenFaceId: Option[FaceId]
   ): IO[ServiceIssue, Option[Person]]
@@ -282,16 +285,18 @@ object MediaService {
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
+    email: Option[PersonEmail],
     description: Option[PersonDescription]
-  ): ZIO[MediaService, ServiceIssue, Person] = ZIO.serviceWithZIO(_.personCreate(id, firstName, lastName, birthDate, description))
+  ): ZIO[MediaService, ServiceIssue, Person] = ZIO.serviceWithZIO(_.personCreate(id, firstName, lastName, birthDate, email, description))
   def personUpdate(
     personId: PersonId,
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
+    email: Option[PersonEmail],
     description: Option[PersonDescription],
     chosenFaceId: Option[FaceId]
-  ): ZIO[MediaService, ServiceIssue, Option[Person]] = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthDate, description, chosenFaceId))
+  ): ZIO[MediaService, ServiceIssue, Option[Person]] = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthDate, email, description, chosenFaceId))
   def personFaceList(personId: PersonId): ZStream[MediaService, ServiceStreamIssue, DetectedFace] = ZStream.serviceWithStream(_.personFaceList(personId))
 
   // -------------------------------------------------------------------------------------------------------------------

@@ -45,6 +45,17 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+  opaque type PersonEmail = String
+
+  object PersonEmail {
+    def apply(email: String): PersonEmail = email
+
+    extension (email: PersonEmail) {
+      def text: String = email
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   opaque type NormalizedPath = Path
   object NormalizedPath {
     def apply(path: Path): NormalizedPath = path

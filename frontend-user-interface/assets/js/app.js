@@ -4386,6 +4386,8 @@ function openPersonCreateModal() {
             <input type="text" id="pc-last" value="">
             <label style="margin-top:8px">Birthdate</label>
             <input type="date" id="pc-birth" value="">
+            <label style="margin-top:8px">Email</label>
+            <input type="email" id="pc-email" value="">
             <label style="margin-top:8px">Description</label>
             <input type="text" id="pc-desc" value="">
           </div>
@@ -4408,10 +4410,12 @@ function openPersonCreateModal() {
     const firstName = modal.querySelector('#pc-first').value.trim();
     const lastName  = modal.querySelector('#pc-last').value.trim();
     const birth     = modal.querySelector('#pc-birth').value; // yyyy-mm-dd or ''
+    const email     = modal.querySelector('#pc-email').value.trim();
     const desc      = modal.querySelector('#pc-desc').value.trim();
     if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
     const body = { firstName, lastName };
     if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
+    if (email) body.email = email;
     if (desc) body.description = desc;
     try {
       await api.createPerson(body);
@@ -4454,25 +4458,30 @@ function openPersonEditModal(person) {
   const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
   const birthVal = person.birthDate ? new Date(person.birthDate) : null;
   const toDateInput = (d) => { try { if (!d) return ''; const yyyy=d.getFullYear(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${yyyy}-${mm}-${dd}`; } catch { return ''; } };
+  const faceUrl = person.chosenFaceId ? api.faceImageUrl(person.chosenFaceId) : null;
   overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
+    <div class="modal" role="dialog" aria-modal="true" tabindex="-1" style="width:600px;max-width:95vw">
       <header>
         <div>Edit person</div>
         <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
       </header>
       <div class="content">
-        <div class="row">
-          <div>
+        <div class="row" style="display:flex;gap:16px">
+          <div style="flex:1">
             <label>First name</label>
             <input type="text" id="pe-first" value="${(person.firstName||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
             <label style="margin-top:8px">Last name</label>
             <input type="text" id="pe-last" value="${(person.lastName||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
             <label style="margin-top:8px">Birthdate</label>
             <input type="date" id="pe-birth" value="${toDateInput(birthVal)}">
+            <label style="margin-top:8px">Email</label>
+            <input type="email" id="pe-email" value="${(person.email||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
             <label style="margin-top:8px">Description</label>
             <input type="text" id="pe-desc" value="${(person.description||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Chosen face id</label>
-            <input type="text" id="pe-chosen" value="${(person.chosenFaceId||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+            <input type="hidden" id="pe-chosen" value="${(person.chosenFaceId||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+          </div>
+          <div style="width:200px;display:flex;flex-direction:column;align-items:center">
+            ${faceUrl ? `<img src="${faceUrl}" style="width:100%;border-radius:4px;object-fit:contain;max-height:300px;background:#eee">` : '<div style="width:100%;height:150px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;border-radius:4px">No face</div>'}
           </div>
         </div>
       </div>
@@ -4493,11 +4502,13 @@ function openPersonEditModal(person) {
     const firstName = modal.querySelector('#pe-first').value.trim();
     const lastName  = modal.querySelector('#pe-last').value.trim();
     const birth     = modal.querySelector('#pe-birth').value;
+    const email     = modal.querySelector('#pe-email').value.trim();
     const desc      = modal.querySelector('#pe-desc').value.trim();
     const chosen    = modal.querySelector('#pe-chosen').value.trim();
     if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
     const body = { firstName, lastName };
     body.birthDate = birth ? `${birth}T00:00:00Z` : null;
+    if (email) body.email = email; else body.email = null;
     if (desc) body.description = desc; else body.description = null;
     if (chosen) body.chosenFaceId = chosen; else body.chosenFaceId = null;
     try {

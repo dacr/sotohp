@@ -196,6 +196,11 @@ package object json {
     (trace: List[JsonError], in: RetractReader) => PersonDescription(JsonDecoder.string.unsafeDecode(trace, in))
   )
 
+  given personEmailCodec: JsonCodec[PersonEmail] = new JsonCodec(
+    (a: PersonEmail, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
+    (trace: List[JsonError], in: RetractReader) => PersonEmail(JsonDecoder.string.unsafeDecode(trace, in))
+  )
+
   given orientationCodec: JsonCodec[Orientation] = new JsonCodec(
     (a: Orientation, indent: Option[Int], out: Write) => JsonEncoder.int.unsafeEncode(a.ordinal, indent, out),
     (trace: List[JsonError], in: RetractReader) => Orientation.fromOrdinal(JsonDecoder.int.unsafeDecode(trace, in))

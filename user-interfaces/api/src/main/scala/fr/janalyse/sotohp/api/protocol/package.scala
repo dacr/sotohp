@@ -10,7 +10,7 @@ import java.nio.file.Path
 import java.time.OffsetDateTime
 import java.util.UUID
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath, PersonDescription, PersonId}
+import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath, PersonDescription, PersonEmail, PersonId}
 
 import java.net.URL
 
@@ -76,6 +76,7 @@ package object protocol {
   given Schema[EventDescription]  = strAs
   given Schema[MediaDescription]  = strAs
   given Schema[PersonDescription] = strAs
+  given Schema[PersonEmail]       = strAs
   given Schema[Keyword]           = strAs
   given Schema[URL]               = strAs
 

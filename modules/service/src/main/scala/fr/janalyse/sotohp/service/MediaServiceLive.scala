@@ -428,11 +428,12 @@ class MediaServiceLive private (
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
+    email: Option[PersonEmail],
     description: Option[PersonDescription]
   ): IO[ServiceIssue, Person] = {
     for {
       personId <- id.map(ZIO.succeed).getOrElse(ZIO.succeed(PersonId(ULID.newULID)))
-      person    = Person(personId, firstName = firstName, lastName = lastName, birthDate = birthDate, description = description, chosenFaceId = None)
+      person    = Person(personId, firstName = firstName, lastName = lastName, birthDate = birthDate, email = email, description = description, chosenFaceId = None)
       _        <- personsColl
                     .upsertOverwrite(personId, person.into[DaoPerson].transform)
                     .mapError(err => ServiceDatabaseIssue(s"Couldn't create person : $err"))
@@ -444,6 +445,7 @@ class MediaServiceLive private (
     firstName: FirstName,
     lastName: LastName,
     birthDate: Option[BirthDate],
+    email: Option[PersonEmail],
     description: Option[PersonDescription],
     chosenFaceId: Option[FaceId]
   ): IO[ServiceIssue, Option[Person]] = {
@@ -455,6 +457,7 @@ class MediaServiceLive private (
                               firstName = firstName,
                               lastName = lastName,
                               birthDate = birthDate,
+                              email = email,
                               description = description,
                               chosenFaceId = chosenFaceId
                             )

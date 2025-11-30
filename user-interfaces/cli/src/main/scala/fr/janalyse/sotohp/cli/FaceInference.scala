@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.cli
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{DetectedFace, FaceFeatures, FaceId}
+import fr.janalyse.sotohp.processor.model.{DetectedFace, FaceFeatures, FaceId, PersonId}
 import fr.janalyse.sotohp.processor.{FacesDetectionIssue, NormalizeProcessor}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
@@ -87,6 +87,45 @@ object FaceInference extends CommonsCLI {
 
     MediaService
       .faceUpdate(face.faceId, updatedFace)
+      .when(updatedFace != face)
+      .as(isFreshlyIdentified)
+  }
+
+  def identifyFaceWithConsensus(knownFaces: Chunk[(DetectedFace, FaceFeatures)])(face: DetectedFace, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
+    val shortests =
+      knownFaces
+        .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))
+        .filter { (_, _, distance) => distance < 0.65 }
+        .sortBy { (_, _, distance) => distance }
+        .take(3)
+
+//    val bestCandidate:Option[PersonId] = {
+//      shortests
+//        .groupBy{(personId, faceFeatures, distance) => personId}
+//        .maxByOption{(personId, faces) => (faces.size, 1d-faces.map{(_,_,dist)=>dist}.min)}
+//        .map{ (personId, faces) => personId}
+//    }
+
+    val bestCandidate:Option[PersonId] = {
+      shortests
+        .map{(personId, _, _) => personId}
+        .distinct match {
+        case Chunk(personId) => Some(personId)
+        case _ => None
+      }
+    }
+
+    val updatedFace         = face.copy(inferredIdentifiedPersonId = bestCandidate)
+
+    val isFreshlyIdentified = (
+      updatedFace.inferredIdentifiedPersonId.isDefined
+        && face.identifiedPersonId.isEmpty
+        && face.inferredIdentifiedPersonId.isEmpty
+    )
+
+    MediaService
+      .faceUpdate(face.faceId, updatedFace)
+      .when(updatedFace != face)
       .as(isFreshlyIdentified)
   }
 
@@ -102,8 +141,9 @@ object FaceInference extends CommonsCLI {
       _                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
       newIdentifiedCount <- zio.stream.ZStream
                               .from(tocheck)
-                              //.filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
-                              .mapZIO((face, faceFeatures) => identifyFace(knownFaces)(face, faceFeatures))
+                              // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
+                              //.mapZIO((face, faceFeatures) => identifyFace(knownFaces)(face, faceFeatures))
+                              .mapZIO((face, faceFeatures) => identifyFaceWithConsensus(knownFaces)(face, faceFeatures))
                               .filter(_ == true)
                               .runCount
       _                  <- Console.printLine(s"$newIdentifiedCount new faces inferred")
