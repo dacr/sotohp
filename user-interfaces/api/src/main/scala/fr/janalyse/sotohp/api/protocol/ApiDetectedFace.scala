@@ -14,6 +14,7 @@ case class ApiDetectedFace(
   box: ApiBoundingBox,
   identifiedPersonId: Option[PersonId],
   inferredIdentifiedPersonId: Option[PersonId],
+  inferredIdentifiedPersonConfidence: Option[Double],
   timestamp: OffsetDateTime
 )
 

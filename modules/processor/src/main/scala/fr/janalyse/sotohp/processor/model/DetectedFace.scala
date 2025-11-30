@@ -10,6 +10,7 @@ case class DetectedFace(
   box: BoundingBox,
   identifiedPersonId: Option[PersonId],
   inferredIdentifiedPersonId: Option[PersonId],
+  inferredIdentifiedPersonConfidence: Option[Double],
   timestamp: OffsetDateTime,
   path: DetectedFacePath
 )

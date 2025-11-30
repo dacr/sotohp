@@ -13,6 +13,7 @@ case class DaoDetectedFace(
   box: DaoBoundingBox,
   identifiedPersonId: Option[PersonId],
   inferredIdentifiedPersonId: Option[PersonId],
+  inferredIdentifiedPersonConfidence: Option[Double],
   timestamp: OffsetDateTime,
   path: DetectedFacePath
 ) derives LMDBCodecJson

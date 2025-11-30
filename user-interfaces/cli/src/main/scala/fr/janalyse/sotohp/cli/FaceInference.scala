@@ -95,9 +95,9 @@ object FaceInference extends CommonsCLI {
     val shortests =
       knownFaces
         .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))
-        .filter { (_, _, distance) => distance < 0.65 }
+        .filter { (_, _, distance) => distance <= 0.625 }
         .sortBy { (_, _, distance) => distance }
-        .take(3)
+        .take(4)
 
 //    val bestCandidate:Option[PersonId] = {
 //      shortests
@@ -106,16 +106,18 @@ object FaceInference extends CommonsCLI {
 //        .map{ (personId, faces) => personId}
 //    }
 
-    val bestCandidate:Option[PersonId] = {
+    val bestCandidate:Option[(id:PersonId,dist:Double)] = {
       shortests
-        .map{(personId, _, _) => personId}
-        .distinct match {
-        case Chunk(personId) => Some(personId)
+        .distinctBy{(personId, _, _) => personId} match {
+        case Chunk((personId,_,distance)) => Some((personId,distance))
         case _ => None
       }
     }
 
-    val updatedFace         = face.copy(inferredIdentifiedPersonId = bestCandidate)
+    val updatedFace         = face.copy(
+      inferredIdentifiedPersonId = bestCandidate.map(_.id),
+      inferredIdentifiedPersonConfidence = bestCandidate.map(1d - _.dist)
+    )
 
     val isFreshlyIdentified = (
       updatedFace.inferredIdentifiedPersonId.isDefined
