@@ -2696,6 +2696,41 @@ function createMosaicTile(media) {
   // Do not set src yet; we will assign it once preload completes
   tile.appendChild(hiImg);
 
+  // Inject Download button
+  const dBtn = document.createElement('button');
+  dBtn.className = 'mosaic-download-btn';
+  dBtn.type = 'button';
+  dBtn.title = 'Download original image';
+  dBtn.textContent = '⬇';
+  dBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const url = api.mediaOriginalUrl(media.accessKey);
+    const dateVal = media.shootDateTime || (media.original ? media.original.cameraShootDateTime : null);
+    let ext = 'jpg';
+    if (media.original && media.original.kind === 'Video') { ext = 'mp4'; }
+    let filename = `selected_unknown.${ext}`;
+    if (dateVal) {
+      const d = new Date(dateVal);
+      if (!isNaN(d.getTime())) {
+        const pad = (n) => n.toString().padStart(2, '0');
+        const yyyy = d.getFullYear();
+        const MM = pad(d.getMonth() + 1);
+        const dd = pad(d.getDate());
+        const HH = pad(d.getHours());
+        const mm = pad(d.getMinutes());
+        const ss = pad(d.getSeconds());
+        filename = `selected_${yyyy}${MM}${dd}_${HH}${mm}${ss}.${ext}`;
+      }
+    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+  tile.appendChild(dBtn);
+
   async function showNormalized() {
     try {
       if (tile.__normalizedLoaded) {
@@ -5223,9 +5258,50 @@ function init() {
     btn.className = 'img-edit-btn';
     btn.type = 'button';
     btn.title = 'Edit media';
-    btn.textContent = '✎ Edit';
+    btn.textContent = '✎';
     btn.addEventListener('click', (e) => { e.stopPropagation(); if (currentMedia) openMediaEditModal(currentMedia); else alert('No media loaded'); });
     cont.appendChild(btn);
+  }
+  // Inject Download button (bottom-right, right of edit button)
+  if (cont && !document.getElementById('img-download-btn')) {
+    const dBtn = document.createElement('button');
+    dBtn.id = 'img-download-btn';
+    dBtn.className = 'img-download-btn';
+    dBtn.type = 'button';
+    dBtn.title = 'Download original image';
+    dBtn.textContent = '⬇';
+    dBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentMedia) {
+        const url = api.mediaOriginalUrl(currentMedia.accessKey);
+        const dateVal = currentMedia.shootDateTime || (currentMedia.original ? currentMedia.original.cameraShootDateTime : null);
+        let ext = 'jpg';
+        if (currentMedia.original && currentMedia.original.kind === 'Video') { ext = 'mp4'; }
+        let filename = `selected_unknown.${ext}`;
+        if (dateVal) {
+          const d = new Date(dateVal);
+          if (!isNaN(d.getTime())) {
+            const pad = (n) => n.toString().padStart(2, '0');
+            const yyyy = d.getFullYear();
+            const MM = pad(d.getMonth() + 1);
+            const dd = pad(d.getDate());
+            const HH = pad(d.getHours());
+            const mm = pad(d.getMinutes());
+            const ss = pad(d.getSeconds());
+            filename = `selected_${yyyy}${MM}${dd}_${HH}${mm}${ss}.${ext}`;
+          }
+        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        alert('No media loaded');
+      }
+    });
+    cont.appendChild(dBtn);
   }
   // Inject Add Face button near the edit button
   if (cont && !document.getElementById('img-add-btn')) {

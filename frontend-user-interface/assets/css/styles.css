@@ -80,6 +80,11 @@ main { flex: 1; position: relative; }
 /* Reserved: placeholder class no longer used; keep for compatibility */
 .mosaic-placeholder { display: none; }
 
+/* Mosaic download button (bottom-right) */
+.mosaic-download-btn { position: absolute; right: 4px; bottom: 4px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 12px; padding: 4px 6px; font-size: 11px; line-height: 1; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); z-index: 5; }
+.mosaic-tile:hover .mosaic-download-btn, .mosaic-tile:focus-within .mosaic-download-btn { opacity: 1; transform: translateY(0); }
+.mosaic-download-btn:hover { background: #1d4ed8; }
+
 /* Tooltip for mosaic photo tiles */
 .mosaic-photo-tooltip {
   position: fixed;
@@ -180,12 +185,19 @@ section#tab-mosaic.tab.active { display: flex; }
 }
 
 /* Hover edit button on viewer image */
-.img-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.img-edit-btn { position: absolute; right: 50px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
 .image-container:hover .img-edit-btn { opacity: 1; transform: translateY(0); }
 .img-edit-btn:hover { background: #1d4ed8; }
 /* Hide image edit button in fullscreen mode */
 .image-container:fullscreen .img-edit-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-edit-btn { display: none !important; }
+
+/* Download button (Viewer) - Added to the right of edit button */
+.img-download-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.image-container:hover .img-download-btn { opacity: 1; transform: translateY(0); }
+.img-download-btn:hover { background: #1d4ed8; }
+.image-container:fullscreen .img-download-btn { display: none !important; }
+.image-container:-webkit-full-screen .img-download-btn { display: none !important; }
 
 /* Add face button (Viewer) */
 .img-add-btn { position: absolute; right: 92px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
@@ -195,7 +207,7 @@ section#tab-mosaic.tab.active { display: flex; }
 .image-container:-webkit-full-screen .img-add-btn { display: none !important; }
 
 /* Confirm-all inferred faces button (Viewer) */
-.img-confirm-btn { position: absolute; right: 176px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
+.img-confirm-btn { position: absolute; right: 200px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
 .image-container:hover .img-confirm-btn { opacity: 1; transform: translateY(0); }
 .img-confirm-btn:hover { background: rgba(245,158,11,1); }
 /* Hide confirm-all button in fullscreen mode (same as edit) */
