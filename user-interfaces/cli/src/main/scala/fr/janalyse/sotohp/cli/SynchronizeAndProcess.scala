@@ -19,8 +19,8 @@ object SynchronizeAndProcess extends CommonsCLI {
     logic
       .provide(
         LMDB.live,
-        MediaService.live,
         SearchService.live,
+        MediaService.live,
         Scope.default
       )
 

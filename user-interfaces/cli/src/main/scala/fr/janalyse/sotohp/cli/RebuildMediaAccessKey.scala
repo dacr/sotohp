@@ -22,11 +22,10 @@ object RebuildMediaAccessKey extends CommonsCLI {
   override def run =
     logic
       .provide(
-        configProviderLayer >>> LMDB.live,
-        configProviderLayer >>> SearchService.live,
+        LMDB.live,
+        SearchService.live,
         MediaService.live,
-        Scope.default,
-        configProviderLayer
+        Scope.default
       )
 
   // -------------------------------------------------------------------------------------------------------------------

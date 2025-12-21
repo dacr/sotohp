@@ -24,11 +24,10 @@ object FaceInference extends CommonsCLI {
   override def run =
     logic
       .provide(
-        configProviderLayer >>> LMDB.live,
-        configProviderLayer >>> SearchService.live,
+        LMDB.live,
+        SearchService.live,
         MediaService.live,
-        Scope.default,
-        configProviderLayer
+        Scope.default
       )
 
   val distance = new smile.math.distance.EuclideanDistance()
@@ -95,9 +94,9 @@ object FaceInference extends CommonsCLI {
     val shortests =
       knownFaces
         .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))
-        .filter { (_, _, distance) => distance <= 0.625 }
+        .filter { (_, _, distance) => distance <= 0.675 }
         .sortBy { (_, _, distance) => distance }
-        .take(4)
+        .take(3)
 
 //    val bestCandidate:Option[PersonId] = {
 //      shortests
@@ -106,15 +105,19 @@ object FaceInference extends CommonsCLI {
 //        .map{ (personId, faces) => personId}
 //    }
 
-    val bestCandidate:Option[(id:PersonId,dist:Double)] = {
+    val bestCandidate: Option[(id: PersonId, dist: Double)] = {
       shortests
-        .distinctBy{(personId, _, _) => personId} match {
-        case Chunk((personId,_,distance)) => Some((personId,distance))
+        .groupBy { (personId, _, _) => personId } match {
+        case result if result.size == 1 => // only one person identified, consensus reached
+          result.values.head
+            .minByOption((personId, _, dist) => dist) // select the best found similarity distance
+            .map((personId, _, dist) => personId -> dist)
+
         case _ => None
       }
     }
 
-    val updatedFace         = face.copy(
+    val updatedFace = face.copy(
       inferredIdentifiedPersonId = bestCandidate.map(_.id),
       inferredIdentifiedPersonConfidence = bestCandidate.map(1d - _.dist)
     )
@@ -139,12 +142,14 @@ object FaceInference extends CommonsCLI {
       unknownFaces       <- featuresForUnknowFaces()
       alreadyInferred     = unknownFaces.filter((face, _) => face.inferredIdentifiedPersonId.isDefined && face.identifiedPersonId.isEmpty)
       tocheck             = unknownFaces
+      personsCount       <- MediaService.personList().runCount
+      _                  <- Console.printLine(s"$personsCount people records")
       _                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")
       _                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
       newIdentifiedCount <- zio.stream.ZStream
                               .from(tocheck)
                               // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
-                              //.mapZIO((face, faceFeatures) => identifyFace(knownFaces)(face, faceFeatures))
+                              // .mapZIO((face, faceFeatures) => identifyFace(knownFaces)(face, faceFeatures))
                               .mapZIO((face, faceFeatures) => identifyFaceWithConsensus(knownFaces)(face, faceFeatures))
                               .filter(_ == true)
                               .runCount

@@ -1,5 +1,6 @@
 package fr.janalyse.sotohp.cli
 
+import fr.janalyse.sotohp.cli.FaceInference.logic
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.NormalizeProcessor
@@ -39,11 +40,10 @@ object GoogleTakeoutTooling extends CommonsCLI {
   override def run =
     logic
       .provide(
-        configProviderLayer >>> LMDB.live,
-        configProviderLayer >>> SearchService.live,
+        LMDB.live,
+        SearchService.live,
         MediaService.live,
-        Scope.default,
-        configProviderLayer
+        Scope.default
       )
 
   def makeUniqueKey(original: Original): String = {
