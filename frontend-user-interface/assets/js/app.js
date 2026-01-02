@@ -4476,6 +4476,11 @@ function renderPersonFacesGrid(view, person, faces, opts) {
               view.__selected.delete(fid);
             }
           } catch {}
+          
+          if (!person) {
+             removeFaceFromAllFacesById(fid);
+          }
+
           try {
             if (view && typeof view.__refreshGrid === 'function') view.__refreshGrid();
             if (view && typeof view.__updateActions === 'function') view.__updateActions();
