@@ -36,6 +36,7 @@ class ApiClient {
   async deletePerson(personId) { await this.http.delete(`/api/person/${encodeURIComponent(personId)}`); }
   async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
   async listPersonFaces(personId) { return await this.#fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`); }
+  async listFaces() { return await this.#fetchNdjson('/api/faces'); }
   faceImageUrl(faceId) { return `/api/face/${encodeURIComponent(faceId)}/content`; }
   // Faces endpoints
   async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
@@ -3741,6 +3742,171 @@ async function loadPersons() {
   } catch (e) { list.innerHTML = '<li>Failed to load persons</li>'; }
 }
 
+async function openAllInferredFacesView() {
+  const tab = document.getElementById('tab-persons'); if (!tab) return;
+  const actions = tab.querySelector('.list-actions'); const list = tab.querySelector('#persons-list');
+  if (actions) actions.style.display = 'none'; if (list) list.style.display = 'none';
+  let view = tab.querySelector('.person-faces-view');
+  if (view) view.remove();
+  view = document.createElement('div');
+  view.className = 'person-faces-view';
+  view.innerHTML = `
+    <div class="person-faces-header">
+      <button type="button" class="back" title="Back to persons" aria-label="Back">← Back</button>
+      <div class="title">All Inferred Faces</div>
+      <div class="spacer"></div>
+      <div class="pf-actions">
+        <div class="pf-left-actions">
+          <div class="pf-size" role="group" aria-label="Face size">
+            <button type="button" class="pf-size-small" data-size="small" title="Small">Small</button>
+            <button type="button" class="pf-size-medium" data-size="medium" title="Medium">Medium</button>
+            <button type="button" class="pf-size-max" data-size="max" title="Maximum">Maximum</button>
+          </div>
+          <button type="button" class="confirm-all" title="Confirm all shown faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm all</button>
+          <button type="button" class="confirm-selected" title="Confirm selected faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm selected</button>
+        </div>
+        <div class="pf-right-actions">
+        </div>
+      </div>
+    </div>
+    <div class="person-faces-grid" id="person-faces-grid">
+      <div class="status muted">Loading all inferred faces… This may take a while.</div>
+    </div>
+  `;
+  tab.appendChild(view);
+  
+  const backBtn = view.querySelector('button.back');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      try { view.remove(); } catch {}
+      if (actions) actions.style.display = '';
+      if (list) { list.style.display = ''; try { list.scrollIntoView({ block: 'nearest' }); } catch {} }
+    });
+  }
+
+  const sizeCtl = view.querySelector('.pf-size');
+  const sizeBtns = sizeCtl ? Array.from(sizeCtl.querySelectorAll('button')) : [];
+  const SIZE_STORAGE_KEY = 'personFaces.size';
+  function getStoredSize() { try { return sessionStorage.getItem(SIZE_STORAGE_KEY) || 'max'; } catch { return 'max'; } }
+  function setStoredSize(sz) { try { sessionStorage.setItem(SIZE_STORAGE_KEY, sz); } catch {} }
+  function applySizeClass(sz) {
+    view.classList.remove('size-small', 'size-medium', 'size-max');
+    const cls = sz === 'small' ? 'size-small' : (sz === 'medium' ? 'size-medium' : 'size-max');
+    view.classList.add(cls);
+    sizeBtns.forEach(b => b.classList.toggle('active', b.getAttribute('data-size') === sz));
+  }
+  const initialSize = getStoredSize();
+  applySizeClass(initialSize);
+  sizeBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const sz = btn.getAttribute('data-size') || 'max';
+      setStoredSize(sz);
+      applySizeClass(sz);
+    });
+  });
+
+  try {
+    const [allFaces, persons] = await Promise.all([
+      api.listFaces(),
+      api.listPersons()
+    ]);
+    
+    // Populate cache immediately so personsName() works
+    personsCache = new Map();
+    for (const p of persons) { if (p && p.id) personsCache.set(p.id, p); }
+
+    // Filter for inferred faces that are not yet identified
+    const faces = allFaces.filter(f => !f.identifiedPersonId && f.inferredIdentifiedPersonId);
+    
+    faces.sort((a,b) => {
+       const pa = personsName(a.inferredIdentifiedPersonId).full.toLowerCase();
+       const pb = personsName(b.inferredIdentifiedPersonId).full.toLowerCase();
+       if (pa < pb) return -1;
+       if (pa > pb) return 1;
+       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    });
+    
+    view.__allFaces = faces;
+    view.__mode = 'validate';
+    view.__selected = new Set();
+  } catch (e) {
+    const grid = view.querySelector('#person-faces-grid');
+    if (grid) grid.innerHTML = `<div class="status error">Failed to load faces: ${e.message}</div>`;
+    return;
+  }
+
+  const confirmAllBtn = view.querySelector('.confirm-all');
+  const confirmSelBtn = view.querySelector('.confirm-selected');
+  
+  function updateActionsVisibility() {
+      const pendingCount = (view.__allFaces||[]).length;
+      const selCount = (view.__selected && view.__selected.size) || 0;
+      if (confirmAllBtn) {
+          confirmAllBtn.style.display = '';
+          confirmAllBtn.textContent = `Confirm all (${pendingCount})`;
+          confirmAllBtn.disabled = pendingCount === 0;
+          confirmAllBtn.style.opacity = confirmAllBtn.disabled ? '0.6' : '1';
+          confirmAllBtn.style.cursor = confirmAllBtn.disabled ? 'not-allowed' : 'pointer';
+      }
+      if (confirmSelBtn) {
+          confirmSelBtn.style.display = '';
+          confirmSelBtn.textContent = `Confirm selected (${selCount})`;
+          confirmSelBtn.disabled = selCount === 0;
+          confirmSelBtn.style.opacity = confirmSelBtn.disabled ? '0.6' : '1';
+          confirmSelBtn.style.cursor = confirmSelBtn.disabled ? 'not-allowed' : 'pointer';
+      }
+  }
+  view.__updateActions = updateActionsVisibility;
+
+  function refreshGrid() {
+      renderPersonFacesGrid(view, null, view.__allFaces, { mode: 'validate' });
+      updateActionsVisibility();
+  }
+  view.__refreshGrid = refreshGrid;
+
+  async function confirmFaces(faceIds) {
+      if (!faceIds || faceIds.length === 0) return;
+      let ok = 0;
+      try {
+          for (const fid of faceIds) {
+              const face = (view.__allFaces||[]).find(f => (f.faceId||f.id) === fid);
+              if (!face || !face.inferredIdentifiedPersonId) continue;
+              await api.setFacePerson(fid, face.inferredIdentifiedPersonId);
+              ok++;
+              const idx = (view.__allFaces||[]).indexOf(face);
+              if (idx >= 0) view.__allFaces.splice(idx, 1);
+              if (view.__selected) view.__selected.delete(fid);
+          }
+          if (ok > 0) showSuccess(`Confirmed ${ok} face(s)`);
+      } catch (e) {
+          showError('Failed to confirm faces');
+      } finally {
+          refreshGrid();
+      }
+  }
+
+  if (confirmAllBtn) {
+      confirmAllBtn.addEventListener('click', () => {
+         const count = (view.__allFaces||[]).length;
+         if (count === 0) return;
+         if (!confirm(`Confirm all ${count} inferred faces?`)) return;
+         const ids = view.__allFaces.map(f => f.faceId || f.id);
+         confirmFaces(ids);
+      });
+  }
+  if (confirmSelBtn) {
+      confirmSelBtn.addEventListener('click', () => {
+         const ids = Array.from(view.__selected||[]);
+         if (ids.length === 0) return;
+         if (!confirm(`Confirm ${ids.length} selected faces?`)) return;
+         confirmFaces(ids);
+      });
+  }
+
+  refreshGrid();
+}
+
 // Persons → Person Faces subview
 async function openPersonFacesView(person) {
   const tab = document.getElementById('tab-persons'); if (!tab) return;
@@ -4040,18 +4206,21 @@ async function goToViewerForFace(face) {
 }
 function renderPersonFacesGrid(view, person, faces, opts) {
   const grid = view.querySelector('#person-faces-grid'); if (!grid) return;
-  if (!faces || faces.length === 0) { grid.innerHTML = '<div class="status muted">No faces found for this person</div>'; return; }
-  const nodes = [];
   const mode = (opts && opts.mode) || 'identified';
-  // Selection handling only in validation mode
-  // Always use the canonical selection stored on the view to avoid stale references
+  if (!faces || faces.length === 0) {
+    const msg = (mode === 'validate' && !person) 
+      ? 'No inferred faces found.' 
+      : 'No faces found for this person';
+    grid.innerHTML = `<div class="status muted">${msg}</div>`; 
+    return; 
+  }
+  const nodes = [];
   if (!view.__selected) view.__selected = new Set();
   let lastSelectedIndex = -1;
   let isDraggingSelect = false;
-  let dragIntentAdd = null; // null = not dragging; true = add during drag; false = remove during drag
+  let dragIntentAdd = null;
 
   function setSelected(fid, on) {
-    // Always mutate the canonical selection set stored on the view
     const sel = view.__selected;
     if (!sel) return;
     if (on) sel.add(fid); else sel.delete(fid);
@@ -4060,16 +4229,11 @@ function renderPersonFacesGrid(view, person, faces, opts) {
   function applyDraggingHandlers(tile, idx, fid) {
     tile.addEventListener('mousedown', (e) => {
       if (mode !== 'validate') return;
-      // Do not start selection if the user interacted with UI controls on the tile
       const ctl = e.target && (e.target.closest('.ft-edit') || e.target.closest('.ft-view') || e.target.closest('.face-badge'));
-      if (ctl) {
-        // Prevent selection toggle
-        return;
-      }
+      if (ctl) return;
       isDraggingSelect = true;
       const rangeMode = !!e.shiftKey && lastSelectedIndex >= 0;
       if (rangeMode) {
-        // Range selection always adds
         const start = Math.min(lastSelectedIndex, idx);
         const end = Math.max(lastSelectedIndex, idx);
         for (let i = start; i <= end; i++) {
@@ -4080,16 +4244,13 @@ function renderPersonFacesGrid(view, person, faces, opts) {
         }
         dragIntentAdd = true;
       } else {
-        // start drag intent based on initial state on the starting tile (single click or drag)
         dragIntentAdd = !(view.__selected && view.__selected.has(fid));
         setSelected(fid, dragIntentAdd);
         updateTileSelection(tile, !!(view.__selected && view.__selected.has(fid)));
         lastSelectedIndex = idx;
       }
       e.preventDefault();
-      // Keep header actions in sync
       if (view && typeof view.__updateActions === 'function') view.__updateActions();
-      // Attach a one-off mouseup to end this drag cycle
       const endDrag = () => {
         isDraggingSelect = false;
         dragIntentAdd = null;
@@ -4099,11 +4260,9 @@ function renderPersonFacesGrid(view, person, faces, opts) {
     });
     tile.addEventListener('mouseenter', () => {
       if (mode !== 'validate' || !isDraggingSelect) return;
-      // Apply current drag intent (add or remove)
       const add = !!dragIntentAdd;
       setSelected(fid, add);
       updateTileSelection(tile, !!(view.__selected && view.__selected.has(fid)));
-      // keep the button count live while dragging
       if (view && typeof view.__updateActions === 'function') view.__updateActions();
     });
   }
@@ -4114,14 +4273,10 @@ function renderPersonFacesGrid(view, person, faces, opts) {
     tile.style.outlineOffset = on ? '0' : '';
   }
 
-  // Removed the global once mouseup listener in favor of per-drag mouseup attached on mousedown
-
-  // Ensure timestamp tooltip formatting
   function tsLabel(ts) {
     try { const d = new Date(ts); return d.toLocaleString(); } catch { return String(ts); }
   }
 
-  // Tooltip helper for faces
   let faceTooltip = document.getElementById('person-faces-tooltip');
   if (!faceTooltip) {
     faceTooltip = document.createElement('div');
@@ -4132,19 +4287,12 @@ function renderPersonFacesGrid(view, person, faces, opts) {
     faceTooltip.style.display = 'none';
     document.body.appendChild(faceTooltip);
   }
-  function hideFaceTooltip() { 
-    if (faceTooltip) {
-      faceTooltip.classList.remove('show');
-      faceTooltip.style.display = 'none'; 
-    }
-  }
+  function hideFaceTooltip() { if (faceTooltip) { faceTooltip.classList.remove('show'); faceTooltip.style.display = 'none'; } }
   function showFaceTooltip(html, x, y) {
     if (!faceTooltip) return;
     faceTooltip.innerHTML = html;
     faceTooltip.style.display = 'block';
-    // Force reflow to enable transition if needed, but here we just want it visible
     requestAnimationFrame(() => faceTooltip.classList.add('show'));
-    
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const rect = faceTooltip.getBoundingClientRect();
@@ -4156,10 +4304,16 @@ function renderPersonFacesGrid(view, person, faces, opts) {
     faceTooltip.style.top = Math.max(0, top) + 'px';
   }
 
+  // Helper inside loop scope to manage removal from the global list reference
+  function removeFaceFromAllFacesById(fid) {
+    const all = view.__allFaces || [];
+    const idx = all.findIndex(f => (f.faceId || f.id) === fid);
+    if (idx >= 0) all.splice(idx, 1);
+  }
+
   for (const face of faces) {
     const tile = document.createElement('div');
     tile.className = 'face-tile';
-    // Only show the magnifier button in validation mode
     tile.innerHTML = `
       <img class="face-img" alt="face" loading="lazy" decoding="async" />
       ${mode === 'validate' ? '<button type="button" class="ft-view" title="Open media in viewer" aria-label="View">🔍</button>' : ''}
@@ -4168,28 +4322,28 @@ function renderPersonFacesGrid(view, person, faces, opts) {
     const img = tile.querySelector('img.face-img');
     if (img) {
       img.src = api.faceImageUrl(face.faceId || face.id);
-      // img.title = tsLabel(face.timestamp); // tooltip with timestamp
-      
-      // Enhanced tooltip with miniature (delayed)
       let hoverTimer = null;
-      
       const showTip = (e) => {
         const hint = (mode === 'validate') 
           ? 'Click to select<br>Shift-click range<br>Drag to multi-select' 
           : 'Click to open in Viewer';
+        
+        let nameInfo = '';
+        if (!person && face.inferredIdentifiedPersonId) {
+             const { full } = personsName(face.inferredIdentifiedPersonId);
+             if (full) nameInfo = `<div style="color:#fbbf24;font-weight:600">Inferred: ${full}</div>`;
+        }
+        
         const baseHtml = `
           <div class="title">${tsLabel(face.timestamp)}</div>
+          ${nameInfo}
           <div class="subtitle" style="font-size:0.85em;opacity:0.8;margin-top:4px">${hint}</div>
         `;
-        
-        // Capture coordinates for the delayed show
         const startX = e.clientX;
         const startY = e.clientY;
 
         hoverTimer = setTimeout(async () => {
              showFaceTooltip(baseHtml, startX, startY);
-             
-             // Fetch key if missing
              if (!face.__mediaAccessKey) {
                  try {
                      const oid = face.originalId || (face.original && face.original.id);
@@ -4201,19 +4355,17 @@ function renderPersonFacesGrid(view, person, faces, opts) {
                      }
                  } catch {}
              }
-             
              if (face.__mediaAccessKey) {
                  const url = api.mediaMiniatureUrl(face.__mediaAccessKey);
-                 // Preload image to avoid layout jump
                  const preload = new Image();
                  preload.onload = () => {
-                     // Only update if tooltip is still shown and we are still hovering this face (timer not cleared/reset)
                      if (faceTooltip && faceTooltip.style.display !== 'none') {
                          const conf = (face.inferredIdentifiedPersonConfidence != null)
                            ? ` <span style="opacity:0.7;font-size:0.9em">(${(face.inferredIdentifiedPersonConfidence * 100).toFixed(0)}%)</span>`
                            : '';
                          const fullHtml = `
                            <div class="title">${tsLabel(face.timestamp)}${conf}</div>
+                           ${nameInfo}
                            <div style="margin:6px 0"><img src="${url}" style="max-width:250px;max-height:250px;border-radius:4px;display:block;object-fit:contain;background:#000"></div>
                            <div class="subtitle" style="font-size:0.85em;opacity:0.8">${hint}</div>
                          `;
@@ -4222,7 +4374,7 @@ function renderPersonFacesGrid(view, person, faces, opts) {
                  };
                  preload.src = url;
              }
-        }, 600); // 600ms delay
+        }, 600);
       };
 
       img.addEventListener('mouseenter', showTip);
@@ -4231,46 +4383,34 @@ function renderPersonFacesGrid(view, person, faces, opts) {
           hideFaceTooltip();
       });
       img.addEventListener('mousemove', (e) => {
-         // If tooltip is already visible, just move it
          if (faceTooltip && faceTooltip.style.display !== 'none') {
             showFaceTooltip(faceTooltip.innerHTML, e.clientX, e.clientY);
          } else {
-            // If waiting for delay, reset timer on significant move, or keep it? 
-            // Standard UX: reset timer if mouse keeps moving to avoid popping up while traversing
             if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
             showTip(e);
          }
       });
 
       if (mode === 'validate') {
-        // Avoid native image drag which can interfere with selection dragging
         try { img.draggable = false; } catch {}
-        // Improve UX when drag-selecting
         try { tile.style.userSelect = 'none'; } catch {}
       }
     }
 
-    // Wire viewer button (present only in validation mode)
     const viewBtn = tile.querySelector('.ft-view');
     if (viewBtn) {
-      // Prevent selection from starting when pressing the button
       viewBtn.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
       viewBtn.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); goToViewerForFace(face); });
     }
 
-    // Make tile navigable to Viewer on click/keyboard
     try {
       if (mode === 'validate') {
-        // Selection & range selection
         const fid = face.faceId || face.id;
         tile.style.cursor = 'crosshair';
-        // tile.title = 'Click to select; Shift-click for range; Drag to multi-select'; // Disabled to use custom tooltip
         if (!tile.hasAttribute('tabindex')) tile.tabIndex = 0;
-        // In validation mode, selection is handled on mousedown/drag; prevent click default to avoid double toggling
         tile.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
         tile.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            // Keyboard toggle behaves like a single click: toggle this tile
             e.preventDefault();
             const turnOn = !(view.__selected && view.__selected.has(fid));
             setSelected(fid, turnOn);
@@ -4279,14 +4419,11 @@ function renderPersonFacesGrid(view, person, faces, opts) {
             if (view && typeof view.__updateActions === 'function') view.__updateActions();
           }
         });
-        // Capture the index for this tile at creation time
         const myIndex = nodes.length;
         applyDraggingHandlers(tile, myIndex, fid);
-        // Apply current selection state if any
         updateTileSelection(tile, !!(view.__selected && view.__selected.has(fid)));
       } else {
         tile.style.cursor = 'pointer';
-        // tile.title = 'Open photo in Viewer'; // Disabled to use custom tooltip
         if (!tile.hasAttribute('tabindex')) tile.tabIndex = 0;
         tile.addEventListener('click', (e) => { e.preventDefault(); goToViewerForFace(face); });
         tile.addEventListener('keydown', (e) => {
@@ -4295,43 +4432,50 @@ function renderPersonFacesGrid(view, person, faces, opts) {
       }
     } catch {}
 
-    // Inferred-only badge when applicable
     const isIdentified = !!face.identifiedPersonId;
-    // Use robust equality to handle number/string id variations
-    const isInferredForThis = !isIdentified && (String(face.inferredIdentifiedPersonId ?? '') === String(person.id ?? ''));
+    const isInferredForThis = (!person) 
+        ? (!isIdentified && !!face.inferredIdentifiedPersonId) 
+        : (!isIdentified && (String(face.inferredIdentifiedPersonId ?? '') === String(person.id ?? '')));
+    
     if (isInferredForThis) {
       const badge = document.createElement('button');
       badge.type = 'button';
       badge.className = 'face-badge inferred';
-      badge.textContent = 'inferred';
+      if (!person) {
+          const { full } = personsName(face.inferredIdentifiedPersonId);
+          badge.textContent = full || 'inferred';
+          badge.style.maxWidth = '100%'; 
+          badge.style.whiteSpace = 'nowrap';
+          badge.style.overflow = 'hidden';
+          badge.style.textOverflow = 'ellipsis';
+      } else {
+          badge.textContent = 'inferred';
+      }
       badge.title = 'Click to confirm identification';
-      // Avoid triggering selection by holding mouse on the badge
       badge.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
       badge.addEventListener('click', async (e) => {
         e.preventDefault(); e.stopPropagation();
+        const targetPersonId = face.inferredIdentifiedPersonId;
+        if (!targetPersonId) return;
         try {
-          await api.setFacePerson(face.faceId || face.id, person.id);
-          // Update local caches
+          await api.setFacePerson(face.faceId || face.id, targetPersonId);
           const fid = face.faceId || face.id;
-          // Lookup in the current view cache (avoid calling helper out of scope)
           const inCache = (view && Array.isArray(view.__allFaces))
             ? (view.__allFaces.find(f => (f.faceId || f.id) === fid) || null)
             : null;
           if (inCache) {
-            inCache.identifiedPersonId = person.id;
+            inCache.identifiedPersonId = targetPersonId;
             inCache.inferredIdentifiedPersonId = null;
           }
-          face.identifiedPersonId = person.id;
+          face.identifiedPersonId = targetPersonId;
           face.inferredIdentifiedPersonId = null;
-          try { pushRecentPersonId(person.id); } catch {}
+          try { pushRecentPersonId(targetPersonId); } catch {}
           showSuccess('Face identification confirmed');
-          // Remove from current selection if any and refresh locally (no reload)
           try {
             if (view && view.__selected && typeof view.__selected.delete === 'function') {
               view.__selected.delete(fid);
             }
           } catch {}
-          // Safely refresh the grid and header actions using view-exposed hooks
           try {
             if (view && typeof view.__refreshGrid === 'function') view.__refreshGrid();
             if (view && typeof view.__updateActions === 'function') view.__updateActions();
@@ -4344,12 +4488,10 @@ function renderPersonFacesGrid(view, person, faces, opts) {
       tile.appendChild(badge);
     }
 
-    // Edit button opens existing modal
     const editBtn = tile.querySelector('.ft-edit');
     if (editBtn) editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openFaceEditModal(face, { onChanged: (updated) => {
-        // Apply local mutations to the cache according to new identification
         try {
           const fid = (updated.faceId || updated.id || face.faceId || face.id);
           const cacheFace = (view && Array.isArray(view.__allFaces))
@@ -4361,21 +4503,24 @@ function renderPersonFacesGrid(view, person, faces, opts) {
             cacheFace.identifiedPersonId = updatedIdent;
             cacheFace.inferredIdentifiedPersonId = updatedInferred;
           }
-          // Decide visibility against the current person according to rules
-          const nowIdentToThis = !!updatedIdent && idEq(updatedIdent, person.id);
-          const nowToValidateForThis = (!updatedIdent) && idEq(updatedInferred, person.id);
-          if (!nowIdentToThis && !nowToValidateForThis) {
-            // Edited away from this person (either identified to someone else or not relevant here) → remove from both lists
-            removeFaceFromAllFacesById(fid);
+          
+          if (!person) {
+             if (updatedIdent || !updatedInferred) {
+                 removeFaceFromAllFacesById(fid);
+             }
+          } else {
+             const nowIdentToThis = !!updatedIdent && idEq(updatedIdent, person.id);
+             const nowToValidateForThis = (!updatedIdent) && idEq(updatedInferred, person.id);
+             if (!nowIdentToThis && !nowToValidateForThis) {
+               removeFaceFromAllFacesById(fid);
+             }
           }
-          // Remove from selection if present (avoid cross-scope helper)
           try {
             if (view && view.__selected && typeof view.__selected.delete === 'function') {
               view.__selected.delete(fid);
             }
           } catch {}
         } catch {}
-        // Refresh locally using view-exposed hooks
         try {
           if (view && typeof view.__refreshGrid === 'function') view.__refreshGrid();
           if (view && typeof view.__updateActions === 'function') view.__updateActions();
@@ -4395,14 +4540,12 @@ function renderPersonFacesGrid(view, person, faces, opts) {
       }});
     });
     if (editBtn) {
-      // Also suppress mousedown to avoid starting a drag-select when clicking the edit button
       editBtn.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
     }
 
     nodes.push(tile);
   }
   try { grid.replaceChildren(...nodes); } catch { grid.innerHTML = ''; nodes.forEach(n => grid.appendChild(n)); }
-  // Sync header actions (button visibility and counts)
   if (view && typeof view.__updateActions === 'function') view.__updateActions();
 }
 
@@ -4567,6 +4710,8 @@ function initPersonsTab() {
   if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadPersons); refreshBtn.__wired = true; }
   const createBtn = document.getElementById('create-person');
   if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openPersonCreateModal()); createBtn.__wired = true; }
+  const allInferredBtn = document.getElementById('all-inferred-faces');
+  if (allInferredBtn && !allInferredBtn.__wired) { allInferredBtn.addEventListener('click', () => openAllInferredFacesView()); allInferredBtn.__wired = true; }
   const filterInput = document.getElementById('persons-filter');
   const resetBtn = document.getElementById('reset-persons-filter');
   // Restore filter from session storage (persist across reloads in the session)

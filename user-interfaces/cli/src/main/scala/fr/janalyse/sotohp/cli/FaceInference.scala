@@ -12,6 +12,7 @@ import zio.config.typesafe.*
 import zio.lmdb.LMDB
 
 import java.awt.image.BufferedImage
+import java.time.temporal.ChronoUnit
 import java.time.temporal.ChronoUnit.{MONTHS, YEARS}
 import java.time.{Instant, OffsetDateTime}
 import scala.io.AnsiColor.*
@@ -94,7 +95,7 @@ object FaceInference extends CommonsCLI {
     val shortests =
       knownFaces
         .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))
-        .filter { (_, _, distance) => distance <= 0.675 }
+        .filter { (_, _, distance) => distance <= 0.625 }
         .sortBy { (_, _, distance) => distance }
         .take(3)
 
@@ -138,10 +139,15 @@ object FaceInference extends CommonsCLI {
   val logic = ZIO.logSpan("Infer person identification from faces features and already identified faces") {
     for {
       // _              <- fixFaceWithMissingFeatures()
+      // _                  <- ZIO.attemptBlocking(Thread.sleep(120.minutes)) // TODO temporary hack top be removed
       knownFaces         <- featuresForIdentifiedFaces()
       unknownFaces       <- featuresForUnknowFaces()
-      alreadyInferred     = unknownFaces.filter((face, _) => face.inferredIdentifiedPersonId.isDefined && face.identifiedPersonId.isEmpty)
+      now                <- Clock.currentDateTime
+      alreadyInferred     = unknownFaces
+                              .filter((face, _) => face.inferredIdentifiedPersonId.isDefined)
       tocheck             = unknownFaces
+                              .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty)
+                              .filter((face, _) => face.timestamp.isAfter(now.minus(5, ChronoUnit.DAYS)))
       personsCount       <- MediaService.personList().runCount
       _                  <- Console.printLine(s"$personsCount people records")
       _                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")
