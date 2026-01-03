@@ -204,6 +204,7 @@ package object model {
 
   object FileLastModified {
     def apply(timeStamp: OffsetDateTime): FileLastModified = timeStamp
+    def apply(epoch:Long):FileLastModified = apply(OffsetDateTime.ofInstant(Instant.ofEpochMilli(epoch), java.time.ZoneOffset.UTC))
 
     extension (fileLastModified: FileLastModified) {
       def offsetDateTime: OffsetDateTime = fileLastModified

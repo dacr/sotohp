@@ -68,7 +68,7 @@ object FileSystemSearch {
       )
 
     val securityConstraints =
-      ( // keep the parenthesis to enforce all conditions are taken into account with the && or || when spilling conditions across several lines
+      (                                                                           // keep the parenthesis to enforce all conditions are taken into account with the && or || when spilling conditions across several lines
         searchConfig.lockDirectory.isEmpty ||
           path.normalize().startsWith(searchConfig.lockDirectory.get.normalize()) // the normalize() operations are very important here
       )
@@ -101,20 +101,25 @@ object FileSystemSearch {
 
   def originalsStreamFromSearchRoot(
     searchRoot: Store,
-    searchConfig: FileSystemSearchCoreConfig
+    searchConfig: FileSystemSearchCoreConfig,
+    searchFilter: Option[SearchFilter] = None
   ): Either[FileSystemSearchIssue, JStream[Either[OriginalIssue, Original]]] = {
     fileStreamFromSearchRoot(searchRoot, searchConfig)
       .map(stream =>
-        stream.map { case (searchRoot = sr, originalPath = op) =>
-          OriginalBuilder.originalFromFile(sr, op)
-        }
+        stream
+          .filter { case (searchRoot = sr, originalPath = op) =>
+            searchFilter.isEmpty || searchFilter.exists(_.fileLastModifiedCriteria(FileLastModified(op.file.lastModified())))
+          }
+          .map { case (searchRoot = sr, originalPath = op) =>
+            OriginalBuilder.originalFromFile(sr, op)
+          }
       )
   }
 
   def mediasStreamFromSearchRoot(
-                                  searchRoot: Store,
-                                  searchConfig: FileSystemSearchCoreConfig,
-                                  eventGetter: Original => Option[Event]
+    searchRoot: Store,
+    searchConfig: FileSystemSearchCoreConfig,
+    eventGetter: Original => Option[Event]
   ): Either[FileSystemSearchIssue, JStream[Either[CoreIssue, Media]]] = {
     originalsStreamFromSearchRoot(searchRoot, searchConfig)
       .map { stream =>

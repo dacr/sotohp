@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder}
+import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder, SearchFilter}
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.{
   ClassificationIssue,
@@ -1189,7 +1189,10 @@ class MediaServiceLive private (
                          .update(_ => None)
       } yield ()
 
-    val syncLogic = {
+    val searchFilter = new SearchFilter {
+      override def fileLastModifiedCriteria: FileLastModified => Boolean = fileLastModified => addedThoseLastDays.isEmpty || fileLastModified.offsetDateTime.isAfter(OffsetDateTime.now().minusDays(addedThoseLastDays.get))
+    }
+    val syncLogic    = {
       for {
         _              <- ZIO.log(s"Synchronization started addedThoseLastDays=$addedThoseLastDays")
         stores         <- storeList().runCollect
@@ -1198,13 +1201,12 @@ class MediaServiceLive private (
         searchConfig    = serviceConfig.fileSystemSearch.toCoreConfig
         originalsStream = ZStream
                             .from(stores)
-                            .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store, searchConfig)))
+                            .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store, searchConfig, Some(searchFilter))))
                             .absolve
                             .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
                             .right
         _              <- originalsStream
                             .tap(_ => updateSynchronizeCheckedStatus())
-                            .filter(original => addedThoseLastDays.isEmpty || original.fileLastModified.offsetDateTime.isAfter(OffsetDateTime.now().minusDays(addedThoseLastDays.get)))
                             .mapZIO(synchronizeOriginal)
                             .mapZIO(synchronizeState)
                             .mapZIO(synchronizeMedia)
