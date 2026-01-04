@@ -1489,18 +1489,37 @@ object ApiApp extends ZIOAppDefault {
     }
   }
 
+  def generateOpenApiSpec(fileName: String): Task[Unit] = {
+    import sttp.tapir.docs.openapi.OpenAPIDocsInterpreter
+    import sttp.apispec.openapi.circe._
+    import io.circe.syntax._
+
+    val info = Info(title = "SOTOHP API", version = "1.0", description = Some("Medias management software by @crodav"))
+    val docs = OpenAPIDocsInterpreter().toOpenAPI(apiRoutes.map(_.endpoint), info)
+    val json = docs.asJson.spaces2
+
+    ZIO.attempt(Files.writeString(Path.of(fileName), json, StandardCharsets.UTF_8)).unit
+  }
+
   override def run = {
-    for {
-      config <- ApiConfig.config
-      _      <- server
-                  .provide(
-                    LMDB.live,
-                    MediaService.live,
-                    SearchService.live,
-                    serverConfigLayer,
-                    Server.live,
-                    Scope.default
-                  )
-    } yield ()
+    getArgs.flatMap { args =>
+      args.toList match {
+        case "--just-generate-openapi-specs" :: fileName :: Nil =>
+          generateOpenApiSpec(fileName)
+        case _ =>
+          for {
+            config <- ApiConfig.config
+            _      <- server
+                        .provide(
+                          LMDB.live,
+                          MediaService.live,
+                          SearchService.live,
+                          serverConfigLayer,
+                          Server.live,
+                          Scope.default
+                        )
+          } yield ()
+      }
+    }
   }
 }

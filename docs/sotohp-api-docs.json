@@ -1,0 +1,3148 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "SOTOHP API",
+    "version" : "1.0",
+    "description" : "Medias management software by @crodav"
+  },
+  "paths" : {
+    "/api/medias" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Stream all defined medias",
+        "operationId" : "List medias",
+        "parameters" : [
+          {
+            "name" : "filterHasLocation",
+            "in" : "query",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Store JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Media"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter filterHasLocation",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Get information from a random, first, last, previous of, or next to media",
+        "operationId" : "Get media information",
+        "parameters" : [
+          {
+            "name" : "select",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "$ref" : "#/components/schemas/MediaSelector"
+            }
+          },
+          {
+            "name" : "referenceMediaAccessKey",
+            "in" : "query",
+            "description" : "previous or next media from the provided a reference media",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "referenceMediaTimestamp",
+            "in" : "query",
+            "description" : "previous or next media from the provided timestamp",
+            "required" : false,
+            "schema" : {
+              "type" : "string",
+              "format" : "date-time"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Media"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter select, Invalid value for: query parameter referenceMediaTimestamp",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/{mediaAccessKey}" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Get all media information for the given media access key",
+        "operationId" : "Get media",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Media"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Update media information for the given media identifier",
+        "operationId" : "Update media",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/Media1"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/{mediaAccessKey}/starred" : {
+      "put" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Update media starred state for the given media identifier",
+        "operationId" : "Update media",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "state",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "boolean"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/{mediaAccessKey}/content/original" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Get media original size image content",
+        "operationId" : "Get media original size image",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/{mediaAccessKey}/content/normalized" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Get media normalized image content",
+        "operationId" : "Get media normalized image",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/{mediaAccessKey}/content/miniature" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Get media miniature image content",
+        "operationId" : "Get media miniature image",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/media/{mediaAccessKey}/faces" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Get media identified people faces for the given media access key",
+        "operationId" : "Get media faces",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OriginalFaces"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/faces" : {
+      "get" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Stream people faces",
+        "operationId" : "List faces",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Store JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DetectedFace"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/face" : {
+      "post" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Create a new face within the given original",
+        "operationId" : "Create a face",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/FaceCreate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Face"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/face/{faceId}" : {
+      "get" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Get all face information for the given face identifier",
+        "operationId" : "Get face",
+        "parameters" : [
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DetectedFace"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Delete face for the given face identifier",
+        "operationId" : "Delete face",
+        "parameters" : [
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/face/{faceId}/content" : {
+      "get" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Get face image content",
+        "operationId" : "Get face image",
+        "parameters" : [
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/face/{faceId}/person/{personId}" : {
+      "put" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Set or update face identified person",
+        "operationId" : "Set or update face identified person",
+        "parameters" : [
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "personId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/face/{faceId}/person" : {
+      "delete" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Remove face identified person",
+        "operationId" : "Remove face identified person",
+        "parameters" : [
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/persons" : {
+      "get" : {
+        "tags" : [
+          "Person"
+        ],
+        "summary" : "Stream all defined persons",
+        "operationId" : "List persons",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Person JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Person"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/person" : {
+      "post" : {
+        "tags" : [
+          "Person"
+        ],
+        "summary" : "Create a new person",
+        "operationId" : "Create a person",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PersonCreate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Person"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/person/{personId}" : {
+      "get" : {
+        "tags" : [
+          "Person"
+        ],
+        "summary" : "Get all person information for the given person identifier",
+        "operationId" : "Get person",
+        "parameters" : [
+          {
+            "name" : "personId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Person"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "Person"
+        ],
+        "summary" : "Update person configuration for the given person identifier",
+        "operationId" : "Update person",
+        "parameters" : [
+          {
+            "name" : "personId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PersonUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [
+          "Person"
+        ],
+        "summary" : "Delete the person for the given person identifier",
+        "operationId" : "Delete person",
+        "parameters" : [
+          {
+            "name" : "personId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/person/{personId}/face/{faceId}" : {
+      "put" : {
+        "tags" : [
+          "Person"
+        ],
+        "summary" : "Update person face for the given person and face identifiers",
+        "operationId" : "Update person face",
+        "parameters" : [
+          {
+            "name" : "personId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/person/{personId}/faces" : {
+      "get" : {
+        "tags" : [
+          "Person"
+        ],
+        "summary" : "Stream all defined person faces",
+        "operationId" : "List person faces",
+        "parameters" : [
+          {
+            "name" : "personId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Person JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DetectedFace"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events" : {
+      "get" : {
+        "tags" : [
+          "Event"
+        ],
+        "summary" : "Stream all defined events",
+        "operationId" : "List events",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Event JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/event" : {
+      "post" : {
+        "tags" : [
+          "Event"
+        ],
+        "summary" : "Create a user-defined event",
+        "operationId" : "Create event",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EventCreate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/event/{eventId}" : {
+      "get" : {
+        "tags" : [
+          "Event"
+        ],
+        "summary" : "Get all event information for the given event identifier",
+        "operationId" : "Get event",
+        "parameters" : [
+          {
+            "name" : "eventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "Event"
+        ],
+        "summary" : "Update event configuration for the given event identifier",
+        "operationId" : "Update event",
+        "parameters" : [
+          {
+            "name" : "eventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EventUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [
+          "Event"
+        ],
+        "summary" : "Delete the event for the given event identifier",
+        "operationId" : "Delete event",
+        "parameters" : [
+          {
+            "name" : "eventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/event/{eventId}/cover/{mediaAccessKey}" : {
+      "put" : {
+        "tags" : [
+          "Event"
+        ],
+        "summary" : "Update event image cover for the given event and original identifiers",
+        "operationId" : "Update event image cover",
+        "parameters" : [
+          {
+            "name" : "eventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owner" : {
+      "post" : {
+        "tags" : [
+          "Owner"
+        ],
+        "summary" : "Create a new media owner",
+        "operationId" : "Create an owner",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OwnerCreate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Owner"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owners" : {
+      "get" : {
+        "tags" : [
+          "Owner"
+        ],
+        "summary" : "Stream all defined owners",
+        "operationId" : "List owners",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Owner JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Owner"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owner/{ownerId}" : {
+      "get" : {
+        "tags" : [
+          "Owner"
+        ],
+        "summary" : "Get all owner information for the given owner identifier",
+        "operationId" : "Get owner",
+        "parameters" : [
+          {
+            "name" : "ownerId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Owner"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "Owner"
+        ],
+        "summary" : "Update owner configuration for the given owner identifier",
+        "operationId" : "Update owner",
+        "parameters" : [
+          {
+            "name" : "ownerId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OwnerUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/owner/{ownerId}/cover/{mediaAccessKey}" : {
+      "put" : {
+        "tags" : [
+          "Owner"
+        ],
+        "summary" : "Update owner image cover for the given owner and original identifiers",
+        "operationId" : "Update owner image cover",
+        "parameters" : [
+          {
+            "name" : "ownerId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/store" : {
+      "post" : {
+        "tags" : [
+          "Store"
+        ],
+        "summary" : "Create a new media store",
+        "operationId" : "Create an store",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StoreCreate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Store"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stores" : {
+      "get" : {
+        "tags" : [
+          "Store"
+        ],
+        "summary" : "Stream all defined stores",
+        "operationId" : "List stores",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Store JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Store"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/store/{storeId}" : {
+      "get" : {
+        "tags" : [
+          "Store"
+        ],
+        "summary" : "Get all store information for the given store identifier",
+        "operationId" : "Get store",
+        "parameters" : [
+          {
+            "name" : "storeId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Store"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "Store"
+        ],
+        "summary" : "Update store configuration for the given store identifier",
+        "operationId" : "Update store",
+        "parameters" : [
+          {
+            "name" : "storeId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/StoreUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state/{originalId}" : {
+      "get" : {
+        "tags" : [
+          "State"
+        ],
+        "summary" : "Get original/media state information for the given original identifier",
+        "description" : "Also get the related media access key for the selected original",
+        "operationId" : "Get original state",
+        "parameters" : [
+          {
+            "name" : "originalId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string",
+              "format" : "uuid"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/State"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/synchronize" : {
+      "get" : {
+        "tags" : [
+          "Admin"
+        ],
+        "summary" : "Get all the details about what's going on with the synchronize operations",
+        "operationId" : "Get synchronize status",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SynchronizeStatus"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put" : {
+        "tags" : [
+          "Admin"
+        ],
+        "summary" : "Start synchronize background operations with all stores content",
+        "operationId" : "Synchronize start",
+        "parameters" : [
+          {
+            "name" : "addedThoseLastDays",
+            "in" : "query",
+            "description" : "for faster synchronize operations provide how much days back to look for new medias",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter addedThoseLastDays",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/status" : {
+      "get" : {
+        "tags" : [
+          "System"
+        ],
+        "summary" : "Get the service status",
+        "description" : "Returns the service status, can also be used as a health check end point for monitoring purposes",
+        "operationId" : "Service status",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/info" : {
+      "get" : {
+        "tags" : [
+          "System"
+        ],
+        "summary" : "Get information and some global statistics",
+        "description" : "Returns service global information such as release information, authors and global statistics",
+        "operationId" : "Service global information",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Info"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "BoundingBox" : {
+        "title" : "BoundingBox",
+        "type" : "object",
+        "required" : [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "y" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "width" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "height" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "DetectedFace" : {
+        "title" : "DetectedFace",
+        "type" : "object",
+        "required" : [
+          "faceId",
+          "originalId",
+          "box",
+          "timestamp"
+        ],
+        "properties" : {
+          "faceId" : {
+            "type" : "string"
+          },
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "box" : {
+            "$ref" : "#/components/schemas/BoundingBox"
+          },
+          "identifiedPersonId" : {
+            "type" : "string"
+          },
+          "inferredIdentifiedPersonId" : {
+            "type" : "string"
+          },
+          "inferredIdentifiedPersonConfidence" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "Dimension" : {
+        "title" : "Dimension",
+        "type" : "object",
+        "required" : [
+          "width",
+          "height"
+        ],
+        "properties" : {
+          "width" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "height" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ErrorInternal" : {
+        "title" : "ErrorInternal",
+        "type" : "object",
+        "required" : [
+          "message"
+        ],
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ErrorResourceNotFound" : {
+        "title" : "ErrorResourceNotFound",
+        "type" : "object",
+        "required" : [
+          "message"
+        ],
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Event" : {
+        "title" : "Event",
+        "type" : "object",
+        "required" : [
+          "id",
+          "name"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/Location"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "publishedOn" : {
+            "type" : "string"
+          },
+          "keywords" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "EventCreate" : {
+        "title" : "EventCreate",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "keywords" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "EventUpdate" : {
+        "title" : "EventUpdate",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/Location"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "publishedOn" : {
+            "type" : "string"
+          },
+          "keywords" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ExposureTime" : {
+        "title" : "ExposureTime",
+        "type" : "object",
+        "required" : [
+          "numerator",
+          "denominator"
+        ],
+        "properties" : {
+          "numerator" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "denominator" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Face" : {
+        "title" : "Face",
+        "type" : "object",
+        "required" : [
+          "originalId",
+          "faceId",
+          "box"
+        ],
+        "properties" : {
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "faceId" : {
+            "type" : "string"
+          },
+          "box" : {
+            "$ref" : "#/components/schemas/BoundingBox"
+          }
+        }
+      },
+      "FaceCreate" : {
+        "title" : "FaceCreate",
+        "type" : "object",
+        "required" : [
+          "originalId",
+          "box"
+        ],
+        "properties" : {
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "box" : {
+            "$ref" : "#/components/schemas/BoundingBox"
+          }
+        }
+      },
+      "Info" : {
+        "title" : "Info",
+        "type" : "object",
+        "required" : [
+          "version",
+          "message",
+          "originalsCount"
+        ],
+        "properties" : {
+          "authors" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "originalsCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "InvalidOrMissingInput" : {
+        "title" : "InvalidOrMissingInput",
+        "type" : "object",
+        "required" : [
+          "message"
+        ],
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Location" : {
+        "title" : "Location",
+        "type" : "object",
+        "required" : [
+          "latitude",
+          "longitude"
+        ],
+        "properties" : {
+          "latitude" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "longitude" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "altitude" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "Media" : {
+        "title" : "Media",
+        "type" : "object",
+        "required" : [
+          "accessKey",
+          "original",
+          "starred"
+        ],
+        "properties" : {
+          "accessKey" : {
+            "type" : "string"
+          },
+          "original" : {
+            "$ref" : "#/components/schemas/Original"
+          },
+          "events" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Event"
+            }
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "starred" : {
+            "type" : "boolean"
+          },
+          "keywords" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "orientation" : {
+            "$ref" : "#/components/schemas/Orientation"
+          },
+          "shootDateTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "userDefinedLocation" : {
+            "$ref" : "#/components/schemas/Location"
+          },
+          "deductedLocation" : {
+            "$ref" : "#/components/schemas/Location"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/Location"
+          }
+        }
+      },
+      "Media1" : {
+        "title" : "Media",
+        "type" : "object",
+        "required" : [
+          "starred"
+        ],
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "starred" : {
+            "type" : "boolean"
+          },
+          "keywords" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "shootDateTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "userDefinedLocation" : {
+            "$ref" : "#/components/schemas/Location"
+          }
+        }
+      },
+      "MediaKind" : {
+        "title" : "MediaKind",
+        "type" : "string",
+        "enum" : [
+          "Photo",
+          "Video"
+        ]
+      },
+      "MediaSelector" : {
+        "title" : "MediaSelector",
+        "type" : "string",
+        "enum" : [
+          "first",
+          "last",
+          "next",
+          "previous",
+          "random"
+        ]
+      },
+      "Orientation" : {
+        "title" : "Orientation",
+        "type" : "string",
+        "enum" : [
+          "Horizontal",
+          "MirrorHorizontal",
+          "MirrorHorizontalAndRotate270ClockWise",
+          "MirrorHorizontalAndRotate90ClockWise",
+          "MirrorVertical",
+          "Rotate180",
+          "Rotate270ClockWise",
+          "Rotate90ClockWise"
+        ]
+      },
+      "Original" : {
+        "title" : "Original",
+        "type" : "object",
+        "required" : [
+          "id",
+          "storeId",
+          "kind"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "storeId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "kind" : {
+            "$ref" : "#/components/schemas/MediaKind"
+          },
+          "cameraShootDateTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "cameraName" : {
+            "type" : "string"
+          },
+          "artistInfo" : {
+            "type" : "string"
+          },
+          "dimension" : {
+            "$ref" : "#/components/schemas/Dimension"
+          },
+          "orientation" : {
+            "$ref" : "#/components/schemas/Orientation"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/Location"
+          },
+          "aperture" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "exposureTime" : {
+            "$ref" : "#/components/schemas/ExposureTime"
+          },
+          "iso" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "focalLength" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
+      },
+      "OriginalFaces" : {
+        "title" : "OriginalFaces",
+        "type" : "object",
+        "required" : [
+          "originalId"
+        ],
+        "properties" : {
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "facesIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "Owner" : {
+        "title" : "Owner",
+        "type" : "object",
+        "required" : [
+          "id",
+          "firstName",
+          "lastName"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "birthDate" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }
+      },
+      "OwnerCreate" : {
+        "title" : "OwnerCreate",
+        "type" : "object",
+        "required" : [
+          "firstName",
+          "lastName"
+        ],
+        "properties" : {
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "birthDate" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "OwnerUpdate" : {
+        "title" : "OwnerUpdate",
+        "type" : "object",
+        "required" : [
+          "firstName",
+          "lastName"
+        ],
+        "properties" : {
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "birthDate" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "Person" : {
+        "title" : "Person",
+        "type" : "object",
+        "required" : [
+          "id",
+          "firstName",
+          "lastName"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "birthDate" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "chosenFaceId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PersonCreate" : {
+        "title" : "PersonCreate",
+        "type" : "object",
+        "required" : [
+          "firstName",
+          "lastName"
+        ],
+        "properties" : {
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "birthDate" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PersonUpdate" : {
+        "title" : "PersonUpdate",
+        "type" : "object",
+        "required" : [
+          "firstName",
+          "lastName"
+        ],
+        "properties" : {
+          "firstName" : {
+            "type" : "string"
+          },
+          "lastName" : {
+            "type" : "string"
+          },
+          "birthDate" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "chosenFaceId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "State" : {
+        "title" : "State",
+        "type" : "object",
+        "required" : [
+          "originalId",
+          "originalAddedOn",
+          "mediaAccessKey"
+        ],
+        "properties" : {
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "originalAddedOn" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "mediaAccessKey" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Status" : {
+        "title" : "Status",
+        "type" : "object",
+        "required" : [
+          "alive"
+        ],
+        "properties" : {
+          "alive" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "Store" : {
+        "title" : "Store",
+        "type" : "object",
+        "required" : [
+          "id",
+          "ownerId",
+          "baseDirectory"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "ownerId" : {
+            "type" : "string"
+          },
+          "baseDirectory" : {
+            "type" : "string"
+          },
+          "includeMask" : {
+            "type" : "string"
+          },
+          "ignoreMask" : {
+            "type" : "string"
+          }
+        }
+      },
+      "StoreCreate" : {
+        "title" : "StoreCreate",
+        "type" : "object",
+        "required" : [
+          "ownerId",
+          "baseDirectory"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "ownerId" : {
+            "type" : "string"
+          },
+          "baseDirectory" : {
+            "type" : "string"
+          },
+          "includeMask" : {
+            "type" : "string"
+          },
+          "ignoreMask" : {
+            "type" : "string"
+          }
+        }
+      },
+      "StoreUpdate" : {
+        "title" : "StoreUpdate",
+        "type" : "object",
+        "required" : [
+          "baseDirectory"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "baseDirectory" : {
+            "type" : "string"
+          },
+          "includeMask" : {
+            "type" : "string"
+          },
+          "ignoreMask" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SynchronizeStatus" : {
+        "title" : "SynchronizeStatus",
+        "type" : "object",
+        "required" : [
+          "running",
+          "checkedCount",
+          "processedCount"
+        ],
+        "properties" : {
+          "running" : {
+            "type" : "boolean"
+          },
+          "lastUpdated" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "checkedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "processedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      }
+    }
+  }
+}

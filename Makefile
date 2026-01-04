@@ -3,6 +3,9 @@ all: test
 run-api: ui
 	mill user-interfaces.api.run
 
+openapi-spec:
+	mill user-interfaces.api.run --just-generate-openapi-specs docs/sotohp-api-docs.json
+
 run-face-inference:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference
 
@@ -89,11 +92,8 @@ ui: ui-openapi ui-ts
 	cp -r $(UI_SRC)/assets/* $(UI_DIST)/assets/ 2>/dev/null || true
 	@echo "[UI] Done. Serve at http://127.0.0.1:8080/ui/ (after 'make api')"
 
-ui-openapi:
-	@echo "[UI] Fetching OpenAPI spec"
-	mkdir -p $(UI_SRC)/openapi
-	curl -fsSL http://127.0.0.1:8080/docs/docs.yaml -o $(UI_SRC)/openapi/docs.yaml || true
-	@echo "[UI] OpenAPI spec fetch attempted (ignored errors if API not running)"
+ui-openapi: openapi-spec
+	@echo "[UI] OpenAPI spec generated (docs/sotohp-api-docs.json)"
 
 ui-ts:
 	@echo "[UI] Compiling TypeScript (if configured)"
