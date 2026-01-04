@@ -123,7 +123,7 @@ object FaceInference extends CommonsCLI {
       inferredIdentifiedPersonConfidence = bestCandidate.map(1d - _.dist)
     )
 
-    val isFreshlyIdentified = (
+    val isFreshlyIdentified: Boolean = (
       updatedFace.inferredIdentifiedPersonId.isDefined
         && face.identifiedPersonId.isEmpty
         && face.inferredIdentifiedPersonId.isEmpty
@@ -147,7 +147,7 @@ object FaceInference extends CommonsCLI {
                               .filter((face, _) => face.inferredIdentifiedPersonId.isDefined)
       tocheck             = unknownFaces
                               .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty)
-                              .filter((face, _) => face.timestamp.isAfter(now.minus(5, ChronoUnit.DAYS)))
+                              //.filter((face, _) => face.timestamp.isAfter(now.minus(5, ChronoUnit.DAYS)))
       personsCount       <- MediaService.personList().runCount
       _                  <- Console.printLine(s"$personsCount people records")
       _                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")

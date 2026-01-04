@@ -3762,6 +3762,11 @@ async function openAllInferredFacesView() {
             <button type="button" class="pf-size-medium" data-size="medium" title="Medium">Medium</button>
             <button type="button" class="pf-size-max" data-size="max" title="Maximum">Maximum</button>
           </div>
+          <select class="pf-sort-select" aria-label="Sort order" style="margin-left: 8px; padding: 4px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px;">
+            <option value="person">Sort: Person, Date</option>
+            <option value="person_confidence">Sort: Person, Confidence</option>
+            <option value="confidence">Sort: Confidence</option>
+          </select>
           <button type="button" class="confirm-all" title="Confirm all shown faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm all</button>
           <button type="button" class="confirm-selected" title="Confirm selected faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm selected</button>
         </div>
@@ -3806,6 +3811,56 @@ async function openAllInferredFacesView() {
     });
   });
 
+  // Sort control
+  const sortSelect = view.querySelector('.pf-sort-select');
+  const SORT_STORAGE_KEY = 'personFaces.sortOrder';
+  function getStoredSort() { try { return sessionStorage.getItem(SORT_STORAGE_KEY) || 'person'; } catch { return 'person'; } }
+  function setStoredSort(val) { try { sessionStorage.setItem(SORT_STORAGE_KEY, val); } catch {} }
+
+  if (sortSelect) {
+    sortSelect.value = getStoredSort();
+    sortSelect.addEventListener('change', () => {
+      setStoredSort(sortSelect.value);
+      if (view.__allFaces) {
+        applySort(view.__allFaces);
+        refreshGrid();
+      }
+    });
+  }
+
+  function applySort(facesList) {
+    const currentSort = sortSelect ? sortSelect.value : 'person';
+    if (currentSort === 'confidence') {
+      facesList.sort((a,b) => {
+         const ca = (a.inferredIdentifiedPersonConfidence != null) ? a.inferredIdentifiedPersonConfidence : -1;
+         const cb = (b.inferredIdentifiedPersonConfidence != null) ? b.inferredIdentifiedPersonConfidence : -1;
+         if (ca > cb) return -1;
+         if (ca < cb) return 1;
+         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+    } else if (currentSort === 'person_confidence') {
+      facesList.sort((a,b) => {
+         const pa = personsName(a.inferredIdentifiedPersonId).full.toLowerCase();
+         const pb = personsName(b.inferredIdentifiedPersonId).full.toLowerCase();
+         if (pa < pb) return -1;
+         if (pa > pb) return 1;
+         const ca = (a.inferredIdentifiedPersonConfidence != null) ? a.inferredIdentifiedPersonConfidence : -1;
+         const cb = (b.inferredIdentifiedPersonConfidence != null) ? b.inferredIdentifiedPersonConfidence : -1;
+         if (ca > cb) return -1;
+         if (ca < cb) return 1;
+         return 0;
+      });
+    } else {
+      facesList.sort((a,b) => {
+         const pa = personsName(a.inferredIdentifiedPersonId).full.toLowerCase();
+         const pb = personsName(b.inferredIdentifiedPersonId).full.toLowerCase();
+         if (pa < pb) return -1;
+         if (pa > pb) return 1;
+         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+    }
+  }
+
   try {
     const [allFaces, persons] = await Promise.all([
       api.listFaces(),
@@ -3819,13 +3874,7 @@ async function openAllInferredFacesView() {
     // Filter for inferred faces that are not yet identified
     const faces = allFaces.filter(f => !f.identifiedPersonId && f.inferredIdentifiedPersonId);
     
-    faces.sort((a,b) => {
-       const pa = personsName(a.inferredIdentifiedPersonId).full.toLowerCase();
-       const pb = personsName(b.inferredIdentifiedPersonId).full.toLowerCase();
-       if (pa < pb) return -1;
-       if (pa > pb) return 1;
-       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    });
+    applySort(faces);
     
     view.__allFaces = faces;
     view.__mode = 'validate';
