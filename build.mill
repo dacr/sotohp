@@ -116,7 +116,9 @@ object `user-interfaces` extends Module {
       mvn"com.softwaremill.sttp.tapir::tapir-zio:1.13.3",
       mvn"com.softwaremill.sttp.tapir::tapir-zio-http-server:1.13.3",
       mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.13.3",
-      mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.13.3"
+      mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.13.3",
+      mvn"com.github.jwt-scala::jwt-zio-json:10.0.4",
+      mvn"com.softwaremill.sttp.client3::zio:3.10.3"
     )
 
     override def packageVersion = publishVersion

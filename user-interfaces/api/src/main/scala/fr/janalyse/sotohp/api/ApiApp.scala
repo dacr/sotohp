@@ -20,6 +20,7 @@ import fr.janalyse.sotohp.api.protocol.{*, given}
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.model.{PersonId, BoundingBox}
 import fr.janalyse.sotohp.api.protocol.{ApiPersonCreate, ApiPersonUpdate}
+import fr.janalyse.sotohp.api.security.{ApiSecurityError, SecureEndpoints, SecurityService, UserContext}
 import wvlet.airframe.ulid.ULID
 import fr.janalyse.sotohp.service.model.SynchronizeAction
 import fr.janalyse.sotohp.service.model.SynchronizeAction.Start
@@ -89,6 +90,26 @@ object ApiApp extends ZIOAppDefault {
   def personEndpoint(plurial: Boolean = false) = endpoint.in("api").in("person" + (if (plurial) "s" else "")).tag("Person")
   def eventEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
   def faceEndpoint(plurial: Boolean = false)   = endpoint.in("api").in("face" + (if (plurial) "s" else "")).tag("Face")
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Secure endpoint bases with optional bearer authentication
+  // When auth is disabled, endpoints work without token; when enabled, token is validated
+  val secureSystemEndpoint                           = systemEndpoint.securityIn(SecureEndpoints.bearerAuth)
+  val secureAdminEndpoint                            = adminEndpoint.securityIn(SecureEndpoints.bearerAuth)
+  def secureStateEndpoint(plurial: Boolean = false)  = stateEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+  def secureMediaEndpoint(plurial: Boolean = false)  = mediaEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+  def secureStoreEndpoint(plurial: Boolean = false)  = storeEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+  def secureOwnerEndpoint(plurial: Boolean = false)  = ownerEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+  def securePersonEndpoint(plurial: Boolean = false) = personEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+  def secureEventEndpoint(plurial: Boolean = false)  = eventEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+  def secureFaceEndpoint(plurial: Boolean = false)   = faceEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+
+  // Security logic that validates token when auth is enabled
+  def securityLogic(token: String): ZIO[SecurityService, ApiSecurityError, UserContext] =
+    for {
+      config  <- ApiConfig.config.orDie
+      context <- SecureEndpoints.securityLogic(config.auth)(token)
+    } yield context
 
   // -------------------------------------------------------------------------------------------------------------------
   def extractOwnerId(rawOwnerId: String) =
@@ -1501,6 +1522,18 @@ object ApiApp extends ZIOAppDefault {
     ZIO.attempt(Files.writeString(Path.of(fileName), json, StandardCharsets.UTF_8)).unit
   }
 
+  val securityServiceLayer: ZLayer[Any, Nothing, SecurityService] =
+    ZLayer.fromZIO {
+      ApiConfig.config.map(_.auth).orDie
+    }.flatMap { authConfigEnv =>
+      val authConfig = authConfigEnv.get
+      if (authConfig.enabled) {
+        ZLayer.succeed(authConfig) >>> SecurityService.live
+      } else {
+        SecurityService.disabled
+      }
+    }
+
   override def run = {
     getArgs.flatMap { args =>
       args.toList match {
@@ -1509,11 +1542,13 @@ object ApiApp extends ZIOAppDefault {
         case _ =>
           for {
             config <- ApiConfig.config
+            _      <- ZIO.logInfo(s"Authentication enabled: ${config.auth.enabled}")
             _      <- server
                         .provide(
                           LMDB.live,
                           MediaService.live,
                           SearchService.live,
+                          securityServiceLayer,
                           serverConfigLayer,
                           Server.live,
                           Scope.default

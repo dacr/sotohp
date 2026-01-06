@@ -1,0 +1,260 @@
+{
+  "realm": "sotohp",
+  "enabled": true,
+  "displayName": "SOTOHP",
+  "displayNameHtml": "<strong>SOTOHP</strong>",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Full access to all resources",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "reader",
+        "description": "Read-only access (GET requests only)",
+        "composite": false,
+        "clientRole": false
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "pending",
+      "path": "/pending",
+      "attributes": {},
+      "realmRoles": [],
+      "clientRoles": {},
+      "subGroups": []
+    },
+    {
+      "name": "users",
+      "path": "/users",
+      "attributes": {},
+      "realmRoles": ["reader"],
+      "clientRoles": {},
+      "subGroups": []
+    },
+    {
+      "name": "admins",
+      "path": "/admins",
+      "attributes": {},
+      "realmRoles": ["admin"],
+      "clientRoles": {},
+      "subGroups": []
+    }
+  ],
+  "defaultGroups": ["/pending"],
+  "clients": [
+    {
+      "clientId": "sotohp-api",
+      "name": "SOTOHP API",
+      "description": "Backend API client for SOTOHP",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "clientId": "sotohp-frontend",
+      "name": "SOTOHP Frontend",
+      "description": "Frontend SPA client for SOTOHP",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:8080/*",
+        "http://localhost:8180/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:8180"
+      ],
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "roles",
+      "description": "OpenID Connect scope for add user roles to the access token",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "${rolesScopeConsentText}"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "foo",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "email": "admin@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["admin"],
+      "groups": ["/admins"]
+    },
+    {
+      "username": "reader",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Reader",
+      "lastName": "User",
+      "email": "reader@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "reader",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["reader"],
+      "groups": ["/users"]
+    },
+    {
+      "username": "pending",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Pending",
+      "lastName": "User",
+      "email": "pending@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pending",
+          "temporary": true
+        }
+      ],
+      "realmRoles": [],
+      "groups": ["/pending"]
+    }
+  ],
+  "scopeMappings": [
+    {
+      "clientScope": "offline_access",
+      "roles": ["offline_access"]
+    }
+  ],
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": false,
+  "offlineSessionMaxLifespan": 5184000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300
+}
