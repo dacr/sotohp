@@ -926,22 +926,22 @@ object ApiApp extends ZIOAppDefault {
         (rawFaceId, rawPersonId) =>
           for {
             faceId   <- extractFaceId(rawFaceId)
-          personId <- extractPersonId(rawPersonId)
-          face     <- MediaService
-                        .faceGet(faceId)
-                        .logError("Couldn't get face")
-                        .mapError(err => ApiInternalError("Couldn't get face"))
-                        .someOrFail(ApiResourceNotFound("Couldn't find face"))
-          person   <- personGetLogic(personId)
-          _        <- MediaService
-                        .faceUpdate(
-                          faceId = faceId,
-                          face = face.copy(identifiedPersonId = Some(personId))
-                        )
-                        .logError("Couldn't update face identified person")
-                        .mapError(err => ApiInternalError("Couldn't update face identified person"))
+            personId <- extractPersonId(rawPersonId)
+            face     <- MediaService
+                          .faceGet(faceId)
+                          .logError("Couldn't get face")
+                          .mapError(err => ApiInternalError("Couldn't get face"))
+                          .someOrFail(ApiResourceNotFound("Couldn't find face"))
+            person   <- personGetLogic(personId)
+            _        <- MediaService
+                          .faceUpdate(
+                            faceId = faceId,
+                            face = face.copy(identifiedPersonId = Some(personId))
+                          )
+                          .logError("Couldn't update face identified person")
+                          .mapError(err => ApiInternalError("Couldn't update face identified person"))
 
-        } yield ()
+          } yield ()
       )
 
   val faceDeletePersonEndpoint =

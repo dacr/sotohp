@@ -53,8 +53,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/media" : {
@@ -133,8 +149,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/media/{mediaAccessKey}" : {
@@ -194,8 +226,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "put" : {
         "tags" : [
@@ -256,8 +304,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/media/{mediaAccessKey}/starred" : {
@@ -318,8 +382,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/media/{mediaAccessKey}/content/original" : {
@@ -388,8 +468,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/media/{mediaAccessKey}/content/normalized" : {
@@ -458,8 +554,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/media/{mediaAccessKey}/content/miniature" : {
@@ -528,8 +640,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/media/{mediaAccessKey}/faces" : {
@@ -589,8 +717,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/faces" : {
@@ -620,8 +764,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/face" : {
@@ -671,8 +831,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/face/{faceId}" : {
@@ -732,8 +908,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "delete" : {
         "tags" : [
@@ -784,8 +976,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/face/{faceId}/content" : {
@@ -854,8 +1062,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/face/{faceId}/person/{personId}" : {
@@ -916,8 +1140,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/face/{faceId}/person" : {
@@ -970,8 +1210,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/persons" : {
@@ -1001,8 +1257,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/person" : {
@@ -1052,8 +1324,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/person/{personId}" : {
@@ -1113,8 +1401,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "put" : {
         "tags" : [
@@ -1175,8 +1479,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "delete" : {
         "tags" : [
@@ -1227,8 +1547,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/person/{personId}/face/{faceId}" : {
@@ -1289,8 +1625,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/person/{personId}/faces" : {
@@ -1350,8 +1702,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/events" : {
@@ -1381,8 +1749,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/event" : {
@@ -1432,8 +1816,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/event/{eventId}" : {
@@ -1493,8 +1893,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "put" : {
         "tags" : [
@@ -1555,8 +1971,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "delete" : {
         "tags" : [
@@ -1607,8 +2039,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/event/{eventId}/cover/{mediaAccessKey}" : {
@@ -1669,8 +2117,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/owner" : {
@@ -1720,8 +2184,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/owners" : {
@@ -1751,8 +2231,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/owner/{ownerId}" : {
@@ -1812,8 +2308,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "put" : {
         "tags" : [
@@ -1874,8 +2386,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/owner/{ownerId}/cover/{mediaAccessKey}" : {
@@ -1936,8 +2464,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/store" : {
@@ -1987,8 +2531,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/stores" : {
@@ -2018,8 +2578,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/store/{storeId}" : {
@@ -2079,8 +2655,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "put" : {
         "tags" : [
@@ -2141,8 +2733,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/state/{originalId}" : {
@@ -2204,8 +2812,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/admin/synchronize" : {
@@ -2235,8 +2859,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       },
       "put" : {
         "tags" : [
@@ -2279,8 +2919,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/system/status" : {
@@ -2301,8 +2957,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/system/info" : {
@@ -2333,8 +3005,24 @@
                 }
               }
             }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
           }
-        }
+        },
+        "security" : [
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     }
   },
@@ -2436,6 +3124,18 @@
       },
       "ErrorResourceNotFound" : {
         "title" : "ErrorResourceNotFound",
+        "type" : "object",
+        "required" : [
+          "message"
+        ],
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ErrorSecurity" : {
+        "title" : "ErrorSecurity",
         "type" : "object",
         "required" : [
           "message"
@@ -3142,6 +3842,12 @@
             "format" : "date-time"
           }
         }
+      }
+    },
+    "securitySchemes" : {
+      "httpAuth" : {
+        "type" : "http",
+        "scheme" : "bearer"
       }
     }
   }

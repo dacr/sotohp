@@ -1,7 +1,21 @@
 import axios from 'axios';
+import { getToken, updateToken } from './auth';
 export class ApiClient {
     constructor(baseURL = '') {
         this.http = axios.create({ baseURL });
+        this.http.interceptors.request.use(async (config) => {
+            try {
+                await updateToken(5);
+                const token = getToken();
+                if (token) {
+                    config.headers.Authorization = `Bearer ${token}`;
+                }
+            }
+            catch (error) {
+                console.error('Failed to refresh token', error);
+            }
+            return config;
+        });
     }
     async getMedia(select, referenceMediaAccessKey) {
         const res = await this.http.get('/api/media', {

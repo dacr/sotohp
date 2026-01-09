@@ -30,6 +30,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
   import scala.util.Properties.{envOrNone, envOrElse}
 
   private val client = { // TODO rewrite to be fully effect based
+    import scala.concurrent.ExecutionContext.Implicits.global
     val elasticProperties = ElasticProperties(config.elasticUrl)
 
     val commonRequestConfigBuilder: RequestConfigCallback = (requestConfigBuilder: RequestConfig.Builder) =>
@@ -127,7 +128,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
     // TODO deep pagination issue see https://www.elastic.co/guide/en/elasticsearch/reference/current/scroll-api.html
     val result = for {
       response         <- client.execute(search(Index(indexName)).size(searchPageSize).scroll(scrollKeepAlive))
-      scrollId         <- ZIO.fromOption(response.result.scrollId)
+      scrollId         <- ZIO.fromOption(response.result.scrollId).orElseFail(new Exception("No scrollId returned"))
       firstResults      = Chunk.fromArray(response.result.hits.hits.map(_.sourceAsString))
       _                <- ZIO.log(s"Got ${firstResults.size} first documents")
       nextResultsStream = streamFromScroll(scrollId)

@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.api.security
 
 import fr.janalyse.sotohp.api.{ApiConfig, AuthConfig}
 import pdi.jwt.{JwtAlgorithm, JwtClaim, JwtZIOJson}
-import sttp.client3.*
+import sttp.client4.*
 import zio.*
 import zio.json.*
 
@@ -91,7 +91,7 @@ object SecurityService {
       for {
         config   <- ZIO.service[AuthConfig]
         jwksRef  <- Ref.make[Map[String, PublicKey]](Map.empty)
-        backend  <- ZIO.succeed(HttpClientSyncBackend())
+        backend  <- ZIO.succeed(DefaultSyncBackend())
         service   = LiveSecurityService(config, jwksRef, backend)
         _        <- service.startJwksRefresh.forkScoped
       } yield service
@@ -104,7 +104,7 @@ object SecurityService {
 private class LiveSecurityService(
   config: AuthConfig,
   jwksRef: Ref[Map[String, PublicKey]],
-  backend: SttpBackend[Identity, Any]
+  backend: SyncBackend
 ) extends SecurityService {
 
   private val supportedAlgorithms = Seq(JwtAlgorithm.RS256, JwtAlgorithm.RS384, JwtAlgorithm.RS512)
