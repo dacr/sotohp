@@ -41,3 +41,9 @@ object ApiResourceNotFound {
   given JsonCodec[ApiResourceNotFound] = DeriveJsonCodec.gen
   given Schema[ApiResourceNotFound]    = Schema.derived[ApiResourceNotFound].name(Schema.SName("ErrorResourceNotFound"))
 }
+
+case class ApiSecurityError(message: String) extends Exception(message) with ApiIssue
+object ApiSecurityError {
+  given JsonCodec[ApiSecurityError] = DeriveJsonCodec.gen
+  given Schema[ApiSecurityError]    = Schema.derived[ApiSecurityError].name(Schema.SName("ErrorSecurity"))
+}

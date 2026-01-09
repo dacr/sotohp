@@ -16,17 +16,17 @@ import zio.logging.consoleLogger
 //import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
-import fr.janalyse.sotohp.api.protocol.{*, given}
+import fr.janalyse.sotohp.api.protocol.{ApiSecurityError, *}
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.model.{PersonId, BoundingBox}
 import fr.janalyse.sotohp.api.protocol.{ApiPersonCreate, ApiPersonUpdate}
-import fr.janalyse.sotohp.api.security.{ApiSecurityError, SecureEndpoints, SecurityService, UserContext}
+import fr.janalyse.sotohp.api.security.{SecureEndpoints, SecurityService, UserContext}
 import wvlet.airframe.ulid.ULID
 import fr.janalyse.sotohp.service.model.SynchronizeAction
 import fr.janalyse.sotohp.service.model.SynchronizeAction.Start
 import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
-import sttp.tapir.{Codec, CodecFormat, EndpointInput, Schema}
+import sttp.tapir.{Codec, CodecFormat, EndpointInput, EndpointOutput, Schema}
 import sttp.tapir.files.staticFilesGetServerEndpoint
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
@@ -46,7 +46,7 @@ import java.util.UUID
 
 object ApiApp extends ZIOAppDefault {
 
-  type ApiEnv = MediaService
+  type ApiEnv = MediaService & SecurityService
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -94,18 +94,24 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   // Secure endpoint bases with optional bearer authentication
   // When auth is disabled, endpoints work without token; when enabled, token is validated
-  val secureSystemEndpoint                           = systemEndpoint.securityIn(SecureEndpoints.bearerAuth)
-  val secureAdminEndpoint                            = adminEndpoint.securityIn(SecureEndpoints.bearerAuth)
-  def secureStateEndpoint(plurial: Boolean = false)  = stateEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
-  def secureMediaEndpoint(plurial: Boolean = false)  = mediaEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
-  def secureStoreEndpoint(plurial: Boolean = false)  = storeEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
-  def secureOwnerEndpoint(plurial: Boolean = false)  = ownerEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
-  def securePersonEndpoint(plurial: Boolean = false) = personEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
-  def secureEventEndpoint(plurial: Boolean = false)  = eventEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
-  def secureFaceEndpoint(plurial: Boolean = false)   = faceEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth)
+
+  def securityError: EndpointOutput[ApiIssue] = jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
+    case e: ApiSecurityError => e
+    case _                   => ApiSecurityError("Unknown security error")
+  }
+
+  val secureSystemEndpoint                           = systemEndpoint.securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  val secureAdminEndpoint                            = adminEndpoint.securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def secureStateEndpoint(plurial: Boolean = false)  = stateEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def secureMediaEndpoint(plurial: Boolean = false)  = mediaEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def secureStoreEndpoint(plurial: Boolean = false)  = storeEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def secureOwnerEndpoint(plurial: Boolean = false)  = ownerEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def securePersonEndpoint(plurial: Boolean = false) = personEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def secureEventEndpoint(plurial: Boolean = false)  = eventEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def secureFaceEndpoint(plurial: Boolean = false)   = faceEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
 
   // Security logic that validates token when auth is enabled
-  def securityLogic(token: String): ZIO[SecurityService, ApiSecurityError, UserContext] =
+  def securityLogic(token: String): ZIO[ApiEnv, ApiSecurityError, UserContext] =
     for {
       config  <- ApiConfig.config.orDie
       context <- SecureEndpoints.securityLogic(config.auth)(token)
@@ -161,17 +167,20 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val stateGetEndpoint =
-    stateEndpoint()
+    secureStateEndpoint()
       .name("Get original state")
       .summary("Get original/media state information for the given original identifier")
       .description("Also get the related media access key for the selected original")
       .get
       .in(path[UUID]("originalId"))
       .out(jsonBody[ApiState])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawOriginalId =>
-        extractOriginalId(rawOriginalId)
-          .flatMap(originalId => stateGetLogic(originalId))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawOriginalId =>
+          extractOriginalId(rawOriginalId)
+            .flatMap(originalId => stateGetLogic(originalId))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -186,14 +195,14 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val ownerCreateEndpoint =
-    ownerEndpoint()
+    secureOwnerEndpoint()
       .name("Create an owner")
       .summary("Create a new media owner")
       .post
       .in(jsonBody[ApiOwnerCreate])
       .out(jsonBody[ApiOwner])
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](toCreate => ownerCreateLogic(toCreate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => toCreate => ownerCreateLogic(toCreate))
 
   def ownerGetLogic(ownerId: OwnerId): ZIO[ApiEnv, ApiIssue, ApiOwner] = {
     for {
@@ -207,16 +216,19 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val ownerGetEndpoint =
-    ownerEndpoint()
+    secureOwnerEndpoint()
       .name("Get owner")
       .summary("Get all owner information for the given owner identifier")
       .get
       .in(path[String]("ownerId"))
       .out(jsonBody[ApiOwner])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawOwnerId =>
-        extractOwnerId(rawOwnerId)
-          .flatMap(ownerId => ownerGetLogic(ownerId))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawOwnerId =>
+          extractOwnerId(rawOwnerId)
+            .flatMap(ownerId => ownerGetLogic(ownerId))
       )
 
   def ownerUpdateLogic(ownerId: OwnerId, toUpdate: ApiOwnerUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
@@ -242,45 +254,51 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val ownerUpdateEndpoint =
-    ownerEndpoint()
+    secureOwnerEndpoint()
       .name("Update owner")
       .summary("Update owner configuration for the given owner identifier")
       .put
       .in(path[String]("ownerId"))
       .in(jsonBody[ApiOwnerUpdate]) // TODO security and regex fields
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawOwnerId, toUpdate) =>
-        extractOwnerId(rawOwnerId)
-          .flatMap(ownerId => ownerUpdateLogic(ownerId, toUpdate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawOwnerId, toUpdate) =>
+          extractOwnerId(rawOwnerId)
+            .flatMap(ownerId => ownerUpdateLogic(ownerId, toUpdate))
       )
 
   val ownerUpdateCoverEndpoint =
-    ownerEndpoint()
+    secureOwnerEndpoint()
       .name("Update owner image cover")
       .summary("Update owner image cover for the given owner and original identifiers")
       .put
       .in(path[String]("ownerId"))
       .in("cover")
       .in(path[String]("mediaAccessKey"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawOwnerId, rawMediaAccessKey) =>
-        for {
-          ownerId        <- extractOwnerId(rawOwnerId)
-          mediaAccessKey <- extractMediaAccessKey(rawMediaAccessKey)
-          owner          <- ownerGetLogic(ownerId)
-          media          <- mediaGetLogic(mediaAccessKey)
-          _              <- MediaService
-                              .ownerUpdate(
-                                ownerId = ownerId,
-                                firstName = owner.firstName,
-                                lastName = owner.lastName,
-                                birthDate = owner.birthDate,
-                                coverOriginalId = Some(media.original.id)
-                              )
-                              .logError("Couldn't update owner")
-                              .mapError(err => ApiInternalError("Couldn't update owner"))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawOwnerId, rawMediaAccessKey) =>
+          for {
+            ownerId        <- extractOwnerId(rawOwnerId)
+            mediaAccessKey <- extractMediaAccessKey(rawMediaAccessKey)
+            owner          <- ownerGetLogic(ownerId)
+            media          <- mediaGetLogic(mediaAccessKey)
+            _              <- MediaService
+                                .ownerUpdate(
+                                  ownerId = ownerId,
+                                  firstName = owner.firstName,
+                                  lastName = owner.lastName,
+                                  birthDate = owner.birthDate,
+                                  coverOriginalId = Some(media.original.id)
+                                )
+                                .logError("Couldn't update owner")
+                                .mapError(err => ApiInternalError("Couldn't update owner"))
 
-        } yield ()
+          } yield ()
       )
 
   val ownerListLogic: ZStream[MediaService, Throwable, ApiOwner] = {
@@ -291,7 +309,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val ownerListEndpoint =
-    ownerEndpoint(true)
+    secureOwnerEndpoint(true)
       .name("List owners")
       .summary("Stream all defined owners")
       .get
@@ -299,16 +317,17 @@ object ApiApp extends ZIOAppDefault {
         streamBody(ZioStreams)(ApiOwner.apiOwnerSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Owner JSON object per line)")
       ) // TODO how to provide information about the fact we want NDJSON output of ApiOwner ?
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](_ =>
-        for {
-          ms        <- ZIO.service[MediaService]
-          byteStream = ownerListLogic
-                         .map(_.toJson)
-                         .intersperse("\n")
-                         .via(ZPipeline.utf8Encode)
-                         .provideEnvironment(ZEnvironment(ms))
-        } yield byteStream
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = ownerListLogic
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -330,14 +349,14 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val storeCreateEndpoint =
-    storeEndpoint()
+    secureStoreEndpoint()
       .name("Create an store")
       .summary("Create a new media store")
       .post
       .in(jsonBody[ApiStoreCreate])
       .out(jsonBody[ApiStore])
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](toCreate => storeCreateLogic(toCreate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => toCreate => storeCreateLogic(toCreate))
 
   def storeGetLogic(storeId: StoreId): ZIO[ApiEnv, ApiIssue, ApiStore] = {
     val logic = for {
@@ -353,16 +372,19 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val storeGetEndpoint =
-    storeEndpoint()
+    secureStoreEndpoint()
       .name("Get store")
       .summary("Get all store information for the given store identifier")
       .get
       .in(path[String]("storeId"))
       .out(jsonBody[ApiStore])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawStoreId =>
-        extractStoreId(rawStoreId)
-          .flatMap(storeId => storeGetLogic(storeId))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawStoreId =>
+          extractStoreId(rawStoreId)
+            .flatMap(storeId => storeGetLogic(storeId))
       )
 
   def storeUpdateLogic(storeId: StoreId, toUpdate: ApiStoreUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
@@ -382,16 +404,19 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val storeUpdateEndpoint =
-    storeEndpoint()
+    secureStoreEndpoint()
       .name("Update store")
       .summary("Update store configuration for the given store identifier")
       .put
       .in(path[String]("storeId"))
       .in(jsonBody[ApiStoreUpdate]) // TODO security and regex fields
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawStoreId, toUpdate) =>
-        extractStoreId(rawStoreId)
-          .flatMap(storeId => storeUpdateLogic(storeId, toUpdate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawStoreId, toUpdate) =>
+          extractStoreId(rawStoreId)
+            .flatMap(storeId => storeUpdateLogic(storeId, toUpdate))
       )
 
   val storeListLogic: ZStream[MediaService, Throwable, ApiStore] = {
@@ -402,7 +427,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val storeListEndpoint =
-    storeEndpoint(true)
+    secureStoreEndpoint(true)
       .name("List stores")
       .summary("Stream all defined stores")
       .get
@@ -411,16 +436,17 @@ object ApiApp extends ZIOAppDefault {
           .description("NDJSON (one Store JSON object per line)")
           // .schema(summon[Schema[List[ApiStore]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiStore ?
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](_ =>
-        for {
-          ms        <- ZIO.service[MediaService]
-          byteStream = storeListLogic
-                         .map(_.toJson)
-                         .intersperse("\n")
-                         .via(ZPipeline.utf8Encode)
-                         .provideEnvironment(ZEnvironment(ms))
-        } yield byteStream
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = storeListLogic
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
       )
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -438,16 +464,19 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val mediaGetEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Get media")
       .summary("Get all media information for the given media access key")
       .get
       .in(path[String]("mediaAccessKey"))
       .out(jsonBody[ApiMedia])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey =>
-        extractMediaAccessKey(rawMediaAccessKey)
-          .flatMap(mediaAccessKey => mediaGetLogic(mediaAccessKey))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawMediaAccessKey =>
+          extractMediaAccessKey(rawMediaAccessKey)
+            .flatMap(mediaAccessKey => mediaGetLogic(mediaAccessKey))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -477,16 +506,19 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val mediaUpdateEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Update media")
       .summary("Update media information for the given media identifier")
       .put
       .in(path[String]("mediaAccessKey"))
       .in(jsonBody[ApiMediaUpdate])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawMediaAccessKey, toUpdate) =>
-        extractMediaAccessKey(rawMediaAccessKey)
-          .flatMap(eventId => mediaUpdateLogic(eventId, toUpdate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawMediaAccessKey, toUpdate) =>
+          extractMediaAccessKey(rawMediaAccessKey)
+            .flatMap(eventId => mediaUpdateLogic(eventId, toUpdate))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -505,17 +537,20 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val mediaUpdateStarredEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Update media")
       .summary("Update media starred state for the given media identifier")
       .put
       .in(path[String]("mediaAccessKey"))
       .in("starred")
       .in(query[Boolean]("state"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawMediaAccessKey, state) =>
-        extractMediaAccessKey(rawMediaAccessKey)
-          .flatMap(mediaAccessKey => mediaUpdateStarredLogic(mediaAccessKey, state))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawMediaAccessKey, state) =>
+          extractMediaAccessKey(rawMediaAccessKey)
+            .flatMap(mediaAccessKey => mediaUpdateStarredLogic(mediaAccessKey, state))
       )
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -525,7 +560,7 @@ object ApiApp extends ZIOAppDefault {
     case Miniature
   }
 
-  def mediaGetImageBytesStream(accessKey: MediaAccessKey, whichMedia: WhichMedia): ZIO[ApiEnv, ApiIssue, (Media, ZStream[ApiEnv, ApiInternalError, Byte])] = {
+  def mediaGetImageBytesStream(accessKey: MediaAccessKey, whichMedia: WhichMedia): ZIO[ApiEnv, ApiIssue, (Media, ZStream[MediaService, ApiInternalError, Byte])] = {
     val logic = for {
       media           <- MediaService
                            .mediaGet(accessKey)
@@ -553,7 +588,7 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
   val mediaContentGetOriginalEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Get media original size image")
       .summary("Get media original size image content")
       .get
@@ -561,13 +596,15 @@ object ApiApp extends ZIOAppDefault {
       .in("content" / "original")
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Original))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user => rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Original))
 
   // -------------------------------------------------------------------------------------------------------------------
 
   val mediaContentGetNormalizedEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Get media normalized image")
       .summary("Get media normalized image content")
       .get
@@ -575,13 +612,15 @@ object ApiApp extends ZIOAppDefault {
       .in("content" / "normalized")
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Normalized))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user => rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Normalized))
 
   // -------------------------------------------------------------------------------------------------------------------
 
   val mediaContentGetMiniatureEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Get media miniature image")
       .summary("Get media miniature image content")
       .get
@@ -589,8 +628,10 @@ object ApiApp extends ZIOAppDefault {
       .in("content" / "miniature")
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Miniature))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user => rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Miniature))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -603,7 +644,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val mediaListEndpoint =
-    mediaEndpoint(true)
+    secureMediaEndpoint(true)
       .name("List medias")
       .summary("Stream all defined medias")
       .in(query[Option[Boolean]]("filterHasLocation"))
@@ -613,16 +654,17 @@ object ApiApp extends ZIOAppDefault {
           .description("NDJSON (one Store JSON object per line)")
           // .schema(summon[Schema[List[ApiMedia]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiMedia ?
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv]((filterHasLocation) =>
-        for {
-          ms        <- ZIO.service[MediaService]
-          byteStream = mediaListLogic(filterHasLocation)
-                         .map(_.toJson)
-                         .intersperse("\n")
-                         .via(ZPipeline.utf8Encode)
-                         .provideEnvironment(ZEnvironment(ms))
-        } yield byteStream
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        (filterHasLocation) =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = mediaListLogic(filterHasLocation)
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -678,7 +720,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val mediaSelectEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Get media information")
       .summary("Get information from a random, first, last, previous of, or next to media")
       .get
@@ -686,27 +728,29 @@ object ApiApp extends ZIOAppDefault {
       .in(query[Option[String]]("referenceMediaAccessKey").description("previous or next media from the provided a reference media"))
       .in(query[Option[OffsetDateTime]]("referenceMediaTimestamp").description("previous or next media from the provided timestamp"))
       .out(jsonBody[ApiMedia])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound))
-      .zServerLogic[ApiEnv]((selectCriteria, mayBeRawKey, mayBeMediaTimestamp) =>
-        for {
-          nearKey <- ZIO
-                       .attempt(
-                         mayBeRawKey
-                           .map(rawKey => MediaAccessKey(rawKey))
-                           .orElse(mayBeMediaTimestamp.map(timestamp => MediaAccessKey(timestamp)))
-                       )
-                       .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
-          media   <- selectCriteria match {
-                       case MediaSelector.random                        => mediaSelectRandomLogic
-                       case MediaSelector.first                         => mediaSelectFirstLogic
-                       case MediaSelector.previous if nearKey.isDefined => mediaSelectPreviousLogic(nearKey.get)
-                       case MediaSelector.previous                      => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
-                       case MediaSelector.next if nearKey.isDefined     => mediaSelectNextLogic(nearKey.get)
-                       case MediaSelector.next                          => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
-                       case MediaSelector.last                          => mediaSelectLastLogic
-                     }
-          taoMedia = media.transformInto[ApiMedia](using ApiMedia.transformer)
-        } yield taoMedia
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .serverLogic[ApiEnv](user =>
+        (selectCriteria, mayBeRawKey, mayBeMediaTimestamp) =>
+          for {
+            nearKey <- ZIO
+                         .attempt(
+                           mayBeRawKey
+                             .map(rawKey => MediaAccessKey(rawKey))
+                             .orElse(mayBeMediaTimestamp.map(timestamp => MediaAccessKey(timestamp)))
+                         )
+                         .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+            media   <- selectCriteria match {
+                         case MediaSelector.random                        => mediaSelectRandomLogic
+                         case MediaSelector.first                         => mediaSelectFirstLogic
+                         case MediaSelector.previous if nearKey.isDefined => mediaSelectPreviousLogic(nearKey.get)
+                         case MediaSelector.previous                      => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
+                         case MediaSelector.next if nearKey.isDefined     => mediaSelectNextLogic(nearKey.get)
+                         case MediaSelector.next                          => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
+                         case MediaSelector.last                          => mediaSelectLastLogic
+                       }
+            taoMedia = media.transformInto[ApiMedia](using ApiMedia.transformer)
+          } yield taoMedia
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -726,17 +770,20 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val mediaFacesGetEndpoint =
-    mediaEndpoint()
+    secureMediaEndpoint()
       .name("Get media faces")
       .summary("Get media identified people faces for the given media access key")
       .get
       .in(path[String]("mediaAccessKey"))
       .in("faces")
       .out(jsonBody[ApiOriginalFaces])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawMediaAccessKey =>
-        extractMediaAccessKey(rawMediaAccessKey)
-          .flatMap(mediaAccessKey => mediaFacesGetLogic(mediaAccessKey))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawMediaAccessKey =>
+          extractMediaAccessKey(rawMediaAccessKey)
+            .flatMap(mediaAccessKey => mediaFacesGetLogic(mediaAccessKey))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -749,7 +796,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val faceListEndpoint =
-    faceEndpoint(true)
+    secureFaceEndpoint(true)
       .name("List faces")
       .summary("Stream people faces")
       .get
@@ -758,16 +805,17 @@ object ApiApp extends ZIOAppDefault {
           .description("NDJSON (one Store JSON object per line)")
           // .schema(summon[Schema[List[ApiDetectedFace]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiDetectedFace ?
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](_ =>
-        for {
-          ms        <- ZIO.service[MediaService]
-          byteStream = faceListLogic
-                         .map(_.toJson)
-                         .intersperse("\n")
-                         .via(ZPipeline.utf8Encode)
-                         .provideEnvironment(ZEnvironment(ms))
-        } yield byteStream
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = faceListLogic
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
       )
 
   def faceCreateLogic(toCreate: ApiFaceCreate): ZIO[ApiEnv, ApiInternalError, ApiFace] = {
@@ -780,14 +828,14 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val faceCreateEndpoint =
-    faceEndpoint()
+    secureFaceEndpoint()
       .name("Create a face")
       .summary("Create a new face within the given original")
       .post
       .in(jsonBody[ApiFaceCreate])
       .out(jsonBody[ApiFace])
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](toCreate => faceCreateLogic(toCreate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => toCreate => faceCreateLogic(toCreate))
 
   def faceGetLogic(faceId: FaceId): ZIO[ApiEnv, ApiIssue, ApiDetectedFace] = {
     val logic = for {
@@ -803,32 +851,38 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val faceGetEndpoint =
-    faceEndpoint()
+    secureFaceEndpoint()
       .name("Get face")
       .summary("Get all face information for the given face identifier")
       .get
       .in(path[String]("faceId"))
       .out(jsonBody[ApiDetectedFace])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawFaceId =>
-        extractFaceId(rawFaceId)
-          .flatMap(id => faceGetLogic(id))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawFaceId =>
+          extractFaceId(rawFaceId)
+            .flatMap(id => faceGetLogic(id))
       )
 
   val faceDeleteEndpoint =
-    faceEndpoint()
+    secureFaceEndpoint()
       .name("Delete face")
       .summary("Delete face for the given face identifier")
       .delete
       .in(path[String]("faceId"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv] { rawFaceId =>
-        for {
-          faceId <- extractFaceId(rawFaceId)
-          _      <- MediaService
-                      .faceDelete(faceId)
-                      .mapError(err => ApiInternalError("Couldn't delete face"))
-        } yield ()
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv] { user =>
+        rawFaceId =>
+          for {
+            faceId <- extractFaceId(rawFaceId)
+            _      <- MediaService
+                        .faceDelete(faceId)
+                        .mapError(err => ApiInternalError("Couldn't delete face"))
+          } yield ()
       }
 
   def faceGetImageBytesLogic(faceId: FaceId) = {
@@ -840,7 +894,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val faceContentGetEndpoint =
-    faceEndpoint()
+    secureFaceEndpoint()
       .name("Get face image")
       .summary("Get face image content")
       .get
@@ -848,24 +902,30 @@ object ApiApp extends ZIOAppDefault {
       .in("content")
       .out(header[String]("Content-Type"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawFaceId =>
-        extractFaceId(rawFaceId)
-          .flatMap(id => faceGetImageBytesLogic(id))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawFaceId =>
+          extractFaceId(rawFaceId)
+            .flatMap(id => faceGetImageBytesLogic(id))
       )
 
   val faceUpdatePersonEndpoint =
-    faceEndpoint()
+    secureFaceEndpoint()
       .name("Set or update face identified person")
       .summary("Set or update face identified person")
       .put
       .in(path[String]("faceId"))
       .in("person")
       .in(path[String]("personId"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawFaceId, rawPersonId) =>
-        for {
-          faceId   <- extractFaceId(rawFaceId)
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawFaceId, rawPersonId) =>
+          for {
+            faceId   <- extractFaceId(rawFaceId)
           personId <- extractPersonId(rawPersonId)
           face     <- MediaService
                         .faceGet(faceId)
@@ -885,60 +945,65 @@ object ApiApp extends ZIOAppDefault {
       )
 
   val faceDeletePersonEndpoint =
-    faceEndpoint()
+    secureFaceEndpoint()
       .name("Remove face identified person")
       .summary("Remove face identified person")
       .delete
       .in(path[String]("faceId"))
       .in("person")
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawFaceId =>
-        for {
-          faceId <- extractFaceId(rawFaceId)
-          face   <- MediaService
-                      .faceGet(faceId)
-                      .logError("Couldn't get face")
-                      .mapError(err => ApiInternalError("Couldn't get face"))
-                      .someOrFail(ApiResourceNotFound("Couldn't find face"))
-          _      <- MediaService
-                      .faceUpdate(
-                        faceId = faceId,
-                        face = face.copy(identifiedPersonId = None)
-                      )
-                      .logError("Couldn't remove face identified person")
-                      .mapError(err => ApiInternalError("Couldn't remove delete identified person"))
-        } yield ()
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawFaceId =>
+          for {
+            faceId <- extractFaceId(rawFaceId)
+            face   <- MediaService
+                        .faceGet(faceId)
+                        .logError("Couldn't get face")
+                        .mapError(err => ApiInternalError("Couldn't get face"))
+                        .someOrFail(ApiResourceNotFound("Couldn't find face"))
+            _      <- MediaService
+                        .faceUpdate(
+                          faceId = faceId,
+                          face = face.copy(identifiedPersonId = None)
+                        )
+                        .logError("Couldn't remove face identified person")
+                        .mapError(err => ApiInternalError("Couldn't remove delete identified person"))
+          } yield ()
       )
 
   // -------------------------------------------------------------------------------------------------------------------
 
   val adminSynchronizeEndpoint =
-    adminEndpoint
+    secureAdminEndpoint
       .name("Synchronize start")
       .summary("Start synchronize background operations with all stores content")
       .put
       .in("synchronize")
       .in(query[Option[Int]]("addedThoseLastDays").description("for faster synchronize operations provide how much days back to look for new medias"))
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv] { addedThoseLastDays =>
-        MediaService
-          .synchronizeStart(addedThoseLastDays)
-          .mapError(err => ApiInternalError("Couldn't synchronize"))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv] { user =>
+        addedThoseLastDays =>
+          MediaService
+            .synchronizeStart(addedThoseLastDays)
+            .mapError(err => ApiInternalError("Couldn't synchronize"))
       }
 
   val adminSynchronizeStatusEndpoint =
-    adminEndpoint
+    secureAdminEndpoint
       .name("Get synchronize status")
       .summary("Get all the details about what's going on with the synchronize operations")
       .get
       .in("synchronize")
       .out(jsonBody[ApiSynchronizeStatus])
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv] { _ =>
-        MediaService
-          .synchronizeStatus()
-          .map(_.transformInto[ApiSynchronizeStatus])
-          .mapError(err => ApiInternalError("Couldn't get synchronize status"))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv] { user =>
+        _ =>
+          MediaService
+            .synchronizeStatus()
+            .map(_.transformInto[ApiSynchronizeStatus])
+            .mapError(err => ApiInternalError("Couldn't get synchronize status"))
       }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -950,7 +1015,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val personListEndpoint =
-    personEndpoint(true)
+    securePersonEndpoint(true)
       .name("List persons")
       .summary("Stream all defined persons")
       .get
@@ -958,16 +1023,17 @@ object ApiApp extends ZIOAppDefault {
         streamBody(ZioStreams)(ApiPerson.apiOwnerSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Person JSON object per line)")
       )
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](_ =>
-        for {
-          ms        <- ZIO.service[MediaService]
-          byteStream = personListLogic
-                         .map(_.toJson)
-                         .intersperse("\n")
-                         .via(ZPipeline.utf8Encode)
-                         .provideEnvironment(ZEnvironment(ms))
-        } yield byteStream
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = personListLogic
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
       )
 
   def personCreateLogic(toCreate: ApiPersonCreate): ZIO[ApiEnv, ApiInternalError, ApiPerson] = {
@@ -980,14 +1046,14 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val personCreateEndpoint =
-    personEndpoint()
+    securePersonEndpoint()
       .name("Create a person")
       .summary("Create a new person")
       .post
       .in(jsonBody[ApiPersonCreate])
       .out(jsonBody[ApiPerson])
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](toCreate => personCreateLogic(toCreate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => toCreate => personCreateLogic(toCreate))
 
   def personGetLogic(personId: PersonId): ZIO[ApiEnv, ApiIssue, ApiPerson] = {
     for {
@@ -1001,16 +1067,19 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val personGetEndpoint =
-    personEndpoint()
+    securePersonEndpoint()
       .name("Get person")
       .summary("Get all person information for the given person identifier")
       .get
       .in(path[String]("personId"))
       .out(jsonBody[ApiPerson])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawPersonId =>
-        extractPersonId(rawPersonId)
-          .flatMap(personId => personGetLogic(personId))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawPersonId =>
+          extractPersonId(rawPersonId)
+            .flatMap(personId => personGetLogic(personId))
       )
 
   def personUpdateLogic(personId: PersonId, toUpdate: ApiPersonUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
@@ -1031,54 +1100,60 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val personUpdateEndpoint =
-    personEndpoint()
+    securePersonEndpoint()
       .name("Update person")
       .summary("Update person configuration for the given person identifier")
       .put
       .in(path[String]("personId"))
       .in(jsonBody[ApiPersonUpdate])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawPersonId, toUpdate) =>
-        extractPersonId(rawPersonId)
-          .flatMap(personId => personUpdateLogic(personId, toUpdate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawPersonId, toUpdate) =>
+          extractPersonId(rawPersonId)
+            .flatMap(personId => personUpdateLogic(personId, toUpdate))
       )
 
   val personUpdateFaceEndpoint =
-    personEndpoint()
+    securePersonEndpoint()
       .name("Update person face")
       .summary("Update person face for the given person and face identifiers")
       .put
       .in(path[String]("personId"))
       .in("face")
       .in(path[String]("faceId"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawPersonId, rawFaceId) =>
-        for {
-          personId <- extractPersonId(rawPersonId)
-          faceId   <- extractFaceId(rawFaceId)
-          _        <- MediaService
-                        .faceGet(faceId)
-                        .logError("Couldn't get face")
-                        .mapError(err => ApiInternalError("Couldn't get face"))
-                        .someOrFail(ApiResourceNotFound("Couldn't find face"))
-          person   <- MediaService
-                        .personGet(personId)
-                        .logError("Couldn't get person")
-                        .mapError(err => ApiInternalError("Couldn't get person"))
-                        .someOrFail(ApiResourceNotFound("Couldn't find person"))
-          _        <- MediaService
-                        .personUpdate(
-                          personId = personId,
-                          firstName = person.firstName,
-                          lastName = person.lastName,
-                          birthDate = person.birthDate,
-                          email = person.email,
-                          description = person.description,
-                          chosenFaceId = Some(faceId)
-                        )
-                        .logError("Couldn't update person")
-                        .mapError(err => ApiInternalError("Couldn't update person"))
-        } yield ()
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawPersonId, rawFaceId) =>
+          for {
+            personId <- extractPersonId(rawPersonId)
+            faceId   <- extractFaceId(rawFaceId)
+            _        <- MediaService
+                          .faceGet(faceId)
+                          .logError("Couldn't get face")
+                          .mapError(err => ApiInternalError("Couldn't get face"))
+                          .someOrFail(ApiResourceNotFound("Couldn't find face"))
+            person   <- MediaService
+                          .personGet(personId)
+                          .logError("Couldn't get person")
+                          .mapError(err => ApiInternalError("Couldn't get person"))
+                          .someOrFail(ApiResourceNotFound("Couldn't find person"))
+            _        <- MediaService
+                          .personUpdate(
+                            personId = personId,
+                            firstName = person.firstName,
+                            lastName = person.lastName,
+                            birthDate = person.birthDate,
+                            email = person.email,
+                            description = person.description,
+                            chosenFaceId = Some(faceId)
+                          )
+                          .logError("Couldn't update person")
+                          .mapError(err => ApiInternalError("Couldn't update person"))
+          } yield ()
       )
 
   def personDeleteLogic(personId: PersonId): ZIO[ApiEnv, ApiIssue, Unit] = {
@@ -1089,15 +1164,18 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val personDeleteEndpoint =
-    personEndpoint()
+    securePersonEndpoint()
       .name("Delete person")
       .summary("Delete the person for the given person identifier")
       .delete
       .in(path[String]("personId"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawPersonId =>
-        extractPersonId(rawPersonId)
-          .flatMap(personId => personDeleteLogic(personId))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawPersonId =>
+          extractPersonId(rawPersonId)
+            .flatMap(personId => personDeleteLogic(personId))
       )
 
   def personFaceListLogic(personId: PersonId): ZStream[MediaService, Throwable, ApiDetectedFace] = {
@@ -1108,7 +1186,7 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val personFaceListEndpoint =
-    personEndpoint()
+    securePersonEndpoint()
       .name("List person faces")
       .summary("Stream all defined person faces")
       .get
@@ -1119,17 +1197,20 @@ object ApiApp extends ZIOAppDefault {
         streamBody(ZioStreams)(ApiDetectedFace.apiDetectedFaceSchema, NdJson, Some(StandardCharsets.UTF_8))
           .description("NDJSON (one Person JSON object per line)")
       )
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawPersonId =>
-        for {
-          personId  <- extractPersonId(rawPersonId)
-          ms        <- ZIO.service[MediaService]
-          byteStream = personFaceListLogic(personId)
-                         .map(_.toJson)
-                         .intersperse("\n")
-                         .via(ZPipeline.utf8Encode)
-                         .provideEnvironment(ZEnvironment(ms))
-        } yield byteStream
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawPersonId =>
+          for {
+            personId  <- extractPersonId(rawPersonId)
+            ms        <- ZIO.service[MediaService]
+            byteStream = personFaceListLogic(personId)
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1148,16 +1229,19 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val eventGetEndpoint =
-    eventEndpoint()
+    secureEventEndpoint()
       .name("Get event")
       .summary("Get all event information for the given event identifier")
       .get
       .in(path[String]("eventId"))
       .out(jsonBody[ApiEvent])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawEventId =>
-        extractEventId(rawEventId)
-          .flatMap(id => eventGetLogic(id))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawEventId =>
+          extractEventId(rawEventId)
+            .flatMap(id => eventGetLogic(id))
       )
 
   def eventUpdateLogic(eventId: EventId, toUpdate: ApiEventUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
@@ -1186,52 +1270,58 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val eventUpdateEndpoint =
-    eventEndpoint()
+    secureEventEndpoint()
       .name("Update event")
       .summary("Update event configuration for the given event identifier")
       .put
       .in(path[String]("eventId"))
       .in(jsonBody[ApiEventUpdate])
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawEventId, toUpdate) =>
-        extractEventId(rawEventId)
-          .flatMap(eventId => eventUpdateLogic(eventId, toUpdate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawEventId, toUpdate) =>
+          extractEventId(rawEventId)
+            .flatMap(eventId => eventUpdateLogic(eventId, toUpdate))
       )
 
   val eventUpdateCoverEndpoint =
-    eventEndpoint()
+    secureEventEndpoint()
       .name("Update event image cover")
       .summary("Update event image cover for the given event and original identifiers")
       .put
       .in(path[String]("eventId"))
       .in("cover")
       .in(path[String]("mediaAccessKey"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv]((rawEventId, rawMediaAccessKey) =>
-        for {
-          eventId        <- extractEventId(rawEventId)
-          mediaAccessKey <- extractMediaAccessKey(rawMediaAccessKey)
-          event          <- MediaService
-                              .eventGet(eventId)
-                              .logError("Couldn't get event")
-                              .mapError(err => ApiInternalError("Couldn't get event"))
-                              .someOrFail(ApiResourceNotFound("Couldn't find event"))
-          media          <- mediaGetLogic(mediaAccessKey)
-          _              <- MediaService
-                              .eventUpdate(
-                                eventId = eventId,
-                                name = event.name,
-                                description = event.description,
-                                location = event.location,
-                                timestamp = event.timestamp,
-                                coverOriginalId = Some(media.original.id),
-                                publishedOn = event.publishedOn,
-                                keywords = event.keywords
-                              )
-                              .logError("Couldn't update event")
-                              .mapError(err => ApiInternalError("Couldn't update event"))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawEventId, rawMediaAccessKey) =>
+          for {
+            eventId        <- extractEventId(rawEventId)
+            mediaAccessKey <- extractMediaAccessKey(rawMediaAccessKey)
+            event          <- MediaService
+                                .eventGet(eventId)
+                                .logError("Couldn't get event")
+                                .mapError(err => ApiInternalError("Couldn't get event"))
+                                .someOrFail(ApiResourceNotFound("Couldn't find event"))
+            media          <- mediaGetLogic(mediaAccessKey)
+            _              <- MediaService
+                                .eventUpdate(
+                                  eventId = eventId,
+                                  name = event.name,
+                                  description = event.description,
+                                  location = event.location,
+                                  timestamp = event.timestamp,
+                                  coverOriginalId = Some(media.original.id),
+                                  publishedOn = event.publishedOn,
+                                  keywords = event.keywords
+                                )
+                                .logError("Couldn't update event")
+                                .mapError(err => ApiInternalError("Couldn't update event"))
 
-        } yield ()
+          } yield ()
       )
 
   val eventListLogic: ZStream[MediaService, Throwable, ApiEvent] = {
@@ -1260,21 +1350,24 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val eventDeleteEndpoint =
-    eventEndpoint()
+    secureEventEndpoint()
       .name("Delete event")
       .summary("Delete the event for the given event identifier")
       .delete
       .in(path[String]("eventId"))
-      .errorOut(oneOf(statusForApiInternalError, statusForApiResourceNotFound, statusForApiInvalidRequestError))
-      .zServerLogic[ApiEnv](rawEventId =>
-        ZIO
-          .attempt(EventId(java.util.UUID.fromString(rawEventId)))
-          .orElseFail(ApiInvalidOrMissingInput("Invalid event identifier"))
-          .flatMap(eventId => eventDeleteLogic(eventId))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawEventId =>
+          ZIO
+            .attempt(EventId(java.util.UUID.fromString(rawEventId)))
+            .orElseFail(ApiInvalidOrMissingInput("Invalid event identifier"))
+            .flatMap(eventId => eventDeleteLogic(eventId))
       )
 
   val eventListEndpoint =
-    eventEndpoint(true)
+    secureEventEndpoint(true)
       .name("List events")
       .summary("Stream all defined events")
       .get
@@ -1283,16 +1376,17 @@ object ApiApp extends ZIOAppDefault {
           .description("NDJSON (one Event JSON object per line)")
           // .schema(summon[Schema[List[ApiEvent]]])
       ) // TODO how to provide information about the fact we want NDJSON output of ApiEvent ?
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](_ =>
-        for {
-          ms        <- ZIO.service[MediaService]
-          byteStream = eventListLogic
-                         .map(_.toJson)
-                         .intersperse("\n")
-                         .via(ZPipeline.utf8Encode)
-                         .provideEnvironment(ZEnvironment(ms))
-        } yield byteStream
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = eventListLogic
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1317,27 +1411,27 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val eventCreateEndpoint =
-    eventEndpoint()
+    secureEventEndpoint()
       .name("Create event")
       .summary("Create a user-defined event")
       .post
       .in(jsonBody[ApiEventCreate])
       .out(jsonBody[ApiEvent])
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](toCreate => eventCreateLogic(toCreate))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => toCreate => eventCreateLogic(toCreate))
 
   // -------------------------------------------------------------------------------------------------------------------
   val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
 
   val serviceStatusEndpoint =
-    systemEndpoint
+    secureSystemEndpoint
       .name("Service status")
       .summary("Get the service status")
       .description("Returns the service status, can also be used as a health check end point for monitoring purposes")
       .get
       .in("status")
       .out(jsonBody[ApiStatus])
-      .zServerLogic[ApiEnv](_ => serviceStatusLogic)
+      .serverLogic[ApiEnv](user => _ => serviceStatusLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
   val serviceInfoLogic = for {
@@ -1353,15 +1447,15 @@ object ApiApp extends ZIOAppDefault {
   )
 
   val serviceInfoEndpoint =
-    systemEndpoint
+    secureSystemEndpoint
       .name("Service global information")
       .summary("Get information and some global statistics")
       .description("Returns service global information such as release information, authors and global statistics")
       .get
       .in("info")
       .out(jsonBody[ApiInfo])
-      .errorOut(oneOf(statusForApiInternalError))
-      .zServerLogic[ApiEnv](_ => serviceInfoLogic)
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => _ => serviceInfoLogic)
 
   // -------------------------------------------------------------------------------------------------------------------
   val apiRoutes = List(

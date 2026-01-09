@@ -1,11 +1,25 @@
 import axios, { AxiosInstance } from 'axios'
 import type { Media, MediaSelector, Event as SEvent, Owner, Store, EventCreate, EventUpdate } from './types'
+import { getToken, updateToken } from './auth'
 
 export class ApiClient {
   private http: AxiosInstance
 
   constructor(baseURL: string = '') {
     this.http = axios.create({ baseURL })
+
+    this.http.interceptors.request.use(async (config) => {
+      try {
+        await updateToken(5)
+        const token = getToken()
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+        }
+      } catch (error) {
+        console.error('Failed to refresh token', error)
+      }
+      return config
+    })
   }
 
   async getMedia(select: MediaSelector, referenceMediaAccessKey?: string): Promise<Media> {

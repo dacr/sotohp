@@ -1,9 +1,30 @@
 // Compiled JavaScript (manually authored) corresponding to TypeScript sources.
 // Uses axios (via CDN) and Leaflet (via CDN). ES module for clarity.
 
+// Initialize Keycloak
+const keycloak = new Keycloak({
+  url: 'http://localhost:8081',
+  realm: 'sotohp',
+  clientId: 'sotohp-web'
+});
+
 class ApiClient {
   // Faces & persons overlay support added
-  constructor(baseURL = '') { this.http = axios.create({ baseURL }); }
+  constructor(baseURL = '') {
+    this.http = axios.create({ baseURL });
+    this.http.interceptors.request.use(async (config) => {
+      if (keycloak.authenticated) {
+        try {
+          await keycloak.updateToken(5);
+          config.headers.Authorization = `Bearer ${keycloak.token}`;
+        } catch (e) {
+          console.warn('Failed to refresh token', e);
+          keycloak.login();
+        }
+      }
+      return config;
+    });
+  }
   async getMedia(select, referenceMediaAccessKey, referenceMediaTimestamp) {
     const params = { select };
     if (referenceMediaAccessKey) params.referenceMediaAccessKey = referenceMediaAccessKey;
@@ -5532,4 +5553,31 @@ function init() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Initialize Keycloak and then start the app
+document.addEventListener('DOMContentLoaded', () => {
+  keycloak
+    .init({ onLoad: 'login-required', checkLoginIframe: false })
+    .then((authenticated) => {
+      if (authenticated) {
+        init();
+        // Add logout button to settings
+        const settingsCard = document.querySelector('#tab-settings .settings-card');
+        if (settingsCard) {
+          const logoutBtn = document.createElement('button');
+          logoutBtn.textContent = 'Logout';
+          logoutBtn.style.marginTop = '20px';
+          logoutBtn.style.background = '#ef4444';
+          logoutBtn.style.color = 'white';
+          logoutBtn.style.border = '1px solid #dc2626';
+          logoutBtn.style.padding = '8px 16px';
+          logoutBtn.style.borderRadius = '6px';
+          logoutBtn.style.cursor = 'pointer';
+          logoutBtn.onclick = () => keycloak.logout();
+          settingsCard.appendChild(logoutBtn);
+        }
+      } else {
+        keycloak.login();
+      }
+    })
+    .catch(console.error);
+});

@@ -1,19 +1,12 @@
 package fr.janalyse.sotohp.api.security
 
 import fr.janalyse.sotohp.api.AuthConfig
+import fr.janalyse.sotohp.api.protocol.{ApiIssue, ApiSecurityError}
 import sttp.model.StatusCode
 import sttp.tapir.{EndpointInput, EndpointOutput, Schema, auth, oneOf, oneOfVariant}
 import sttp.tapir.json.zio.jsonBody
 import zio.*
 import zio.json.*
-
-case class ApiSecurityError(message: String)
-
-object ApiSecurityError {
-  given JsonEncoder[ApiSecurityError] = DeriveJsonEncoder.gen[ApiSecurityError]
-  given JsonDecoder[ApiSecurityError] = DeriveJsonDecoder.gen[ApiSecurityError]
-  given Schema[ApiSecurityError]      = Schema.derived[ApiSecurityError]
-}
 
 object SecureEndpoints {
 
