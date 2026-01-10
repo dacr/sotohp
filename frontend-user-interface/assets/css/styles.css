@@ -140,7 +140,7 @@ main { flex: 1; position: relative; }
 .mosaic-scroll-indicator.show { opacity: 1; }
 
 /* Mosaic timeline layout */
-section#tab-mosaic.tab { overflow: hidden; touch-action: none; overscroll-behavior: contain; }
+section#tab-mosaic.tab { overflow: hidden; flex-direction: row; }
 section#tab-mosaic.tab.active { display: flex; }
 .mosaic-timeline {
   touch-action: none;
@@ -163,7 +163,7 @@ section#tab-mosaic.tab.active { display: flex; }
 .mosaic-timeline .cursor { position: absolute; left: 0; right: 0; height: 2px; background: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
 
 /* Ensure mosaic container flexes next to the timeline */
-#mosaic-container.mosaic-container { flex: 1 1 auto; overflow: hidden; touch-action: none; overscroll-behavior: contain; }
+#mosaic-container.mosaic-container { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; touch-action: pan-y; overscroll-behavior: contain; display: block; position: relative; overflow-anchor: none; }
 
 /* Hover edit button on event tiles */
 .list li { position: relative; }
