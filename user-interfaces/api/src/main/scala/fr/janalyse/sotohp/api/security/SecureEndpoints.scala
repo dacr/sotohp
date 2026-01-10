@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.api.security
 import fr.janalyse.sotohp.api.AuthConfig
 import fr.janalyse.sotohp.api.protocol.{ApiIssue, ApiSecurityError}
 import sttp.model.StatusCode
-import sttp.tapir.{EndpointInput, EndpointOutput, Schema, auth, oneOf, oneOfVariant}
+import sttp.tapir.{EndpointInput, EndpointOutput, Schema, auth, oneOf, oneOfVariant, query}
 import sttp.tapir.json.zio.jsonBody
 import zio.*
 import zio.json.*
@@ -28,7 +28,13 @@ object SecureEndpoints {
     )
 
   val bearerAuth: EndpointInput[String] =
-    auth.bearer[String]()
+    auth.bearer[Option[String]]()
+      .and(query[Option[String]]("token").schema(_.hidden(true)))
+      .map { case (headerToken, queryToken) =>
+        headerToken.orElse(queryToken).getOrElse("")
+      } { token =>
+        (Some(token), None)
+      }
 
   def securityLogic(authConfig: AuthConfig)(token: String): ZIO[SecurityService, ApiSecurityError, UserContext] =
     if (!authConfig.enabled) {

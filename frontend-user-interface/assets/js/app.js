@@ -3,7 +3,7 @@
 
 // Initialize Keycloak
 const keycloak = new Keycloak({
-  url: 'http://localhost:8081',
+  url: 'http://127.0.0.1:8081',
   realm: 'sotohp',
   clientId: 'sotohp-web'
 });
@@ -13,9 +13,9 @@ class ApiClient {
   constructor(baseURL = '') {
     this.http = axios.create({ baseURL });
     this.http.interceptors.request.use(async (config) => {
-      if (keycloak.authenticated) {
+      if (keycloak && keycloak.token) {
         try {
-          await keycloak.updateToken(5);
+          await keycloak.updateToken(30);
           config.headers.Authorization = `Bearer ${keycloak.token}`;
         } catch (e) {
           console.warn('Failed to refresh token', e);
@@ -36,9 +36,27 @@ class ApiClient {
     const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}`);
     return res.data;
   }
-  mediaNormalizedUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`; }
-  mediaMiniatureUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`; }
-  mediaOriginalUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`; }
+  mediaNormalizedUrl(mediaAccessKey) { 
+    let url = `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`;
+    if (keycloak && keycloak.token) {
+      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
+    }
+    return url;
+  }
+  mediaMiniatureUrl(mediaAccessKey) { 
+    let url = `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`;
+    if (keycloak && keycloak.token) {
+      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
+    }
+    return url;
+  }
+  mediaOriginalUrl(mediaAccessKey) { 
+    let url = `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`;
+    if (keycloak && keycloak.token) {
+      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
+    }
+    return url;
+  }
   async listEvents() { return await this.#fetchNdjson('/api/events'); }
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
   async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
@@ -58,7 +76,13 @@ class ApiClient {
   async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
   async listPersonFaces(personId) { return await this.#fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`); }
   async listFaces() { return await this.#fetchNdjson('/api/faces'); }
-  faceImageUrl(faceId) { return `/api/face/${encodeURIComponent(faceId)}/content`; }
+  faceImageUrl(faceId) { 
+    let url = `/api/face/${encodeURIComponent(faceId)}/content`;
+    if (keycloak && keycloak.token) {
+      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
+    }
+    return url;
+  }
   // Faces endpoints
   async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
   async getFace(faceId) { const res = await this.http.get(`/api/face/${encodeURIComponent(faceId)}`); return res.data; }
@@ -5555,12 +5579,34 @@ function init() {
 
 // Initialize Keycloak and then start the app
 document.addEventListener('DOMContentLoaded', () => {
+  // Explicitly set redirectUri to avoid mismatch issues between localhost/127.0.0.1
+  const redirectUri = window.location.origin + window.location.pathname;
+  const initOptions = { 
+    // Manual control to prevent loops
+    onLoad: undefined, 
+    checkLoginIframe: false,
+    enableLogging: true
+  };
+  
   keycloak
-    .init({ onLoad: 'login-required', checkLoginIframe: false })
+    .init(initOptions)
     .then((authenticated) => {
+      // Clear retry counter on any successful init (authenticated or not, as long as it didn't crash)
+      try { sessionStorage.removeItem('keycloak_init_retry_count'); } catch {}
+
       if (authenticated) {
+        console.log('Keycloak authenticated');
         init();
-        // Add logout button to settings
+        
+        // Wire up the navigation logout button
+        const navLogoutBtn = document.getElementById('nav-logout');
+        if (navLogoutBtn) {
+          navLogoutBtn.addEventListener('click', () => {
+             keycloak.logout({ redirectUri: redirectUri });
+          });
+        }
+
+        // Add logout button to settings (keep existing logic as fallback/alternative)
         const settingsCard = document.querySelector('#tab-settings .settings-card');
         if (settingsCard) {
           const logoutBtn = document.createElement('button');
@@ -5572,12 +5618,47 @@ document.addEventListener('DOMContentLoaded', () => {
           logoutBtn.style.padding = '8px 16px';
           logoutBtn.style.borderRadius = '6px';
           logoutBtn.style.cursor = 'pointer';
-          logoutBtn.onclick = () => keycloak.logout();
+          logoutBtn.onclick = () => keycloak.logout({ redirectUri: redirectUri });
           settingsCard.appendChild(logoutBtn);
         }
       } else {
-        keycloak.login();
+        console.log('Not authenticated');
+        // If we are not authenticated, check if we should login
+        keycloak.login({ redirectUri: redirectUri });
       }
     })
-    .catch(console.error);
+    .catch((err) => {
+      console.error('Keycloak init failed', err);
+      
+      const cleanUrl = redirectUri;
+      const hasAuthParams = (window.location.hash.includes('code=') || window.location.search.includes('code='));
+
+      // Auto-recovery for stale codes/invalid nonces
+      if (hasAuthParams) {
+          const retryKey = 'keycloak_init_retry_count';
+          const retries = parseInt(sessionStorage.getItem(retryKey) || '0', 10);
+          
+          if (retries < 2) {
+              console.log('Detected likely stale auth code. Cleaning URL and retrying... (Attempt ' + (retries + 1) + ')');
+              sessionStorage.setItem(retryKey, String(retries + 1));
+              window.location.href = cleanUrl;
+              return;
+          } else {
+              console.warn('Max retries reached for auth init.');
+              // Do not clear immediately, let the user see the error. 
+              // We can clear it if they click the manual button.
+          }
+      }
+
+      document.body.innerHTML = `
+        <div style="padding:20px;color:red;font-family:sans-serif;text-align:center;margin-top:20vh">
+          <h2>Authentication Error</h2>
+          <p>Failed to initialize session: ${err?.error || err || 'Unknown error'}</p>
+          <p>This may happen if the page was reloaded during login.</p>
+          <button style="padding:10px 20px;cursor:pointer;background:#2563eb;color:white;border:none;border-radius:6px;font-size:16px" 
+            onclick="sessionStorage.removeItem('keycloak_init_retry_count'); window.location.href='${cleanUrl}'">
+            Start Fresh Login
+          </button>
+        </div>`;
+    });
 });

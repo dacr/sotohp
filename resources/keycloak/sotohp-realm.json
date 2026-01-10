@@ -92,20 +92,22 @@
       ]
     },
     {
-      "clientId": "sotohp-frontend",
-      "name": "SOTOHP Frontend",
+      "clientId": "sotohp-web",
+      "name": "SOTOHP Web",
       "description": "Frontend SPA client for SOTOHP",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
         "http://localhost:3000/*",
         "http://localhost:8080/*",
-        "http://localhost:8180/*"
+        "http://localhost:8180/*",
+        "http://127.0.0.1:8080/*"
       ],
       "webOrigins": [
         "http://localhost:3000",
         "http://localhost:8080",
-        "http://localhost:8180"
+        "http://localhost:8180",
+        "http://127.0.0.1:8080"
       ],
       "publicClient": true,
       "bearerOnly": false,

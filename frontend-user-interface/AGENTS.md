@@ -116,6 +116,7 @@
     - ignore all the scala code, do not modify any scala files when working on the front end user interface
     - if something is missing ask me
 - all the source files are in the `frontend-user-interface` folder`
+- **IMPORTANT**: `assets/js/app.js` is currently a manually maintained file. Do not assume `src/` files compile into it automatically without verifying the build pipeline.
 - build the front end user interface sources into the `frontend-user-interface-dist` folder
     - `make ui` to build the sources into the `frontend-user-interface-dist` folder
 - use **typescript** programming language associated and those kind of libraries/frameworks

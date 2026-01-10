@@ -1,0 +1,12 @@
+services:
+  keycloak: # FOR LOCAL DEBUGGING/TESTING PURPOSES
+    image: quay.io/keycloak/keycloak:26.5
+    container_name: sotohp-keycloak
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./resources/keycloak/sotohp-realm.json:/opt/keycloak/data/import/realm.json
+    ports:
+      - "8081:8080"

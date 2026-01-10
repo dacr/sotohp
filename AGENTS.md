@@ -1,93 +1,80 @@
 # SOTOHP Project Context
 
 ## Project Overview
-**SOTOHP** is a comprehensive photo management and annotation software designed to handle large photo collections (100k+). It emphasizes privacy (self-hosted, typically for home networks) and performance, utilizing a cache-based approach and embedded database.
+**SOTOHP** is a comprehensive photo management and annotation software designed to handle large photo collections (100k+). It emphasizes privacy (self-hosted), performance, and security.
 
 ### Key Features
-- **Photo Management:** Supports browsing, diaporama, and timeline mosaic views.
-- **Annotation:** People face identification, location fixing, tagging, and event management.
+- **Photo Management:** Browsing, diaporama, timeline mosaic, map view.
+- **Annotation:** Face identification, location fixing, tagging, event management.
 - **Architecture:** 
-  - **Backend:** Modular Scala 3 application using the ZIO ecosystem.
-  - **Frontend:** TypeScript-based Web UI interacting via a REST API.
-  - **Storage:** Local file system (read-only for originals), LMDB for metadata/cache, optional Elasticsearch/Opensearch for advanced search.
+  - **Backend:** Modular Scala 3 application using ZIO 2 and Tapir.
+  - **Frontend:** Vanilla TypeScript/JavaScript Web UI interacting via REST API.
+  - **Security:** Role-Based Access Control (RBAC) via JWT and Keycloak.
+  - **Storage:** Local file system (originals), LMDB (metadata/cache), Elasticsearch/Opensearch (search).
 
 ## Tech Stack
-- **Language:** Scala 3.7.x (Backend), TypeScript (Frontend).
-- **Build Tool:** Mill (Backend), npm/tsc (Frontend).
-- **Runtime:** Java 21 (requires JavaFX support for GUI components).
+- **Language:** Scala 3.7.x (Backend), TypeScript/JavaScript (Frontend).
+- **Build Tool:** Mill (Backend), npm (Frontend dependencies).
+- **Runtime:** Java 21.
 - **Frameworks/Libraries:** 
-  - **Scala:** ZIO (Effects, Config, Logging), Tapir (API definitions), Elastic4s, DJL (Deep Java Library for ML).
-  - **Frontend:** Axios, Leaflet (implied for maps).
+  - **Scala:** ZIO 2, Tapir 1.13.x, Sttp Client 4, Elastic4s 8.x, DJL (ML), JWT-Scala.
+  - **Frontend:** Axios, Leaflet, Keycloak-JS.
 - **DevOps:** Docker, Nix.
 
 ## Project Structure
-- `modules/`: Core backend logic split into submodules:
-  - `model`: Domain models and data structures.
-  - `core`: Core utilities and configuration.
-  - `imaging`: Image processing logic.
-  - `processor`: Background processing (e.g., face detection) using DJL.
-  - `search`: Search engine integration (Elasticsearch).
-  - `service`: Business logic layer connecting core, persistence, and search.
+- `modules/`: Core backend logic:
+  - `model`: Domain models.
+  - `core`: Utilities and configuration.
+  - `imaging`: Image processing.
+  - `processor`: ML/AI background processing.
+  - `search`: Elasticsearch integration.
+  - `service`: Business logic and data access (LMDB).
 - `user-interfaces/`: Application entry points:
-  - `api`: HTTP REST API server (Tapir/ZIO-HTTP).
-  - `cli`: Command-line tools (e.g., inference, maintenance).
-  - `gui`: Desktop GUI (ScalaFX).
-- `frontend-user-interface/`: Web frontend source code (TypeScript).
-- `frontend-user-interface-dist/`: Compiled frontend assets (served by the API).
-- `build.mill`: Main build configuration file.
-- `default.nix`: Nix shell configuration for reproducible development environments.
+  - `api`: REST API server (Tapir/ZIO-HTTP). **Contains Security Logic.**
+  - `cli`: Command-line tools.
+- `frontend-user-interface/`: Frontend source.
+  - `assets/js/app.js`: **Manually authored** main application logic.
+  - `src/`: TypeScript sources (`apiClient.ts`, `auth.ts`) - primarily for reference/types, runtime relies on `app.js`.
+- `docs/`: Documentation and specifications.
+  - `sotohp-api-docs.json`: OpenAPI specification.
+  - `SECURITY_PLAN.md`, `TECHNICAL_REVIEW.md`: Architectural details.
 
-## Building and Running
+## Development Guidelines
 
-### Prerequisites
-- Java 21 (with JavaFX)
-- Mill Build Tool
-- Node.js & npm (for frontend)
-- Docker (optional, for containerized run)
-
-### Common Commands (via Makefile)
-The project includes a `Makefile` to simplify common tasks:
-
-*   **Run API Server:**
-    ```bash
-    make run-api
+### 1. Backend (Scala/ZIO)
+- **Style:** Follow `scalafmt`. Use ZIO functional patterns.
+- **Security Pattern:** 
+  - All sensitive endpoints **MUST** use the `SecureEndpoints` pattern.
+  - Use `zServerSecurityLogic` to wire authentication.
+  - Use `errorOutVariantPrepend` to handle endpoint-specific errors while preserving the base security error type (`ApiIssue`).
+  - **Example:**
+    ```scala
+    secureMyEndpoint()
+      .get
+      .in("path")
+      .out(jsonBody[MyResponse])
+      .errorOutVariantPrepend(statusForMyError)
+      .serverLogic[ApiEnv](user => input => myLogic(input))
     ```
-    *Note: This automatically builds the UI (`make ui`) before starting the backend.*
+- **Dependencies:** Manage via `build.mill`. Use `mill mill.javalib.Dependency/showUpdates` to check.
 
-*   **Build Frontend UI:**
-    ```bash
-    make ui
-    ```
-    *Compiles TypeScript from `frontend-user-interface` and copies assets to `frontend-user-interface-dist`.*
+### 2. Frontend (TS/JS)
+- **Manual JS:** `frontend-user-interface/assets/js/app.js` is currently the main entry point and is **manually maintained**. Do not overwrite it with build artifacts unless the build process is explicitly fixed to handle it.
+- **Auth:** Use `keycloak-js` for authentication. The `ApiClient` in `app.js` handles token injection.
+- **API Specs:** Refer to `docs/sotohp-api-docs.json` for API contracts.
 
-*   **Run Tests:**
-    ```bash
-    make test
-    ```
+### 3. Build & Run
+- **API Server:** `make run-api` (builds UI first).
+- **OpenAPI Spec:** `make openapi-spec` (generates to `docs/sotohp-api-docs.json`).
+- **Tests:** `make test`.
+- **Docker:** `make docker-build`.
 
-*   **Run CLI Tools:**
-    - Face Inference: `make run-face-inference`
-    - Statistics: `make run-stats`
+### 4. Security
+- **Authentication:** Enabled via `AuthConfig` in `ApiConfig`. Defaults to `false` for dev, but `true` for production/secure modes.
+- **CORS:** Be validation-aware. Explicit CORS configuration is currently minimal/missing (see `SECURITY_REVIEW.md`).
+- **Input:** rely on Tapir schema validation.
 
-*   **Generate OpenAPI Specification:**
-    ```bash
-    make openapi-spec
-    ```
-    *Generates the OpenAPI specification file at `docs/sotohp-api-docs.json`.*
-
-*   **Docker Build:**
-    ```bash
-    make docker-build
-    ```
-
-### Environment Variables
-Configuration is primarily managed via environment variables. Key variables include:
-- `PHOTOS_CACHE_DIRECTORY`: Path to image cache (default: `.sotohp`).
-- `PHOTOS_DATABASE_PATH`: Path to LMDB database (default: `.lmdb`).
-- `PHOTOS_ELASTIC_ENABLED`: Enable/disable search engine (default: `true`).
-- `PHOTOS_LISTENING_PORT`: API port (default: `8080`).
-
-## Development Conventions
-- **Scala Style:** The project uses `scalafmt` (config in `.scalafmt.conf`). adhere to functional programming patterns with ZIO.
-- **Frontend:** TypeScript is used for type safety. Ensure `make ui` passes after frontend changes.
-- **Testing:** ZIO Test is used for unit and integration testing.
+## Agent Behavior
+- **Refactoring:** When refactoring API endpoints, **always** verify security logic is preserved.
+- **Frontend Changes:** Be cautious with `app.js`. It is a large monolith. Prefer small, surgical edits over full rewrites unless requested.
+- **Compilation:** Always run `mill user-interfaces.api.compile` after backend changes.

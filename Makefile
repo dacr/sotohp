@@ -12,9 +12,6 @@ run-face-inference:
 run-face-fix:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FacesFix
 
-run-viewer:
-	mill user-interfaces.gui.run
-
 run-stats:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
@@ -63,6 +60,10 @@ docker-run-demo-maker-update: docker-build
 		-v "${PWD}/demo/SOTOHP:/data/SOTOHP" \
 		--name sotohp \
 		dacr/sotohp:latest
+
+keycloak-local:
+	docker compose up -d keycloak
+
 
 # -----------------------------------------------------------------------------
 # Publishing helpers

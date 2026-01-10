@@ -26,7 +26,7 @@ Once again this project has first started as just [a "small" script][photosc], f
 ## Current status
 
 - Released first as a docker application, [see below for more details](#docker-container-quick-start),
-- comes with a [REST API](frontend-user-interface/openapi/docs.yaml) and a **web user interface** providing:
+- comes with a [REST API](docs/sotohp-api-docs.json) and a **web user interface** providing:
     - fast visualization,
     - photos diaporama,
     - timeline mosaic browsing,
@@ -39,6 +39,7 @@ Once again this project has first started as just [a "small" script][photosc], f
 - ⚠️ keep in mind that this software is currently designed for use in **private home network**,
   do not expose it directly to the internet without configuring a secured reverse proxy, know
   what you do!
+  - **Note:** Basic Role-Based Access Control (RBAC) via Keycloak is now supported but disabled by default. See `docs/SECURITY_PLAN.md`.
 - ⚠️ automated face recognition is still a batch process, done by this command [FaceInference](user-interfaces/cli/src/main/scala/fr/janalyse/sotohp/cli/FaceInference.scala)
   - the current implementation is basic: shortest Euclidean distance on face features 
 
