@@ -8,6 +8,33 @@ const keycloak = new Keycloak({
   clientId: 'sotohp-web'
 });
 
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('assets/js/service-worker.js')
+    .then(reg => {
+      console.log('Service Worker registered', reg);
+      // If controller already exists, send token immediately if we have one
+      if (navigator.serviceWorker.controller && keycloak.token) {
+        sendTokenToSW(keycloak.token);
+      }
+    })
+    .catch(err => console.error('Service Worker registration failed', err));
+
+  // Re-send token when controller changes (e.g. new SW activation)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (keycloak.token) sendTokenToSW(keycloak.token);
+  });
+}
+
+function sendTokenToSW(token) {
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SET_TOKEN',
+      token: token
+    });
+  }
+}
+
 class ApiClient {
   // Faces & persons overlay support added
   constructor(baseURL = '') {
@@ -17,6 +44,8 @@ class ApiClient {
         try {
           await keycloak.updateToken(30);
           config.headers.Authorization = `Bearer ${keycloak.token}`;
+          // Also update SW with fresh token
+          sendTokenToSW(keycloak.token);
         } catch (e) {
           console.warn('Failed to refresh token', e);
           keycloak.login();
@@ -36,27 +65,10 @@ class ApiClient {
     const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}`);
     return res.data;
   }
-  mediaNormalizedUrl(mediaAccessKey) { 
-    let url = `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`;
-    if (keycloak && keycloak.token) {
-      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
-    }
-    return url;
-  }
-  mediaMiniatureUrl(mediaAccessKey) { 
-    let url = `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`;
-    if (keycloak && keycloak.token) {
-      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
-    }
-    return url;
-  }
-  mediaOriginalUrl(mediaAccessKey) { 
-    let url = `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`;
-    if (keycloak && keycloak.token) {
-      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
-    }
-    return url;
-  }
+  // Revert to clean URLs for Service Worker interception and caching
+  mediaNormalizedUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`; }
+  mediaMiniatureUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`; }
+  mediaOriginalUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`; }
   async listEvents() { return await this.#fetchNdjson('/api/events'); }
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
   async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
@@ -76,13 +88,7 @@ class ApiClient {
   async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
   async listPersonFaces(personId) { return await this.#fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`); }
   async listFaces() { return await this.#fetchNdjson('/api/faces'); }
-  faceImageUrl(faceId) { 
-    let url = `/api/face/${encodeURIComponent(faceId)}/content`;
-    if (keycloak && keycloak.token) {
-      url += (url.includes('?') ? '&' : '?') + `token=${encodeURIComponent(keycloak.token)}`;
-    }
-    return url;
-  }
+  faceImageUrl(faceId) { return `/api/face/${encodeURIComponent(faceId)}/content`; }
   // Faces endpoints
   async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
   async getFace(faceId) { const res = await this.http.get(`/api/face/${encodeURIComponent(faceId)}`); return res.data; }

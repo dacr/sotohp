@@ -587,6 +587,34 @@ object ApiApp extends ZIOAppDefault {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  // We need to read the config to set the cache header, but endpoints are defined as vals.
+  // We can wrap the header logic or rely on the fact that ApiConfig.config is a ZIO effect.
+  // Ideally, we'd restructure to build endpoints after config, but for minimal intrusion:
+  // We'll define a placeholder or read it unsafely/default if necessary? 
+  // No, let's use a serverLogic wrapper or just a fixed value if dynamic is too hard in this structure.
+  // Actually, 'header' in tapir output is static unless mapped. 
+  // Let's use a Task/ZIO to build the header output? Tapir doesn't support ZIO in definition easily.
+  // Best approach: Use a var or lazy val initialized early, OR just assume a default since we can't change the val structure easily without refactoring 'ApiApp' into a class/layer.
+  
+  // WAIT: ApiApp is an object extending ZIOAppDefault. config is available via ApiConfig.config effect.
+  // But 'mediaContentGetOriginalEndpoint' is a val. It is evaluated at initialization time.
+  // We cannot use the effectful config here.
+  // HOWEVER: We can use `out(header[String]("Cache-Control"))` and provide the value in the serverLogic.
+  
+  // Let's modify the endpoints to include the header in the output definition, and then provide the value in the logic.
+  
+  // Helper to add cache control
+  def addCacheHeader[R, E, Err](logic: ZIO[R, E, (String, ZStream[Any, Err, Byte])]): ZIO[R, E, (String, String, ZStream[Any, Err, Byte])] = {
+    for {
+      config <- ApiConfig.config.orDie
+      tuple  <- logic
+      (contentType, stream) = tuple
+      cacheControl = s"private, max-age=${config.cacheMaxAgeSeconds}"
+    } yield (contentType, cacheControl, stream)
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   val mediaContentGetOriginalEndpoint =
     secureMediaEndpoint()
       .name("Get media original size image")
@@ -595,11 +623,12 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("mediaAccessKey"))
       .in("content" / "original")
       .out(header[String]("Content-Type"))
+      .out(header[String]("Cache-Control"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
       .errorOutVariantPrepend(statusForApiInvalidRequestError)
-      .serverLogic[ApiEnv](user => rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Original))
+      .serverLogic[ApiEnv](user => rawMediaAccessKey => addCacheHeader(mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Original)))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -611,11 +640,12 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("mediaAccessKey"))
       .in("content" / "normalized")
       .out(header[String]("Content-Type"))
+      .out(header[String]("Cache-Control"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
       .errorOutVariantPrepend(statusForApiInvalidRequestError)
-      .serverLogic[ApiEnv](user => rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Normalized))
+      .serverLogic[ApiEnv](user => rawMediaAccessKey => addCacheHeader(mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Normalized)))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -627,11 +657,12 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("mediaAccessKey"))
       .in("content" / "miniature")
       .out(header[String]("Content-Type"))
+      .out(header[String]("Cache-Control"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
       .errorOutVariantPrepend(statusForApiInvalidRequestError)
-      .serverLogic[ApiEnv](user => rawMediaAccessKey => mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Miniature))
+      .serverLogic[ApiEnv](user => rawMediaAccessKey => addCacheHeader(mediaGetImageBytesLogic(rawMediaAccessKey, WhichMedia.Miniature)))
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -889,7 +920,9 @@ object ApiApp extends ZIOAppDefault {
     val byteStream = MediaService.faceRead(faceId)
     for {
       ms        <- ZIO.service[MediaService]
-      httpStream = byteStream.provideEnvironment(ZEnvironment(ms))
+      httpStream = byteStream
+                     .mapError(err => ApiInternalError("Couldn't read face"))
+                     .provideEnvironment(ZEnvironment(ms))
     } yield (MediaType.ImageJpeg.toString, httpStream)
   }
 
@@ -901,6 +934,7 @@ object ApiApp extends ZIOAppDefault {
       .in(path[String]("faceId"))
       .in("content")
       .out(header[String]("Content-Type"))
+      .out(header[String]("Cache-Control"))
       .out(streamBinaryBody(ZioStreams)(CodecFormat.OctetStream()))
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
@@ -908,7 +942,7 @@ object ApiApp extends ZIOAppDefault {
       .serverLogic[ApiEnv](user =>
         rawFaceId =>
           extractFaceId(rawFaceId)
-            .flatMap(id => faceGetImageBytesLogic(id))
+            .flatMap(id => addCacheHeader(faceGetImageBytesLogic(id)))
       )
 
   val faceUpdatePersonEndpoint =

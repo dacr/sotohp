@@ -16,7 +16,8 @@ case class AuthConfig(
 case class ApiConfig(
   listeningPort: Int,
   clientResourcesPath: String,
-  auth: AuthConfig = AuthConfig()
+  auth: AuthConfig = AuthConfig(),
+  cacheMaxAgeSeconds: Int = 900
 )
 
 object ApiConfig {
