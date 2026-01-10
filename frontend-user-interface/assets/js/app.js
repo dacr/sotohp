@@ -352,7 +352,7 @@ function showMedia(media) {
     // Clear faces overlay immediately while new image loads to avoid misaligned boxes
     if (facesEnabled) { clearFacesOverlay(); }
     const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
-    const srcUrl = (isFs ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey)) + `?t=${Date.now()}`;
+    const srcUrl = (isFs ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey));
     // Smooth fade transition for image swaps
     try { img.style.opacity = '0'; } catch {}
     // Start zoom exactly when the new image is displayed
@@ -1547,7 +1547,7 @@ function initViewerControls() {
       const cont = document.querySelector('.image-container');
       if (!img || !currentMedia) return;
       const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
-      const newUrl = (isFs ? api.mediaOriginalUrl(currentMedia.accessKey) : api.mediaNormalizedUrl(currentMedia.accessKey)) + `?t=${Date.now()}`;
+      const newUrl = (isFs ? api.mediaOriginalUrl(currentMedia.accessKey) : api.mediaNormalizedUrl(currentMedia.accessKey));
       // Fade and restart zoom timing on the newly displayed variant
       try { img.style.opacity = '0'; } catch {}
       img.onload = () => {
