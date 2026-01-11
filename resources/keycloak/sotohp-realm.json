@@ -98,16 +98,12 @@
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "http://localhost:3000/*",
-        "http://localhost:8080/*",
-        "http://localhost:8180/*",
-        "http://127.0.0.1:8080/*"
+        "http://127.0.0.1:8080/*",
+        "http://192.168.1.222:8080/*"
       ],
       "webOrigins": [
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://localhost:8180",
-        "http://127.0.0.1:8080"
+        "http://127.0.0.1:8080",
+        "http://192.168.1.222:8080"
       ],
       "publicClient": true,
       "bearerOnly": false,
@@ -205,40 +201,6 @@
       ],
       "realmRoles": ["admin"],
       "groups": ["/admins"]
-    },
-    {
-      "username": "reader",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Reader",
-      "lastName": "User",
-      "email": "reader@example.com",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "reader",
-          "temporary": true
-        }
-      ],
-      "realmRoles": ["reader"],
-      "groups": ["/users"]
-    },
-    {
-      "username": "pending",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Pending",
-      "lastName": "User",
-      "email": "pending@example.com",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "pending",
-          "temporary": true
-        }
-      ],
-      "realmRoles": [],
-      "groups": ["/pending"]
     }
   ],
   "scopeMappings": [

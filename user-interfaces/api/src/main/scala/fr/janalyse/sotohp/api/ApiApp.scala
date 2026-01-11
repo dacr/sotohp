@@ -61,12 +61,11 @@ object ApiApp extends ZIOAppDefault {
   val configProviderLayer = Runtime.setConfigProvider(configProvider)
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
-    //val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
+    // val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
     // val fmt     = LogFormat.annotations |-| LogFormat.line
-    //val loggingLayer = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
-    //val loggingLayer = zio.logging.slf4j.bridge.Slf4jBridge.initialize
+    // val loggingLayer = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
+    // val loggingLayer = zio.logging.slf4j.bridge.Slf4jBridge.initialize
     val loggingLayer = Runtime.removeDefaultLoggers >>> consoleLogger()
-
 
     loggingLayer
       ++ configProviderLayer
@@ -95,10 +94,22 @@ object ApiApp extends ZIOAppDefault {
   // Secure endpoint bases with optional bearer authentication
   // When auth is disabled, endpoints work without token; when enabled, token is validated
 
-  def securityError: EndpointOutput[ApiIssue] = jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
-    case e: ApiSecurityError => e
-    case _                   => ApiSecurityError("Unknown security error")
-  }
+  def securityError: EndpointOutput[ApiIssue] =
+    oneOf[ApiIssue](
+      oneOfVariant(StatusCode.Unauthorized, jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
+        case e: ApiSecurityError => e
+        case _                   => ApiSecurityError("Unknown security error")
+      }.description("Authentication failed")),
+      oneOfVariant(StatusCode.Forbidden, jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
+        case e: ApiSecurityError => e
+        case _                   => ApiSecurityError("Unknown security error")
+      }.description("Insufficient permissions")),
+      // Fallback for any other ApiSecurityError to 401
+      oneOfVariant(StatusCode.Unauthorized, jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
+        case e: ApiSecurityError => e
+        case _                   => ApiSecurityError("Unknown security error")
+      })
+    )
 
   val secureSystemEndpoint                           = systemEndpoint.securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
   val secureAdminEndpoint                            = adminEndpoint.securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
@@ -591,26 +602,26 @@ object ApiApp extends ZIOAppDefault {
   // We need to read the config to set the cache header, but endpoints are defined as vals.
   // We can wrap the header logic or rely on the fact that ApiConfig.config is a ZIO effect.
   // Ideally, we'd restructure to build endpoints after config, but for minimal intrusion:
-  // We'll define a placeholder or read it unsafely/default if necessary? 
+  // We'll define a placeholder or read it unsafely/default if necessary?
   // No, let's use a serverLogic wrapper or just a fixed value if dynamic is too hard in this structure.
-  // Actually, 'header' in tapir output is static unless mapped. 
+  // Actually, 'header' in tapir output is static unless mapped.
   // Let's use a Task/ZIO to build the header output? Tapir doesn't support ZIO in definition easily.
   // Best approach: Use a var or lazy val initialized early, OR just assume a default since we can't change the val structure easily without refactoring 'ApiApp' into a class/layer.
-  
+
   // WAIT: ApiApp is an object extending ZIOAppDefault. config is available via ApiConfig.config effect.
   // But 'mediaContentGetOriginalEndpoint' is a val. It is evaluated at initialization time.
   // We cannot use the effectful config here.
   // HOWEVER: We can use `out(header[String]("Cache-Control"))` and provide the value in the serverLogic.
-  
+
   // Let's modify the endpoints to include the header in the output definition, and then provide the value in the logic.
-  
+
   // Helper to add cache control
   def addCacheHeader[R, E, Err](logic: ZIO[R, E, (String, ZStream[Any, Err, Byte])]): ZIO[R, E, (String, String, ZStream[Any, Err, Byte])] = {
     for {
-      config <- ApiConfig.config.orDie
-      tuple  <- logic
+      config               <- ApiConfig.config.orDie
+      tuple                <- logic
       (contentType, stream) = tuple
-      cacheControl = s"private, max-age=${config.cacheMaxAgeSeconds}"
+      cacheControl          = s"private, max-age=${config.cacheMaxAgeSeconds}"
     } yield (contentType, cacheControl, stream)
   }
 
@@ -906,14 +917,13 @@ object ApiApp extends ZIOAppDefault {
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
       .errorOutVariantPrepend(statusForApiInvalidRequestError)
-      .serverLogic[ApiEnv] { user =>
-        rawFaceId =>
-          for {
-            faceId <- extractFaceId(rawFaceId)
-            _      <- MediaService
-                        .faceDelete(faceId)
-                        .mapError(err => ApiInternalError("Couldn't delete face"))
-          } yield ()
+      .serverLogic[ApiEnv] { user => rawFaceId =>
+        for {
+          faceId <- extractFaceId(rawFaceId)
+          _      <- MediaService
+                      .faceDelete(faceId)
+                      .mapError(err => ApiInternalError("Couldn't delete face"))
+        } yield ()
       }
 
   def faceGetImageBytesLogic(faceId: FaceId) = {
@@ -1017,11 +1027,10 @@ object ApiApp extends ZIOAppDefault {
       .in("synchronize")
       .in(query[Option[Int]]("addedThoseLastDays").description("for faster synchronize operations provide how much days back to look for new medias"))
       .errorOutVariantPrepend(statusForApiInternalError)
-      .serverLogic[ApiEnv] { user =>
-        addedThoseLastDays =>
-          MediaService
-            .synchronizeStart(addedThoseLastDays)
-            .mapError(err => ApiInternalError("Couldn't synchronize"))
+      .serverLogic[ApiEnv] { user => addedThoseLastDays =>
+        MediaService
+          .synchronizeStart(addedThoseLastDays)
+          .mapError(err => ApiInternalError("Couldn't synchronize"))
       }
 
   val adminSynchronizeStatusEndpoint =
@@ -1032,12 +1041,11 @@ object ApiApp extends ZIOAppDefault {
       .in("synchronize")
       .out(jsonBody[ApiSynchronizeStatus])
       .errorOutVariantPrepend(statusForApiInternalError)
-      .serverLogic[ApiEnv] { user =>
-        _ =>
-          MediaService
-            .synchronizeStatus()
-            .map(_.transformInto[ApiSynchronizeStatus])
-            .mapError(err => ApiInternalError("Couldn't get synchronize status"))
+      .serverLogic[ApiEnv] { user => _ =>
+        MediaService
+          .synchronizeStatus()
+          .map(_.transformInto[ApiSynchronizeStatus])
+          .mapError(err => ApiInternalError("Couldn't get synchronize status"))
       }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1491,6 +1499,33 @@ object ApiApp extends ZIOAppDefault {
       .errorOutVariantPrepend(statusForApiInternalError)
       .serverLogic[ApiEnv](user => _ => serviceInfoLogic)
 
+  val serviceClientConfigEndpoint =
+    systemEndpoint.get
+      .in("config")
+      .out(jsonBody[ApiClientConfig])
+      .zServerLogic[ApiEnv] { _ =>
+        for {
+          config <- ApiConfig.config.orDie // .mapError(err => ApiInternalError("Couldn't get client configuration"))
+          auth    = config.auth
+          issuer  = auth.issuer
+          parts   = issuer.split("/realms/")
+        } yield {
+          val (url, realm) = if (parts.length >= 2) {
+            (parts(0), parts(1))
+          } else {
+            ("http://127.0.0.1:8081", "sotohp")
+          }
+          ApiClientConfig(
+            auth = ApiClientAuth(
+              enabled = auth.enabled,
+              url = url,
+              realm = realm,
+              clientId = auth.clientId
+            )
+          )
+        }
+      }
+
   // -------------------------------------------------------------------------------------------------------------------
   val apiRoutes = List(
     // -------------------------
@@ -1545,7 +1580,8 @@ object ApiApp extends ZIOAppDefault {
     adminSynchronizeStatusEndpoint,
     // -------------------------
     serviceStatusEndpoint,
-    serviceInfoEndpoint
+    serviceInfoEndpoint,
+    serviceClientConfigEndpoint
   )
 
   def apiDocRoutes =
@@ -1651,23 +1687,25 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val securityServiceLayer: ZLayer[Any, Nothing, SecurityService] =
-    ZLayer.fromZIO {
-      ApiConfig.config.map(_.auth).orDie
-    }.flatMap { authConfigEnv =>
-      val authConfig = authConfigEnv.get
-      if (authConfig.enabled) {
-        ZLayer.succeed(authConfig) >>> SecurityService.live
-      } else {
-        SecurityService.disabled
+    ZLayer
+      .fromZIO {
+        ApiConfig.config.map(_.auth).orDie
       }
-    }
+      .flatMap { authConfigEnv =>
+        val authConfig = authConfigEnv.get
+        if (authConfig.enabled) {
+          ZLayer.succeed(authConfig) >>> SecurityService.live
+        } else {
+          SecurityService.disabled
+        }
+      }
 
   override def run = {
     getArgs.flatMap { args =>
       args.toList match {
         case "--just-generate-openapi-specs" :: fileName :: Nil =>
           generateOpenApiSpec(fileName)
-        case _ =>
+        case _                                                  =>
           for {
             config <- ApiConfig.config
             _      <- ZIO.logInfo(s"Authentication enabled: ${config.auth.enabled}")

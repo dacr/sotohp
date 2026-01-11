@@ -160,6 +160,15 @@ private class LiveSecurityService(
 
   private def parsePayload(claim: JwtClaim): IO[SecurityError, JwtPayload] =
     ZIO.fromEither(claim.content.fromJson[JwtPayload])
+      .map { partial =>
+        partial.copy(
+          iss = partial.iss.orElse(claim.issuer),
+          sub = partial.sub.orElse(claim.subject),
+          aud = partial.aud.orElse(claim.audience.flatMap(_.headOption)),
+          exp = partial.exp.orElse(claim.expiration),
+          iat = partial.iat.orElse(claim.issuedAt)
+        )
+      }
       .mapError(e => TokenInvalid(s"Failed to parse token payload: $e"))
 
   private def validateIssuer(payload: JwtPayload): IO[SecurityError, Unit] =

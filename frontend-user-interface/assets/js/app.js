@@ -1,33 +1,20 @@
 // Compiled JavaScript (manually authored) corresponding to TypeScript sources.
 // Uses axios (via CDN) and Leaflet (via CDN). ES module for clarity.
-
-// Initialize Keycloak
-const keycloak = new Keycloak({
-  url: 'http://127.0.0.1:8081',
-  realm: 'sotohp',
-  clientId: 'sotohp-web'
-});
+// Keycloak instance - will be initialized dynamically after fetching config from server
+let keycloak = null;
+let api = null; // Will be initialized after config is ready
 
 // Service Worker Registration
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('assets/js/service-worker.js')
     .then(reg => {
       console.log('Service Worker registered', reg);
-      // If controller already exists, send token immediately if we have one
-      if (navigator.serviceWorker.controller && keycloak.token) {
-        sendTokenToSW(keycloak.token);
-      }
     })
     .catch(err => console.error('Service Worker registration failed', err));
-
-  // Re-send token when controller changes (e.g. new SW activation)
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (keycloak.token) sendTokenToSW(keycloak.token);
-  });
 }
 
 function sendTokenToSW(token) {
-  if (navigator.serviceWorker.controller) {
+  if (navigator.serviceWorker && navigator.serviceWorker.controller && token) {
     navigator.serviceWorker.controller.postMessage({
       type: 'SET_TOKEN',
       token: token
@@ -36,24 +23,47 @@ function sendTokenToSW(token) {
 }
 
 class ApiClient {
-  // Faces & persons overlay support added
   constructor(baseURL = '') {
     this.http = axios.create({ baseURL });
     this.http.interceptors.request.use(async (config) => {
       if (keycloak && keycloak.token) {
         try {
+          // Attempt refresh if nearly expired
           await keycloak.updateToken(30);
-          config.headers.Authorization = `Bearer ${keycloak.token}`;
-          // Also update SW with fresh token
-          sendTokenToSW(keycloak.token);
         } catch (e) {
-          console.warn('Failed to refresh token', e);
-          keycloak.login();
         }
+        const token = keycloak.token;
+        config.headers.Authorization = `Bearer ${token}`;
+        
+        // Robustness: Add token as query param too, in case headers are stripped or for SW fallback
+        // Check if config.params exists, if not create it
+        if (!config.params) config.params = {};
+        config.params.token = token;
+        
+        sendTokenToSW(token);
       }
       return config;
     });
   }
+  
+  // Update image URLs to include token query param for direct access (bypassing SW reliance)
+  mediaNormalizedUrl(mediaAccessKey) { 
+      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
+      return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized${t}`; 
+  }
+  mediaMiniatureUrl(mediaAccessKey) { 
+      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
+      return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature${t}`; 
+  }
+  mediaOriginalUrl(mediaAccessKey) { 
+      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
+      return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original${t}`; 
+  }
+  faceImageUrl(faceId) { 
+      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
+      return `/api/face/${encodeURIComponent(faceId)}/content${t}`; 
+  }
+
   async getMedia(select, referenceMediaAccessKey, referenceMediaTimestamp) {
     const params = { select };
     if (referenceMediaAccessKey) params.referenceMediaAccessKey = referenceMediaAccessKey;
@@ -65,10 +75,6 @@ class ApiClient {
     const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}`);
     return res.data;
   }
-  // Revert to clean URLs for Service Worker interception and caching
-  mediaNormalizedUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized`; }
-  mediaMiniatureUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature`; }
-  mediaOriginalUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`; }
   async listEvents() { return await this.#fetchNdjson('/api/events'); }
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
   async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
@@ -79,7 +85,6 @@ class ApiClient {
   async getOwner(ownerId) { const res = await this.http.get(`/api/owner/${encodeURIComponent(ownerId)}`); return res.data; }
   async updateOwner(ownerId, body) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}`, body); }
   async createOwner(body) { const res = await this.http.post('/api/owner', body); return res.data; }
-  // Persons
   async listPersons() { return await this.#fetchNdjson('/api/persons'); }
   async getPerson(personId) { const res = await this.http.get(`/api/person/${encodeURIComponent(personId)}`); return res.data; }
   async createPerson(body) { const res = await this.http.post('/api/person', body); return res.data; }
@@ -88,13 +93,9 @@ class ApiClient {
   async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
   async listPersonFaces(personId) { return await this.#fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`); }
   async listFaces() { return await this.#fetchNdjson('/api/faces'); }
-  faceImageUrl(faceId) { return `/api/face/${encodeURIComponent(faceId)}/content`; }
-  // Faces endpoints
   async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
   async getFace(faceId) { const res = await this.http.get(`/api/face/${encodeURIComponent(faceId)}`); return res.data; }
   async setFacePerson(faceId, personId) {
-    // Some backends are strict about PUT without an explicit body; pass null to avoid
-    // accidental serialization of "undefined" and ensure a zero-length entity.
     await this.http.put(
       `/api/face/${encodeURIComponent(faceId)}/person/${encodeURIComponent(personId)}`,
       null
@@ -107,36 +108,78 @@ class ApiClient {
   async getStore(storeId) { const res = await this.http.get(`/api/store/${encodeURIComponent(storeId)}`); return res.data; }
   async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
   async createStore(body) { const res = await this.http.post('/api/store', body); return res.data; }
+  async synchronize(days) { 
+      const params = {};
+      if (days) params.addedThoseLastDays = days;
+      await this.http.post('/api/admin/synchronize', null, { params }); 
+  }
   async synchronizeStatus() { const res = await this.http.get('/api/admin/synchronize'); return res.data; }
   async synchronizeStart(addedThoseLastDays) { const params = {}; if (typeof addedThoseLastDays === 'number' && Number.isFinite(addedThoseLastDays)) params.addedThoseLastDays = addedThoseLastDays; await this.http.put('/api/admin/synchronize', null, { params }); }
   async setEventCover(eventId, mediaAccessKey) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
   async setOwnerCover(ownerId, mediaAccessKey) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
   async mediasWithLocations(onItem) { await this.#fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
+  
   async #fetchNdjson(url) {
-    const res = await this.http.get(url, { responseType: 'text' });
-    const items = [];
-    const lines = (res.data || '').split(/\r?\n/);
-    for (const line of lines) { if (!line.trim()) continue; try { items.push(JSON.parse(line)); } catch {} }
-    return items;
-  }
-  async #fetchNdjsonStream(url, onItem) {
-    if (!('fetch' in window)) { (await this.#fetchNdjson(url)).forEach(onItem); return; }
-    const res = await fetch(url);
-    const reader = res.body?.getReader(); if (!reader) return;
-    const decoder = new TextDecoder(); let buffer = '';
+    // Use native fetch to support streaming properly
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${keycloak?.token || ''}`
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    const results = [];
     while (true) {
-      const { done, value } = await reader.read(); if (done) break;
+      const { done, value } = await reader.read();
+      if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      let idx; while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx); buffer = buffer.slice(idx + 1);
-        if (line.trim().length === 0) continue; try { onItem(JSON.parse(line)); } catch {}
+      let idx;
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (line.trim()) {
+          try { results.push(JSON.parse(line)); } catch (e) { console.error('NDJSON parse error', e); }
+        }
       }
     }
-    if (buffer.trim().length > 0) { try { onItem(JSON.parse(buffer)); } catch {} }
+    if (buffer.trim()) {
+        try { results.push(JSON.parse(buffer)); } catch {}
+    }
+    return results;
+  }
+
+  async #fetchNdjsonStream(url, onItem) {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${keycloak?.token || ''}`
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        if (line.trim()) {
+          try { onItem(JSON.parse(line)); } catch (e) { console.error('NDJSON parse error', e); }
+        }
+      }
+    }
+    if (buffer.trim()) {
+        try { onItem(JSON.parse(buffer)); } catch {}
+    }
   }
 }
 
-const api = new ApiClient('');
+api = new ApiClient('');
 let currentMedia = null;
 let slideshowTimer = null;
 let facesEnabled = false;
@@ -4868,87 +4911,83 @@ function init() {
 }
 
 // Initialize Keycloak and then start the app
-document.addEventListener('DOMContentLoaded', () => {
-  // Explicitly set redirectUri to avoid mismatch issues between localhost/127.0.0.1
+document.addEventListener('DOMContentLoaded', async () => {
   const redirectUri = window.location.origin + window.location.pathname;
-  const initOptions = { 
-    // Manual control to prevent loops
-    onLoad: undefined, 
-    checkLoginIframe: false,
-    enableLogging: true
-  };
   
-  keycloak
-    .init(initOptions)
-    .then((authenticated) => {
-      // Clear retry counter on any successful init (authenticated or not, as long as it didn't crash)
-      try { sessionStorage.removeItem('keycloak_init_retry_count'); } catch {}
+  // 1. Fetch config from backend
+  let authConfig = null;
+  try {
+    const res = await fetch('/api/system/config');
+    if (res.ok) {
+      const config = await res.json();
+      authConfig = config.auth;
+    }
+  } catch (e) {
+  }
 
-      if (authenticated) {
-        console.log('Keycloak authenticated');
-        init();
-        
-        // Wire up the navigation logout button
-        const navLogoutBtn = document.getElementById('nav-logout');
-        if (navLogoutBtn) {
-          navLogoutBtn.addEventListener('click', () => {
-             keycloak.logout({ redirectUri: redirectUri });
-          });
-        }
+  // 2. Decide if we need Keycloak
+  if (authConfig && !authConfig.enabled) {
+    api = new ApiClient('');
+    init();
+    return;
+  }
 
-        // Add logout button to settings (keep existing logic as fallback/alternative)
-        const settingsCard = document.querySelector('#tab-settings .settings-card');
-        if (settingsCard) {
-          const logoutBtn = document.createElement('button');
-          logoutBtn.textContent = 'Logout';
-          logoutBtn.style.marginTop = '20px';
-          logoutBtn.style.background = '#ef4444';
-          logoutBtn.style.color = 'white';
-          logoutBtn.style.border = '1px solid #dc2626';
-          logoutBtn.style.padding = '8px 16px';
-          logoutBtn.style.borderRadius = '6px';
-          logoutBtn.style.cursor = 'pointer';
-          logoutBtn.onclick = () => keycloak.logout({ redirectUri: redirectUri });
-          settingsCard.appendChild(logoutBtn);
-        }
-      } else {
-        console.log('Not authenticated');
-        // If we are not authenticated, check if we should login
-        keycloak.login({ redirectUri: redirectUri });
-      }
-    })
-    .catch((err) => {
-      console.error('Keycloak init failed', err);
-      
-      const cleanUrl = redirectUri;
-      const hasAuthParams = (window.location.hash.includes('code=') || window.location.search.includes('code='));
+  // 3. Setup Keycloak
+  keycloak = new Keycloak({
+    url: authConfig?.url || 'http://127.0.0.1:8081',
+    realm: authConfig?.realm || 'sotohp',
+    clientId: authConfig?.clientId || 'sotohp-web'
+  });
 
-      // Auto-recovery for stale codes/invalid nonces
-      if (hasAuthParams) {
-          const retryKey = 'keycloak_init_retry_count';
-          const retries = parseInt(sessionStorage.getItem(retryKey) || '0', 10);
-          
-          if (retries < 2) {
-              console.log('Detected likely stale auth code. Cleaning URL and retrying... (Attempt ' + (retries + 1) + ')');
-              sessionStorage.setItem(retryKey, String(retries + 1));
-              window.location.href = cleanUrl;
-              return;
-          } else {
-              console.warn('Max retries reached for auth init.');
-              // Do not clear immediately, let the user see the error. 
-              // We can clear it if they click the manual button.
-          }
+  const initOptions = {
+    onLoad: 'check-sso',
+    silentCheckSsoRedirectUri: window.location.origin + '/assets/silent-check-sso.html',
+    checkLoginIframe: false,
+    responseMode: 'query',
+    redirectUri: redirectUri
+  };
+
+  try {
+    const authenticated = await keycloak.init(initOptions);
+    
+    if (authenticated) {
+      // Clean URL parameters
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('code')) {
+        url.searchParams.delete('code');
+        url.searchParams.delete('state');
+        url.searchParams.delete('session_state');
+        url.searchParams.delete('iss');
+        window.history.replaceState({}, document.title, url.toString());
       }
 
-      document.body.innerHTML = `
-        <div style="padding:20px;color:red;font-family:sans-serif;text-align:center;margin-top:20vh">
-          <h2>Authentication Error</h2>
-          <p>Failed to initialize session: ${err?.error || err || 'Unknown error'}</p>
-          <p>This may happen if the page was reloaded during login.</p>
-          <button style="padding:10px 20px;cursor:pointer;background:#2563eb;color:white;border:none;border-radius:6px;font-size:16px" 
-            onclick="sessionStorage.removeItem('keycloak_init_retry_count'); window.location.href='${cleanUrl}'">
-            Start Fresh Login
-          </button>
+      api = new ApiClient('');
+      init();
+
+      // Setup logout buttons
+      document.getElementById('nav-logout')?.addEventListener('click', () => {
+        keycloak.logout({ redirectUri });
+      });
+    } else {
+      // Final attempt to prevent loop: if we have 'code' in URL but init() said not authenticated
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('code')) {
+        console.error('Authentication failed: code present but session not established');
+        document.body.innerHTML = `<div style="padding:40px; text-align:center; font-family:sans-serif">
+          <h2 style="color:red">Authentication Failed</h2>
+          <p>We received a login response but could not validate your session.</p>
+          <button onclick="window.location.href='${redirectUri}'" style="padding:10px 20px; cursor:pointer">Back to App</button>
         </div>`;
-    });
+      } else {
+        keycloak.login({ redirectUri });
+      }
+    }
+  } catch (err) {
+    console.error('Keycloak init error', err);
+    document.body.innerHTML = `<div style="padding:40px; text-align:center; font-family:sans-serif">
+      <h2 style="color:red">Initialization Error</h2>
+      <p>${err.message || 'Failed to connect to authentication server.'}</p>
+      <button onclick="location.reload()" style="padding:10px 20px; cursor:pointer">Retry</button>
+    </div>`;
+  }
 });

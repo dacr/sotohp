@@ -7,8 +7,9 @@ import zio.config.magnolia.*
 
 case class AuthConfig(
   enabled: Boolean = false,
-  issuer: String = "http://localhost:8081/realms/sotohp",
-  jwksUrl: String = "http://localhost:8081/realms/sotohp/protocol/openid-connect/certs",
+  issuer: String = "http://127.0.0.1:8081/realms/sotohp",
+  clientId: String = "sotohp-web",
+  jwksUrl: String = "http://127.0.0.1:8081/realms/sotohp/protocol/openid-connect/certs",
   audience: Option[String] = None,
   jwksRefreshIntervalSeconds: Int = 300
 )

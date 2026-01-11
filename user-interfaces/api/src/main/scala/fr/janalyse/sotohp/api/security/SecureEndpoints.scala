@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.api.security
 import fr.janalyse.sotohp.api.AuthConfig
 import fr.janalyse.sotohp.api.protocol.{ApiIssue, ApiSecurityError}
 import sttp.model.StatusCode
-import sttp.tapir.{EndpointInput, EndpointOutput, Schema, auth, oneOf, oneOfVariant, query}
+import sttp.tapir.{EndpointInput, EndpointOutput, Schema, auth, oneOf, oneOfVariant, query, statusCode}
 import sttp.tapir.json.zio.jsonBody
 import zio.*
 import zio.json.*
@@ -21,11 +21,15 @@ object SecureEndpoints {
     case PendingUser(msg)   => ApiSecurityError(msg)
   }
 
-  val securityErrorOutput: EndpointOutput.OneOf[ApiSecurityError, ApiSecurityError] =
-    oneOf[ApiSecurityError](
-      oneOfVariant(StatusCode.Unauthorized, jsonBody[ApiSecurityError].description("Authentication failed")),
-      oneOfVariant(StatusCode.Forbidden, jsonBody[ApiSecurityError].description("Insufficient permissions"))
-    )
+  def securityError: EndpointOutput[ApiIssue] =
+    jsonBody[ApiSecurityError]
+      .map(e => e: ApiIssue)( {
+        case e: ApiSecurityError => e
+        case _                   => ApiSecurityError("Unknown security error")
+      })
+      .description("Authentication failed")
+      .example(ApiSecurityError("Bearer token required"))
+      .and(statusCode(StatusCode.Unauthorized))
 
   val bearerAuth: EndpointInput[String] =
     auth.bearer[Option[String]]()
