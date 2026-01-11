@@ -3139,6 +3139,7 @@ async function openAllInferredFacesView() {
             <button type="button" class="pf-size-medium" data-size="medium" title="Medium">Medium</button>
             <button type="button" class="pf-size-max" data-size="max" title="Maximum">Maximum</button>
           </div>
+          <input type="text" class="pf-filter-input" placeholder="Filter people (name, description)..." aria-label="Filter people" style="margin-left: 8px; padding: 4px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px;">
           <select class="pf-sort-select" aria-label="Sort order" style="margin-left: 8px; padding: 4px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px;">
             <option value="person">Sort: Person, Date</option>
             <option value="person_confidence">Sort: Person, Confidence</option>
@@ -3264,9 +3265,11 @@ async function openAllInferredFacesView() {
 
   const confirmAllBtn = view.querySelector('.confirm-all');
   const confirmSelBtn = view.querySelector('.confirm-selected');
+  const filterInput = view.querySelector('.pf-filter-input');
   
   function updateActionsVisibility() {
-      const pendingCount = (view.__allFaces||[]).length;
+      const displayedFaces = view.__displayedFaces || view.__allFaces || [];
+      const pendingCount = displayedFaces.length;
       const selCount = (view.__selected && view.__selected.size) || 0;
       if (confirmAllBtn) {
           confirmAllBtn.style.display = '';
@@ -3286,10 +3289,28 @@ async function openAllInferredFacesView() {
   view.__updateActions = updateActionsVisibility;
 
   function refreshGrid() {
-      renderPersonFacesGrid(view, null, view.__allFaces, { mode: 'validate' });
+      let displayedFaces = view.__allFaces || [];
+      const filterValue = filterInput ? filterInput.value.trim().toLowerCase() : '';
+      if (filterValue) {
+          displayedFaces = displayedFaces.filter(f => {
+              const pid = f.inferredIdentifiedPersonId;
+              const name = (personsName(pid).full || '').toLowerCase();
+              const p = personsCache && personsCache.get(pid);
+              const desc = (p && p.description) ? p.description.toLowerCase() : '';
+              return name.includes(filterValue) || desc.includes(filterValue);
+          });
+      }
+      view.__displayedFaces = displayedFaces;
+      renderPersonFacesGrid(view, null, displayedFaces, { mode: 'validate' });
       updateActionsVisibility();
   }
   view.__refreshGrid = refreshGrid;
+
+  if (filterInput) {
+      filterInput.addEventListener('input', () => {
+          refreshGrid();
+      });
+  }
 
   async function confirmFaces(faceIds) {
       if (!faceIds || faceIds.length === 0) return;
@@ -3314,10 +3335,11 @@ async function openAllInferredFacesView() {
 
   if (confirmAllBtn) {
       confirmAllBtn.addEventListener('click', () => {
-         const count = (view.__allFaces||[]).length;
+         const faces = view.__displayedFaces || view.__allFaces || [];
+         const count = faces.length;
          if (count === 0) return;
          if (!confirm(`Confirm all ${count} inferred faces?`)) return;
-         const ids = view.__allFaces.map(f => f.faceId || f.id);
+         const ids = faces.map(f => f.faceId || f.id);
          confirmFaces(ids);
       });
   }
