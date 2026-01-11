@@ -67,6 +67,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -163,6 +166,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -239,6 +245,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -318,6 +327,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -396,6 +408,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -424,6 +439,12 @@
             "description" : "",
             "headers" : {
               "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "Cache-Control" : {
                 "required" : true,
                 "schema" : {
                   "type" : "string"
@@ -481,6 +502,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -514,88 +538,8 @@
                 "schema" : {
                   "type" : "string"
                 }
-              }
-            },
-            "content" : {
-              "application/octet-stream" : {
-                "schema" : {
-                  "type" : "string",
-                  "format" : "binary"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "Invalid identifier provided",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "Couldn't find the request resource",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "Something went wrong with the backend",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorInternal"
-                }
-              }
-            }
-          },
-          "default" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorSecurity"
-                }
-              }
-            }
-          }
-        },
-        "security" : [
-          {
-            "httpAuth" : [
-            ]
-          }
-        ]
-      }
-    },
-    "/api/media/{mediaAccessKey}/content/miniature" : {
-      "get" : {
-        "tags" : [
-          "Media"
-        ],
-        "summary" : "Get media miniature image content",
-        "operationId" : "Get media miniature image",
-        "parameters" : [
-          {
-            "name" : "mediaAccessKey",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          }
-        ],
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "headers" : {
-              "Content-Type" : {
+              },
+              "Cache-Control" : {
                 "required" : true,
                 "schema" : {
                   "type" : "string"
@@ -653,6 +597,104 @@
           }
         },
         "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/media/{mediaAccessKey}/content/miniature" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Get media miniature image content",
+        "operationId" : "Get media miniature image",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -731,6 +773,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -777,6 +822,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -844,6 +892,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -922,6 +973,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -990,6 +1044,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -1018,6 +1075,12 @@
             "description" : "",
             "headers" : {
               "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "Cache-Control" : {
                 "required" : true,
                 "schema" : {
                   "type" : "string"
@@ -1075,6 +1138,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1154,6 +1220,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -1224,6 +1293,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -1270,6 +1342,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1337,6 +1412,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1414,6 +1492,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1493,6 +1574,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -1560,6 +1644,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1639,6 +1726,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -1716,6 +1806,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -1762,6 +1855,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1829,6 +1925,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1906,6 +2005,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -1985,6 +2087,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2052,6 +2157,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -2131,6 +2239,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2198,6 +2309,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2244,6 +2358,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -2321,6 +2438,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -2400,6 +2520,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2478,6 +2601,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2545,6 +2671,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2591,6 +2720,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -2669,6 +2801,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2746,6 +2881,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -2826,6 +2964,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2872,6 +3013,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -2933,6 +3077,9 @@
         },
         "security" : [
           {
+            
+          },
+          {
             "httpAuth" : [
             ]
           }
@@ -2970,6 +3117,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]
@@ -3018,6 +3168,9 @@
           }
         },
         "security" : [
+          {
+            
+          },
           {
             "httpAuth" : [
             ]

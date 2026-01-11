@@ -80,6 +80,11 @@ main { flex: 1; position: relative; }
 /* Reserved: placeholder class no longer used; keep for compatibility */
 .mosaic-placeholder { display: none; }
 
+/* Mosaic sizing variants */
+.mosaic-container.size-small .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 0.35rem; }
+.mosaic-container.size-medium .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.45rem; }
+.mosaic-container.size-max .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
+
 /* Mosaic download button (bottom-right) */
 .mosaic-download-btn { position: absolute; right: 4px; bottom: 4px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 12px; padding: 4px 6px; font-size: 11px; line-height: 1; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); z-index: 5; }
 .mosaic-tile:hover .mosaic-download-btn, .mosaic-tile:focus-within .mosaic-download-btn { opacity: 1; transform: translateY(0); }
@@ -140,8 +145,11 @@ main { flex: 1; position: relative; }
 .mosaic-scroll-indicator.show { opacity: 1; }
 
 /* Mosaic timeline layout */
-section#tab-mosaic.tab { overflow: hidden; flex-direction: row; }
+section#tab-mosaic.tab { overflow: hidden; flex-direction: column; }
 section#tab-mosaic.tab.active { display: flex; }
+.mosaic-body { display: flex; flex: 1; overflow: hidden; flex-direction: row; width: 100%; }
+.mosaic-header { display: flex; align-items: center; justify-content: flex-end; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; background: #fff; min-height: 50px; }
+
 .mosaic-timeline {
   touch-action: none;
   overscroll-behavior: contain;

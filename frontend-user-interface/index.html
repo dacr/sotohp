@@ -75,8 +75,20 @@
     <!-- Mosaic Tab -->
     <section id="tab-mosaic" class="tab">
       <div id="mosaic-scroll-indicator" class="mosaic-scroll-indicator"></div>
-      <div id="mosaic-timeline" class="mosaic-timeline" aria-label="Timeline" title="Click to jump to a time"></div>
-      <div id="mosaic-container" class="mosaic-container"></div>
+      
+      <div class="mosaic-header">
+         <span style="margin-right: 8px; font-size: 14px; color: #374151;">Size:</span>
+         <div id="mosaic-size-ctl" class="segmented" role="group" aria-label="Mosaic size">
+            <button type="button" data-size="small" title="Small thumbnails">Small</button>
+            <button type="button" data-size="medium" title="Medium thumbnails">Medium</button>
+            <button type="button" data-size="max" title="Large thumbnails" class="active">Large</button>
+         </div>
+      </div>
+
+      <div class="mosaic-body">
+        <div id="mosaic-timeline" class="mosaic-timeline" aria-label="Timeline" title="Click to jump to a time"></div>
+        <div id="mosaic-container" class="mosaic-container"></div>
+      </div>
     </section>
 
     <!-- Map Tab -->

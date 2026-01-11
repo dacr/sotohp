@@ -2399,8 +2399,8 @@ let mosaicLoadedMedia = []; // Array of media objects currently in DOM, sorted n
 function getOldestLoaded() { return mosaicLoadedMedia.length > 0 ? mosaicLoadedMedia[mosaicLoadedMedia.length - 1] : null; }
 function getNewestLoaded() { return mosaicLoadedMedia.length > 0 ? mosaicLoadedMedia[0] : null; }
 
-const MOSAIC_BATCH_SIZE = 60; // Items per fetch
-const MOSAIC_SCROLL_THRESHOLD = 800; // Pixels from edge to trigger load
+const MOSAIC_BATCH_SIZE = 200; // Items per fetch
+const MOSAIC_SCROLL_THRESHOLD = 400; // Pixels from edge to trigger load
 
 // Persist/retrieve selected timestamp across reloads
 function persistMosaicTimestamp(ts) {
@@ -2408,6 +2408,40 @@ function persistMosaicTimestamp(ts) {
 }
 function getPersistedMosaicTimestamp() {
   try { return localStorage.getItem('mosaic.selectedTimestamp'); } catch { return null; }
+}
+
+const MOSAIC_SIZE_KEY = 'mosaic.size';
+function getMosaicStoredSize() { try { return localStorage.getItem(MOSAIC_SIZE_KEY) || 'max'; } catch { return 'max'; } }
+function setMosaicStoredSize(sz) { try { localStorage.setItem(MOSAIC_SIZE_KEY, sz); } catch {} }
+
+function applyMosaicSize(sz) {
+  const container = document.getElementById('mosaic-container');
+  if (!container) return;
+  container.classList.remove('size-small', 'size-medium', 'size-max');
+  const cls = sz === 'small' ? 'size-small' : (sz === 'medium' ? 'size-medium' : 'size-max');
+  container.classList.add(cls);
+  
+  const ctl = document.getElementById('mosaic-size-ctl');
+  if (ctl) {
+    Array.from(ctl.querySelectorAll('button')).forEach(b => {
+      b.classList.toggle('active', b.getAttribute('data-size') === sz);
+    });
+  }
+}
+
+function initMosaicSize() {
+  applyMosaicSize(getMosaicStoredSize());
+  const ctl = document.getElementById('mosaic-size-ctl');
+  if (ctl && !ctl.__wired) {
+    ctl.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const sz = btn.getAttribute('data-size') || 'max';
+        setMosaicStoredSize(sz);
+        applyMosaicSize(sz);
+      });
+    });
+    ctl.__wired = true;
+  }
 }
 
 // Logarithmic scale mapping for timeline
@@ -2655,7 +2689,7 @@ async function appendOlder() {
     if (!last) return;
     mosaicIsLoading = true;
     try {
-        const batch = await fetchMediaBatch('previous', last, 30);
+        const batch = await fetchMediaBatch('previous', last, MOSAIC_BATCH_SIZE);
         if (batch.length > 0) {
             mosaicLoadedMedia.push(...batch);
             const grid = ensureMosaicGrid();
@@ -2685,7 +2719,7 @@ async function prependNewer() {
         // - 'next' -> newer (towards future)
         // Based on `fetchAroundTimestamp` logic above which puts `next` items at start of list (newest first).
         
-        const batch = await fetchMediaBatch('next', first, 30);
+        const batch = await fetchMediaBatch('next', first, MOSAIC_BATCH_SIZE);
         if (batch.length > 0) {
             // batch is [newer1, newer2...]. We want newest at top.
             // If fetchMediaBatch returns sequential from ref: ref -> newer1 -> newer2.
@@ -4818,6 +4852,7 @@ function init() {
   initPersonsTab();
   initOwnersTab();
   initStoresTab();
+  initMosaicSize();
   initSettings();
   // Initial media: restore last viewed image if possible, else random
   try {
