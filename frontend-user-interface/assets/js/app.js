@@ -2442,7 +2442,7 @@ let mosaicLoadedMedia = []; // Array of media objects currently in DOM, sorted n
 function getOldestLoaded() { return mosaicLoadedMedia.length > 0 ? mosaicLoadedMedia[mosaicLoadedMedia.length - 1] : null; }
 function getNewestLoaded() { return mosaicLoadedMedia.length > 0 ? mosaicLoadedMedia[0] : null; }
 
-const MOSAIC_BATCH_SIZE = 200; // Items per fetch
+const MOSAIC_BATCH_SIZE = 50; // Items per fetch
 const MOSAIC_SCROLL_THRESHOLD = 400; // Pixels from edge to trigger load
 
 // Persist/retrieve selected timestamp across reloads
@@ -2765,12 +2765,13 @@ async function prependNewer() {
         const batch = await fetchMediaBatch('next', first, MOSAIC_BATCH_SIZE);
         if (batch.length > 0) {
             // batch is [newer1, newer2...]. We want newest at top.
-            // If fetchMediaBatch returns sequential from ref: ref -> newer1 -> newer2.
-            // We need to reverse them to put newer2 at top, then newer1, then ref.
-            batch.reverse(); 
-            mosaicLoadedMedia.unshift(...batch);
+            // We need to reverse for the array state (to be [newer3, newer2, newer1, current...])
+            // But we need ORIGINAL order for DOM insertBefore (insert newer1 -> top=newer1; insert newer2 -> top=newer2...)
+            mosaicLoadedMedia.unshift(...[...batch].reverse());
+            
             const grid = ensureMosaicGrid();
             if (grid) {
+                // Iterate original batch order for DOM insertion
                 batch.forEach(m => grid.insertBefore(createMosaicTile(m), grid.firstChild));
                 // Adjust scroll position to maintain view
                 const newScrollHeight = container.scrollHeight;
