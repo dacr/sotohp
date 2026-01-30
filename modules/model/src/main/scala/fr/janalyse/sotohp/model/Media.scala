@@ -35,4 +35,5 @@ case class Media(
     //val ulid = ULID.ofMillis(epoch)
     MediaAccessKey(timestamp, original.id.asUUID)
   }
+  def allKeywords: Set[Keyword] = keywords ++ events.flatMap(_.keywords)
 }

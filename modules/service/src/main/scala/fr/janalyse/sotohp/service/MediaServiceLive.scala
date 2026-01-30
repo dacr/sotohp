@@ -90,9 +90,17 @@ class MediaServiceLive private (
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect medias : $err"))
   }
 
-  override def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = ???
+  override def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]] = {
+    // TODO temporary implementation
+    mediaNext(nearKey)
+      .orElse(mediaPrevious(nearKey))
+  }
 
-  override def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media] = ???
+  override def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media] = {
+    // TODO temporary implementation
+    mediaList()
+      .filter(media => keywordsFilter.forall(media.allKeywords.contains))
+  }
 
   override def mediaFirst(): IO[ServiceIssue, Option[Media]] = {
     mediasColl
