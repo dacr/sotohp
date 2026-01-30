@@ -111,6 +111,55 @@ User configuration is done through environment variables, the main ones are:
 |                                            |                                                                 |                         |
 | `PHOTOS_LISTENING_PORT`                    | Web server and API listening port                               | `8080`                  |
 
+## MCP Server Integration
+
+The SOTOHP MCP server allows LLMs (like via `gemini-cli`) to interact with your photo collection.
+
+### 1. Build the MCP Server
+```bash
+mill user-interfaces.mcp.assembly
+```
+The JAR will be created at `out/user-interfaces/mcp/assembly.dest/out.jar`.
+
+### 2. Obtain an API Token
+If authentication is enabled, you need a JWT token for the `SOTOHP_API_TOKEN` environment variable.
+
+#### From the Web UI (Manual)
+1. Log in to the SOTOHP Web UI.
+2. Open Browser Developer Tools (`F12`).
+3. Go to the **Application** or **Storage** tab.
+4. Under **Local Storage**, look for a key starting with `kc-token` or similar (from Keycloak).
+5. Alternatively, go to the **Network** tab, refresh the page, find any `/api/` request, and copy the `Authorization: Bearer <TOKEN>` value.
+
+#### Using curl (Automated)
+If your Keycloak realm allows direct password grant:
+```bash
+TOKEN=$(curl -s -X POST "http://localhost:8081/realms/sotohp/protocol/openid-connect/token" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "client_id=sotohp-web" \
+     -d "username=admin" \
+     -d "password=admin" \
+     -d "grant_type=password" | jq -r '.access_token')
+export SOTOHP_API_TOKEN=$TOKEN
+```
+
+### 3. Configure Gemini CLI
+Add this to your `settings.json`:
+```json
+{
+  "mcpServers": {
+    "sotohp": {
+      "command": "java",
+      "args": ["-jar", "/path/to/sotohp/out/user-interfaces/mcp/assembly.dest/out.jar"],
+      "env": {
+        "SOTOHP_API_URL": "http://localhost:8080",
+        "SOTOHP_API_TOKEN": "your-extracted-token"
+      }
+    }
+  }
+}
+```
+
 ## Docker demo container quick start
 
 ```
