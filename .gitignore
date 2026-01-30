@@ -18,7 +18,7 @@ lock.mdb
 .envrc
 .env/
 
-# IDE or build tool related
+# IDE, AI or build tool related
 .bsp*/
 .metals/
 .bloop*/
@@ -30,6 +30,8 @@ project/target/
 project/project/
 project/metals.sbt
 frontend-user-interface-dist/*
+.gemini
+docs/internals
 
 # sotohp related data
 cluster*/
