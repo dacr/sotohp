@@ -23,7 +23,8 @@ import fr.janalyse.sotohp.service.model.*
 import fr.janalyse.sotohp.service.model.SynchronizeAction.{Stop, WaitForCompletion}
 import wvlet.airframe.ulid.ULID
 import zio.*
-import zio.lmdb.{LMDB, LMDBCodec, LMDBCollection, LMDBKodec, StorageSystemError, StorageUserError}
+import zio.lmdb.{LMDB, LMDBCodec, LMDBCollection, StorageSystemError, StorageUserError}
+import zio.lmdb.keycodecs.KeyCodec
 import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
 import zio.ZIOAspect.annotated
@@ -160,12 +161,11 @@ class MediaServiceLive private (
         .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
         .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia2Media))
     } else {
-      // TODO require transactions
-      // key has been modified require delete record & then insert with the new access key
-      // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
-      (mediasColl.delete(key).unit *> mediasColl.upsert(updatedMedia.accessKey, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer))).uninterruptible
-        .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
-        .flatMap(daoMedia => daoMedia2Media(daoMedia).option)
+      mediasColl.readWrite(ops =>
+        (ops.delete(key).unit *> ops.upsert(updatedMedia.accessKey, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer))).uninterruptible
+          .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
+          .flatMap(daoMedia => daoMedia2Media(daoMedia).option)
+      ).mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
     }
     // TODO resync published
   }
@@ -1440,43 +1440,43 @@ object MediaServiceLive {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  given LMDBKodec[OriginalId] = new LMDBKodec {
+  given KeyCodec[OriginalId] = new KeyCodec {
     def encode(key: OriginalId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, OriginalId] = uuidBytesToEither(keyBytes).map(OriginalId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  given LMDBKodec[EventId] = new LMDBKodec {
+  given KeyCodec[EventId] = new KeyCodec {
     def encode(key: EventId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, EventId] = uuidBytesToEither(keyBytes).map(EventId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  given LMDBKodec[MediaAccessKey] = new LMDBKodec {
+  given KeyCodec[MediaAccessKey] = new KeyCodec {
     def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = stringBytesToEither(keyBytes).map(MediaAccessKey.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  given LMDBKodec[OwnerId] = new LMDBKodec {
+  given KeyCodec[OwnerId] = new KeyCodec {
     def encode(key: OwnerId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, OwnerId] = ulidBytesToEither(keyBytes).map(OwnerId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  given LMDBKodec[FaceId] = new LMDBKodec {
+  given KeyCodec[FaceId] = new KeyCodec {
     def encode(key: FaceId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, FaceId] = ulidBytesToEither(keyBytes).map(FaceId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  given LMDBKodec[PersonId] = new LMDBKodec {
+  given KeyCodec[PersonId] = new KeyCodec {
     def encode(key: PersonId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, PersonId] = ulidBytesToEither(keyBytes).map(PersonId.apply)
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  given LMDBKodec[StoreId] = new LMDBKodec {
+  given KeyCodec[StoreId] = new KeyCodec {
     def encode(key: StoreId): Array[Byte]                     = key.asString.getBytes(charset.name())
     def decode(keyBytes: ByteBuffer): Either[String, StoreId] = uuidBytesToEither(keyBytes).map(StoreId.apply)
   }

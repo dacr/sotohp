@@ -95,7 +95,7 @@ object modules extends Module {
     def artifactName = "sotohp-service"
     def moduleDeps   = Seq(core, search, processor)
     def mvnDeps      = Seq(
-      mvn"fr.janalyse::zio-lmdb:2.2.1",
+      mvn"fr.janalyse::zio-lmdb:2.3.1",
       mvn"io.scalaland::chimney:1.8.2"
     )
   }
