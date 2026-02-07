@@ -22,8 +22,8 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
   }
 
   private def extractFaceImage(
-    face: DetectedFace,
-    originalImage: BufferedImage
+                                face: Face,
+                                originalImage: BufferedImage
   ): IO[FaceFeaturesExtractIssue, BufferedImage] = {
     val x           = (face.box.x.value * originalImage.getWidth).toInt
     val y           = (face.box.y.value * originalImage.getHeight).toInt
@@ -40,8 +40,8 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
   }
 
   private def extractFaceFeatures(
-    face: DetectedFace,
-    originalImage: BufferedImage
+                                   face: Face,
+                                   originalImage: BufferedImage
   ): IO[CoreIssue, FaceFeatures] = {
 
     for {

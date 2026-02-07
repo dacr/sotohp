@@ -1,7 +1,8 @@
 package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.model.{Original, OriginalId}
-import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, OriginalFaces, PersonId}
+import fr.janalyse.sotohp.model.{FacePath, FaceId, PersonId}
+import fr.janalyse.sotohp.processor.model.OriginalFaces
 import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import wvlet.airframe.ulid.ULID

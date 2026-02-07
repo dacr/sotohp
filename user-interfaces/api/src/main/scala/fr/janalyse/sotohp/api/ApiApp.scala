@@ -1,7 +1,6 @@
 package fr.janalyse.sotohp.api
 
 import com.typesafe.config.ConfigFactory
-import fr.janalyse.sotohp.processor.model.FaceId
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
 import zio.json.*
@@ -16,9 +15,8 @@ import zio.logging.consoleLogger
 //import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
 import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
-import fr.janalyse.sotohp.api.protocol.{ApiSecurityError, *}
+import fr.janalyse.sotohp.api.protocol.*
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{PersonId, BoundingBox}
 import fr.janalyse.sotohp.api.protocol.{ApiPersonCreate, ApiPersonUpdate}
 import fr.janalyse.sotohp.api.security.{SecureEndpoints, SecurityService, UserContext}
 import wvlet.airframe.ulid.ULID

@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.service.dao
 
 import fr.janalyse.sotohp.model.OriginalId
-import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, PersonId}
+import fr.janalyse.sotohp.model.{FacePath, FaceId, PersonId}
 import zio.lmdb.json.LMDBCodecJson
 import fr.janalyse.sotohp.service.json.{*, given}
 
@@ -15,5 +15,5 @@ case class DaoDetectedFace(
   inferredIdentifiedPersonId: Option[PersonId],
   inferredIdentifiedPersonConfidence: Option[Double],
   timestamp: OffsetDateTime,
-  path: DetectedFacePath
+  path: FacePath
 ) derives LMDBCodecJson

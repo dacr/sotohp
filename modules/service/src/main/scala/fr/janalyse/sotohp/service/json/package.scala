@@ -36,9 +36,9 @@ package object json {
     (trace: List[JsonError], in: RetractReader) => OriginalPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
   )
 
-  given detectedFacePathCodec: JsonCodec[DetectedFacePath] = new JsonCodec(
-    (a: DetectedFacePath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => DetectedFacePath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  given detectedFacePathCodec: JsonCodec[FacePath] = new JsonCodec(
+    (a: FacePath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => FacePath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
   )
 
   given normalizedPathCodec: JsonCodec[NormalizedPath] = new JsonCodec(

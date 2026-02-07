@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.processor.model
 
-import fr.janalyse.sotohp.model.{Original, OriginalId}
+import fr.janalyse.sotohp.model.{FaceId, Original, OriginalId}
 
 case class FaceFeatures(
   faceId: FaceId,

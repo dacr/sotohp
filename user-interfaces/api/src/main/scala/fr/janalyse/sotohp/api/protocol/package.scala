@@ -10,7 +10,6 @@ import java.nio.file.Path
 import java.time.OffsetDateTime
 import java.util.UUID
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{DetectedFacePath, FaceId, NormalizedPath, PersonDescription, PersonEmail, PersonId}
 
 import java.net.URL
 
@@ -43,7 +42,7 @@ package object protocol {
   // Path-based wrappers (string JSON representation)
   given Schema[BaseDirectoryPath]   = strAs
   given Schema[OriginalPath]        = strAs
-  given Schema[DetectedFacePath]    = strAs
+  given Schema[FacePath]    = strAs
   given Schema[NormalizedPath]      = strAs
   given Schema[EventMediaDirectory] = strAs
 

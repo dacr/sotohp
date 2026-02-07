@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.processor.model
 
-import fr.janalyse.sotohp.model.Original
+import fr.janalyse.sotohp.model.{BoundingBox, Original}
 
 case class DetectedObject(
   name: String,

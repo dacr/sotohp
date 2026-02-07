@@ -37,8 +37,8 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
   }
 
   def extractThenCacheFaceImageFromOriginal(
-    face: DetectedFace,
-    originalImage: BufferedImage
+                                             face: Face,
+                                             originalImage: BufferedImage
   ): IO[FacesDetectionIssue, Unit] = {
     val x           = (face.box.x.value * originalImage.getWidth).toInt
     val y           = (face.box.y.value * originalImage.getHeight).toInt
@@ -76,7 +76,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     } yield originalBufferedImage
   }
 
-  def buildDetectedFace(original: Original, box: BoundingBox): IO[FacesDetectionIssue, DetectedFace] = {
+  def buildDetectedFace(original: Original, box: BoundingBox): IO[FacesDetectionIssue, Face] = {
     val faceId = makeFaceId(original)
     for {
       facePath <- getOriginalFaceFilePath(original, faceId)
@@ -84,9 +84,9 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
       _        <- ZIO
                     .attempt(facePath.toFile.getParentFile.mkdirs()) // TODO not optimal !!
                     .mapError(th => FacesDetectionIssue("Unable to create face path", th))
-    } yield DetectedFace(
+    } yield Face(
       box = box,
-      path = DetectedFacePath(facePath),
+      path = FacePath(facePath),
       faceId = faceId,
       originalId = original.id,
       timestamp = original.timestamp,
@@ -96,7 +96,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     )
   }
 
-  private def doDetectFaces(original: Original, path: Path): IO[FacesDetectionIssue, List[DetectedFace]] = {
+  private def doDetectFaces(original: Original, path: Path): IO[FacesDetectionIssue, List[Face]] = {
     for {
       detectedObjects       <- ZIO
                                  .attemptBlocking {

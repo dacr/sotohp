@@ -4,7 +4,6 @@ import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.{FacesDetectionIssue, NormalizeProcessor}
-import fr.janalyse.sotohp.processor.model.DetectedFace
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.{MediaService, ServiceIssue}
 import zio.*
@@ -32,8 +31,8 @@ object FacesFix extends CommonsCLI {
 
   // -------------------------------------------------------------------------------------------------------------------
   def cacheFaceImage(
-    face: DetectedFace,
-    originalImage: BufferedImage
+                      face: Face,
+                      originalImage: BufferedImage
   ): IO[FacesDetectionIssue, Unit] = {
     val x           = (face.box.x.value * originalImage.getWidth).toInt
     val y           = (face.box.y.value * originalImage.getHeight).toInt
@@ -56,7 +55,7 @@ object FacesFix extends CommonsCLI {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  def facesRotateRefresh(original: Original, originalFaces: List[DetectedFace], rotation: Int) = {
+  def facesRotateRefresh(original: Original, originalFaces: List[Face], rotation: Int) = {
     for {
       originalBufferedImage <- ZIO.attemptBlocking(BasicImaging.load(original.absoluteMediaPath))
       originalBufferedImage <- ZIO
@@ -84,7 +83,7 @@ object FacesFix extends CommonsCLI {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def checkFaceIsInOriginalFaces(originalId: OriginalId, foundFaces: Chunk[DetectedFace]): ZIO[MediaService, ServiceIssue, Unit] = {
+  def checkFaceIsInOriginalFaces(originalId: OriginalId, foundFaces: Chunk[Face]): ZIO[MediaService, ServiceIssue, Unit] = {
     for {
       currentFaces   <- MediaService.originalFaces(originalId).map(_.map(_.faces).getOrElse(Nil))
       currentFacesIds = currentFaces.map(_.faceId)

@@ -2,10 +2,9 @@ package fr.janalyse.sotohp.processor
 
 import zio.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
-import fr.janalyse.sotohp.model.Original
+import fr.janalyse.sotohp.model.{FaceId, Original}
 import fr.janalyse.sotohp.core.{ConfigInvalid, CoreIssue}
 import fr.janalyse.sotohp.processor.config.{CacheDataConfig, MiniaturizerConfig, NormalizerConfig}
-import fr.janalyse.sotohp.processor.model.FaceId
 
 import java.awt.image.BufferedImage
 import java.nio.file.Path

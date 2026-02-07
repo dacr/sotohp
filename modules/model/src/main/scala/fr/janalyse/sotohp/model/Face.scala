@@ -1,10 +1,10 @@
-package fr.janalyse.sotohp.processor.model
+package fr.janalyse.sotohp.model
 
-import fr.janalyse.sotohp.model.OriginalId
+import fr.janalyse.sotohp.model.{BoundingBox, FaceId, FacePath, OriginalId, PersonId}
 
 import java.time.OffsetDateTime
 
-case class DetectedFace(
+case class Face(
   faceId: FaceId,
   originalId: OriginalId,
   box: BoundingBox,
@@ -12,5 +12,5 @@ case class DetectedFace(
   inferredIdentifiedPersonId: Option[PersonId],
   inferredIdentifiedPersonConfidence: Option[Double],
   timestamp: OffsetDateTime,
-  path: DetectedFacePath
+  path: FacePath
 )

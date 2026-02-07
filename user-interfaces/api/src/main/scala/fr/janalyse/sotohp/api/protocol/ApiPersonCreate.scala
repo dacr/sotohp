@@ -1,7 +1,7 @@
 package fr.janalyse.sotohp.api.protocol
 
 import fr.janalyse.sotohp.model.{BirthDate, FirstName, LastName}
-import fr.janalyse.sotohp.processor.model.{PersonDescription, PersonEmail}
+import fr.janalyse.sotohp.model.{PersonDescription, PersonEmail}
 import sttp.tapir.Schema
 import zio.json.{DeriveJsonCodec, JsonCodec}
 import fr.janalyse.sotohp.service.json.{*, given}

@@ -1,7 +1,8 @@
 package fr.janalyse.sotohp.api.protocol
 
 import fr.janalyse.sotohp.model.{Original, OriginalId}
-import fr.janalyse.sotohp.processor.model.{FaceId, OriginalFaces}
+import fr.janalyse.sotohp.model.{FaceId}
+import fr.janalyse.sotohp.processor.model.{OriginalFaces}
 import fr.janalyse.sotohp.service.json.{*, given}
 import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 import sttp.tapir.Schema

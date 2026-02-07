@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.cli
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{DetectedFace, FaceFeatures, FaceId, PersonId}
+import fr.janalyse.sotohp.processor.model.FaceFeatures
 import fr.janalyse.sotohp.processor.{FacesDetectionIssue, NormalizeProcessor}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
@@ -42,7 +42,7 @@ object FaceInference extends CommonsCLI {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  def featuresForIdentifiedFaces(): ZIO[MediaService, Exception, Chunk[(DetectedFace, FaceFeatures)]] = {
+  def featuresForIdentifiedFaces(): ZIO[MediaService, Exception, Chunk[(Face, FaceFeatures)]] = {
     for {
       identifiedFaces <- MediaService.faceList().filter(_.identifiedPersonId.isDefined).runCollect
       featureByFace   <- ZIO.foreach(identifiedFaces) { detectedFace =>
@@ -53,7 +53,7 @@ object FaceInference extends CommonsCLI {
     } yield featureByFace.flatten
   }
 
-  def featuresForUnknowFaces(): ZIO[MediaService, Exception, Chunk[(DetectedFace, FaceFeatures)]] = {
+  def featuresForUnknowFaces(): ZIO[MediaService, Exception, Chunk[(Face, FaceFeatures)]] = {
     for {
       identifiedFaces <- MediaService.faceList().filter(_.identifiedPersonId.isEmpty).runCollect
       featureByFace   <- ZIO.foreach(identifiedFaces) { detectedFace =>
@@ -71,7 +71,7 @@ object FaceInference extends CommonsCLI {
     } yield featureByFace.flatten
   }
 
-  def identifyFace(knownFaces: Chunk[(DetectedFace, FaceFeatures)])(face: DetectedFace, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
+  def identifyFace(knownFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     val (knownFace, knownFaceFeature) = knownFaces.minBy((knownFace, knownFaceFeatures) => distance.d(faceFeatures.features, knownFaceFeatures.features))
     val foundDistance                 = distance.d(faceFeatures.features, knownFaceFeature.features)
 
@@ -91,7 +91,7 @@ object FaceInference extends CommonsCLI {
       .as(isFreshlyIdentified)
   }
 
-  def identifyFaceWithConsensus(knownFaces: Chunk[(DetectedFace, FaceFeatures)])(face: DetectedFace, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
+  def identifyFaceWithConsensus(knownFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     val shortests =
       knownFaces
         .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))

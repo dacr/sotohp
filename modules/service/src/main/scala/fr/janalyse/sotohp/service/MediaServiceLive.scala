@@ -271,10 +271,10 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def faceList(): Stream[ServiceStreamIssue, DetectedFace] = {
+  def faceList(): Stream[ServiceStreamIssue, Face] = {
     detectedFaceColl
       .stream()
-      .map(daoFace => daoFace.transformInto[DetectedFace])
+      .map(daoFace => daoFace.transformInto[Face])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect medias : $err"))
   }
 
@@ -284,10 +284,10 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't count faces : $err"))
   }
 
-  def faceGet(faceId: FaceId): IO[ServiceIssue, Option[DetectedFace]] = {
+  def faceGet(faceId: FaceId): IO[ServiceIssue, Option[Face]] = {
     detectedFaceColl
       .fetch(faceId)
-      .map(maybeDaoFace => maybeDaoFace.map(_.transformInto[DetectedFace]))
+      .map(maybeDaoFace => maybeDaoFace.map(_.transformInto[Face]))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch face : $err"))
   }
 
@@ -317,7 +317,7 @@ class MediaServiceLive private (
     } yield ()
   }
 
-  def faceCreate(faceId: Option[FaceId], originalId: OriginalId, box: BoundingBox): IO[ServiceIssue, DetectedFace] = {
+  def faceCreate(faceId: Option[FaceId], originalId: OriginalId, box: BoundingBox): IO[ServiceIssue, Face] = {
     // TODO require transactions
     for {
       original            <- originalGet(originalId)
@@ -345,9 +345,9 @@ class MediaServiceLive private (
   }
 
   def faceUpdate(
-    faceId: FaceId, // current face id
-    face: DetectedFace // may contain and updated id
-  ): IO[ServiceIssue, DetectedFace] = {
+                  faceId: FaceId, // current face id
+                  face: Face // may contain and updated id
+  ): IO[ServiceIssue, Face] = {
     if (face.faceId == faceId) {
       detectedFaceColl
         .upsert(faceId, _ => face.transformInto[DaoDetectedFace])
@@ -474,11 +474,11 @@ class MediaServiceLive private (
     } yield maybeDaoPerson.map(_.transformInto[Person])
   }
 
-  def personFaceList(personId: PersonId): Stream[ServiceStreamIssue, DetectedFace] = {
+  def personFaceList(personId: PersonId): Stream[ServiceStreamIssue, Face] = {
     detectedFaceColl
       .stream()
       .filter(df => df.identifiedPersonId.contains(personId) || (df.identifiedPersonId.isEmpty && df.inferredIdentifiedPersonId.contains(personId)))
-      .map(_.transformInto[DetectedFace])
+      .map(_.transformInto[Face])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect faces for person $personId : $err"))
   }
 

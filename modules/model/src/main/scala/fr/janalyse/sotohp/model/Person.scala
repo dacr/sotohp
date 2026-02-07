@@ -1,6 +1,6 @@
-package fr.janalyse.sotohp.processor.model
+package fr.janalyse.sotohp.model
 
-import fr.janalyse.sotohp.model.{BirthDate, FirstName, LastName}
+import fr.janalyse.sotohp.model.{BirthDate, FaceId, FirstName, LastName, PersonDescription, PersonEmail, PersonId}
 
 case class Person(
   id: PersonId,

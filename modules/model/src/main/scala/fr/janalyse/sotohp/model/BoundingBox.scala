@@ -1,4 +1,4 @@
-package fr.janalyse.sotohp.processor.model
+package fr.janalyse.sotohp.model
 
 case class BoundingBox(
   x: XAxis,

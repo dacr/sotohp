@@ -1,7 +1,6 @@
 package fr.janalyse.sotohp.api.protocol
 
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.{BoundingBox, FaceId}
 import fr.janalyse.sotohp.service.json.{*, given}
 import io.scalaland.chimney.*
 import io.scalaland.chimney.dsl.*

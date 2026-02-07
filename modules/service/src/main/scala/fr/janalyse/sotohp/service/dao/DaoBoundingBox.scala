@@ -1,11 +1,11 @@
 package fr.janalyse.sotohp.service.dao
 
-import fr.janalyse.sotohp.model.{Height, Width}
-import fr.janalyse.sotohp.processor.model.{BoundingBox, BoxHeight, BoxWidth, XAxis, YAxis}
+import fr.janalyse.sotohp.model.{BoundingBox, Height, Width}
+import fr.janalyse.sotohp.model.{BoxHeight, BoxWidth, XAxis, YAxis}
 import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{given, *}
 
 case class DaoBoundingBox(
   x: Double,
