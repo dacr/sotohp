@@ -1,5 +1,7 @@
 all: test
 
+run: run-api
+
 run-api: ui
 	mill user-interfaces.api.run
 

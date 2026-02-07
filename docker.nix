@@ -1,5 +1,5 @@
 let
-  pkgs = import (fetchTarball "https://nixos.org/channels/nixos-25.05/nixexprs.tar.xz") {};
+  pkgs = import (fetchTarball "https://nixos.org/channels/nixos-25.11/nixexprs.tar.xz") {};
   # Generate the UTF-8 locale archive inside the image
   localeArchive = pkgs.glibcLocales.override {
     locales = [ "en_US.UTF-8/UTF-8" "en_US.UTF-16/UTF-16"];
