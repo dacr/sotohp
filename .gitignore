@@ -30,8 +30,10 @@ project/target/
 project/project/
 project/metals.sbt
 frontend-user-interface-dist/*
-.gemini
+.gemini/
+.opencode/
 docs/internals
+.direnv/
 
 # sotohp related data
 cluster*/
