@@ -1547,8 +1547,9 @@ object MediaServiceLive {
   } yield collections
 
   def setupIndexes(lmdb: LMDB, collections: MediaServiceCollections): ZIO[Any, IndexErrors, MediaServiceIndexes] = for {
-    originalIdByTimestampIndex <- lmdb.indexCreate[Instant, UUID]("originalIdByTimestamp")
+    originalIdByTimestampIndex <- lmdb.indexCreate[Instant, UUID]("originalIdByTimestamp", false)
     indexes                     = MediaServiceIndexes(
+                                    collections = collections,
                                     originalIdByTimestamp = originalIdByTimestampIndex
                                   )
   } yield indexes
