@@ -3,19 +3,19 @@ all: test
 run: run-api
 
 run-api: ui
-	mill user-interfaces.api.run
+	mill --no-server user-interfaces.api.run
 
 openapi-spec:
-	mill user-interfaces.api.run --just-generate-openapi-specs docs/sotohp-api-docs.json
+	mill --no-server user-interfaces.api.run --just-generate-openapi-specs docs/sotohp-api-docs.json
 
 run-face-inference:
-	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference
 
 run-face-fix:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FacesFix
 
 run-stats:
-	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
 check-updates:
 	mill mill.javalib.Dependency/showUpdates
