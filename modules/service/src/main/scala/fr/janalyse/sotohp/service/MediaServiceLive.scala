@@ -410,10 +410,27 @@ class MediaServiceLive private (
   }
 
   def personDelete(personId: PersonId): IO[ServiceIssue, Unit] = {
-    collections.persons
-      .delete(personId)
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete person : $err"))
-      .unit
+    for {
+      facesToUpdate <- collections.detectedFaces
+                         .stream()
+                         .filter(df => df.identifiedPersonId.contains(personId) || df.inferredIdentifiedPersonId.contains(personId))
+                         .map(df =>
+                           df.copy(
+                             identifiedPersonId = df.identifiedPersonId.filterNot(_ == personId),
+                             inferredIdentifiedPersonId = df.inferredIdentifiedPersonId.filterNot(_ == personId)
+                           )
+                         )
+                         .runCollect
+                         .mapError(err => ServiceDatabaseIssue(s"Couldn't collect faces for person $personId : $err"))
+      _             <- ZIO.foreachDiscard(facesToUpdate)(df =>
+                         collections.detectedFaces
+                           .upsertOverwrite(df.faceId, df)
+                           .mapError(err => ServiceDatabaseIssue(s"Couldn't update face ${df.faceId} : $err"))
+                       )
+      _             <- collections.persons
+                         .delete(personId)
+                         .mapError(err => ServiceDatabaseIssue(s"Couldn't delete person : $err"))
+    } yield ()
   }
 
   def personCreate(
