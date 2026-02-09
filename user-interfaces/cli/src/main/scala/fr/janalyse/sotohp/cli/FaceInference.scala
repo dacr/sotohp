@@ -31,7 +31,26 @@ object FaceInference extends CommonsCLI {
         Scope.default
       )
 
-  val distance = new smile.math.distance.EuclideanDistance()
+  object CosineDistance {
+    def d(f1: Array[Float], f2: Array[Float]): Double = {
+      var dot = 0.0
+      var n1  = 0.0
+      var n2  = 0.0
+      var i   = 0
+      while (i < f1.length) {
+        val v1 = f1(i)
+        val v2 = f2(i)
+        dot += v1 * v2
+        n1 += v1 * v1
+        n2 += v2 * v2
+        i += 1
+      }
+      val similarity = dot / (Math.sqrt(n1) * Math.sqrt(n2))
+      1.0 - similarity
+    }
+  }
+
+  val distance = CosineDistance
 
   def fixFaceWithMissingFeatures(): ZIO[MediaService, Exception, Unit] = {
     MediaService
@@ -77,7 +96,7 @@ object FaceInference extends CommonsCLI {
 
     val updatedFace         = face.copy(
       inferredIdentifiedPersonId = knownFace.identifiedPersonId
-        .filter(_ => foundDistance < 0.65)
+        .filter(_ => foundDistance < 0.21)
     )
     val isFreshlyIdentified = (
       updatedFace.inferredIdentifiedPersonId.isDefined
@@ -95,7 +114,7 @@ object FaceInference extends CommonsCLI {
     val shortests =
       knownFaces
         .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))
-        .filter { (_, _, distance) => distance <= 0.625 }
+        .filter { (_, _, distance) => distance <= 0.20 }
         .sortBy { (_, _, distance) => distance }
         .take(3)
 
@@ -146,7 +165,7 @@ object FaceInference extends CommonsCLI {
       alreadyInferred     = unknownFaces
                               .filter((face, _) => face.inferredIdentifiedPersonId.isDefined)
       tocheck             = unknownFaces
-                              .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty)
+                              //.filter((face, _) => face.inferredIdentifiedPersonId.isEmpty)
                               //.filter((face, _) => face.timestamp.isAfter(now.minus(5, ChronoUnit.DAYS)))
       personsCount       <- MediaService.personList().runCount
       _                  <- Console.printLine(s"$personsCount people records")
