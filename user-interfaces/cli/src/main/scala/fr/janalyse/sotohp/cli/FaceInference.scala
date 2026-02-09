@@ -96,7 +96,7 @@ object FaceInference extends CommonsCLI {
 
     val updatedFace         = face.copy(
       inferredIdentifiedPersonId = knownFace.identifiedPersonId
-        .filter(_ => foundDistance < 0.21)
+        .filter(_ => foundDistance < 0.22)
     )
     val isFreshlyIdentified = (
       updatedFace.inferredIdentifiedPersonId.isDefined
@@ -114,7 +114,7 @@ object FaceInference extends CommonsCLI {
     val shortests =
       knownFaces
         .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))
-        .filter { (_, _, distance) => distance <= 0.20 }
+        .filter { (_, _, distance) => distance <= 0.22 }
         .sortBy { (_, _, distance) => distance }
         .take(3)
 
