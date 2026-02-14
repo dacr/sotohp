@@ -10,10 +10,13 @@ import zio.*
 
 case class MediaServiceIndexes(
   collections: MediaServiceCollections,
-  originalIdByTimestamp: LMDBIndex[Instant, UUID]
+  originalIdByTimestamp: LMDBIndex[(Instant,OriginalId), OriginalId],
+  originalIdByEventId: LMDBIndex[EventId, (Instant, OriginalId)],
+  faceIdByPersonId: LMDBIndex[PersonId, (Instant, FaceId)]
 ) {
-  def rebuildOriginalIdByTimestampIndex() = {
-  }
+  def rebuildOriginalIdByTimestampIndex() = {}
+  def rebuildOriginalIdByEventId() = {}
+  def rebuildFaceIdByPersonId() = {}
 
   def rebuildAllIndexes(): Unit = {
     rebuildOriginalIdByTimestampIndex()

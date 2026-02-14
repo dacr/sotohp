@@ -94,19 +94,32 @@ object ApiApp extends ZIOAppDefault {
 
   def securityError: EndpointOutput[ApiIssue] =
     oneOf[ApiIssue](
-      oneOfVariant(StatusCode.Unauthorized, jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
-        case e: ApiSecurityError => e
-        case _                   => ApiSecurityError("Unknown security error")
-      }.description("Authentication failed")),
-      oneOfVariant(StatusCode.Forbidden, jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
-        case e: ApiSecurityError => e
-        case _                   => ApiSecurityError("Unknown security error")
-      }.description("Insufficient permissions")),
+      oneOfVariant(
+        StatusCode.Unauthorized,
+        jsonBody[ApiSecurityError]
+          .map(e => e: ApiIssue) {
+            case e: ApiSecurityError => e
+            case _                   => ApiSecurityError("Unknown security error")
+          }
+          .description("Authentication failed")
+      ),
+      oneOfVariant(
+        StatusCode.Forbidden,
+        jsonBody[ApiSecurityError]
+          .map(e => e: ApiIssue) {
+            case e: ApiSecurityError => e
+            case _                   => ApiSecurityError("Unknown security error")
+          }
+          .description("Insufficient permissions")
+      ),
       // Fallback for any other ApiSecurityError to 401
-      oneOfVariant(StatusCode.Unauthorized, jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
-        case e: ApiSecurityError => e
-        case _                   => ApiSecurityError("Unknown security error")
-      })
+      oneOfVariant(
+        StatusCode.Unauthorized,
+        jsonBody[ApiSecurityError].map(e => e: ApiIssue) {
+          case e: ApiSecurityError => e
+          case _                   => ApiSecurityError("Unknown security error")
+        }
+      )
     )
 
   val secureSystemEndpoint                           = systemEndpoint.securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
@@ -461,12 +474,12 @@ object ApiApp extends ZIOAppDefault {
 
   def mediaGetLogic(accessKey: MediaAccessKey): ZIO[ApiEnv, ApiIssue, ApiMedia] = {
     val logic = for {
-      media   <- MediaService
+      tuple   <- MediaService
                    .mediaGet(accessKey)
                    .logError("Couldn't get media")
                    .mapError(err => ApiInternalError("Couldn't get media"))
                    .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      taoMedia = media.transformInto[ApiMedia](using ApiMedia.transformer)
+      taoMedia = tuple.media.transformInto[ApiMedia](using ApiMedia.transformer)
     } yield taoMedia
 
     logic
@@ -491,24 +504,24 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   def mediaUpdateLogic(accessKey: MediaAccessKey, toUpdate: ApiMediaUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
     val logic = for {
-      media <- MediaService
-                 .mediaGet(accessKey)
-                 .logError("Couldn't get media")
-                 .mapError(err => ApiInternalError("Couldn't get media"))
-                 .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      _     <- MediaService
-                 .mediaUpdate(
-                   media.accessKey,
-                   media.copy(
-                     description = toUpdate.description,
-                     starred = toUpdate.starred,
-                     keywords = toUpdate.keywords,
-                     shootDateTime = toUpdate.shootDateTime,
-                     userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]]
-                   )
-                 )
-                 .logError("Couldn't update media")
-                 .mapError(err => ApiInternalError("Couldn't update media"))
+      mediaTuple <- MediaService
+                      .mediaGet(accessKey)
+                      .logError("Couldn't get media")
+                      .mapError(err => ApiInternalError("Couldn't get media"))
+                      .someOrFail(ApiResourceNotFound("Couldn't find media"))
+      _          <- MediaService
+                      .mediaUpdate(
+                        mediaTuple.media.accessKey,
+                        mediaTuple.media.copy(
+                          description = toUpdate.description,
+                          starred = toUpdate.starred,
+                          keywords = toUpdate.keywords,
+                          shootDateTime = toUpdate.shootDateTime,
+                          userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]]
+                        )
+                      )
+                      .logError("Couldn't update media")
+                      .mapError(err => ApiInternalError("Couldn't update media"))
     } yield ()
 
     logic
@@ -533,15 +546,15 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   def mediaUpdateStarredLogic(accessKey: MediaAccessKey, state: Boolean): ZIO[ApiEnv, ApiIssue, Unit] = {
     for {
-      media <- MediaService
-                 .mediaGet(accessKey)
-                 .logError("Couldn't get media")
-                 .mapError(err => ApiInternalError("Couldn't get media"))
-                 .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      _     <- MediaService
-                 .mediaUpdate(media.accessKey, media.copy(starred = Starred(state)))
-                 .logError("Couldn't update media")
-                 .mapError(err => ApiInternalError("Couldn't update media"))
+      mediaTuple <- MediaService
+                      .mediaGet(accessKey)
+                      .logError("Couldn't get media")
+                      .mapError(err => ApiInternalError("Couldn't get media"))
+                      .someOrFail(ApiResourceNotFound("Couldn't find media"))
+      _          <- MediaService
+                      .mediaUpdate(mediaTuple.media.accessKey, mediaTuple.media.copy(starred = Starred(state)))
+                      .logError("Couldn't update media")
+                      .mapError(err => ApiInternalError("Couldn't update media"))
     } yield ()
   }
 
@@ -571,17 +584,17 @@ object ApiApp extends ZIOAppDefault {
 
   def mediaGetImageBytesStream(accessKey: MediaAccessKey, whichMedia: WhichMedia): ZIO[ApiEnv, ApiIssue, (Media, ZStream[MediaService, ApiInternalError, Byte])] = {
     val logic = for {
-      media           <- MediaService
+      mediaTuple      <- MediaService
                            .mediaGet(accessKey)
                            .logError("Couldn't get media")
                            .mapError(err => ApiInternalError("Couldn't get media"))
                            .someOrFail(ApiResourceNotFound("Couldn't find media"))
       imageBytesStream = whichMedia match {
-                           case WhichMedia.Original   => MediaService.mediaOriginalRead(media.accessKey)
-                           case WhichMedia.Normalized => MediaService.mediaNormalizedRead(media.accessKey)
-                           case WhichMedia.Miniature  => MediaService.mediaMiniatureRead(media.accessKey)
+                           case WhichMedia.Original   => MediaService.mediaOriginalRead(mediaTuple.key)
+                           case WhichMedia.Normalized => MediaService.mediaNormalizedRead(mediaTuple.key)
+                           case WhichMedia.Miniature  => MediaService.mediaMiniatureRead(mediaTuple.key)
                          }
-    } yield (media, imageBytesStream.mapError(err => ApiInternalError("Couldn't read media")))
+    } yield (mediaTuple.media, imageBytesStream.mapError(err => ApiInternalError("Couldn't read media")))
 
     logic
   }
@@ -678,8 +691,8 @@ object ApiApp extends ZIOAppDefault {
   def mediaListLogic(filterHasLocation: Option[Boolean]): ZStream[MediaService, Throwable, ApiMedia] = {
     MediaService
       .mediaList()
-      .filter(media => filterHasLocation.isEmpty || media.location.isDefined == filterHasLocation.get)
-      .map(media => media.transformInto[ApiMedia](using ApiMedia.transformer))
+      .filter(mediaTuple => filterHasLocation.isEmpty || mediaTuple.media.location.isDefined == filterHasLocation.get)
+      .map(mediaTuple => mediaTuple.media.transformInto[ApiMedia](using ApiMedia.transformer))
       .mapError(err => ApiInternalError("Couldn't list medias"))
   }
 
@@ -773,23 +786,23 @@ object ApiApp extends ZIOAppDefault {
       .serverLogic[ApiEnv](user =>
         (selectCriteria, mayBeRawKey, mayBeMediaTimestamp) =>
           for {
-            nearKey <- ZIO
-                         .attempt(
-                           mayBeRawKey
-                             .map(rawKey => MediaAccessKey(rawKey))
-                             .orElse(mayBeMediaTimestamp.map(timestamp => MediaAccessKey(timestamp)))
-                         )
-                         .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
-            media   <- selectCriteria match {
-                         case MediaSelector.random                        => mediaSelectRandomLogic
-                         case MediaSelector.first                         => mediaSelectFirstLogic
-                         case MediaSelector.previous if nearKey.isDefined => mediaSelectPreviousLogic(nearKey.get)
-                         case MediaSelector.previous                      => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
-                         case MediaSelector.next if nearKey.isDefined     => mediaSelectNextLogic(nearKey.get)
-                         case MediaSelector.next                          => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
-                         case MediaSelector.last                          => mediaSelectLastLogic
-                       }
-            taoMedia = media.transformInto[ApiMedia](using ApiMedia.transformer)
+            nearKey    <- ZIO
+                            .attempt(
+                              mayBeRawKey
+                                .map(rawKey => MediaAccessKey(rawKey))
+                                .orElse(mayBeMediaTimestamp.map(timestamp => MediaAccessKey(timestamp)))
+                            )
+                            .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
+            mediaTuple <- selectCriteria match {
+                            case MediaSelector.random                        => mediaSelectRandomLogic
+                            case MediaSelector.first                         => mediaSelectFirstLogic
+                            case MediaSelector.previous if nearKey.isDefined => mediaSelectPreviousLogic(nearKey.get)
+                            case MediaSelector.previous                      => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
+                            case MediaSelector.next if nearKey.isDefined     => mediaSelectNextLogic(nearKey.get)
+                            case MediaSelector.next                          => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
+                            case MediaSelector.last                          => mediaSelectLastLogic
+                          }
+            taoMedia    = mediaTuple.media.transformInto[ApiMedia](using ApiMedia.transformer)
           } yield taoMedia
       )
 

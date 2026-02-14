@@ -13,24 +13,26 @@ import java.net.URL
 import java.time.OffsetDateTime
 import java.util.regex.Pattern
 
+type MediaTuple = (key: MediaAccessKey, media: Media)
+
 trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
-  def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
-  def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, Media]
+  def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
+  def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, MediaTuple]
 
-  def mediaList(): Stream[ServiceStreamIssue, Media]
-  def mediaFirst(): IO[ServiceIssue, Option[Media]]
-  def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
-  def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[Media]]
-  def mediaLast(): IO[ServiceIssue, Option[Media]]
-  def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[Media]]
-  def mediaGetAt(index: Long): IO[ServiceIssue, Option[Media]]
+  def mediaList(): Stream[ServiceStreamIssue, MediaTuple]
+  def mediaFirst(): IO[ServiceIssue, Option[MediaTuple]]
+  def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
+  def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
+  def mediaLast(): IO[ServiceIssue, Option[MediaTuple]]
+  def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
+  def mediaGetAt(index: Long): IO[ServiceIssue, Option[MediaTuple]]
 
   def mediaUpdate(
     key: MediaAccessKey, // current media key
-    updatedMedia: Media // can contain the new media key to use
-  ): IO[ServiceIssue, Option[Media]]
+    updatedMedia: Media  // can contain the new media key to use
+  ): IO[ServiceIssue, Option[MediaTuple]]
 
   // -------------------------------------------------------------------------------------------------------------------
   def mediaNormalizedRead(key: MediaAccessKey): Stream[ServiceStreamIssue, Byte]
@@ -61,8 +63,8 @@ trait MediaService {
   def faceDelete(faceId: FaceId): IO[ServiceIssue, Unit]
   def faceCreate(faceId: Option[FaceId], originalId: OriginalId, box: BoundingBox): IO[ServiceIssue, Face]
   def faceUpdate(
-                  faceId: FaceId, // current face id
-                  face: Face // may contain and updated id
+    faceId: FaceId, // current face id
+    face: Face      // may contain and updated id
   ): IO[ServiceIssue, Face]
   def faceRead(faceId: FaceId): Stream[ServiceStreamIssue, Byte]
 
@@ -198,28 +200,28 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def mediaFind(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFind(nearKey))
+  def mediaFind(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaFind(nearKey))
 
-  def mediaSearch(keywordsFilter: Set[Keyword]): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter))
+  def mediaSearch(keywordsFilter: Set[Keyword]): ZStream[MediaService, ServiceStreamIssue, MediaTuple] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter))
 
-  def mediaList(): ZStream[MediaService, ServiceStreamIssue, Media] = ZStream.serviceWithStream(_.mediaList())
+  def mediaList(): ZStream[MediaService, ServiceStreamIssue, MediaTuple] = ZStream.serviceWithStream(_.mediaList())
 
-  def mediaFirst(): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaFirst())
+  def mediaFirst(): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaFirst())
 
-  def mediaPrevious(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaPrevious(nearKey))
+  def mediaPrevious(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaPrevious(nearKey))
 
-  def mediaNext(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaNext(nearKey))
+  def mediaNext(nearKey: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaNext(nearKey))
 
-  def mediaLast(): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaLast())
+  def mediaLast(): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaLast())
 
-  def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGet(key))
+  def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaGet(key))
 
-  def mediaGetAt(index: Long): ZIO[MediaService, ServiceIssue, Option[Media]] = ZIO.serviceWithZIO(_.mediaGetAt(index))
+  def mediaGetAt(index: Long): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaGetAt(index))
 
   def mediaUpdate(
     key: MediaAccessKey,
     updatedMedia: Media
-  ): ZIO[MediaService, ServiceIssue, Option[Media]] =
+  ): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] =
     ZIO.serviceWithZIO(_.mediaUpdate(key, updatedMedia))
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -239,32 +241,32 @@ object MediaService {
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.originalFacesUpdate(originalId, facesIds))
 
   // -------------------------------------------------------------------------------------------------------------------
-  def faceList(): ZStream[MediaService, ServiceStreamIssue, Face]            = ZStream.serviceWithStream(_.faceList())
-  def faceCount(): ZIO[MediaService, ServiceIssue, Long]                             = ZIO.serviceWithZIO(_.faceCount())
-  def faceGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[Face]] = ZIO.serviceWithZIO(_.faceGet(faceId))
-  def faceExists(faceId: FaceId): ZIO[MediaService, ServiceIssue, Boolean]           = ZIO.serviceWithZIO(_.faceExists(faceId))
-  def faceDelete(faceId: FaceId): ZIO[MediaService, ServiceIssue, Unit]              = ZIO.serviceWithZIO(_.faceDelete(faceId))
+  def faceList(): ZStream[MediaService, ServiceStreamIssue, Face]               = ZStream.serviceWithStream(_.faceList())
+  def faceCount(): ZIO[MediaService, ServiceIssue, Long]                        = ZIO.serviceWithZIO(_.faceCount())
+  def faceGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[Face]]    = ZIO.serviceWithZIO(_.faceGet(faceId))
+  def faceExists(faceId: FaceId): ZIO[MediaService, ServiceIssue, Boolean]      = ZIO.serviceWithZIO(_.faceExists(faceId))
+  def faceDelete(faceId: FaceId): ZIO[MediaService, ServiceIssue, Unit]         = ZIO.serviceWithZIO(_.faceDelete(faceId))
   def faceCreate(
     faceId: Option[FaceId],
     originalId: OriginalId,
     box: BoundingBox
-  ): ZIO[MediaService, ServiceIssue, Face] = ZIO.serviceWithZIO(_.faceCreate(faceId, originalId, box))
+  ): ZIO[MediaService, ServiceIssue, Face]                                      = ZIO.serviceWithZIO(_.faceCreate(faceId, originalId, box))
   def faceUpdate(
-                  faceId: FaceId, // current face id
-                  face: Face // may contain and updated id
-  ): ZIO[MediaService, ServiceIssue, Face] = ZIO.serviceWithZIO(_.faceUpdate(faceId, face))
-  def faceRead(faceId: FaceId): ZStream[MediaService, ServiceStreamIssue, Byte]      = ZStream.serviceWithStream(_.faceRead(faceId))
+    faceId: FaceId, // current face id
+    face: Face      // may contain and updated id
+  ): ZIO[MediaService, ServiceIssue, Face]                                      = ZIO.serviceWithZIO(_.faceUpdate(faceId, face))
+  def faceRead(faceId: FaceId): ZStream[MediaService, ServiceStreamIssue, Byte] = ZStream.serviceWithStream(_.faceRead(faceId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def faceFeaturesList(): ZStream[MediaService, ServiceStreamIssue, FaceFeatures]            = ZStream.serviceWithStream(_.faceFeaturesList())
   def faceFeaturesGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[FaceFeatures]] = ZIO.serviceWithZIO(_.faceFeaturesGet(faceId))
 
   // -------------------------------------------------------------------------------------------------------------------
-  def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                             = ZStream.serviceWithStream(_.personList())
-  def personCount(): ZIO[MediaService, ServiceIssue, Long]                                        = ZIO.serviceWithZIO(_.personCount())
-  def personGet(personId: PersonId): ZIO[MediaService, ServiceIssue, Option[Person]]              = ZIO.serviceWithZIO(_.personGet(personId))
-  def personExists(personId: PersonId): ZIO[MediaService, ServiceIssue, Boolean]                  = ZIO.serviceWithZIO(_.personExists(personId))
-  def personDelete(personId: PersonId): ZIO[MediaService, ServiceIssue, Unit]                     = ZIO.serviceWithZIO(_.personDelete(personId))
+  def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                     = ZStream.serviceWithStream(_.personList())
+  def personCount(): ZIO[MediaService, ServiceIssue, Long]                                = ZIO.serviceWithZIO(_.personCount())
+  def personGet(personId: PersonId): ZIO[MediaService, ServiceIssue, Option[Person]]      = ZIO.serviceWithZIO(_.personGet(personId))
+  def personExists(personId: PersonId): ZIO[MediaService, ServiceIssue, Boolean]          = ZIO.serviceWithZIO(_.personExists(personId))
+  def personDelete(personId: PersonId): ZIO[MediaService, ServiceIssue, Unit]             = ZIO.serviceWithZIO(_.personDelete(personId))
   def personCreate(
     id: Option[PersonId],
     firstName: FirstName,
@@ -272,7 +274,7 @@ object MediaService {
     birthDate: Option[BirthDate],
     email: Option[PersonEmail],
     description: Option[PersonDescription]
-  ): ZIO[MediaService, ServiceIssue, Person] = ZIO.serviceWithZIO(_.personCreate(id, firstName, lastName, birthDate, email, description))
+  ): ZIO[MediaService, ServiceIssue, Person]                                              = ZIO.serviceWithZIO(_.personCreate(id, firstName, lastName, birthDate, email, description))
   def personUpdate(
     personId: PersonId,
     firstName: FirstName,
@@ -281,7 +283,7 @@ object MediaService {
     email: Option[PersonEmail],
     description: Option[PersonDescription],
     chosenFaceId: Option[FaceId]
-  ): ZIO[MediaService, ServiceIssue, Option[Person]] = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthDate, email, description, chosenFaceId))
+  ): ZIO[MediaService, ServiceIssue, Option[Person]]                                      = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthDate, email, description, chosenFaceId))
   def personFaceList(personId: PersonId): ZStream[MediaService, ServiceStreamIssue, Face] = ZStream.serviceWithStream(_.personFaceList(personId))
 
   // -------------------------------------------------------------------------------------------------------------------
