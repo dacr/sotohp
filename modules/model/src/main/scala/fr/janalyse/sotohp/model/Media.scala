@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.model
 import java.time.OffsetDateTime
 
 case class Media(
-  accessKey: MediaAccessKey,
+  //accessKey: MediaAccessKey,
   original: Original,
   events: List[Event],
   description: Option[MediaDescription],
@@ -28,12 +28,12 @@ case class Media(
       .orElse(events.find(_.location.isDefined).flatMap(_.location))
       .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d) // TODO fix location data
 
-  def rebuildAccessKey: MediaAccessKey = {
-    //val timestamp = original.timestamp
-    // TODO Migrate to something else as ULID are constrained to start from epoch ! 1947:07:01 15:00:00 +00:00 => -710154000000 for epoch millis !
-    //val epoch = if (timestamp.getYear >= 1970) Try(timestamp.toInstant.toEpochMilli).toOption.getOrElse(0L) else 0L
-    //val ulid = ULID.ofMillis(epoch)
-    MediaAccessKey(timestamp, original.id.asUUID)
-  }
+//  def rebuildAccessKey: MediaAccessKey = { // TODO TO BE REMOVED
+//    //val timestamp = original.timestamp
+//    // TODO Migrate to something else as ULID are constrained to start from epoch ! 1947:07:01 15:00:00 +00:00 => -710154000000 for epoch millis !
+//    //val epoch = if (timestamp.getYear >= 1970) Try(timestamp.toInstant.toEpochMilli).toOption.getOrElse(0L) else 0L
+//    //val ulid = ULID.ofMillis(epoch)
+//    MediaAccessKey(timestamp, original.id)
+//  }
   def allKeywords: Set[Keyword] = keywords ++ events.flatMap(_.keywords)
 }

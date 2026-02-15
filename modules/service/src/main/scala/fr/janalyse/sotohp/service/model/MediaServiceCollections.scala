@@ -8,7 +8,7 @@ case class MediaServiceCollections(
   originals: LMDBCollection[OriginalId, DaoOriginal],
   states: LMDBCollection[OriginalId, DaoState],
   events: LMDBCollection[EventId, DaoEvent],
-  medias: LMDBCollection[MediaAccessKey, DaoMedia],
+  medias: LMDBCollection[OriginalId, DaoMedia],
   owners: LMDBCollection[OwnerId, DaoOwner],
   stores: LMDBCollection[StoreId, DaoStore],
   keywordRules: LMDBCollection[StoreId, DaoKeywordRules],

@@ -95,12 +95,12 @@ object modules extends Module {
     def artifactName = "sotohp-service"
     def moduleDeps   = Seq(core, search, processor)
     def mvnDeps      = Seq(
-      mvn"fr.janalyse::zio-lmdb:2.3.2",
-      mvn"fr.janalyse::keycodecs:2.3.2",
-      mvn"fr.janalyse::keycodecs-ulid:2.3.2",
-      mvn"fr.janalyse::keycodecs-uuidv7:2.3.2",
-      mvn"fr.janalyse::keycodecs-geo:2.3.2",
-      mvn"fr.janalyse::keycodecs-timestamp:2.3.2",
+      mvn"fr.janalyse::zio-lmdb:2.4.0-SNAPSHOT",
+      mvn"fr.janalyse::keycodecs:2.4.0-SNAPSHOT",
+      mvn"fr.janalyse::keycodecs-ulid:2.4.0-SNAPSHOT",
+      mvn"fr.janalyse::keycodecs-uuidv7:2.4.0-SNAPSHOT",
+      mvn"fr.janalyse::keycodecs-geo:2.4.0-SNAPSHOT",
+      mvn"fr.janalyse::keycodecs-timestamp:2.4.0-SNAPSHOT",
       mvn"io.scalaland::chimney:1.8.2"
     )
   }

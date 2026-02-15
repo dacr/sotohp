@@ -4,7 +4,7 @@ import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.NormalizeProcessor
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.service.{MediaService, ServiceIssue}
+import fr.janalyse.sotohp.service.{MediaService, MediaTuple, ServiceIssue}
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.config.typesafe.*
@@ -31,9 +31,9 @@ object SearchForPeople extends CommonsCLI {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def areAllIn(peopleToLookFor: Set[PersonId])(media: Media): ZIO[MediaService, ServiceIssue, Boolean] = {
+  def areAllIn(peopleToLookFor: Set[PersonId])(mediaTuple: MediaTuple): ZIO[MediaService, ServiceIssue, Boolean] = {
     MediaService
-      .originalFaces(media.original.id)
+      .originalFaces(mediaTuple.media.original.id)
       .map(_.map(_.faces).getOrElse(Nil))
       .map { faces =>
         val allIdentifiedPersonId = faces.flatMap(_.identifiedPersonId).toSet
@@ -43,11 +43,11 @@ object SearchForPeople extends CommonsCLI {
       }
   }
 
-  def searchForPeople(peopleToLookFor: Set[PersonId]): ZStream[MediaService, Exception, Media] = {
+  def searchForPeople(peopleToLookFor: Set[PersonId]): ZStream[MediaService, Exception, MediaTuple] = {
     MediaService
       .mediaList()
-      .filterZIO(media => areAllIn(peopleToLookFor)(media))
-      .tap(media => ZIO.logInfo(s"Found media with specified people : ${media.original.mediaPath.path}"))
+      .filterZIO(mediaTuple => areAllIn(peopleToLookFor)(mediaTuple))
+      .tap(mediaTuple => ZIO.logInfo(s"Found media with specified people : ${mediaTuple.media.original.mediaPath.path}"))
   }
 
   def FindPeopleAndCopy(peopleToLookFor: Set[PersonId]) = {
@@ -57,9 +57,9 @@ object SearchForPeople extends CommonsCLI {
     val targetDir = java.nio.file.Paths.get("out", s"searched-people-results-$timestamp")
     ZIO.attemptBlocking(java.nio.file.Files.createDirectories(targetDir)) *>
       searchForPeople(peopleToLookFor)
-        .foreach(media =>
+        .foreach(mediaTuple =>
           ZIO.attemptBlocking {
-            val source      = media.original.absoluteMediaPath
+            val source      = mediaTuple.media.original.absoluteMediaPath
             val destination = targetDir.resolve(source.getFileName)
             java.nio.file.Files.copy(source, destination, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
           }

@@ -4,7 +4,7 @@ import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.NormalizeProcessor
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.service.MediaService
+import fr.janalyse.sotohp.service.{MediaService, MediaTuple}
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
@@ -57,7 +57,8 @@ object MigrateFaces extends CommonsCLI {
 //    } yield ()
 //  }
   // -------------------------------------------------------------------------------------------------------------------
-  def refreshDetectedFaceTimestampField(media: Media) = {
+  def refreshDetectedFaceTimestampField(mediaTuple: MediaTuple) = {
+    val media = mediaTuple.media
     for {
       originalFaces <- MediaService.originalFaces(media.original.id)
       timestamp      = media.timestamp

@@ -15,7 +15,7 @@ case class SaoGeoPoint(
 
 // SearchAccessObject Photo
 case class SaoMedia(
-  id: String,                // MediaAccessKey
+  id: String,                // originalId
   timestamp: OffsetDateTime, // Media timestamp, allowing changes by the users
   originalId: String,
   // ----------------- ORIGINAL FILE INFO -----------------
@@ -65,7 +65,7 @@ object SaoMedia {
         bag.processedMiniatures.exists(_.status.successful == false)
     )
     SaoMedia(
-      id = media.accessKey.asString,
+      id = media.original.id.asString,
       timestamp = media.timestamp,
       originalId = media.original.id.asString,
       // ----------------- ORIGINAL FILE INFO -----------------

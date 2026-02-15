@@ -53,11 +53,11 @@ class SearchServiceLive(mayBeElasticOperations: Option[ElasticOperations], confi
       case None                    => ZIO.succeed(())
       case Some(elasticOperations) =>
         elasticOperations
-          .delete(config.indexPrefix, media.accessKey.asString, media.timestamp)
+          .delete(config.indexPrefix, media.original.id.asString, media.timestamp)
           .when(config.enabled)
           .map(_ => ())
-          .logError(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}")
-          .mapError(err => SearchServiceIssue(s"Couldn't unpublish ${media.accessKey.asString} ${media.timestamp}", err :: Nil))
+          .logError(s"Couldn't unpublish ${media.original.id.asString} ${media.timestamp}")
+          .mapError(err => SearchServiceIssue(s"Couldn't unpublish ${media.original.id.asString} ${media.timestamp}", err :: Nil))
     }
   }
 }

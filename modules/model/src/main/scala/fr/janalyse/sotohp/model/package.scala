@@ -6,9 +6,10 @@ import java.time.{Instant, OffsetDateTime}
 import java.time.OffsetDateTime
 import scala.util.matching.Regex
 import java.io.File
+import java.nio.ByteBuffer
 import java.nio.file.Path
 import java.time.OffsetDateTime
-import java.util.{Locale, UUID}
+import java.util.{Base64, Locale, UUID}
 import scala.annotation.targetName
 import scala.math.{pow, sqrt}
 import scala.util.{Failure, Success, Try}
@@ -31,23 +32,64 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  // use a default encoding that optimize speed to access medias using a default time based order
+  // use a default encoding that optimizes speed to access medias using a default time-based order
   opaque type MediaAccessKey = String
 
-  object MediaAccessKey {
-    private val sep      = "_"
-    private val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
+  extension (key: MediaAccessKey) {
+    def toNative: (timestamp: Instant, originalId: OriginalId) = {
+      val decoded = Base64.getUrlDecoder.decode(key)
+      val buffer  = ByteBuffer.wrap(decoded)
+      MediaAccessKey.decodeTimestamp(buffer) -> MediaAccessKey.decodeUUID(buffer)
+    }
+  }
 
-    def apply(timestamp: OffsetDateTime, uuid: UUID): MediaAccessKey = {
-      val formattedTimestamp = formatter.format(timestamp.toInstant.atOffset(java.time.ZoneOffset.UTC))
-      s"$formattedTimestamp$sep${uuid.toString}"
+  object MediaAccessKey {
+
+    def encodeTimestamp(key: Instant, byteBuffer: ByteBuffer): Unit = {
+      // Flip sign bit to make signed long lexicographically sortable as unsigned bytes
+      byteBuffer.putLong(key.getEpochSecond ^ Long.MinValue)
+      byteBuffer.putInt(key.getNano)
+    }
+
+    def decodeTimestamp(byteBuffer: ByteBuffer): Instant = {
+      val secondsEncoded = byteBuffer.getLong
+      val nanos          = byteBuffer.getInt
+      // Restore original seconds by flipping sign bit again
+      val seconds        = secondsEncoded ^ Long.MinValue
+      Instant.ofEpochSecond(seconds, nanos.toLong)
+    }
+
+    def encodeUUID(uuid: UUID, byteBuffer: ByteBuffer): Unit = { // 16 bytes
+      val msb = uuid.getMostSignificantBits
+      val lsb = uuid.getLeastSignificantBits
+
+      for (i <- 0 until 8) {
+        byteBuffer.put((msb >>> (8 * (7 - i))).toByte)
+      }
+      for (i <- 8 until 16) {
+        byteBuffer.put((lsb >>> (8 * (15 - i))).toByte)
+      }
+    }
+
+    def decodeUUID(byteBuffer: ByteBuffer): UUID = {
+      new UUID(byteBuffer.getLong, byteBuffer.getLong)
+    }
+
+    def apply(timestamp: Instant, id: OriginalId): MediaAccessKey = {
+      val buffer = ByteBuffer.allocate(16 + 12)
+      encodeTimestamp(timestamp, buffer)
+      encodeUUID(id, buffer)
+      Base64.getUrlEncoder.withoutPadding().encodeToString(buffer.array())
+    }
+
+    def apply(timestamp: OffsetDateTime, id: OriginalId): MediaAccessKey = {
+      apply(timestamp.toInstant, id)
     }
 
     def apply(timestamp: OffsetDateTime): MediaAccessKey = {
       apply(timestamp, UUID.randomUUID())
     }
 
-    @deprecated // TODO rename to fromString and return a Try
     def apply(input: String): MediaAccessKey = input
 
     extension (mediaAccessKey: MediaAccessKey) {
@@ -204,7 +246,7 @@ package object model {
 
   object FileLastModified {
     def apply(timeStamp: OffsetDateTime): FileLastModified = timeStamp
-    def apply(epoch:Long):FileLastModified = apply(OffsetDateTime.ofInstant(Instant.ofEpochMilli(epoch), java.time.ZoneOffset.UTC))
+    def apply(epoch: Long): FileLastModified               = apply(OffsetDateTime.ofInstant(Instant.ofEpochMilli(epoch), java.time.ZoneOffset.UTC))
 
     extension (fileLastModified: FileLastModified) {
       def offsetDateTime: OffsetDateTime = fileLastModified
@@ -613,10 +655,10 @@ package object model {
     def apply(path: Path): NormalizedPath = path
 
     extension (path: NormalizedPath) {
-      def parent: Path = path.getParent
-      def file: File = path.toFile
-      def path: Path = path
-      def fileName: String = path.getFileName.toString
+      def parent: Path      = path.getParent
+      def file: File        = path.toFile
+      def path: Path        = path
+      def fileName: String  = path.getFileName.toString
       def extension: String = path.getFileName.toString.split("\\.").last
     }
   }
@@ -628,10 +670,10 @@ package object model {
     def apply(path: Path): FacePath = path
 
     extension (path: FacePath) {
-      def parent: Path = path.getParent
-      def file: File = path.toFile
-      def path: Path = path
-      def fileName: String = path.getFileName.toString
+      def parent: Path      = path.getParent
+      def file: File        = path.toFile
+      def path: Path        = path
+      def fileName: String  = path.getFileName.toString
       def extension: String = path.getFileName.toString.split("\\.").last
     }
   }

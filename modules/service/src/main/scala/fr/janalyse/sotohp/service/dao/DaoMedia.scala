@@ -7,7 +7,6 @@ import zio.lmdb.json.LMDBCodecJson
 import fr.janalyse.sotohp.service.json.{given,*}
 
 case class DaoMedia(
-  accessKey: MediaAccessKey,
   originalId: OriginalId,
   events: Set[EventId],
   description: Option[MediaDescription],

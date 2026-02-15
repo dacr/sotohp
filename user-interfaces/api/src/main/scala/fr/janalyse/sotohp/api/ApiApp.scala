@@ -511,7 +511,7 @@ object ApiApp extends ZIOAppDefault {
                       .someOrFail(ApiResourceNotFound("Couldn't find media"))
       _          <- MediaService
                       .mediaUpdate(
-                        mediaTuple.media.accessKey,
+                        accessKey,
                         mediaTuple.media.copy(
                           description = toUpdate.description,
                           starred = toUpdate.starred,
@@ -552,7 +552,7 @@ object ApiApp extends ZIOAppDefault {
                       .mapError(err => ApiInternalError("Couldn't get media"))
                       .someOrFail(ApiResourceNotFound("Couldn't find media"))
       _          <- MediaService
-                      .mediaUpdate(mediaTuple.media.accessKey, mediaTuple.media.copy(starred = Starred(state)))
+                      .mediaUpdate(accessKey, mediaTuple.media.copy(starred = Starred(state)))
                       .logError("Couldn't update media")
                       .mapError(err => ApiInternalError("Couldn't update media"))
     } yield ()

@@ -7,8 +7,7 @@ import zio.json.{DeriveJsonCodec, JsonCodec}
 
 case class ApiState(
   originalId: OriginalId,
-  originalAddedOn: AddedOn,
-  mediaAccessKey: MediaAccessKey,
+  originalAddedOn: AddedOn
 )
 
 object ApiState {

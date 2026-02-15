@@ -4001,14 +4001,10 @@
         "title" : "Media",
         "type" : "object",
         "required" : [
-          "accessKey",
           "original",
           "starred"
         ],
         "properties" : {
-          "accessKey" : {
-            "type" : "string"
-          },
           "original" : {
             "$ref" : "#/components/schemas/Original"
           },
@@ -4347,8 +4343,7 @@
         "type" : "object",
         "required" : [
           "originalId",
-          "originalAddedOn",
-          "mediaAccessKey"
+          "originalAddedOn"
         ],
         "properties" : {
           "originalId" : {
@@ -4358,9 +4353,6 @@
           "originalAddedOn" : {
             "type" : "string",
             "format" : "date-time"
-          },
-          "mediaAccessKey" : {
-            "type" : "string"
           }
         }
       },

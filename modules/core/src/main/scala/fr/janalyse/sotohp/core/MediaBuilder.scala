@@ -22,18 +22,18 @@ import scala.util.{Failure, Success, Try}
 object MediaBuilder {
   private val logger = org.slf4j.LoggerFactory.getLogger(classOf[MediaBuilder.type])
 
-  def buildDefaultMediaAccessKey(original: Original): MediaAccessKey = {
-    MediaAccessKey(original.timestamp, original.id.asUUID)
-  }
-
-  def buildDefaultMediaAccessKey(original: Original, event: Option[Event]): MediaAccessKey = {
-    val timestamp =
-      original.cameraShootDateTime // 1. if camera shot date time is known
-        .orElse(event.flatMap(_.timestamp)) // 2. if the event timestamp is known (because a default event already exists and has a timestamp)
-        .map(_.offsetDateTime)
-        .getOrElse(original.fileLastModified.offsetDateTime) // 3. default will go to file last modified date time
-    MediaAccessKey(timestamp, original.id.asUUID)
-  }
+//  def buildDefaultMediaAccessKey(original: Original): MediaAccessKey = {
+//    MediaAccessKey(original.timestamp, original.id.asUUID)
+//  }
+//
+//  def buildDefaultMediaAccessKey(original: Original, event: Option[Event]): MediaAccessKey = {
+//    val timestamp =
+//      original.cameraShootDateTime // 1. if camera shot date time is known
+//        .orElse(event.flatMap(_.timestamp)) // 2. if the event timestamp is known (because a default event already exists and has a timestamp)
+//        .map(_.offsetDateTime)
+//        .getOrElse(original.fileLastModified.offsetDateTime) // 3. default will go to file last modified date time
+//    MediaAccessKey(timestamp, original.id.asUUID)
+//  }
 
   def buildEventAttachment(original: Original): Option[EventAttachment] = buildEventAttachment(original.store, original.mediaPath)
 
@@ -81,9 +81,9 @@ object MediaBuilder {
     original: Original,
     knownEvent: Option[Event]
   ): Either[CoreIssue, Media] = Right {
-    val mediaAccessKey = buildDefaultMediaAccessKey(original)
+    //val mediaAccessKey = buildDefaultMediaAccessKey(original)
     Media(
-      accessKey = mediaAccessKey,
+      //accessKey = mediaAccessKey,
       original = original,
       events = knownEvent.toList,
       description = None,

@@ -4,7 +4,7 @@ import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.NormalizeProcessor
 import fr.janalyse.sotohp.search.SearchService
-import fr.janalyse.sotohp.service.MediaService
+import fr.janalyse.sotohp.service.{MediaService, MediaTuple}
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
@@ -44,7 +44,8 @@ object Statistics extends CommonsCLI {
   val shootingDateMinimumValidYear        = 1826 // https://en.wikipedia.org/wiki/History_of_photography
   //val digitalShootingDateMinimumValidYear = 1989 // https://en.wikipedia.org/wiki/Digital_camera
 
-  def updateStats(stats: Statistics, media: Media) = {
+  def updateStats(stats: Statistics, mediaTuple: MediaTuple) = {
+    val media = mediaTuple.media
     for {
       state            <- MediaService.stateGet(media.original.id)
       place             = media.original.location

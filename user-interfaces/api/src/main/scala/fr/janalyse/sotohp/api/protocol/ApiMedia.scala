@@ -9,7 +9,6 @@ import sttp.tapir.Schema.annotations.encodedName
 import zio.json.*
 
 case class ApiMedia(
-  accessKey: MediaAccessKey,
   original: ApiOriginal,
   events: List[ApiEvent],
   description: Option[MediaDescription],

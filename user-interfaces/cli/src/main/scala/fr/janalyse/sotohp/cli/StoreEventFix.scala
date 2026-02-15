@@ -27,16 +27,19 @@ object StoreEventFix extends CommonsCLI {
   def fixEvent(event: Event) = {
     // will be slow but I don't care as it is a one-shot fix
     for {
-      medias       <- MediaService.mediaList().filter(_.events.exists(_.id == event.id)).runCollect
-      selectedMedia = medias.find(_.original.hasLocation).orElse(medias.headOption)
+      medias       <- MediaService
+                        .mediaList()
+                        .filter(_.media.events.exists(_.id == event.id))
+                        .runCollect
+      selectedMedia = medias.find(_.media.original.hasLocation).orElse(medias.headOption)
       _            <- MediaService
                         .eventUpdate(
                           eventId = event.id,
                           name = event.name,
                           description = event.description,
-                          location = selectedMedia.flatMap(_.original.location),
-                          timestamp = selectedMedia.flatMap(_.original.cameraShootDateTime),
-                          coverOriginalId = selectedMedia.map(_.original.id),
+                          location = selectedMedia.flatMap(_.media.original.location),
+                          timestamp = selectedMedia.flatMap(_.media.original.cameraShootDateTime),
+                          coverOriginalId = selectedMedia.map(_.media.original.id),
                           publishedOn = event.publishedOn,
                           keywords = event.keywords
                         )
