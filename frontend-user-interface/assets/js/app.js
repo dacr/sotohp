@@ -4924,7 +4924,13 @@ function init() {
   try {
     const lastKey = localStorage.getItem('viewer.lastMediaAccessKey');
     if (lastKey) {
-      api.getMediaByKey(lastKey).then(m => showMedia(m)).catch(() => loadMedia('random'));
+      api.getMediaByKey(lastKey)
+         .then(m => showMedia(m))
+         .catch(() => {
+             console.warn('Failed to load last media key, clearing cache');
+             localStorage.removeItem('viewer.lastMediaAccessKey'); // Fix: Clear invalid key
+             loadMedia('random');
+         });
     } else {
       loadMedia('random');
     }

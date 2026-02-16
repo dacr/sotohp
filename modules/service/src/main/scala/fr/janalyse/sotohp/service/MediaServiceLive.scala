@@ -39,6 +39,7 @@ import scala.annotation.tailrec
 import scala.util.{Failure, Success, Try}
 import zio.lmdb.keycodecs.timestamp.TimestampCodec.given
 import zio.lmdb.keycodecs.uuidv7.UUIDv7.given
+import zio.lmdb.keycodecs.ulid.ULIDCodec.given
 
 type LMDBIssues = StorageUserError | StorageSystemError | IndexErrors
 
@@ -117,7 +118,9 @@ class MediaServiceLive private (
                                    }
     } yield mediaTuple
 
-    result.mapError(err => ServiceDatabaseIssue(s"Couldn't get first media : $err"))
+    result
+      .logError("Couldn't get first media")
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get first media : $err"))
   }
 
   override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
@@ -136,7 +139,9 @@ class MediaServiceLive private (
                                    }
     } yield mediaTuple
 
-    result.mapError(err => ServiceDatabaseIssue(s"Couldn't get previous media : $err"))
+    result
+      .logError("Couldn't get previous media")
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get previous media : $err"))
   }
 
   override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
@@ -155,7 +160,9 @@ class MediaServiceLive private (
                                    }
     } yield mediaTuple
 
-    result.mapError(err => ServiceDatabaseIssue(s"Couldn't get next media : $err"))
+    result
+      .logError("Couldn't get next media")
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get next media : $err"))
   }
 
   override def mediaLast(): IO[ServiceIssue, Option[MediaTuple]] = {
@@ -174,23 +181,26 @@ class MediaServiceLive private (
                                    }
     } yield mediaTuple
 
-    result.mapError(err => ServiceDatabaseIssue(s"Couldn't get last media : $err"))
-
+    result
+      .logError("Couldn't get last media")
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get last media : $err"))
   }
 
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
     collections.medias
       .fetch(key.toNative.originalId)
+      .logError(s"Couldn't fetch media for key ${key.asString}")
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
       .flatMap(tuple => ZIO.foreach(tuple)(daoMedia => daoMedia2Media(daoMedia).map(key -> _)))
   }
 
   // TODO temporary implementation for the sake of ongoing data model migration
-  def buildMediaAccessKey(media:Media):MediaAccessKey = MediaAccessKey(media.timestamp, media.original.id)
+  def buildMediaAccessKey(media: Media): MediaAccessKey = MediaAccessKey(media.timestamp, media.original.id)
 
   def mediaGet(id: OriginalId): IO[ServiceIssue, Option[MediaTuple]] = {
     collections.medias
       .fetch(id)
+      .logError(s"Couldn't fetch media for id $id")
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
       .flatMap(tuple => ZIO.foreach(tuple)(daoMedia => daoMedia2Media(daoMedia).map(media => buildMediaAccessKey(media) -> media)))
   }
@@ -211,7 +221,9 @@ class MediaServiceLive private (
                                    }
     } yield mediaTuple
 
-    result.mapError(err => ServiceDatabaseIssue(s"Couldn't fetch at $position media : $err"))
+    result
+      .logError(s"Couldn't fetch at $position media")
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch at $position media : $err"))
   }
 
   override def mediaUpdate(
@@ -557,10 +569,11 @@ class MediaServiceLive private (
   }
 
   def personFaceList(personId: PersonId): Stream[ServiceStreamIssue, Face] = {
-    collections.detectedFaces
-      .stream()
-      .filter(df => df.identifiedPersonId.contains(personId) || (df.identifiedPersonId.isEmpty && df.inferredIdentifiedPersonId.contains(personId)))
-      .map(_.transformInto[Face])
+    indexes.faceIdByPersonId
+      .indexed(personId)
+      .mapZIO{ case (personId, (timestamp, faceId)) => collections.detectedFaces.fetch(faceId) }
+      .filter(_.isDefined)
+      .map(_.get.transformInto[Face])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect faces for person $personId : $err"))
   }
 
@@ -1496,78 +1509,19 @@ class MediaServiceLive private (
 }
 
 object MediaServiceLive {
-  val charset = StandardCharsets.UTF_8 // TODO improve charset support
 
   // -------------------------------------------------------------------------------------------------------------------
-  private def uuidBytesToEither(uuidBytes: ByteBuffer): Either[String, UUID] = Try {
-    UUID.fromString(charset.decode(uuidBytes).toString)
-  } match {
-    case Failure(exception) => Left(exception.getMessage)
-    case Success(uuid)      => Right(uuid)
+  def mapCodec[A, B](base: KeyCodec[A], to: A => B, from: B => A): KeyCodec[B] = new KeyCodec[B] {
+    def encode(b: B): Array[Byte]                = base.encode(from(b))
+    def decode(b: ByteBuffer): Either[String, B] = base.decode(b).map(to)
   }
 
-  // -------------------------------------------------------------------------------------------------------------------
-  private def ulidBytesToEither(ulidBytes: ByteBuffer): Either[String, ULID] = Try {
-    ULID.fromString(charset.decode(ulidBytes).toString)
-  } match {
-    case Failure(exception) => Left(exception.getMessage)
-    case Success(ulid)      => Right(ulid)
-  }
-  // -------------------------------------------------------------------------------------------------------------------
-  private def stringBytesToEither(bytes: ByteBuffer): Either[String, String] = Try {
-    charset.decode(bytes).toString
-  } match {
-    case Failure(exception) => Left(exception.getMessage)
-    case Success(str)       => Right(str)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given KeyCodec[OriginalId] = new KeyCodec {
-    def encode(key: OriginalId): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, OriginalId] = uuidBytesToEither(keyBytes).map(OriginalId.apply)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given KeyCodec[EventId] = new KeyCodec {
-    def encode(key: EventId): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, EventId] = uuidBytesToEither(keyBytes).map(EventId.apply)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given KeyCodec[MediaAccessKey] = new KeyCodec {
-    def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = stringBytesToEither(keyBytes).map(MediaAccessKey.apply)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given KeyCodec[OwnerId] = new KeyCodec {
-    def encode(key: OwnerId): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, OwnerId] = ulidBytesToEither(keyBytes).map(OwnerId.apply)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given KeyCodec[FaceId] = new KeyCodec {
-    def encode(key: FaceId): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, FaceId] = ulidBytesToEither(keyBytes).map(FaceId.apply)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given KeyCodec[PersonId] = new KeyCodec {
-    def encode(key: PersonId): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, PersonId] = ulidBytesToEither(keyBytes).map(PersonId.apply)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given KeyCodec[StoreId] = new KeyCodec {
-    def encode(key: StoreId): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, StoreId] = uuidBytesToEither(keyBytes).map(StoreId.apply)
-  }
-
-  // -------------------------------------------------------------------------------------------------------------------
-  given LMDBCodec[MediaAccessKey] = new LMDBCodec {
-    def encode(key: MediaAccessKey): Array[Byte]                     = key.asString.getBytes(charset.name())
-    def decode(keyBytes: ByteBuffer): Either[String, MediaAccessKey] = stringBytesToEither(keyBytes).map(MediaAccessKey.apply)
-  }
+  given KeyCodec[OriginalId] = mapCodec(summon[KeyCodec[UUID]], OriginalId.apply, _.asUUID)
+  given KeyCodec[EventId]    = mapCodec(summon[KeyCodec[UUID]], EventId.apply, _.asUUID)
+  given KeyCodec[StoreId]    = mapCodec(summon[KeyCodec[UUID]], StoreId.apply, _.asUUID)
+  given KeyCodec[PersonId]   = mapCodec(summon[KeyCodec[ULID]], PersonId.apply, _.asULID)
+  given KeyCodec[FaceId]     = mapCodec(summon[KeyCodec[ULID]], FaceId.apply, _.asULID)
+  given KeyCodec[OwnerId]    = mapCodec(summon[KeyCodec[ULID]], OwnerId.apply, _.asULID)
 
   // -------------------------------------------------------------------------------------------------------------------
   private val originalsCollectionName            = "originals"

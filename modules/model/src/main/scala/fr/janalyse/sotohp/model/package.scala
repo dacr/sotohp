@@ -37,9 +37,11 @@ package object model {
 
   extension (key: MediaAccessKey) {
     def toNative: (timestamp: Instant, originalId: OriginalId) = {
-      val decoded = Base64.getUrlDecoder.decode(key)
-      val buffer  = ByteBuffer.wrap(decoded)
-      MediaAccessKey.decodeTimestamp(buffer) -> MediaAccessKey.decodeUUID(buffer)
+      val decoded    = Base64.getUrlDecoder.decode(key)
+      val buffer     = ByteBuffer.wrap(decoded)
+      val timestamp  = MediaAccessKey.decodeTimestamp(buffer)
+      val originalId = MediaAccessKey.decodeUUID(buffer)
+      timestamp -> originalId
     }
   }
 
@@ -116,6 +118,7 @@ package object model {
 
     extension (eventId: EventId) {
       def asString: String = eventId.toString
+      def asUUID: UUID     = eventId
     }
   }
 
@@ -340,6 +343,7 @@ package object model {
     def fromString(id: String): StoreId = StoreId(UUID.fromString(id)) // TODO unsafe
 
     extension (storeId: StoreId) {
+      def asUUID: UUID = storeId
       def asString: String = storeId.toString
     }
   }
@@ -606,7 +610,7 @@ package object model {
     def apply(value: ULID): PersonId = value
 
     extension (faceId: PersonId) {
-      def code: ULID       = faceId
+      def asULID: ULID     = faceId
       def asString: String = faceId.toString
     }
   }
@@ -621,7 +625,7 @@ package object model {
     def fromString(id: String): FaceId = FaceId(ULID(id))
 
     extension (faceId: FaceId) {
-      def code: ULID       = faceId
+      def asULID: ULID     = faceId
       def asString: String = faceId.toString
     }
   }

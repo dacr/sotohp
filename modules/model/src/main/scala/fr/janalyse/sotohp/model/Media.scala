@@ -3,7 +3,6 @@ package fr.janalyse.sotohp.model
 import java.time.OffsetDateTime
 
 case class Media(
-  //accessKey: MediaAccessKey,
   original: Original,
   events: List[Event],
   description: Option[MediaDescription],

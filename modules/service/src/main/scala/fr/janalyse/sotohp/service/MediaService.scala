@@ -27,6 +27,7 @@ trait MediaService {
   def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
   def mediaLast(): IO[ServiceIssue, Option[MediaTuple]]
   def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
+  def mediaGet(id: OriginalId): IO[ServiceIssue, Option[MediaTuple]]
   def mediaGetAt(index: Long): IO[ServiceIssue, Option[MediaTuple]]
 
   def mediaUpdate(
@@ -215,6 +216,8 @@ object MediaService {
   def mediaLast(): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaLast())
 
   def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaGet(key))
+
+  def mediaGet(id: OriginalId): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaGet(id))
 
   def mediaGetAt(index: Long): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaGetAt(index))
 

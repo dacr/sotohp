@@ -9,6 +9,7 @@ import sttp.tapir.Schema.annotations.encodedName
 import zio.json.*
 
 case class ApiMedia(
+  accessKey: MediaAccessKey,
   original: ApiOriginal,
   events: List[ApiEvent],
   description: Option[MediaDescription],
@@ -24,11 +25,4 @@ case class ApiMedia(
 object ApiMedia {
   given JsonCodec[ApiMedia]              = DeriveJsonCodec.gen
   given apiMediaSchema: Schema[ApiMedia] = Schema.derived[ApiMedia].name(Schema.SName("Media"))
-
-  given transformer: Transformer[Media, ApiMedia] =
-    Transformer
-      .define[Media, ApiMedia]
-      .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-      .buildTransformer
-
 }

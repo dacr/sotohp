@@ -99,8 +99,8 @@ object MediaMigrationTool extends CommonsCLI {
     given storeIdCodec: KeyCodec[StoreId]       = mapUUID(StoreId.apply, id => UUID.fromString(id.asString))
 
     given ownerIdCodec: KeyCodec[OwnerId]   = mapULID(OwnerId.apply, _.asULID)
-    given faceIdCodec: KeyCodec[FaceId]     = mapULID(FaceId.apply, _.code)
-    given personIdCodec: KeyCodec[PersonId] = mapULID(PersonId.apply, _.code)
+    given faceIdCodec: KeyCodec[FaceId]     = mapULID(FaceId.apply, _.asULID)
+    given personIdCodec: KeyCodec[PersonId] = mapULID(PersonId.apply, _.asULID)
 
     // DaoMedia WITHOUT accessKey
     case class MigrationNewDaoMedia(

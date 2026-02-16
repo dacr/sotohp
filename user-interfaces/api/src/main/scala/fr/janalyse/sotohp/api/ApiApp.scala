@@ -179,12 +179,16 @@ object ApiApp extends ZIOAppDefault {
 
   def stateGetLogic(originalId: OriginalId): ZIO[ApiEnv, ApiIssue, ApiState] = {
     for {
-      state   <- MediaService
-                   .stateGet(originalId)
-                   .logError("Couldn't get state")
-                   .mapError(err => ApiInternalError("Couldn't get state"))
-                   .someOrFail(ApiResourceNotFound("Couldn't find state"))
-      taoState = state.transformInto[ApiState]
+      state      <- MediaService
+                      .stateGet(originalId)
+                      .logError("Couldn't get state")
+                      .mapError(err => ApiInternalError("Couldn't get state"))
+                      .someOrFail(ApiResourceNotFound("Couldn't find state"))
+      mediaTuple <- MediaService.mediaGet(originalId).orElseSucceed(None)
+      taoState    = state
+                      .into[ApiState]
+                      .withFieldConst(_.mediaAccessKey, mediaTuple.map(_.key))
+                      .transform
     } yield taoState
   }
 
@@ -479,7 +483,10 @@ object ApiApp extends ZIOAppDefault {
                    .logError("Couldn't get media")
                    .mapError(err => ApiInternalError("Couldn't get media"))
                    .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      taoMedia = tuple.media.transformInto[ApiMedia](using ApiMedia.transformer)
+      taoMedia = tuple.media.into[ApiMedia]
+                   .withFieldConst(_.accessKey, tuple.key)
+                   .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+                   .transform
     } yield taoMedia
 
     logic
@@ -692,7 +699,12 @@ object ApiApp extends ZIOAppDefault {
     MediaService
       .mediaList()
       .filter(mediaTuple => filterHasLocation.isEmpty || mediaTuple.media.location.isDefined == filterHasLocation.get)
-      .map(mediaTuple => mediaTuple.media.transformInto[ApiMedia](using ApiMedia.transformer))
+      .map { mediaTuple =>
+        mediaTuple.media.into[ApiMedia]
+          .withFieldConst(_.accessKey, mediaTuple.key)
+          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .transform
+      }
       .mapError(err => ApiInternalError("Couldn't list medias"))
   }
 
@@ -802,7 +814,10 @@ object ApiApp extends ZIOAppDefault {
                             case MediaSelector.next                          => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
                             case MediaSelector.last                          => mediaSelectLastLogic
                           }
-            taoMedia    = mediaTuple.media.transformInto[ApiMedia](using ApiMedia.transformer)
+            taoMedia    = mediaTuple.media.into[ApiMedia]
+                            .withFieldConst(_.accessKey, mediaTuple.key)
+                            .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+                            .transform
           } yield taoMedia
       )
 
