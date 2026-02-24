@@ -2,10 +2,12 @@ package fr.janalyse.sotohp.media.imaging
 
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import javax.imageio.{IIOImage, ImageIO, ImageWriteParam}
 import scala.jdk.CollectionConverters.*
 import scala.math.*
+import scala.sys.process.*
+import scala.util.Using
 
 case object BasicImaging {
 
@@ -103,9 +105,29 @@ case object BasicImaging {
   }
 
   def load(input: Path): BufferedImage = {
-    val image = ImageIO.read(input.toFile)
-    if (image == null) throw RuntimeException(s"Unsupported input image format : $input") // TODO enhance error support
-    image
+    val fileType = fileTypeFromName(input).getOrElse("").toLowerCase
+    if (fileType == "heif" || fileType == "heic") {
+      loadWithImageMagick(input)
+    } else {
+      val image = ImageIO.read(input.toFile)
+      if (image == null) throw new RuntimeException(s"Unsupported input image format : $input") // TODO enhance error support
+      image
+    }
+  }
+
+  private def loadWithImageMagick(input: Path): BufferedImage = {
+    val tempFile = Files.createTempFile("sotohp-heif-", ".jpg")
+    try {
+      val exitCode = Process(Seq("magick", input.toString, tempFile.toString)).!
+      if (exitCode != 0) {
+        throw new RuntimeException(s"Failed to convert HEIF image with ImageMagick : $input")
+      }
+      val image = ImageIO.read(tempFile.toFile)
+      if (image == null) throw new RuntimeException(s"Failed to read converted HEIF image : $input")
+      image
+    } finally {
+      Files.deleteIfExists(tempFile)
+    }
   }
 
   def save(output: Path, image: BufferedImage, compressionLevel: Option[Double] = None): Unit = {

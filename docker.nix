@@ -51,7 +51,7 @@ in pkgs.dockerTools.buildLayeredImage {
     Entrypoint = [ "${pkgs.bash}/bin/bash" "/entrypoint.sh" ];
     #Entrypoint = [ "${pkgs.bash}/bin/bash" ];
     Env = [
-      "PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.gawk}/bin:${pkgs.temurin-jre-bin}/bin:$PATH"
+      "PATH=${pkgs.coreutils}/bin:${pkgs.bash}/bin:${pkgs.gawk}/bin:${pkgs.temurin-jre-bin}/bin:${pkgs.imagemagick}/bin:$PATH"
       #"PATH=${pkgs.temurin-bin}/bin:$PATH"
       "DJL_CACHE_DIR=/data/DJLAI"
       "PHOTOS_LISTENING_PORT=8080"

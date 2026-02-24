@@ -16,6 +16,7 @@
           opencode      # The AI Agent
           gemini-cli    # The Auth Bridge
           nodejs_22     # Required for the auth plugin
+          imagemagick   # For HEIF image processing
           
           # Scala Development
           jdk21         # Java Runtime

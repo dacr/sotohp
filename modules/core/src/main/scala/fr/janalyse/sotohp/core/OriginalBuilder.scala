@@ -4,6 +4,7 @@ import com.drew.imaging.ImageMetadataReader
 import com.drew.metadata.bmp.BmpHeaderDirectory
 import com.drew.metadata.exif.{ExifDirectoryBase, ExifIFD0Directory, ExifSubIFDDirectory, GpsDirectory}
 import com.drew.metadata.gif.GifImageDirectory
+import com.drew.metadata.heif.HeifDirectory
 import com.drew.metadata.jpeg.JpegDirectory
 import com.drew.metadata.png.PngDirectory
 import com.drew.metadata.{Metadata as DrewMetadata, Tag as DrewTag}
@@ -213,6 +214,9 @@ object OriginalBuilder {
     lazy val dimensionFromBmp  =
       Option(metadata.getFirstDirectoryOfType(classOf[BmpHeaderDirectory]))
         .flatMap(dir => buildDimension2D(Width(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_WIDTH)), Height(dir.getInt(BmpHeaderDirectory.TAG_IMAGE_HEIGHT))))
+    lazy val dimensionFromHeif =
+      Option(metadata.getFirstDirectoryOfType(classOf[HeifDirectory]))
+        .flatMap(dir => buildDimension2D(Width(dir.getInt(HeifDirectory.TAG_IMAGE_WIDTH)), Height(dir.getInt(HeifDirectory.TAG_IMAGE_HEIGHT))))
     lazy val dimensionFromExif =
       extractExif(metadata)
         .flatMap(dir => buildDimension2D(Width(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_WIDTH)), Height(dir.getInt(ExifDirectoryBase.TAG_EXIF_IMAGE_HEIGHT))))
@@ -221,6 +225,7 @@ object OriginalBuilder {
       .orElse(dimensionFromPng)
       .orElse(dimensionFromGif)
       .orElse(dimensionFromBmp)
+      .orElse(dimensionFromHeif)
       .orElse(dimensionFromExif) // Remember that exif dimensions declaration may lie if the image have been altered
   }
 
