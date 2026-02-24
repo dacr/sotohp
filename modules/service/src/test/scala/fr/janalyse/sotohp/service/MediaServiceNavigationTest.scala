@@ -24,11 +24,11 @@ object MediaServiceNavigationTest extends BaseSpecDefault {
         _                 <- MediaService.synchronizeWait()
         medias            <- MediaService.mediaList().runCollect
         last              <- MediaService.mediaLast().some
-        previousLast      <- MediaService.mediaPrevious(last.accessKey).some
-        previousNextLast  <- MediaService.mediaNext(previousLast.accessKey).some
+        previousLast      <- MediaService.mediaPrevious(last.key).some
+        previousNextLast  <- MediaService.mediaNext(previousLast.key).some
         first             <- MediaService.mediaFirst().some
-        nextFirst         <- MediaService.mediaNext(first.accessKey).some
-        nextPreviousFirst <- MediaService.mediaPrevious(nextFirst.accessKey).some
+        nextFirst         <- MediaService.mediaNext(first.key).some
+        nextPreviousFirst <- MediaService.mediaPrevious(nextFirst.key).some
       } yield assertTrue(
         medias.size == 13,
         first == nextPreviousFirst,

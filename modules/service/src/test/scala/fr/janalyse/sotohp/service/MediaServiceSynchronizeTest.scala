@@ -60,7 +60,7 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         events.size == 6,
         states.size == 13,
         medias.size == 13,
-        medias.filter(_.events.nonEmpty).size == 12,
+        medias.filter(_.media.events.nonEmpty).size == 12,
         originals == originalsAgain,
         events == eventsAgain,
         states != statesAgain,                    // originalLastChecked should differ :
