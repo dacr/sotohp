@@ -2,9 +2,15 @@ package fr.janalyse.sotohp.service.model
 
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.dao.*
-import zio.lmdb.LMDBCollection
+import zio.lmdb.{LMDBCollection, LMDBIndex}
 
-case class MediaServiceCollections(
+import java.time.Instant
+
+case class MediaServiceDatabase(
+  originalIdByTimestamp: LMDBIndex[(Instant, OriginalId), OriginalId],
+  originalIdByEventId: LMDBIndex[EventId, (Instant, OriginalId)],
+  faceIdByPersonId: LMDBIndex[PersonId, (Instant, FaceId)],
+
   originals: LMDBCollection[OriginalId, DaoOriginal],
   states: LMDBCollection[OriginalId, DaoState],
   events: LMDBCollection[EventId, DaoEvent],
@@ -20,5 +26,5 @@ case class MediaServiceCollections(
   objects: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
   miniatures: LMDBCollection[OriginalId, DaoOriginalMiniatures],
   normalized: LMDBCollection[OriginalId, DaoOriginalNormalized],
-  persons: LMDBCollection[PersonId, DaoPerson],
+  persons: LMDBCollection[PersonId, DaoPerson]
 )

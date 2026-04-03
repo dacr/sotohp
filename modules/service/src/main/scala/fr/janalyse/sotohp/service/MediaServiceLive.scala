@@ -46,8 +46,7 @@ type LMDBIssues = StorageUserError | StorageSystemError | IndexErrors
 class MediaServiceLive private (
   lmdb: LMDB,
   search: SearchService,
-  collections: MediaServiceCollections,
-  indexes: MediaServiceIndexes,
+  collections: MediaServiceDatabase,
   processors: MediaServiceProcessors,
   // ------------------------
   synchronizeStatusRef: Ref[SynchronizeStatus],
@@ -70,12 +69,12 @@ class MediaServiceLive private (
 
   override def mediaList(): Stream[ServiceStreamIssue, MediaTuple] = {
     val medias = for {
-      firstKey <- indexes.originalIdByTimestamp
+      firstKey <- collections.originalIdByTimestamp
                     .head()
                     .map(_.map((key, originalId) => key))
                     .mapError(err => ServiceStreamInternalIssue(s"Couldn't reach first key : $err"))
       stream    = firstKey
-                    .map(key => indexes.originalIdByTimestamp.indexed(key, limitToKey = false))
+                    .map(key => collections.originalIdByTimestamp.indexed(key, limitToKey = false))
                     .getOrElse(ZStream.empty)
                     .mapZIO { case ((timestamp, originalId), _) =>
                       collections.medias
@@ -104,7 +103,7 @@ class MediaServiceLive private (
 
   override def mediaFirst(): IO[ServiceIssue, Option[MediaTuple]] = {
     val result = for {
-      (timestamp, originalId) <- indexes.originalIdByTimestamp
+      (timestamp, originalId) <- collections.originalIdByTimestamp
                                    .head()
                                    .map(_.map((key, originalId) => key))
                                    .some
@@ -125,7 +124,7 @@ class MediaServiceLive private (
 
   override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
     val result = for {
-      (timestamp, originalId) <- indexes.originalIdByTimestamp
+      (timestamp, originalId) <- collections.originalIdByTimestamp
                                    .previous(nearKey.toNative)
                                    .map(_.map((key, originalId) => key))
                                    .some
@@ -146,7 +145,7 @@ class MediaServiceLive private (
 
   override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
     val result = for {
-      (timestamp, originalId) <- indexes.originalIdByTimestamp
+      (timestamp, originalId) <- collections.originalIdByTimestamp
                                    .next(nearKey.toNative)
                                    .map(_.map((key, originalId) => key))
                                    .some
@@ -167,7 +166,7 @@ class MediaServiceLive private (
 
   override def mediaLast(): IO[ServiceIssue, Option[MediaTuple]] = {
     val result = for {
-      (timestamp, originalId) <- indexes.originalIdByTimestamp
+      (timestamp, originalId) <- collections.originalIdByTimestamp
                                    .last()
                                    .map(_.map((key, originalId) => key))
                                    .some
@@ -207,7 +206,7 @@ class MediaServiceLive private (
 
   override def mediaGetAt(position: Long): IO[ServiceIssue, Option[MediaTuple]] = {
     val result = for {
-      (timestamp, originalId) <- indexes.originalIdByTimestamp
+      (timestamp, originalId) <- collections.originalIdByTimestamp
                                    .fetchAt(position)
                                    .map(_.map((key, originalId) => key))
                                    .some
@@ -569,9 +568,9 @@ class MediaServiceLive private (
   }
 
   def personFaceList(personId: PersonId): Stream[ServiceStreamIssue, Face] = {
-    indexes.faceIdByPersonId
+    collections.faceIdByPersonId
       .indexed(personId)
-      .mapZIO{ case (personId, (timestamp, faceId)) => collections.detectedFaces.fetch(faceId) }
+      .mapZIO { case (personId, (timestamp, faceId)) => collections.detectedFaces.fetch(faceId) }
       .filter(_.isDefined)
       .map(_.get.transformInto[Face])
       .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect faces for person $personId : $err"))
@@ -1560,54 +1559,59 @@ object MediaServiceLive {
     personsCollectionName
   )
 
-  def setupCollections(lmdb: LMDB): ZIO[Any, LMDBIssues, MediaServiceCollections] = for {
-    originalsColl            <- lmdb.collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
-    statesColl               <- lmdb.collectionGet[OriginalId, DaoState](statesCollectionName)
-    eventsColl               <- lmdb.collectionGet[EventId, DaoEvent](eventsCollectionName)
-    mediasColl               <- lmdb.collectionGet[OriginalId, DaoMedia](mediasCollectionName)
-    ownersColl               <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
-    storesColl               <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
-    keywordRulesColl         <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
-    classificationsColl      <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
-    detectedFacesColl        <- lmdb.collectionGet[FaceId, DaoDetectedFace](detectedFacesCollectionName)
-    originalFoundFacesColl   <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
-    faceFeaturesColl         <- lmdb.collectionGet[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName)
-    originalFaceFeaturesColl <- lmdb.collectionGet[OriginalId, DaoOriginalFaceFeatures](faceFeaturesCollectionName)
-    objectsColl              <- lmdb.collectionGet[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName)
-    miniaturesColl           <- lmdb.collectionGet[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName)
-    normalizedColl           <- lmdb.collectionGet[OriginalId, DaoOriginalNormalized](normalizedCollectionName)
-    personsColl              <- lmdb.collectionGet[PersonId, DaoPerson](personsCollectionName)
-    collections               = MediaServiceCollections(
-                                  originals = originalsColl,
-                                  states = statesColl,
-                                  events = eventsColl,
-                                  medias = mediasColl,
-                                  owners = ownersColl,
-                                  stores = storesColl,
-                                  keywordRules = keywordRulesColl,
-                                  classifications = classificationsColl,
-                                  detectedFaces = detectedFacesColl,
-                                  originalFaces = originalFoundFacesColl,
-                                  faceFeatures = faceFeaturesColl,
-                                  originalFaceFeatures = originalFaceFeaturesColl,
-                                  objects = objectsColl,
-                                  miniatures = miniaturesColl,
-                                  normalized = normalizedColl,
-                                  persons = personsColl
-                                )
+  def setupMediaServiceDatabase(lmdb: LMDB): ZIO[Any, LMDBIssues, MediaServiceDatabase] = for {
+    // ----------------------------------------------------------------------------------------
+    // INDEXES
+    indexOriginalIdByTimestamp     <- lmdb.indexCreate[(Instant, OriginalId), OriginalId]("originalIdByTimestamp", false)
+    indexOriginalIdByEventId       <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
+    indexFaceIdByPersonId          <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
+    // ----------------------------------------------------------------------------------------
+    // COLLECTIONS
+    collectionOriginals            <- lmdb
+                                        .collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
+    collectionStates               <- lmdb
+                                        .collectionGet[OriginalId, DaoState](statesCollectionName)
+    collectionEvents               <- lmdb
+                                        .collectionGet[EventId, DaoEvent](eventsCollectionName)
+    collectionMedias               <- lmdb
+                                        .collectionGet[OriginalId, DaoMedia](mediasCollectionName)
+    // .map(_.withIndexFull(indexOriginalIdByEventId)((id,media) => media.events.map(eventId => eventId->(media.timestamp, media.originalId))))
+    collectionOwners               <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
+    collectionStores               <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
+    collectionKeywordRules         <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
+    collectionClassifications      <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
+    collectionDetectedFaces        <- lmdb
+                                        .collectionGet[FaceId, DaoDetectedFace](detectedFacesCollectionName)
+                                        .map(_.withIndexFull(indexFaceIdByPersonId)((faceId, face) => face.identifiedPersonId.map(personId => personId -> (face.timestamp.toInstant, faceId))))
+    collectionOriginalFoundFaces   <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
+    collectionFaceFeatures         <- lmdb.collectionGet[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName)
+    collectionOriginalFaceFeatures <- lmdb.collectionGet[OriginalId, DaoOriginalFaceFeatures](faceFeaturesCollectionName)
+    collectionObjects              <- lmdb.collectionGet[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName)
+    collectionMiniatures           <- lmdb.collectionGet[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName)
+    collectionNormalized           <- lmdb.collectionGet[OriginalId, DaoOriginalNormalized](normalizedCollectionName)
+    collectionPersons              <- lmdb.collectionGet[PersonId, DaoPerson](personsCollectionName)
+    collections                     = MediaServiceDatabase(
+                                        originalIdByTimestamp = indexOriginalIdByTimestamp,
+                                        originalIdByEventId = indexOriginalIdByEventId,
+                                        faceIdByPersonId = indexFaceIdByPersonId,
+                                        originals = collectionOriginals,
+                                        states = collectionStates,
+                                        events = collectionEvents,
+                                        medias = collectionMedias,
+                                        owners = collectionOwners,
+                                        stores = collectionStores,
+                                        keywordRules = collectionKeywordRules,
+                                        classifications = collectionClassifications,
+                                        detectedFaces = collectionDetectedFaces,
+                                        originalFaces = collectionOriginalFoundFaces,
+                                        faceFeatures = collectionFaceFeatures,
+                                        originalFaceFeatures = collectionOriginalFaceFeatures,
+                                        objects = collectionObjects,
+                                        miniatures = collectionMiniatures,
+                                        normalized = collectionNormalized,
+                                        persons = collectionPersons
+                                      )
   } yield collections
-
-  def setupIndexes(lmdb: LMDB, collections: MediaServiceCollections): ZIO[Any, IndexErrors, MediaServiceIndexes] = for {
-    originalIdByTimestampIndex <- lmdb.indexCreate[(Instant, OriginalId), OriginalId]("originalIdByTimestamp", false)
-    originalIdByEventIdIndex   <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
-    faceIdByPersonIdIndex      <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
-    indexes                     = MediaServiceIndexes(
-                                    collections = collections,
-                                    originalIdByTimestamp = originalIdByTimestampIndex,
-                                    originalIdByEventId = originalIdByEventIdIndex,
-                                    faceIdByPersonId = faceIdByPersonIdIndex
-                                  )
-  } yield indexes
 
   def setupProcessors() = for {
     classificationProcessor <- ClassificationProcessor.allocate().memoize
@@ -1625,16 +1629,14 @@ object MediaServiceLive {
 
   def setup(lmdb: LMDB, search: SearchService): IO[LMDBIssues | CoreIssue, MediaService] = for {
     _                          <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
-    collections                <- setupCollections(lmdb)
-    indexes                    <- setupIndexes(lmdb, collections)
+    mediaServiceDatabase       <- setupMediaServiceDatabase(lmdb)
     processors                 <- setupProcessors()
     synchronizeStatusReference <- Ref.make(SynchronizeStatus.empty)
     synchronizeFiberReference  <- Ref.make(Option.empty[Fiber[ServiceIssue, Unit]])
   } yield new MediaServiceLive(
     lmdb,
     search,
-    collections,
-    indexes,
+    mediaServiceDatabase,
     processors,
     // ------------------------
     synchronizeStatusReference,

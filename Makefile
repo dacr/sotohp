@@ -20,6 +20,9 @@ run-stats:
 check-updates:
 	mill mill.javalib.Dependency/showUpdates
 
+bsp-install:
+	mill --bsp-install
+
 api-jar:
 	mill -i user-interfaces.api.jar
 
