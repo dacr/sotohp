@@ -1575,7 +1575,8 @@ object MediaServiceLive {
                                         .collectionGet[EventId, DaoEvent](eventsCollectionName)
     collectionMedias               <- lmdb
                                         .collectionGet[OriginalId, DaoMedia](mediasCollectionName)
-    // .map(_.withIndexFull(indexOriginalIdByEventId)((id,media) => media.events.map(eventId => eventId->(media.timestamp, media.originalId))))
+                                        .map(_.withIndexFull(indexOriginalIdByEventId)((id,media) => media.events.map(eventId => eventId->(media.timestamp, media.originalId))))
+                                        // TODO WIRE INDEXES LAMBDA TO MAINTAIN INDEX CONSISTENCY !
     collectionOwners               <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
     collectionStores               <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
     collectionKeywordRules         <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
