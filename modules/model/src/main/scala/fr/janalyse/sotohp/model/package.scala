@@ -505,7 +505,7 @@ package object model {
     def apply(aperture: Double): Aperture = aperture
     extension (aperture: Aperture) {
       def selected: Double = aperture
-      def sexy: String     = "F%.1f".formatLocal(Locale.US, pow(sqrt(2), aperture))
+      def sexy: String     = "F%.1f".formatLocal(Locale.US, aperture)
     }
   }
 

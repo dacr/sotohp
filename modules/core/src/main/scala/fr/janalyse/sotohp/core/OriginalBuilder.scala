@@ -142,11 +142,15 @@ object OriginalBuilder {
   }
 
   def extractAperture(metadata: DrewMetadata): Option[Aperture] = {
-    val tagName = ExifDirectoryBase.TAG_APERTURE
     for {
-      exif     <- extractExifSub(metadata)
-      if exif.containsTag(tagName)
-      aperture <- Option(exif.getDouble(tagName))
+      exif <- extractExifSub(metadata)
+      aperture <- if (exif.containsTag(ExifDirectoryBase.TAG_FNUMBER)) {
+                    Option(exif.getDouble(ExifDirectoryBase.TAG_FNUMBER))
+                  } else if (exif.containsTag(ExifDirectoryBase.TAG_APERTURE)) {
+                    Option(exif.getDouble(ExifDirectoryBase.TAG_APERTURE)).map(apex => math.pow(math.sqrt(2), apex))
+                  } else {
+                    None
+                  }
     } yield Aperture(aperture)
   }
 

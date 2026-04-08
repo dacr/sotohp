@@ -518,6 +518,29 @@ function showMedia(media) {
   } else if (ownerEl) {
     ownerEl.textContent = '-';
   }
+
+  // Camera information
+  const camEl = document.getElementById('info-camera');
+  if (camEl) {
+    const parts = [];
+    const orig = media.original;
+    if (orig) {
+      if (orig.aperture) {
+        const a = orig.aperture;
+        // Show one decimal place for consistency, unless it's a large integer
+        parts.push(`f/${a < 10 ? a.toFixed(1) : Math.round(a)}`);
+      }
+      if (orig.exposureTime && typeof orig.exposureTime.numerator === 'number' && typeof orig.exposureTime.denominator === 'number') {
+        const { numerator, denominator } = orig.exposureTime;
+        if (denominator === 1) parts.push(`${numerator}s`);
+        else parts.push(`${numerator}/${denominator}s`);
+      }
+      if (orig.iso) parts.push(`iso${Math.round(orig.iso)}`);
+      if (orig.focalLength) parts.push(`${Math.round(orig.focalLength)}mm`);
+      if (orig.cameraName) parts.push(orig.cameraName);
+    }
+    camEl.textContent = parts.length > 0 ? parts.join(', ') : '-';
+  }
   
   {
     const kwEl = document.getElementById('info-keywords');
@@ -1843,6 +1866,7 @@ function loadMapData({ clear = false } = {}) {
   $('#map-status').textContent = 'Loading medias with location…';
   mapLoading = true;
   let received = 0;
+  const markersToAdd = [];
   api.mediasWithLocations(m => {
     const loc = m.location || m.userDefinedLocation || m.deductedLocation; if (!loc) return;
     if (mapAddedKeys.has(m.accessKey)) return; // keep existing data, avoid duplicates
@@ -1865,13 +1889,26 @@ function loadMapData({ clear = false } = {}) {
       if (b) b.onclick = () => { setActiveTab('viewer'); showMedia(m); };
     });
     mapMarkersByKey.set(m.accessKey, marker);
-    cluster.addLayer(marker);
+    markersToAdd.push(marker);
     if (pendingFocusKey && m.accessKey === pendingFocusKey) {
-      try { cluster.zoomToShowLayer(marker, () => { marker.openPopup(); }); } catch {}
-      pendingFocusKey = null;
+      // Focus will be handled after addLayers
     }
     received += 1; if (received % 200 === 0) $('#map-status').textContent = `Loaded ${mapAddedKeys.size} markers…`;
-  }).then(() => { mapLoading = false; $('#map-status').textContent = `Done. Markers: ${mapAddedKeys.size}`; }).catch(() => { mapLoading = false; $('#map-status').textContent = `Load interrupted. Markers: ${mapAddedKeys.size}`; });
+  }).then(() => {
+    if (markersToAdd.length > 0) {
+      cluster.addLayers(markersToAdd);
+    }
+    if (pendingFocusKey && mapMarkersByKey.has(pendingFocusKey)) {
+       const marker = mapMarkersByKey.get(pendingFocusKey);
+       try { cluster.zoomToShowLayer(marker, () => { marker.openPopup(); }); } catch {}
+       pendingFocusKey = null;
+    }
+    mapLoading = false;
+    $('#map-status').textContent = `Done. Markers: ${mapAddedKeys.size}`;
+  }).catch(() => {
+    mapLoading = false;
+    $('#map-status').textContent = `Load interrupted. Markers: ${mapAddedKeys.size}`;
+  });
 }
 
 // Events

@@ -13,12 +13,7 @@ case class Media(
   userDefinedLocation: Option[Location], // replace the original's location (user-defined or deducted location)
   deductedLocation: Option[Location] // location deducted from near-by (time, space) localized photos
 ) {
-  def timestamp: OffsetDateTime =
-    shootDateTime
-      .orElse(original.cameraShootDateTime)
-      .orElse(events.find(_.attachment.isDefined).flatMap(_.timestamp))
-      .map(_.offsetDateTime)
-      .getOrElse(original.fileLastModified.offsetDateTime)
+  def timestamp: OffsetDateTime = Media.computeTimestamp(shootDateTime, events, original)
 
   def location: Option[Location] =
     userDefinedLocation
@@ -35,4 +30,15 @@ case class Media(
 //    MediaAccessKey(timestamp, original.id)
 //  }
   def allKeywords: Set[Keyword] = keywords ++ events.flatMap(_.keywords)
+}
+
+object Media {
+  def computeTimestamp( mediaShootDateTime: Option[ShootDateTime], events: List[Event], original: Original): OffsetDateTime = {
+    mediaShootDateTime
+      .orElse(original.cameraShootDateTime)
+      .orElse(events.find(_.attachment.isDefined).flatMap(_.timestamp))
+      .map(_.offsetDateTime)
+      .getOrElse(original.fileLastModified.offsetDateTime)
+  }
+
 }

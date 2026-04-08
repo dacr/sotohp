@@ -2,11 +2,12 @@ package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.dao.*
-import fr.janalyse.sotohp.service.json.{given, *}
+import fr.janalyse.sotohp.service.json.{*, given}
 import zio.*
 import zio.lmdb.*
 import zio.lmdb.json.LMDBCodecJson
 import zio.stream.*
+
 import java.nio.charset.StandardCharsets
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path, Paths}
@@ -15,7 +16,8 @@ import scala.util.Try
 import wvlet.airframe.ulid.ULID
 import zio.lmdb.keycodecs.KeyCodec
 import zio.lmdb.keycodecs.timestamp.TimestampCodec.given
-import java.time.Instant
+
+import java.time.{Instant, OffsetDateTime}
 
 /** Migration tool to move from 'sotohp' to 'sotohp-v2' database.
   */
@@ -112,7 +114,8 @@ object MediaMigrationTool extends CommonsCLI {
       orientation: Option[Orientation],
       shootDateTime: Option[ShootDateTime],
       userDefinedLocation: Option[DaoLocation],
-      deductedLocation: Option[DaoLocation]
+      deductedLocation: Option[DaoLocation],
+      timestamp: OffsetDateTime
     ) derives LMDBCodecJson
 
     // DaoState WITHOUT mediaAccessKey
@@ -144,12 +147,6 @@ object MediaMigrationTool extends CommonsCLI {
       medias    <- target
                      .collectionGet[OriginalId, NewSchema.MigrationNewDaoMedia]("medias")
                      .mapError(e => new Exception(s"Collection 'medias' open error: $e"))
-      originals <- target
-                     .collectionGet[OriginalId, DaoOriginal]("originals")
-                     .mapError(e => new Exception(s"Collection 'originals' open error: $e"))
-      events    <- target
-                     .collectionGet[EventId, DaoEvent]("events")
-                     .mapError(e => new Exception(s"Collection 'events' open error: $e"))
 
       _     <- ZIO.logInfo("Starting 'originalIdByTimestamp' fill stream...")
       count <- medias
@@ -159,19 +156,8 @@ object MediaMigrationTool extends CommonsCLI {
                    idx
                      .readWrite { ops =>
                        ZIO.foreach(chunk) { media =>
-                         for {
-                           original <- originals.fetch(media.originalId).some
-                           evs      <- ZIO.foreach(media.events)(id => events.fetch(id)).map(_.flatten)
-
-                           timestamp = media.shootDateTime
-                                         .orElse(original.cameraShootDateTime)
-                                         .orElse(evs.find(_.attachment.isDefined).flatMap(_.timestamp))
-                                         .map(_.offsetDateTime)
-                                         .getOrElse(original.fileLastModified.offsetDateTime)
-                                         .toInstant
-
-                           _ <- ops.index(timestamp -> media.originalId, media.originalId)
-                         } yield ()
+                         val timestamp = media.timestamp.toInstant
+                         ops.index(timestamp -> media.originalId, media.originalId)
                        }
                      }
                      .as(chunk.size)
@@ -235,12 +221,6 @@ object MediaMigrationTool extends CommonsCLI {
       medias    <- target
                      .collectionGet[OriginalId, NewSchema.MigrationNewDaoMedia]("medias")
                      .mapError(e => new Exception(s"Collection 'medias' open error: $e"))
-      originals <- target
-                     .collectionGet[OriginalId, DaoOriginal]("originals")
-                     .mapError(e => new Exception(s"Collection 'originals' open error: $e"))
-      events    <- target
-                     .collectionGet[EventId, DaoEvent]("events")
-                     .mapError(e => new Exception(s"Collection 'events' open error: $e"))
 
       _     <- ZIO.logInfo("Starting 'originalIdByEventId' fill stream...")
       count <- medias
@@ -250,21 +230,10 @@ object MediaMigrationTool extends CommonsCLI {
                    idx
                      .readWrite { ops =>
                        ZIO.foreach(chunk) { media =>
-                         for {
-                           original <- originals.fetch(media.originalId).some
-                           evs      <- ZIO.foreach(media.events)(id => events.fetch(id)).map(_.flatten)
-
-                           timestamp = media.shootDateTime
-                                         .orElse(original.cameraShootDateTime)
-                                         .orElse(evs.find(_.attachment.isDefined).flatMap(_.timestamp))
-                                         .map(_.offsetDateTime)
-                                         .getOrElse(original.fileLastModified.offsetDateTime)
-                                         .toInstant
-
-                           _ <- ZIO.foreach(media.events) { eventId =>
-                                  ops.index(eventId, (timestamp, media.originalId))
-                                }
-                         } yield ()
+                         val timestamp = media.timestamp.toInstant
+                         ZIO.foreach(media.events) { eventId =>
+                           ops.index(eventId, (timestamp, media.originalId))
+                         }
                        }
                      }
                      .as(chunk.size)
@@ -278,6 +247,18 @@ object MediaMigrationTool extends CommonsCLI {
   // ===================================================================================================================
   // MIGRATION LOGIC
   // ===================================================================================================================
+
+  private def computeTimestamp(
+    mediaShootDateTime: Option[ShootDateTime],
+    original: DaoOriginal,
+    events: Seq[DaoEvent]
+  ): OffsetDateTime = {
+    mediaShootDateTime
+      .orElse(original.cameraShootDateTime)
+      .orElse(events.find(_.attachment.isDefined).flatMap(_.timestamp))
+      .map(_.offsetDateTime)
+      .getOrElse(original.fileLastModified.offsetDateTime)
+  }
 
   private def allocateIgnoreExists(lmdb: LMDB, name: String): ZIO[Any, Throwable, Unit] = {
     lmdb.collectionAllocate(name).catchAll {
@@ -297,8 +278,17 @@ object MediaMigrationTool extends CommonsCLI {
                    .collectionGet[MediaAccessKey, OldSchema.MigrationOldDaoMedia]("medias")
                    .tap(_ => ZIO.logInfo("Source 'medias' collection opened"))
                    .mapError(e => new Exception(s"Source collection error: $e"))
-      _       <- allocateIgnoreExists(target, "medias")
-                   .tap(_ => ZIO.logInfo("Target 'medias' allocated"))
+
+      srcOriginals <- source
+                        .collectionGet[OriginalId, DaoOriginal]("originals")(using OldSchema.originalIdCodec, implicitly)
+                        .mapError(e => new Exception(s"Source 'originals' error: $e"))
+      srcEvents    <- source
+                        .collectionGet[EventId, DaoEvent]("events")(using OldSchema.eventIdCodec, implicitly)
+                        .mapError(e => new Exception(s"Source 'events' error: $e"))
+
+      _ <- target.collectionDrop("medias").ignore
+      _ <- allocateIgnoreExists(target, "medias")
+             .tap(_ => ZIO.logInfo("Target 'medias' allocated"))
       // Explicitly use NewSchema codec for writing
       tgtColl <- target
                    .collectionGet[OriginalId, NewSchema.MigrationNewDaoMedia]("medias")(using NewSchema.originalIdCodec, implicitly)
@@ -313,18 +303,25 @@ object MediaMigrationTool extends CommonsCLI {
                    tgtColl
                      .readWrite { ops =>
                        ZIO.foreach(chunk) { oldMedia =>
-                         val newMedia = NewSchema.MigrationNewDaoMedia(
-                           originalId = oldMedia.originalId,
-                           events = oldMedia.events,
-                           description = oldMedia.description,
-                           starred = oldMedia.starred,
-                           keywords = oldMedia.keywords,
-                           orientation = oldMedia.orientation,
-                           shootDateTime = oldMedia.shootDateTime,
-                           userDefinedLocation = oldMedia.userDefinedLocation,
-                           deductedLocation = oldMedia.deductedLocation
-                         )
-                         ops.upsert(newMedia.originalId, _ => newMedia).as(1L)
+                         for {
+                           original <- srcOriginals.fetch(oldMedia.originalId).some
+                           evs      <- ZIO.foreach(oldMedia.events)(id => srcEvents.fetch(id)).map(_.flatten)
+                           timestamp = computeTimestamp(oldMedia.shootDateTime, original, evs.toSeq)
+
+                           newMedia = NewSchema.MigrationNewDaoMedia(
+                             originalId = oldMedia.originalId,
+                             events = oldMedia.events,
+                             description = oldMedia.description,
+                             starred = oldMedia.starred,
+                             keywords = oldMedia.keywords,
+                             orientation = oldMedia.orientation,
+                             shootDateTime = oldMedia.shootDateTime,
+                             userDefinedLocation = oldMedia.userDefinedLocation,
+                             deductedLocation = oldMedia.deductedLocation,
+                             timestamp = timestamp
+                           )
+                           _ <- ops.upsertOverwrite(newMedia.originalId, newMedia)
+                         } yield 1L
                        }
                      }
                      .map(_.sum)
@@ -345,6 +342,7 @@ object MediaMigrationTool extends CommonsCLI {
                    .collectionGet[OriginalId, OldSchema.MigrationOldDaoState]("states")
                    .tap(_ => ZIO.logInfo("Source 'states' collection opened"))
                    .mapError(e => new Exception(s"Source collection error: $e"))
+      _       <- target.collectionDrop("states").ignore
       _       <- allocateIgnoreExists(target, "states")
       tgtColl <- target
                    .collectionGet[OriginalId, NewSchema.MigrationNewDaoState]("states")(using NewSchema.originalIdCodec, implicitly)
@@ -365,7 +363,7 @@ object MediaMigrationTool extends CommonsCLI {
                            originalLastChecked = oldState.originalLastChecked,
                            mediaLastSynchronized = oldState.mediaLastSynchronized
                          )
-                         ops.upsert(newState.originalId, _ => newState).as(1L)
+                         ops.upsertOverwrite(newState.originalId, newState).as(1L)
                        }
                      }
                      .map(_.sum)
@@ -394,6 +392,7 @@ object MediaMigrationTool extends CommonsCLI {
     for {
       _       <- ZIO.logInfo(s"Migrating '$collectionName' collection...")
       srcColl <- srcCollZIO.mapError(e => new Exception(s"Source collection error: $e"))
+      _       <- target.collectionDrop(collectionName).ignore
       _       <- allocateIgnoreExists(target, collectionName)
       tgtColl <- target
                    .collectionGet[K, V](collectionName)(using newKeyCodec, valCodec)
@@ -407,7 +406,7 @@ object MediaMigrationTool extends CommonsCLI {
                      .readWrite { ops =>
                        ZIO.foreach(chunk) { value =>
                          val key = extractKey(value)
-                         ops.upsert(key, _ => value).as(1L)
+                         ops.upsertOverwrite(key, value).as(1L)
                        }
                      }
                      .map(_.sum)
@@ -432,6 +431,7 @@ object MediaMigrationTool extends CommonsCLI {
                      .collectionGet[StoreId, DaoKeywordRules]("keywordRules")
                      .mapError(e => new Exception(s"Source rules error: $e"))
 
+      _        <- target.collectionDrop("keywordRules").ignore
       _        <- allocateIgnoreExists(target, "keywordRules")
       tgtRules <- target
                     .collectionGet[StoreId, DaoKeywordRules]("keywordRules")(using NewSchema.storeIdCodec, implicitly)
@@ -442,7 +442,7 @@ object MediaMigrationTool extends CommonsCLI {
                  .mapZIO { store =>
                    val storeId = store.id
                    srcRules.fetch(storeId).flatMap {
-                     case Some(rules) => tgtRules.upsert(storeId, _ => rules).as(1L)
+                     case Some(rules) => tgtRules.upsertOverwrite(storeId, rules).as(1L)
                      case None        => ZIO.succeed(0L)
                    }
                  }
