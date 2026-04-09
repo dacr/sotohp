@@ -17,6 +17,9 @@ run-face-fix:
 run-stats:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
+run-reindex:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Reindex
+
 check-updates:
 	mill mill.javalib.Dependency/showUpdates
 

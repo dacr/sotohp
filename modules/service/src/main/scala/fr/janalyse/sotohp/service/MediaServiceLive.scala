@@ -1076,8 +1076,8 @@ class MediaServiceLive private (
 
   private def synchronizeOriginal(original: Original): IO[ServiceIssue, Original] = {
     val logic = for {
-      // available <- originalExists(original.id)
-      _ <- originalUpsert(original) // .when(!available)
+      available <- originalExists(original.id)
+      _         <- originalUpsert(original).when(!available)
     } yield original
     logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
   }
@@ -1303,7 +1303,7 @@ class MediaServiceLive private (
                             .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
                             .right
         _              <- originalsStream
-                            .tap(original => ZIO.logInfo(s"Checking ${original.mediaPath}"))
+                            //.tap(original => ZIO.logInfo(s"Checking ${original.mediaPath}"))
                             .tap(_ => updateSynchronizeCheckedStatus())
                             .mapZIO(original => ZIO.blocking(synchronizeOriginal(original)))
                             .mapZIO(original => ZIO.blocking(synchronizeState(original)))
@@ -1371,6 +1371,23 @@ class MediaServiceLive private (
 
   override def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus] = {
     synchronizeStatusRef.get
+  }
+
+  override def reindexAll(): IO[ServiceIssue, Unit] = {
+    val reindexMedias = collections.medias
+      .stream()
+      .mapZIO(dao => ZIO.blocking(collections.medias.upsert(dao.originalId, _ => dao)))
+      .runDrain
+
+    val reindexOriginals = collections.originals
+      .stream()
+      .mapZIO(dao => ZIO.blocking(collections.originals.upsert(dao.id, _ => dao)))
+      .runDrain
+
+    (reindexMedias *> reindexOriginals)
+      .logError("Reindex failed")
+      .mapError(err => ServiceDatabaseIssue(s"Reindex failed: $err"))
+      .unit
   }
 
   def updateSynchronizeProcessedStatus(input: Chunk[MediaBag]): UIO[Chunk[MediaBag]] = {
@@ -1564,10 +1581,12 @@ object MediaServiceLive {
     indexOriginalIdByTimestamp     <- lmdb.indexCreate[(Instant, OriginalId), OriginalId]("originalIdByTimestamp", false)
     indexOriginalIdByEventId       <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
     indexFaceIdByPersonId          <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
+    indexOriginalIdByStoreId       <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
     // ----------------------------------------------------------------------------------------
     // COLLECTIONS
     collectionOriginals            <- lmdb
                                         .collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
+                                        .map(_.withIndexFull(indexOriginalIdByStoreId)((id, original) => List(original.storeId -> id)))
     collectionStates               <- lmdb
                                         .collectionGet[OriginalId, DaoState](statesCollectionName)
     collectionEvents               <- lmdb
@@ -1596,6 +1615,7 @@ object MediaServiceLive {
                                         originalIdByTimestamp = indexOriginalIdByTimestamp,
                                         originalIdByEventId = indexOriginalIdByEventId,
                                         faceIdByPersonId = indexFaceIdByPersonId,
+                                        originalIdByStoreId = indexOriginalIdByStoreId,
                                         originals = collectionOriginals,
                                         states = collectionStates,
                                         events = collectionEvents,

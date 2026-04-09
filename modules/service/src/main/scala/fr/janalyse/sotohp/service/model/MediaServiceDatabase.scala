@@ -10,6 +10,7 @@ case class MediaServiceDatabase(
   originalIdByTimestamp: LMDBIndex[(Instant, OriginalId), OriginalId],
   originalIdByEventId: LMDBIndex[EventId, (Instant, OriginalId)],
   faceIdByPersonId: LMDBIndex[PersonId, (Instant, FaceId)],
+  originalIdByStoreId: LMDBIndex[StoreId, OriginalId],
 
   originals: LMDBCollection[OriginalId, DaoOriginal],
   states: LMDBCollection[OriginalId, DaoState],

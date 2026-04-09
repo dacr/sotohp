@@ -173,6 +173,7 @@ trait MediaService {
   def synchronizeWait(): IO[ServiceIssue, Unit]
   def synchronizeStop(): IO[ServiceIssue, Unit]
   def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus]
+  def reindexAll(): IO[ServiceIssue, Unit]
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]]
@@ -369,6 +370,7 @@ object MediaService {
   def synchronizeWait(): ZIO[MediaService, ServiceIssue, Unit]                                 = ZIO.serviceWithZIO(_.synchronizeWait())
   def synchronizeStop(): ZIO[MediaService, ServiceIssue, Unit]                                 = ZIO.serviceWithZIO(_.synchronizeStop())
   def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus]                  = ZIO.serviceWithZIO(_.synchronizeStatus())
+  def reindexAll(): ZIO[MediaService, ServiceIssue, Unit]                                      = ZIO.serviceWithZIO(_.reindexAll())
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): ZIO[MediaService, ServiceIssue, Set[Keyword]] = ZIO.serviceWithZIO(_.keywordSentenceToKeywords(storeId, sentence))
