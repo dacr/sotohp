@@ -1303,7 +1303,7 @@ class MediaServiceLive private (
                             .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
                             .right
         _              <- originalsStream
-                            //.tap(original => ZIO.logInfo(s"Checking ${original.mediaPath}"))
+                            // .tap(original => ZIO.logInfo(s"Checking ${original.mediaPath}"))
                             .tap(_ => updateSynchronizeCheckedStatus())
                             .mapZIO(original => ZIO.blocking(synchronizeOriginal(original)))
                             .mapZIO(original => ZIO.blocking(synchronizeState(original)))
@@ -1374,17 +1374,9 @@ class MediaServiceLive private (
   }
 
   override def reindexAll(): IO[ServiceIssue, Unit] = {
-    val reindexMedias = collections.medias
-      .stream()
-      .mapZIO(dao => ZIO.blocking(collections.medias.upsert(dao.originalId, _ => dao)))
-      .runDrain
-
-    val reindexOriginals = collections.originals
-      .stream()
-      .mapZIO(dao => ZIO.blocking(collections.originals.upsert(dao.id, _ => dao)))
-      .runDrain
-
-    (reindexMedias *> reindexOriginals)
+    (collections.medias.rebuildIndexes() *>
+      collections.originals.rebuildIndexes() *>
+      collections.detectedFaces.rebuildIndexes())
       .logError("Reindex failed")
       .mapError(err => ServiceDatabaseIssue(s"Reindex failed: $err"))
       .unit
