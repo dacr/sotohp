@@ -165,8 +165,9 @@ object FaceInference extends CommonsCLI {
       alreadyInferred     = unknownFaces
                               .filter((face, _) => face.inferredIdentifiedPersonId.isDefined)
       tocheck             = unknownFaces
-                              //.filter((face, _) => face.inferredIdentifiedPersonId.isEmpty)
+                              .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty)
                               //.filter((face, _) => face.timestamp.isAfter(now.minus(5, ChronoUnit.DAYS)))
+                              .filter((face, _) => face.timestamp.isAfter(now.minus(6, ChronoUnit.MONTHS)))
       personsCount       <- MediaService.personList().runCount
       _                  <- Console.printLine(s"$personsCount people records")
       _                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")
