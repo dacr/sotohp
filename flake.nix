@@ -32,7 +32,7 @@
           packages = [
           unstable.opencode      # The AI Agent
           unstable.gemini-cli    # The Auth Bridge
-            stable.nodejs_22       # Required for the auth plugin
+          stable.nodejs_22       # Required for the auth plugin
           stable.imagemagick     # For HEIF image processing
 
           # Scala Development
@@ -44,8 +44,9 @@
         ];
 
         shellHook = ''
-          echo "🤖 Gemini 3 Dev Environment Loaded"
-          echo "Run 'gemini' to sync your Pro subscription if not already logged in."
+            echo "🤖 Dev Environment Loaded"
+            echo "Run 'gemini' or 'OpenCode' to sync your Pro subscription if not already logged in."
+            echo "   (opencode auth login)"
         '';
       };
     }
