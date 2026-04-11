@@ -1,4 +1,5 @@
-//| mill-version: 1.0.6
+//| mill-version: 1.1.2
+//| mill-jvm-id: local
 //| mill-jvm-opts: [ "-Xss50M" ]
 //| mvnDeps:
 //| - io.github.hoangmaihuy::mill-universal-packager::0.2.0
@@ -94,7 +95,7 @@ object modules extends Module {
   object service extends SotohpModule with Publishable {
     def artifactName     = "sotohp-service"
     def moduleDeps       = Seq(core, search, processor)
-    lazy private val lmdbRelease = "2.6.0"
+    lazy private val lmdbRelease = "2.7.0"
     def mvnDeps          = Seq(
       mvn"fr.janalyse::zio-lmdb:$lmdbRelease",
       mvn"fr.janalyse::query-dsl:$lmdbRelease",
