@@ -2,18 +2,7 @@ package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder, SearchFilter}
 import fr.janalyse.sotohp.model.{FaceId, PersonId, *}
-import fr.janalyse.sotohp.processor.{
-  ClassificationIssue,
-  ClassificationProcessor,
-  FaceFeaturesIssue,
-  FaceFeaturesProcessor,
-  FacesDetectionIssue,
-  FacesProcessor,
-  MiniaturizeProcessor,
-  NormalizeProcessor,
-  ObjectsDetectionIssue,
-  ObjectsDetectionProcessor
-}
+import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FaceFeaturesIssue, FaceFeaturesProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
 import fr.janalyse.sotohp.processor.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.search.model.MediaBag
@@ -24,7 +13,7 @@ import fr.janalyse.sotohp.service.model.SynchronizeAction.{Stop, WaitForCompleti
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.{GetErrors, IndexErrors, LMDB, LMDBCodec, LMDBCollection, StorageSystemError, StorageUserError}
-import zio.lmdb.keycodecs.KeyCodec
+import zio.lmdb.keycodecs.{KeyCodec, KeyCodecError}
 import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
 import zio.ZIOAspect.annotated
@@ -1375,8 +1364,12 @@ class MediaServiceLive private (
 
   override def reindexAll(): IO[ServiceIssue, Unit] = {
     (collections.medias.rebuildIndexes() *>
+      ZIO.logInfo("medias indexes rebuilt !") *>
       collections.originals.rebuildIndexes() *>
-      collections.detectedFaces.rebuildIndexes())
+      ZIO.logInfo("originals indexes rebuilt !") *>
+      collections.detectedFaces.rebuildIndexes() *>
+      ZIO.logInfo("detectedFaces indexes rebuilt !")
+      )
       .logError("Reindex failed")
       .mapError(err => ServiceDatabaseIssue(s"Reindex failed: $err"))
       .unit
@@ -1520,7 +1513,7 @@ object MediaServiceLive {
   // -------------------------------------------------------------------------------------------------------------------
   def mapCodec[A, B](base: KeyCodec[A], to: A => B, from: B => A): KeyCodec[B] = new KeyCodec[B] {
     def encode(b: B): Array[Byte]                = base.encode(from(b))
-    def decode(b: ByteBuffer): Either[String, B] = base.decode(b).map(to)
+    def decode(b: ByteBuffer): Either[KeyCodecError, B] = base.decode(b).map(to)
   }
 
   given KeyCodec[OriginalId] = mapCodec(summon[KeyCodec[UUID]], OriginalId.apply, _.asUUID)
@@ -1595,7 +1588,12 @@ object MediaServiceLive {
     collectionClassifications      <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
     collectionDetectedFaces        <- lmdb
                                         .collectionGet[FaceId, DaoDetectedFace](detectedFacesCollectionName)
-                                        .map(_.withIndexFull(indexFaceIdByPersonId)((faceId, face) => face.identifiedPersonId.map(personId => personId -> (face.timestamp.toInstant, faceId))))
+                                        .map(_.withIndexFull(indexFaceIdByPersonId)((faceId, face) =>
+                                          face
+                                            .identifiedPersonId
+                                            .orElse(face.inferredIdentifiedPersonId)
+                                            .map(personId => personId -> (face.timestamp.toInstant, faceId)))
+                                        )
     collectionOriginalFoundFaces   <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
     collectionFaceFeatures         <- lmdb.collectionGet[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName)
     collectionOriginalFaceFeatures <- lmdb.collectionGet[OriginalId, DaoOriginalFaceFeatures](faceFeaturesCollectionName)

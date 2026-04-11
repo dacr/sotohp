@@ -14,7 +14,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
 import scala.util.Try
 import wvlet.airframe.ulid.ULID
-import zio.lmdb.keycodecs.KeyCodec
+import zio.lmdb.keycodecs.{KeyCodec, KeyCodecError}
 import zio.lmdb.keycodecs.timestamp.TimestampCodec.given
 
 import java.time.{Instant, OffsetDateTime}
@@ -32,8 +32,8 @@ object MediaMigrationTool extends CommonsCLI {
 
     def stringKeyCodec[A](keyToStr: A => String, strToKey: String => A): KeyCodec[A] = new KeyCodec[A] {
       override def encode(key: A): Array[Byte]                     = keyToStr(key).getBytes(charset)
-      override def decode(keyBytes: ByteBuffer): Either[String, A] =
-        Try(strToKey(charset.decode(keyBytes).toString)).toEither.left.map(_.getMessage)
+      override def decode(keyBytes: ByteBuffer): Either[KeyCodecError, A] =
+        Try(strToKey(charset.decode(keyBytes).toString)).toEither.left.map(e => KeyCodecError.InternalFailure(e.getMessage))
     }
 
     // DaoMedia with accessKey
