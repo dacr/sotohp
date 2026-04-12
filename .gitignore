@@ -20,6 +20,7 @@ lock.mdb
 
 # IDE, AI or build tool related
 .bsp*/
+.scala-build/
 .metals/
 .bloop*/
 .vscode/
