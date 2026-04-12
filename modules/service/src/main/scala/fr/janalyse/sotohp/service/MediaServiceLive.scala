@@ -29,6 +29,8 @@ import scala.util.{Failure, Success, Try}
 import zio.lmdb.keycodecs.timestamp.TimestampCodec.given
 import zio.lmdb.keycodecs.uuidv7.UUIDv7.given
 import zio.lmdb.keycodecs.ulid.ULIDCodec.given
+import zio.lmdb.keycodecs.geo.GeoCodec.given
+import zio.lmdb.keycodecs.geo.GEOTools
 
 type LMDBIssues = StorageUserError | StorageSystemError | IndexErrors
 
@@ -1149,7 +1151,8 @@ class MediaServiceLive private (
                                  shootDateTime = None,
                                  userDefinedLocation = None,
                                  deductedLocation = None,
-                                 timestamp = Media.computeTimestamp(None, events, input.original)
+                                 timestamp = Media.computeTimestamp(None, events, input.original),
+                                 location = input.original.location.transformInto[Option[DaoLocation]],
                                )
                                collections.medias
                                  .upsert(input.original.id, _ => daoMedia)
@@ -1567,6 +1570,8 @@ object MediaServiceLive {
     indexOriginalIdByEventId       <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
     indexFaceIdByPersonId          <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
     indexOriginalIdByStoreId       <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
+    indexOriginalIdByLocation      <- lmdb.indexCreate[GEOTools.Location, OriginalId]("originalIdByLocation", false)
+
     // ----------------------------------------------------------------------------------------
     // COLLECTIONS
     collectionOriginals            <- lmdb
@@ -1581,6 +1586,7 @@ object MediaServiceLive {
                                         .map(
                                           _.withIndexFull(indexOriginalIdByEventId)((id, media) => media.events.map(eventId => eventId -> (media.timestamp.toInstant, media.originalId)))
                                             .withIndexFull(indexOriginalIdByTimestamp)((id, media) => List((media.timestamp.toInstant, id) -> id))
+                                            .withIndexFull(indexOriginalIdByLocation)((id, media) => media.location.map(l => GEOTools.Location(l.latitude.doubleValue, l.longitude.doubleValue) -> id).toList)
                                         )
     collectionOwners               <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
     collectionStores               <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
@@ -1606,6 +1612,7 @@ object MediaServiceLive {
                                         originalIdByEventId = indexOriginalIdByEventId,
                                         faceIdByPersonId = indexFaceIdByPersonId,
                                         originalIdByStoreId = indexOriginalIdByStoreId,
+                                        originalIdByLocation = indexOriginalIdByLocation,
                                         originals = collectionOriginals,
                                         states = collectionStates,
                                         events = collectionEvents,
