@@ -28,7 +28,7 @@ trait Publishable extends SonatypeCentralPublishModule {
 }
 
 trait SotohpModule extends SbtModule {
-  def scalaVersion  = "3.7.4"
+  def scalaVersion  = "3.8.3"
   def scalacOptions = Seq("-deprecation")
   object test extends SbtTests, TestModule.ZioTest {
     def forkArgs       = lmdbJavaOptions
@@ -94,7 +94,7 @@ object modules extends Module {
   object service extends SotohpModule with Publishable {
     def artifactName             = "sotohp-service"
     def moduleDeps               = Seq(core, search, processor)
-    lazy private val lmdbRelease = "2.7.0"
+    lazy private val lmdbRelease = "2.7.1"
     def mvnDeps                  = Seq(
       mvn"fr.janalyse::zio-lmdb:$lmdbRelease",
       mvn"fr.janalyse::query-dsl:$lmdbRelease",
