@@ -57,7 +57,7 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def daoMedia2Media(daoMedia: DaoMedia): IO[ServiceIssue, Media] = {
+  private def daoMedia2Media(daoMedia: DaoMedia): IO[ServiceIssue, Media] = {
     for {
       original <- originalGet(daoMedia.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${daoMedia.originalId}"))
       events   <- ZIO.foreach(daoMedia.events)(eventId => eventGet(eventId).some.mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err")))
@@ -67,6 +67,14 @@ class MediaServiceLive private (
                     .withFieldConst(_.events, events.toList)
                     .transform
     } yield media
+  }
+
+  private def buildMediaAccessKey(media: Media): MediaAccessKey = MediaAccessKey(media.timestamp, media.original.id)
+
+  private def daoMediaToMediaTuple(daoMedia: DaoMedia) = {
+    daoMedia2Media(daoMedia)
+      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
+      .map(media => buildMediaAccessKey(media) -> media)
   }
 
   override def mediaList(): Stream[ServiceStreamIssue, MediaTuple] = {
@@ -109,12 +117,10 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get first media from index: $err"))
       .some
       .map((key, originalId) => key)
-      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
       .some
-      .flatMap(daoMedia2Media)
-      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
-      .map(media => buildMediaAccessKey(media)-> media)
+      .flatMap(daoMediaToMediaTuple)
       .unsome
       .logError("Couldn't get first media")
   }
@@ -125,12 +131,10 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get previous media from index: $err"))
       .some
       .map((key, originalId) => key)
-      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
       .some
-      .flatMap(daoMedia2Media)
-      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
-      .map(media => buildMediaAccessKey(media)-> media)
+      .flatMap(daoMediaToMediaTuple)
       .unsome
       .logError(s"Couldn't get previous media near $nearKey")
   }
@@ -141,12 +145,10 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get next media from index: $err"))
       .some
       .map((key, originalId) => key)
-      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
       .some
-      .flatMap(daoMedia2Media)
-      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
-      .map(media => buildMediaAccessKey(media)-> media)
+      .flatMap(daoMediaToMediaTuple)
       .unsome
       .logError(s"Couldn't get next media near $nearKey")
   }
@@ -157,12 +159,10 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get last media from index: $err"))
       .some
       .map((key, originalId) => key)
-      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
       .some
-      .flatMap(daoMedia2Media)
-      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
-      .map(media => buildMediaAccessKey(media)-> media)
+      .flatMap(daoMediaToMediaTuple)
       .unsome
       .logError("Couldn't get last media")
   }
@@ -172,43 +172,33 @@ class MediaServiceLive private (
       .fetch(key.toNative.originalId)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
       .some
-      .flatMap(daoMedia2Media)
-      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
-      .map(media => buildMediaAccessKey(media) -> media)
+      .flatMap(daoMediaToMediaTuple)
       .unsome
       .logError(s"Couldn't fetch media for key ${key.asString}")
   }
-
-  // TODO temporary implementation for the sake of ongoing data model migration
-  def buildMediaAccessKey(media: Media): MediaAccessKey = MediaAccessKey(media.timestamp, media.original.id)
-  def buildMediaAccessKey(media: DaoMedia): MediaAccessKey = MediaAccessKey(media.timestamp, media.originalId)
 
   def mediaGet(id: OriginalId): IO[ServiceIssue, Option[MediaTuple]] = {
     collections.medias
       .fetch(id)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
       .some
-      .flatMap(daoMedia => daoMedia2Media(daoMedia))
-      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
-      .map(media => buildMediaAccessKey(media) -> media)
+      .flatMap(daoMediaToMediaTuple)
       .unsome
       .logError(s"Couldn't fetch media for id $id")
   }
 
   override def mediaGetAt(position: Long): IO[ServiceIssue, Option[MediaTuple]] = {
-    val result = for {
-      (timestamp, originalId) <- collections.originalIdByTimestamp
-                                   .fetchAt(position)
-                                   .some
-                                   .map((key, originalId) => key)
-      daoMedia                <- collections.medias.fetch(originalId).some
-      accessKey                = MediaAccessKey(timestamp, originalId)
-      media                   <- daoMedia2Media(daoMedia)
-    } yield Some(accessKey, media)
-
-    result
-      .logError(s"Couldn't fetch at $position media")
+    collections.originalIdByTimestamp
+      .fetchAt(position)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch at $position media : $err"))
+      .some
+      .map((key, originalId) => key)
+      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
+      .some
+      .flatMap(daoMediaToMediaTuple)
+      .unsome
+      .logError(s"Couldn't fetch at $position media")
   }
 
   override def mediaUpdate(
