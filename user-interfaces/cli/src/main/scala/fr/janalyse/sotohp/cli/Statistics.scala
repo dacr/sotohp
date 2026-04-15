@@ -20,6 +20,7 @@ case class Statistics(
   normalizedFailureCount: Int = 0,
   facesCount: Int = 0,
   duplicated: Map[Option[String], Int] = Map.empty,     // TODO potentially high memory usage
+  countByFocal: Map[Int, Int] = Map.empty,
   missingCount: Int = 0,
   modifiedCount: Int = 0,
   missingShootingDate: Int = 0,
@@ -41,8 +42,8 @@ object Statistics extends CommonsCLI {
         Scope.default
       )
 
-  val shootingDateMinimumValidYear        = 1826 // https://en.wikipedia.org/wiki/History_of_photography
-  //val digitalShootingDateMinimumValidYear = 1989 // https://en.wikipedia.org/wiki/Digital_camera
+  val shootingDateMinimumValidYear = 1826 // https://en.wikipedia.org/wiki/History_of_photography
+  // val digitalShootingDateMinimumValidYear = 1989 // https://en.wikipedia.org/wiki/Digital_camera
 
   def updateStats(stats: Statistics, mediaTuple: MediaTuple) = {
     val media = mediaTuple.media
@@ -70,12 +71,23 @@ object Statistics extends CommonsCLI {
       val updatedFacesCount                = stats.facesCount + faces.map(_.faces.size).getOrElse(0)
       val updatedMissingCount              = stats.missingCount + (if (originalFound) 0 else 1)
       val updatedModifiedCount             = stats.modifiedCount + (if (originalModified) 1 else 0)
-      val updatedDuplicated                = stats.duplicated + (stats.duplicated.get(fileHash) match {
+      val updatedMissingShootingDateCount  = stats.missingShootingDate + (if (shootingDate.isEmpty) 1 else 0)
+      val updatedInvalidShootingDateCount  = stats.invalidShootingDateCount + (if (shootingDate.exists(_.getYear < shootingDateMinimumValidYear)) 1 else 0)
+
+      val updatedDuplicated = stats.duplicated + (stats.duplicated.get(fileHash) match {
         case None        => fileHash -> 1
         case Some(count) => fileHash -> (count + 1)
       })
-      val updatedMissingShootingDateCount  = stats.missingShootingDate + (if (shootingDate.isEmpty) 1 else 0)
-      val updatedInvalidShootingDateCount  = stats.invalidShootingDateCount + (if (shootingDate.exists(_.getYear < shootingDateMinimumValidYear)) 1 else 0)
+
+      val updatedCountByFocal = media.original.focalLength.filter(f => f.selected > 0d && f.selected < 999d) match {
+        case None              => stats.countByFocal
+        case Some(focalLength) =>
+          val f = (focalLength.selected / 10).toInt * 10
+          stats.countByFocal + (stats.countByFocal.get(f) match {
+            case None        => f -> 1
+            case Some(count) => f -> (count + 1)
+          })
+      }
 
       val updatedEventsCount = stats.eventsCount ++ (events match {
         case Nil         =>
@@ -93,10 +105,10 @@ object Statistics extends CommonsCLI {
       })
 
       val updatedOldestValidTimestamp = (stats.oldestDigitalShootingDate, shootingDate) match {
-        //case (_, Some(date)) if date.getYear < digitalShootingDateMinimumValidYear => stats.oldestDigitalShootingDate
-        case (None, Some(date))                                                    => Some(date)
-        case (Some(currentOldest), Some(date)) if date.isBefore(currentOldest)     => Some(date)
-        case _                                                                     => stats.oldestDigitalShootingDate
+        // case (_, Some(date)) if date.getYear < digitalShootingDateMinimumValidYear => stats.oldestDigitalShootingDate
+        case (None, Some(date))                                                => Some(date)
+        case (Some(currentOldest), Some(date)) if date.isBefore(currentOldest) => Some(date)
+        case _                                                                 => stats.oldestDigitalShootingDate
       }
       val updatedNewestValidTimestamp = (stats.newestDigitalShootingDate, shootingDate) match {
         case (None, Some(date))                                               => Some(date)
@@ -109,6 +121,7 @@ object Statistics extends CommonsCLI {
         deductedGeoLocalizedCount = updatedDeductedGeoLocalizedCount,
         normalizedFailureCount = updatedNormalizedFailureCount,
         duplicated = updatedDuplicated,
+        countByFocal = updatedCountByFocal,
         facesCount = updatedFacesCount,
         missingCount = updatedMissingCount,
         modifiedCount = updatedModifiedCount,
@@ -151,6 +164,8 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine(s"${RED}- $invalidShootingDateCount invalid shooting date year (< $shootingDateMinimumValidYear)$RESET").when(invalidShootingDateCount > 0)
       _ <- Console.printLine(s"${RED}- $normalizedFailureCount not loadable photos (probably not supported format or corrupted)$RESET").when(normalizedFailureCount > 0)
       _ <- Console.printLine("-----------------------------------------------------------------------------------------")
+      _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo count by focal length :$RESET")
+      _ <- Console.printLine(s"${GREEN}${stats.countByFocal.toList.sortBy(_._1).map { case (f, c) => s"${f}mm : $c" }.mkString("\n")}$RESET")
     } yield stats
   }
 
