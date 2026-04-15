@@ -2,7 +2,18 @@ package fr.janalyse.sotohp.service
 
 import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder, SearchFilter}
 import fr.janalyse.sotohp.model.{FaceId, PersonId, *}
-import fr.janalyse.sotohp.processor.{ClassificationIssue, ClassificationProcessor, FaceFeaturesIssue, FaceFeaturesProcessor, FacesDetectionIssue, FacesProcessor, MiniaturizeProcessor, NormalizeProcessor, ObjectsDetectionIssue, ObjectsDetectionProcessor}
+import fr.janalyse.sotohp.processor.{
+  ClassificationIssue,
+  ClassificationProcessor,
+  FaceFeaturesIssue,
+  FaceFeaturesProcessor,
+  FacesDetectionIssue,
+  FacesProcessor,
+  MiniaturizeProcessor,
+  NormalizeProcessor,
+  ObjectsDetectionIssue,
+  ObjectsDetectionProcessor
+}
 import fr.janalyse.sotohp.processor.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.search.model.MediaBag
@@ -93,118 +104,107 @@ class MediaServiceLive private (
   }
 
   override def mediaFirst(): IO[ServiceIssue, Option[MediaTuple]] = {
-    val result = for {
-      maybeKey <- collections.originalIdByTimestamp.head().map(_.map((key, originalId) => key))
-      res      <- maybeKey match {
-                    case None                          => ZIO.none
-                    case Some((timestamp, originalId)) =>
-                      for {
-                        mayBeDaoMedia <- collections.medias.fetch(originalId)
-                        mediaTuple    <- ZIO.foreach(mayBeDaoMedia) { daoMedia =>
-                                           daoMedia2Media(daoMedia).map(MediaAccessKey(timestamp, originalId) -> _)
-                                         }
-                      } yield mediaTuple
-                  }
-    } yield res
-
-    result
+    collections.originalIdByTimestamp
+      .head()
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get first media from index: $err"))
+      .some
+      .map((key, originalId) => key)
+      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
+      .some
+      .flatMap(daoMedia2Media)
+      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
+      .map(media => buildMediaAccessKey(media)-> media)
+      .unsome
       .logError("Couldn't get first media")
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get first media : $err"))
   }
 
   override def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
-    val result = for {
-      maybeKey <- collections.originalIdByTimestamp.previous(nearKey.toNative).map(_.map((key, originalId) => key))
-      res      <- maybeKey match {
-                    case None                          => ZIO.none
-                    case Some((timestamp, originalId)) =>
-                      for {
-                        mayBeDaoMedia <- collections.medias.fetch(originalId)
-                        mediaTuple    <- ZIO.foreach(mayBeDaoMedia) { daoMedia =>
-                                           daoMedia2Media(daoMedia).map(MediaAccessKey(timestamp, originalId) -> _)
-                                         }
-                      } yield mediaTuple
-                  }
-    } yield res
-
-    result
-      .logError("Couldn't get previous media")
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get previous media : $err"))
+    collections.originalIdByTimestamp
+      .previous(nearKey.toNative)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get previous media from index: $err"))
+      .some
+      .map((key, originalId) => key)
+      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
+      .some
+      .flatMap(daoMedia2Media)
+      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
+      .map(media => buildMediaAccessKey(media)-> media)
+      .unsome
+      .logError(s"Couldn't get previous media near $nearKey")
   }
 
   override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
-    val result = for {
-      maybeKey <- collections.originalIdByTimestamp.next(nearKey.toNative).map(_.map((key, originalId) => key))
-      res      <- maybeKey match {
-                    case None                          => ZIO.none
-                    case Some((timestamp, originalId)) =>
-                      for {
-                        mayBeDaoMedia <- collections.medias.fetch(originalId)
-                        mediaTuple    <- ZIO.foreach(mayBeDaoMedia) { daoMedia =>
-                                           daoMedia2Media(daoMedia).map(MediaAccessKey(timestamp, originalId) -> _)
-                                         }
-                      } yield mediaTuple
-                  }
-    } yield res
-
-    result
-      .logError("Couldn't get next media")
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get next media : $err"))
+    collections.originalIdByTimestamp
+      .next(nearKey.toNative)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get next media from index: $err"))
+      .some
+      .map((key, originalId) => key)
+      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
+      .some
+      .flatMap(daoMedia2Media)
+      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
+      .map(media => buildMediaAccessKey(media)-> media)
+      .unsome
+      .logError(s"Couldn't get next media near $nearKey")
   }
 
   override def mediaLast(): IO[ServiceIssue, Option[MediaTuple]] = {
-    val result = for {
-      maybeKey <- collections.originalIdByTimestamp.last().map(_.map((key, originalId) => key))
-      res      <- maybeKey match {
-                    case None                          => ZIO.none
-                    case Some((timestamp, originalId)) =>
-                      for {
-                        mayBeDaoMedia <- collections.medias.fetch(originalId)
-                        mediaTuple    <- ZIO.foreach(mayBeDaoMedia) { daoMedia =>
-                                           daoMedia2Media(daoMedia).map(MediaAccessKey(timestamp, originalId) -> _)
-                                         }
-                      } yield mediaTuple
-                  }
-    } yield res
-
-    result
+    collections.originalIdByTimestamp
+      .last()
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get last media from index: $err"))
+      .some
+      .map((key, originalId) => key)
+      .flatMap( (instant, originalId) => collections.medias.fetch(originalId))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
+      .some
+      .flatMap(daoMedia2Media)
+      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
+      .map(media => buildMediaAccessKey(media)-> media)
+      .unsome
       .logError("Couldn't get last media")
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get last media : $err"))
   }
 
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
     collections.medias
       .fetch(key.toNative.originalId)
-      .logError(s"Couldn't fetch media for key ${key.asString}")
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
-      .flatMap(tuple => ZIO.foreach(tuple)(daoMedia => daoMedia2Media(daoMedia).map(key -> _)))
+      .some
+      .flatMap(daoMedia2Media)
+      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
+      .map(media => buildMediaAccessKey(media) -> media)
+      .unsome
+      .logError(s"Couldn't fetch media for key ${key.asString}")
   }
 
   // TODO temporary implementation for the sake of ongoing data model migration
   def buildMediaAccessKey(media: Media): MediaAccessKey = MediaAccessKey(media.timestamp, media.original.id)
+  def buildMediaAccessKey(media: DaoMedia): MediaAccessKey = MediaAccessKey(media.timestamp, media.originalId)
 
   def mediaGet(id: OriginalId): IO[ServiceIssue, Option[MediaTuple]] = {
     collections.medias
       .fetch(id)
-      .logError(s"Couldn't fetch media for id $id")
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media : $err"))
-      .flatMap(tuple => ZIO.foreach(tuple)(daoMedia => daoMedia2Media(daoMedia).map(media => buildMediaAccessKey(media) -> media)))
+      .some
+      .flatMap(daoMedia => daoMedia2Media(daoMedia))
+      .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't convert back stored media: $err")))
+      .map(media => buildMediaAccessKey(media) -> media)
+      .unsome
+      .logError(s"Couldn't fetch media for id $id")
   }
 
   override def mediaGetAt(position: Long): IO[ServiceIssue, Option[MediaTuple]] = {
     val result = for {
-      maybeKey <- collections.originalIdByTimestamp.fetchAt(position).map(_.map((key, originalId) => key))
-      res      <- maybeKey match {
-                    case None                          => ZIO.none
-                    case Some((timestamp, originalId)) =>
-                      for {
-                        mayBeDaoMedia <- collections.medias.fetch(originalId)
-                        mediaTuple    <- ZIO.foreach(mayBeDaoMedia) { daoMedia =>
-                                           daoMedia2Media(daoMedia).map(MediaAccessKey(timestamp, originalId) -> _)
-                                         }
-                      } yield mediaTuple
-                  }
-    } yield res
+      (timestamp, originalId) <- collections.originalIdByTimestamp
+                                   .fetchAt(position)
+                                   .some
+                                   .map((key, originalId) => key)
+      daoMedia                <- collections.medias.fetch(originalId).some
+      accessKey                = MediaAccessKey(timestamp, originalId)
+      media                   <- daoMedia2Media(daoMedia)
+    } yield Some(accessKey, media)
 
     result
       .logError(s"Couldn't fetch at $position media")
@@ -360,8 +360,6 @@ class MediaServiceLive private (
   }
 
   def faceDelete(faceId: FaceId): IO[ServiceIssue, Unit] = {
-    // TODO require transactions
-    // TODO to be optimized too much serdes but ok as it is a low frequency operation
     for {
       face                <- faceGet(faceId).some.orElseFail(ServiceUserIssue(s"Couldn't find face to delete : $faceId"))
       originalFaces       <- originalFaces(face.originalId)
@@ -370,12 +368,13 @@ class MediaServiceLive private (
       _                   <- ZIO
                                .attempt(face.path.path.toFile.delete())
                                .mapError(th => ServiceInternalIssue(s"Couldn't delete face file : $th"))
-      _                   <- collections.detectedFaces
-                               .delete(faceId)
-                               .mapError(err => ServiceDatabaseIssue(s"Couldn't delete face : $err"))
-      _                   <- collections.faceFeatures
-                               .delete(faceId)
-                               .mapError(err => ServiceDatabaseIssue(s"Couldn't delete face features"))
+      _                   <- lmdb
+                               .readWrite { ops =>
+                                 val detectedFacesTX = collections.detectedFaces.lift(ops)
+                                 val faceFeaturesTX  = collections.faceFeatures.lift(ops)
+                                 detectedFacesTX.delete(faceId) *> faceFeaturesTX.delete(faceId)
+                               }
+                               .mapError(err => ServiceInternalIssue(s"Couldn't delete face : $err"))
     } yield ()
   }
 
@@ -1152,7 +1151,7 @@ class MediaServiceLive private (
                                  userDefinedLocation = None,
                                  deductedLocation = None,
                                  timestamp = Media.computeTimestamp(None, events, input.original),
-                                 location = input.original.location.transformInto[Option[DaoLocation]],
+                                 location = input.original.location.transformInto[Option[DaoLocation]]
                                )
                                collections.medias
                                  .upsert(input.original.id, _ => daoMedia)
@@ -1371,8 +1370,7 @@ class MediaServiceLive private (
       collections.originals.rebuildIndexes() *>
       ZIO.logInfo("originals indexes rebuilt !") *>
       collections.detectedFaces.rebuildIndexes() *>
-      ZIO.logInfo("detectedFaces indexes rebuilt !")
-      )
+      ZIO.logInfo("detectedFaces indexes rebuilt !"))
       .logError("Reindex failed")
       .mapError(err => ServiceDatabaseIssue(s"Reindex failed: $err"))
       .unit
@@ -1515,7 +1513,7 @@ object MediaServiceLive {
 
   // -------------------------------------------------------------------------------------------------------------------
   def mapCodec[A, B](base: KeyCodec[A], to: A => B, from: B => A): KeyCodec[B] = new KeyCodec[B] {
-    def encode(b: B): Array[Byte]                = base.encode(from(b))
+    def encode(b: B): Array[Byte]                       = base.encode(from(b))
     def decode(b: ByteBuffer): Either[KeyCodecError, B] = base.decode(b).map(to)
   }
 
@@ -1566,11 +1564,11 @@ object MediaServiceLive {
   def setupMediaServiceDatabase(lmdb: LMDB): ZIO[Any, LMDBIssues, MediaServiceDatabase] = for {
     // ----------------------------------------------------------------------------------------
     // INDEXES
-    indexOriginalIdByTimestamp     <- lmdb.indexCreate[(Instant, OriginalId), OriginalId]("originalIdByTimestamp", false)
-    indexOriginalIdByEventId       <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
-    indexFaceIdByPersonId          <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
-    indexOriginalIdByStoreId       <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
-    indexOriginalIdByLocation      <- lmdb.indexCreate[GEOTools.Location, OriginalId]("originalIdByLocation", false)
+    indexOriginalIdByTimestamp <- lmdb.indexCreate[(Instant, OriginalId), OriginalId]("originalIdByTimestamp", false)
+    indexOriginalIdByEventId   <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
+    indexFaceIdByPersonId      <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
+    indexOriginalIdByStoreId   <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
+    indexOriginalIdByLocation  <- lmdb.indexCreate[GEOTools.Location, OriginalId]("originalIdByLocation", false)
 
     // ----------------------------------------------------------------------------------------
     // COLLECTIONS
@@ -1594,11 +1592,12 @@ object MediaServiceLive {
     collectionClassifications      <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
     collectionDetectedFaces        <- lmdb
                                         .collectionGet[FaceId, DaoDetectedFace](detectedFacesCollectionName)
-                                        .map(_.withIndexFull(indexFaceIdByPersonId)((faceId, face) =>
-                                          face
-                                            .identifiedPersonId
-                                            .orElse(face.inferredIdentifiedPersonId)
-                                            .map(personId => personId -> (face.timestamp.toInstant, faceId)))
+                                        .map(
+                                          _.withIndexFull(indexFaceIdByPersonId)((faceId, face) =>
+                                            face.identifiedPersonId
+                                              .orElse(face.inferredIdentifiedPersonId)
+                                              .map(personId => personId -> (face.timestamp.toInstant, faceId))
+                                          )
                                         )
     collectionOriginalFoundFaces   <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
     collectionFaceFeatures         <- lmdb.collectionGet[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName)
