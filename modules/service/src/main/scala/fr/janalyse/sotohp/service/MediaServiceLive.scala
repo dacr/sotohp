@@ -351,20 +351,24 @@ class MediaServiceLive private (
 
   def faceDelete(faceId: FaceId): IO[ServiceIssue, Unit] = {
     for {
-      face                <- faceGet(faceId).some.orElseFail(ServiceUserIssue(s"Couldn't find face to delete : $faceId"))
-      originalFaces       <- originalFaces(face.originalId)
-      updatedOriginalFaces = originalFaces.map(_.faces.map(_.faceId)).getOrElse(Nil).filterNot(_ == faceId)
-      _                   <- originalFacesUpdate(face.originalId, updatedOriginalFaces)
-      _                   <- ZIO
-                               .attempt(face.path.path.toFile.delete())
-                               .mapError(th => ServiceInternalIssue(s"Couldn't delete face file : $th"))
-      _                   <- lmdb
-                               .readWrite { ops =>
-                                 val detectedFacesTX = collections.detectedFaces.lift(ops)
-                                 val faceFeaturesTX  = collections.faceFeatures.lift(ops)
-                                 detectedFacesTX.delete(faceId) *> faceFeaturesTX.delete(faceId)
-                               }
-                               .mapError(err => ServiceInternalIssue(s"Couldn't delete face : $err"))
+      face <- faceGet(faceId).some.orElseFail(ServiceUserIssue(s"Couldn't find face to delete : $faceId"))
+      _    <- lmdb
+                .readWrite { ops =>
+                  val detectedFacesTX = collections.detectedFaces.lift(ops)
+                  val faceFeaturesTX  = collections.faceFeatures.lift(ops)
+                  val originalFacesTX = collections.originalFaces.lift(ops)
+                  detectedFacesTX.delete(faceId) *>
+                    faceFeaturesTX.delete(faceId) *>
+                    originalFacesTX.update(
+                      face.originalId,
+                      previous => previous.copy(facesIds = previous.facesIds.filterNot(_ == faceId))
+                    )
+                }
+                .mapError(err => ServiceInternalIssue(s"Couldn't delete face : $err"))
+      // TODO the only risk is to get orphan face files if delete fails
+      _    <- ZIO
+                .attempt(face.path.path.toFile.delete())
+                .mapError(th => ServiceInternalIssue(s"Couldn't delete face file : $th"))
     } yield ()
   }
 
@@ -1563,25 +1567,25 @@ object MediaServiceLive {
     // ----------------------------------------------------------------------------------------
     // COLLECTIONS
     collectionOriginals            <- lmdb
-                                        .collectionGet[OriginalId, DaoOriginal](originalsCollectionName)
+                                        .collectionCreate[OriginalId, DaoOriginal](originalsCollectionName, false)
                                         .map(_.withIndexFull(indexOriginalIdByStoreId)((id, original) => List(original.storeId -> id)))
     collectionStates               <- lmdb
-                                        .collectionGet[OriginalId, DaoState](statesCollectionName)
+                                        .collectionCreate[OriginalId, DaoState](statesCollectionName, false)
     collectionEvents               <- lmdb
-                                        .collectionGet[EventId, DaoEvent](eventsCollectionName)
+                                        .collectionCreate[EventId, DaoEvent](eventsCollectionName, false)
     collectionMedias               <- lmdb
-                                        .collectionGet[OriginalId, DaoMedia](mediasCollectionName)
+                                        .collectionCreate[OriginalId, DaoMedia](mediasCollectionName, false)
                                         .map(
                                           _.withIndexFull(indexOriginalIdByEventId)((id, media) => media.events.map(eventId => eventId -> (media.timestamp.toInstant, media.originalId)))
                                             .withIndexFull(indexOriginalIdByTimestamp)((id, media) => List((media.timestamp.toInstant, id) -> id))
                                             .withIndexFull(indexOriginalIdByLocation)((id, media) => media.location.map(l => GEOTools.Location(l.latitude.doubleValue, l.longitude.doubleValue) -> id).toList)
                                         )
-    collectionOwners               <- lmdb.collectionGet[OwnerId, DaoOwner](ownersCollectionName)
-    collectionStores               <- lmdb.collectionGet[StoreId, DaoStore](storesCollectionName)
-    collectionKeywordRules         <- lmdb.collectionGet[StoreId, DaoKeywordRules](keywordRulesCollectionName)
-    collectionClassifications      <- lmdb.collectionGet[OriginalId, DaoOriginalClassifications](classificationsCollectionName)
+    collectionOwners               <- lmdb.collectionCreate[OwnerId, DaoOwner](ownersCollectionName, false)
+    collectionStores               <- lmdb.collectionCreate[StoreId, DaoStore](storesCollectionName, false)
+    collectionKeywordRules         <- lmdb.collectionCreate[StoreId, DaoKeywordRules](keywordRulesCollectionName, false)
+    collectionClassifications      <- lmdb.collectionCreate[OriginalId, DaoOriginalClassifications](classificationsCollectionName, false)
     collectionDetectedFaces        <- lmdb
-                                        .collectionGet[FaceId, DaoDetectedFace](detectedFacesCollectionName)
+                                        .collectionCreate[FaceId, DaoDetectedFace](detectedFacesCollectionName, false)
                                         .map(
                                           _.withIndexFull(indexFaceIdByPersonId)((faceId, face) =>
                                             face.identifiedPersonId
@@ -1589,13 +1593,13 @@ object MediaServiceLive {
                                               .map(personId => personId -> (face.timestamp.toInstant, faceId))
                                           )
                                         )
-    collectionOriginalFoundFaces   <- lmdb.collectionGet[OriginalId, DaoOriginalFaces](facesCollectionName)
-    collectionFaceFeatures         <- lmdb.collectionGet[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName)
-    collectionOriginalFaceFeatures <- lmdb.collectionGet[OriginalId, DaoOriginalFaceFeatures](faceFeaturesCollectionName)
-    collectionObjects              <- lmdb.collectionGet[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName)
-    collectionMiniatures           <- lmdb.collectionGet[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName)
-    collectionNormalized           <- lmdb.collectionGet[OriginalId, DaoOriginalNormalized](normalizedCollectionName)
-    collectionPersons              <- lmdb.collectionGet[PersonId, DaoPerson](personsCollectionName)
+    collectionOriginalFoundFaces   <- lmdb.collectionCreate[OriginalId, DaoOriginalFaces](facesCollectionName, false)
+    collectionFaceFeatures         <- lmdb.collectionCreate[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName, false)
+    collectionOriginalFaceFeatures <- lmdb.collectionCreate[OriginalId, DaoOriginalFaceFeatures](faceFeaturesCollectionName, false)
+    collectionObjects              <- lmdb.collectionCreate[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName, false)
+    collectionMiniatures           <- lmdb.collectionCreate[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName, false)
+    collectionNormalized           <- lmdb.collectionCreate[OriginalId, DaoOriginalNormalized](normalizedCollectionName, false)
+    collectionPersons              <- lmdb.collectionCreate[PersonId, DaoPerson](personsCollectionName, false)
     collections                     = MediaServiceDatabase(
                                         originalIdByTimestamp = indexOriginalIdByTimestamp,
                                         originalIdByEventId = indexOriginalIdByEventId,
