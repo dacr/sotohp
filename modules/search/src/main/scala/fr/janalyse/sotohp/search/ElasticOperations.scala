@@ -39,8 +39,8 @@ case class ElasticOperations(config: SearchServiceConfig) {
         .setRedirectsEnabled(true)
         .setSocketTimeout(10000)
 
-    if (config.elasticPassword.isEmpty || config.elasticUsername.isEmpty)
-      ElasticClient(JavaClient(elasticProperties, commonRequestConfigBuilder))
+    val javaClient = if (config.elasticPassword.isEmpty || config.elasticUsername.isEmpty)
+      JavaClient(elasticProperties, commonRequestConfigBuilder)
     else {
       lazy val provider = {
         val basicProvider = new BasicCredentialsProvider
@@ -63,8 +63,16 @@ case class ElasticOperations(config: SearchServiceConfig) {
             httpClientBuilder
           }
 
-      ElasticClient(JavaClient(elasticProperties, commonRequestConfigBuilder, httpClientConfigCallback))
+      JavaClient(elasticProperties, commonRequestConfigBuilder, httpClientConfigCallback)
     }
+
+    import com.sksamuel.elastic4s.{HttpClient, ElasticRequest, HttpResponse}
+    val zioClient = new HttpClient[Task] {
+      override def send(request: ElasticRequest): Task[HttpResponse] = ZIO.fromFuture(implicit ec => javaClient.send(request))
+      override def close(): Task[Unit] = ZIO.fromFuture(implicit ec => javaClient.close())
+    }
+
+    ElasticClient(zioClient)
   }
 
   private val scrollKeepAlive = FiniteDuration(30, "seconds")
