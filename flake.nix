@@ -12,7 +12,7 @@
         stable = nixstable.legacyPackages.${system};
         unstable = nixunstable.legacyPackages.${system};
 
-      jdk = stable.jdk21;
+      jdk = stable.jdk25;
 
       sbt = stable.sbt.override {
         jre = jdk;
