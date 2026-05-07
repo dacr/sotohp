@@ -1,4 +1,5 @@
 //| mill-version: 1.1.2
+//| mill-jvm-version: system
 //| mill-jvm-opts: [ "-Xss50M" ]
 //| mvnDeps:
 //| - io.github.hoangmaihuy::mill-universal-packager::0.2.0
@@ -140,7 +141,7 @@ object `user-interfaces` extends Module {
       // mvn"dev.zio::zio-logging-slf4j2-bridge:2.5.1",
       // mvn"ch.qos.logback:logback-classic:1.5.21",
       // mvn"com.github.haifengl:smile-core:5.0.0"
-      mvn"com.github.haifengl:smile-core:5.2.3"
+      mvn"com.github.haifengl:smile-core:6.1.0"
     )
   }
 
