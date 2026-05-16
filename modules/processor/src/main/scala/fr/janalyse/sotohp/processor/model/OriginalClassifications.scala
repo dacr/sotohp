@@ -1,14 +1,9 @@
 package fr.janalyse.sotohp.processor.model
 
-import fr.janalyse.sotohp.model.Original
-
-case class DetectedClassification(
-  name: String,
-  probability: Double
-)
+import fr.janalyse.sotohp.model.{Classification, Original}
 
 case class OriginalClassifications(
   original: Original,
   status: ProcessedStatus,
-  classifications: List[DetectedClassification]
+  classifications: List[Classification]
 ) extends ProcessorResult

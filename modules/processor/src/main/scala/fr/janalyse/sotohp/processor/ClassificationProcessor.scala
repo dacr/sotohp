@@ -2,8 +2,8 @@ package fr.janalyse.sotohp.processor
 
 import ai.djl.Application
 import ai.djl.inference.Predictor
-import ai.djl.modality.Classifications
-import ai.djl.modality.Classifications.Classification
+import ai.djl.modality.{Classifications => DJLClassifications}
+import ai.djl.modality.Classifications.{Classification => DJLClassification}
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.repository.zoo.{Criteria, ModelZoo}
 import fr.janalyse.sotohp.model.*
@@ -17,7 +17,7 @@ import scala.jdk.CollectionConverters.*
 
 case class ClassificationIssue(message: String, exception: Throwable) extends Exception(message, exception) with CoreIssue
 
-class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Classifications]) extends Processor {
+class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, DJLClassifications]) extends Processor {
 
   override def close(): Unit = {
     imageClassificationPredictor.close()
@@ -26,19 +26,19 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
   private def cleanupClassName(input: String): String =
     input.replaceAll("""^n\d+ """, "")
 
-  private def doClassifyImage(path: Path): List[DetectedClassification] = {
+  private def doClassifyImage(path: Path): List[Classification] = {
     val img = ImageFactory.getInstance().fromFile(path)
 
-    val found: Classifications = imageClassificationPredictor.predict(img)
+    val found: DJLClassifications = imageClassificationPredictor.predict(img)
     found
       .items()
       .asScala
       .toList
-      .asInstanceOf[List[Classification]]
+      .asInstanceOf[List[DJLClassification]]
       .filter(_.getProbability >= 0.5d)
       .map(ob => (cleanupClassName(ob.getClassName), ob.getProbability))
       .flatMap((name, prob) => name.split(""",\s+""").toList.map(_ -> prob))
-      .map(DetectedClassification.apply)
+      .map(Classification.apply)
   }
 
   /** analyse photo content using various neural networks
@@ -47,7 +47,7 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, Cla
     * @return
     *   originalClassifications photo with updated miniatures field if some changes have occurred
     */
-  def classify(original: Original) = {
+  def classify(original: Original): IO[CoreIssue, OriginalClassifications] = {
     val logic = for {
       now          <- Clock.currentDateTime
       input        <- getOriginalBestInputFileForProcessors(original)
@@ -72,7 +72,7 @@ object ClassificationProcessor {
 
   def base = Criteria.builder
     .optApplication(Application.CV.IMAGE_CLASSIFICATION)
-    .setTypes(classOf[Image], classOf[Classifications])
+    .setTypes(classOf[Image], classOf[DJLClassifications])
 
   lazy val imageClassificationCriteria = {
     // ------------------------------------

@@ -31,7 +31,7 @@ object NormalizeProcessor extends Processor {
                         .attemptBlocking(
                           BasicImaging.reshapeImage(input, output, referenceSize, orientation.map(_.rotationDegrees), Some(config.quality))
                         )
-                        .tap(_ => ZIO.logInfo(s"Normalize"))
+                        .zipLeft(ZIO.logInfo(s"Normalize"))
                         .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size $referenceSize", th))
                         .uninterruptible
     } yield newDimension

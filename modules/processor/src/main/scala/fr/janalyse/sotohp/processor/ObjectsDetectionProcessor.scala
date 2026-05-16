@@ -23,10 +23,10 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
     objectDetectionPredictor.close()
   }
 
-  private def doDetectObjects(path: Path): List[DetectedObject] = {
-    val loadedImage: Image             = ImageFactory.getInstance().fromFile(path)
-    val detection: DetectedObjects     = objectDetectionPredictor.predict(loadedImage)
-    val detected: List[DetectedObject] =
+  private def doDetectObjects(path: Path): List[Something] = {
+    val loadedImage: Image         = ImageFactory.getInstance().fromFile(path)
+    val detection: DetectedObjects = objectDetectionPredictor.predict(loadedImage)
+    val detected: List[Something]  =
       detection
         .items()
         .iterator()
@@ -35,7 +35,7 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
         .asInstanceOf[List[DetectedObjects.DetectedObject]]
         .filter(_.getProbability >= 0.45d)
         .map(ob =>
-          DetectedObject(
+          Something(
             name = ob.getClassName.trim,
             probability = ob.getProbability,
             box = BoundingBox(

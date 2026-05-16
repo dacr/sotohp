@@ -16,6 +16,7 @@ import ai.djl.repository.zoo.ModelZoo
 import ai.djl.repository.zoo.ZooModel
 import ai.djl.training.util.ProgressBar
 import ai.djl.modality.Classifications.Classification
+import fr.janalyse.sotohp.core.CoreIssue
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 
 import java.nio.file.Path
@@ -37,8 +38,8 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
   }
 
   def extractThenCacheFaceImageFromOriginal(
-                                             face: Face,
-                                             originalImage: BufferedImage
+    face: Face,
+    originalImage: BufferedImage
   ): IO[FacesDetectionIssue, Unit] = {
     val x           = (face.box.x.value * originalImage.getWidth).toInt
     val y           = (face.box.y.value * originalImage.getHeight).toInt
@@ -136,7 +137,7 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     * @param original
     *   The original image metadata and associated details, used to locate and analyze the image file for face detection.
     */
-  def extractFaces(original: Original) = {
+  def extractFaces(original: Original): IO[CoreIssue, OriginalFaces] = {
     val logic = for {
       now        <- Clock.currentDateTime
       input      <- getOriginalBestInputFileForProcessors(original)

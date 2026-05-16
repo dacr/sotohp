@@ -4,7 +4,7 @@ import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.config.MiniaturizerConfig
-import fr.janalyse.sotohp.processor.model.{OriginalMiniature, OriginalMiniatures, ProcessedStatus}
+import fr.janalyse.sotohp.processor.model.{OriginalMiniatures, ProcessedStatus}
 import zio.*
 import zio.ZIOAspect.*
 
@@ -24,7 +24,7 @@ object MiniaturizeProcessor extends Processor {
                           BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.quality))
                         )
                         .mapError(th => MiniaturizeIssue("Couldn't generate miniature photo", th))
-                        .tap(_ => ZIO.logInfo("Miniaturize"))
+                        .zipLeft(ZIO.logInfo("Miniaturize"))
                         .uninterruptible
                         .logError
     } yield newDimension
@@ -39,7 +39,7 @@ object MiniaturizeProcessor extends Processor {
                      .mapError(th => MiniaturizeIssue("Couldn't target path", th))
       dimension <- miniaturizePhoto(size, input, output)
                      @@ annotated("inputFile" -> input.toString)
-    } yield OriginalMiniature(size = size, dimension = Dimension(Width(dimension.width), Height(dimension.height)))
+    } yield MiniatureCharacteristics(size = size, dimension = Dimension(Width(dimension.width), Height(dimension.height)))
   }
 
   // ===================================================================================================================

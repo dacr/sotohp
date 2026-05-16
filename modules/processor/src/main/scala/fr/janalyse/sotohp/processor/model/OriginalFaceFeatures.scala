@@ -1,11 +1,6 @@
 package fr.janalyse.sotohp.processor.model
 
-import fr.janalyse.sotohp.model.{FaceId, Original, OriginalId}
-
-case class FaceFeatures(
-  faceId: FaceId,
-  features: Array[Float]
-)
+import fr.janalyse.sotohp.model.{FaceFeatures, FaceId, Original, OriginalId}
 
 case class OriginalFaceFeatures(
   original: Original,
