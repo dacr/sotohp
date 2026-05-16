@@ -532,8 +532,14 @@ function showMedia(media) {
       }
       if (orig.exposureTime && typeof orig.exposureTime.numerator === 'number' && typeof orig.exposureTime.denominator === 'number') {
         const { numerator, denominator } = orig.exposureTime;
-        if (denominator === 1) parts.push(`${numerator}s`);
-        else parts.push(`${numerator}/${denominator}s`);
+        if (numerator > 0 && denominator > 0) {
+          if (denominator <= numerator) {
+            const seconds = numerator / denominator;
+            parts.push(`${Number.isInteger(seconds) ? seconds : seconds.toFixed(1)}s`);
+          } else {
+            parts.push(`1/${Math.round(denominator / numerator)}s`);
+          }
+        }
       }
       if (orig.iso) parts.push(`iso${Math.round(orig.iso)}`);
       if (orig.focalLength) parts.push(`${Math.round(orig.focalLength)}mm`);

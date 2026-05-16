@@ -514,7 +514,15 @@ package object model {
   object ExposureTime {
     extension (exposureTime: ExposureTime) {
       def selected: Double = exposureTime.numerator.toDouble / exposureTime.denominator.toDouble
-      def sexy: String     = "%d/%d s".formatLocal(Locale.US, exposureTime.numerator, exposureTime.denominator)
+      def sexy: String     = {
+        val n = exposureTime.numerator
+        val d = exposureTime.denominator
+        if (d <= n) {
+          val seconds = n.toDouble / d.toDouble
+          if (seconds == seconds.toLong.toDouble) "%d s".formatLocal(Locale.US, seconds.toLong)
+          else "%.1f s".formatLocal(Locale.US, seconds)
+        } else "1/%d s".formatLocal(Locale.US, Math.round(d.toDouble / n.toDouble))
+      }
     }
   }
 
