@@ -9,8 +9,14 @@
   outputs = { self, nixstable, nixunstable, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
     let
-        stable = nixstable.legacyPackages.${system};
-        unstable = nixunstable.legacyPackages.${system};
+        stable = import nixstable {
+          inherit system;
+          config.allowUnfree = true;
+        };
+        unstable = import nixunstable {
+          inherit system;
+          config.allowUnfree = true;
+        };
 
       jdk = stable.jdk25;
 
@@ -32,6 +38,8 @@
           packages = [
           unstable.opencode      # The AI Agent
           unstable.gemini-cli    # The Auth Bridge
+          unstable.claude-code
+
           stable.nodejs_22       # Required for the auth plugin
           stable.imagemagick     # For HEIF image processing
 
@@ -41,6 +49,7 @@
           mill             # Build Tool
           scl              # Build Tool
           stable.scalafmt  # Formatter
+            stable.protobuf  # Provides native protoc compiler
         ];
 
         shellHook = ''
