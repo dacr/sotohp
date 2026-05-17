@@ -116,11 +116,13 @@ class MediaServiceLive private (
       .head()
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get first media from index: $err"))
       .some
-      .map((key, originalId) => key)
-      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
-      .some
-      .flatMap(daoMediaToMediaTuple)
+      .flatMap { (_, originalId) =>
+        collections.medias
+          .fetch(originalId)
+          .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't get media: $err")))
+          .someOrFail(None)
+          .flatMap(daoMediaToMediaTuple)
+      }
       .unsome
       .logError("Couldn't get first media")
   }
@@ -130,11 +132,13 @@ class MediaServiceLive private (
       .previous(nearKey.toNative)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get previous media from index: $err"))
       .some
-      .map((key, originalId) => key)
-      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
-      .some
-      .flatMap(daoMediaToMediaTuple)
+      .flatMap { (_, originalId) =>
+        collections.medias
+          .fetch(originalId)
+          .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't get media: $err")))
+          .someOrFail(None)
+          .flatMap(daoMediaToMediaTuple)
+      }
       .unsome
       .logError(s"Couldn't get previous media near $nearKey")
   }
@@ -144,11 +148,13 @@ class MediaServiceLive private (
       .next(nearKey.toNative)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get next media from index: $err"))
       .some
-      .map((key, originalId) => key)
-      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
-      .some
-      .flatMap(daoMediaToMediaTuple)
+      .flatMap { (_, originalId) =>
+        collections.medias
+          .fetch(originalId)
+          .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't get media: $err")))
+          .someOrFail(None)
+          .flatMap(daoMediaToMediaTuple)
+      }
       .unsome
       .logError(s"Couldn't get next media near $nearKey")
   }
@@ -158,11 +164,13 @@ class MediaServiceLive private (
       .last()
       .mapError(err => ServiceDatabaseIssue(s"Couldn't get last media from index: $err"))
       .some
-      .map((key, originalId) => key)
-      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
-      .some
-      .flatMap(daoMediaToMediaTuple)
+      .flatMap { (_, originalId) =>
+        collections.medias
+          .fetch(originalId)
+          .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't get media: $err")))
+          .someOrFail(None)
+          .flatMap(daoMediaToMediaTuple)
+      }
       .unsome
       .logError("Couldn't get last media")
   }
@@ -192,11 +200,13 @@ class MediaServiceLive private (
       .fetchAt(position)
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch at $position media : $err"))
       .some
-      .map((key, originalId) => key)
-      .flatMap((instant, originalId) => collections.medias.fetch(originalId))
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media: $err"))
-      .some
-      .flatMap(daoMediaToMediaTuple)
+      .flatMap { (_, originalId) =>
+        collections.medias
+          .fetch(originalId)
+          .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't get media: $err")))
+          .someOrFail(None)
+          .flatMap(daoMediaToMediaTuple)
+      }
       .unsome
       .logError(s"Couldn't fetch at $position media")
   }
@@ -1036,27 +1046,22 @@ class MediaServiceLive private (
 
   override def portfolioAssetUpdate(
     portfolioId: PortfolioId,
-    asset: Asset
+    oldAsset: Asset,
+    newAsset: Asset
   ): IO[ServiceIssue, Option[Asset]] = {
-    val newDao = asset.transformInto[DaoAsset]
+    val oldDao = oldAsset.transformInto[DaoAsset]
+    val newDao = newAsset.transformInto[DaoAsset]
     for {
-      existing <- collections.portfolioAssets
-                    .fetch(portfolioId)
-                    .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch portfolio assets : $err"))
-      // Identity = (originalId, selectedBox) — description is the only mutable field
-      matched   = existing.find(a => a.originalId == newDao.originalId && a.selectedBox == newDao.selectedBox)
-      result   <- matched match {
-                    case None         => ZIO.succeed(Option.empty[Asset])
-                    case Some(oldDao) =>
-                      for {
-                        _ <- collections.portfolioAssets
-                               .delete(portfolioId, oldDao)
-                               .mapError(err => ServiceDatabaseIssue(s"Couldn't remove old portfolio asset : $err"))
-                        _ <- collections.portfolioAssets
-                               .put(portfolioId, newDao)
-                               .mapError(err => ServiceDatabaseIssue(s"Couldn't put updated portfolio asset : $err"))
-                      } yield Some(asset)
-                  }
+      removed <- collections.portfolioAssets
+                   .delete(portfolioId, oldDao)
+                   .mapError(err => ServiceDatabaseIssue(s"Couldn't remove old portfolio asset : $err"))
+      result  <- if (!removed) ZIO.succeed(Option.empty[Asset])
+                 else collections.portfolioAssets
+                        .put(portfolioId, newDao)
+                        .mapBoth(
+                          err => ServiceDatabaseIssue(s"Couldn't put updated portfolio asset : $err"),
+                          _ => Some(newAsset)
+                        )
     } yield result
   }
 
