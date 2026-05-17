@@ -2935,7 +2935,7 @@
         "tags" : [
           "Portfolio"
         ],
-        "summary" : "Update an asset's description (identified by originalId + selectedBox)",
+        "summary" : "Replace an existing asset with an updated one (description and/or crop region)",
         "operationId" : "Update asset in portfolio",
         "parameters" : [
           {
@@ -2951,7 +2951,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/Asset"
+                "$ref" : "#/components/schemas/AssetUpdate"
               }
             }
           },
@@ -4364,6 +4364,22 @@
           },
           "description" : {
             "type" : "string"
+          }
+        }
+      },
+      "AssetUpdate" : {
+        "title" : "AssetUpdate",
+        "type" : "object",
+        "required" : [
+          "oldAsset",
+          "newAsset"
+        ],
+        "properties" : {
+          "oldAsset" : {
+            "$ref" : "#/components/schemas/Asset"
+          },
+          "newAsset" : {
+            "$ref" : "#/components/schemas/Asset"
           }
         }
       },

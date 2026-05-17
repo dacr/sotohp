@@ -214,6 +214,37 @@ section#tab-mosaic.tab.active { display: flex; }
 .image-container:fullscreen .img-add-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-add-btn { display: none !important; }
 
+/* Portfolio asset icon buttons (inline, hover-revealed) */
+.pf-asset-icon {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 160ms ease, background-color 120ms ease, color 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.list li:hover .pf-asset-icon,
+.list li:focus-within .pf-asset-icon { opacity: 1; }
+.pf-asset-icon.pf-asset-edit:hover { background: #dbeafe; color: #1d4ed8; }
+.pf-asset-icon.pf-asset-remove:hover { background: #fee2e2; color: #991b1b; }
+
+/* Add to portfolio button (Viewer) */
+.img-portfolio-btn { position: absolute; right: 185px; bottom: 8px; background: rgba(16,185,129,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.image-container:hover .img-portfolio-btn { opacity: 1; transform: translateY(0); }
+.img-portfolio-btn:hover { background: #059669; }
+.image-container:fullscreen .img-portfolio-btn { display: none !important; }
+.image-container:-webkit-full-screen .img-portfolio-btn { display: none !important; }
+
 /* Confirm-all inferred faces button (Viewer) */
 .img-confirm-btn { position: absolute; right: 200px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
 .image-container:hover .img-confirm-btn { opacity: 1; transform: translateY(0); }

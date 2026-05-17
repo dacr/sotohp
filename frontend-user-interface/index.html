@@ -17,6 +17,7 @@
       <button data-tab="viewer" class="active">Viewer</button>
       <button data-tab="mosaic">Mosaic</button>
       <button data-tab="events">Events</button>
+      <button data-tab="portfolios">Portfolios</button>
       <button data-tab="map">Map</button>
       <button data-tab="persons">Persons</button>
       <button data-tab="owners">Owners</button>
@@ -123,6 +124,29 @@
       <ul id="events-list" class="list"></ul>
     </section>
 
+    <!-- Portfolios Tab -->
+    <section id="tab-portfolios" class="tab">
+      <div id="portfolios-list-view">
+        <div class="list-actions">
+          <button id="refresh-portfolios">↻ Refresh</button>
+          <button id="create-portfolio">＋ Create portfolio</button>
+        </div>
+        <ul id="portfolios-list" class="list"></ul>
+      </div>
+      <div id="portfolios-detail-view" style="display:none">
+        <div class="list-actions">
+          <button id="portfolio-back">← Back</button>
+          <span id="portfolio-detail-title" style="font-weight:600;margin-left:8px"></span>
+          <span style="flex:1"></span>
+          <button id="portfolio-view">👁 View assets</button>
+          <button id="portfolio-edit">✎ Edit</button>
+          <button id="portfolio-delete" style="background:#ef4444;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer">🗑 Delete</button>
+        </div>
+        <p id="portfolio-detail-description" class="muted" style="margin:8px 4px"></p>
+        <ul id="portfolio-assets-list" class="list"></ul>
+      </div>
+    </section>
+
     <!-- Owners Tab -->
     <section id="tab-owners" class="tab">
       <div class="list-actions">
@@ -175,6 +199,6 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/keycloak-js@25.0.4/dist/keycloak.min.js"></script>
   <!-- App -->
-  <script type="module" src="assets/js/app.js?v=14"></script>
+  <script type="module" src="assets/js/app.js?v=28"></script>
 </body>
 </html>
