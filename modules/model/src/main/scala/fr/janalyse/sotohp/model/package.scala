@@ -123,6 +123,51 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+  opaque type PortfolioId = UUID
+
+  object PortfolioId {
+    def apply(id: UUID): PortfolioId = id
+
+    extension (portfolioId: PortfolioId) {
+      def asString: String = portfolioId.toString
+      def asUUID: UUID     = portfolioId
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type PortfolioName = String
+
+  object PortfolioName {
+    def apply(name: String): PortfolioName = name
+
+    extension (portfolioName: PortfolioName) {
+      def text: String = portfolioName
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type PortfolioDescription = String
+
+  object PortfolioDescription {
+    def apply(description: String): PortfolioDescription = description
+
+    extension (portfolioDescription: PortfolioDescription) {
+      def text: String = portfolioDescription
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  opaque type AssetDescription = String
+
+  object AssetDescription {
+    def apply(description: String): AssetDescription = description
+
+    extension (assetDescription: AssetDescription) {
+      def text: String = assetDescription
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   opaque type EventName = String
 
   object EventName {

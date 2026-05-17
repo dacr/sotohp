@@ -87,6 +87,7 @@ object ApiApp extends ZIOAppDefault {
   def personEndpoint(plurial: Boolean = false) = endpoint.in("api").in("person" + (if (plurial) "s" else "")).tag("Person")
   def eventEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
   def faceEndpoint(plurial: Boolean = false)   = endpoint.in("api").in("face" + (if (plurial) "s" else "")).tag("Face")
+  def portfolioEndpoint(plurial: Boolean = false) = endpoint.in("api").in("portfolio" + (if (plurial) "s" else "")).tag("Portfolio")
 
   // -------------------------------------------------------------------------------------------------------------------
   // Secure endpoint bases with optional bearer authentication
@@ -131,6 +132,7 @@ object ApiApp extends ZIOAppDefault {
   def securePersonEndpoint(plurial: Boolean = false) = personEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
   def secureEventEndpoint(plurial: Boolean = false)  = eventEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
   def secureFaceEndpoint(plurial: Boolean = false)   = faceEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def securePortfolioEndpoint(plurial: Boolean = false) = portfolioEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
 
   // Security logic that validates token when auth is enabled
   def securityLogic(token: String): ZIO[ApiEnv, ApiSecurityError, UserContext] =
@@ -164,6 +166,11 @@ object ApiApp extends ZIOAppDefault {
     ZIO
       .attempt(EventId(java.util.UUID.fromString(rawEventId)))
       .mapError(err => ApiInvalidOrMissingInput("Invalid event identifier"))
+
+  def extractPortfolioId(rawPortfolioId: String) =
+    ZIO
+      .attempt(PortfolioId(java.util.UUID.fromString(rawPortfolioId)))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid portfolio identifier"))
 
   def extractStoreId(rawStoreId: String) =
     ZIO
@@ -1489,6 +1496,226 @@ object ApiApp extends ZIOAppDefault {
       .serverLogic[ApiEnv](user => toCreate => eventCreateLogic(toCreate))
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  def portfolio2Api(portfolio: Portfolio): ApiPortfolio =
+    ApiPortfolio(
+      id = portfolio.id,
+      name = portfolio.name,
+      description = portfolio.description,
+      assetCount = portfolio.assets.size,
+      assets = portfolio.assets.map(_.transformInto[ApiAsset])
+    )
+
+  val portfolioListLogic: ZStream[MediaService, Throwable, ApiPortfolio] = {
+    MediaService
+      .portfolioList()
+      .map(portfolio2Api)
+      .mapError(err => ApiInternalError("Couldn't list portfolios"))
+  }
+
+  val portfolioListEndpoint =
+    securePortfolioEndpoint(true)
+      .name("List portfolios")
+      .summary("Stream all defined portfolios")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiPortfolio.apiPortfolioSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Portfolio JSON object per line, with empty assets list for performance)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = portfolioListLogic
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  def portfolioGetLogic(portfolioId: PortfolioId): ZIO[ApiEnv, ApiIssue, ApiPortfolio] = {
+    for {
+      portfolio <- MediaService
+                     .portfolioGet(portfolioId)
+                     .logError("Couldn't get portfolio")
+                     .mapError(err => ApiInternalError("Couldn't get portfolio"))
+                     .someOrFail(ApiResourceNotFound("Couldn't find portfolio"))
+    } yield portfolio2Api(portfolio)
+  }
+
+  val portfolioGetEndpoint =
+    securePortfolioEndpoint()
+      .name("Get portfolio")
+      .summary("Get a portfolio with all its assets")
+      .get
+      .in(path[String]("portfolioId"))
+      .out(jsonBody[ApiPortfolio])
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawPortfolioId =>
+          extractPortfolioId(rawPortfolioId)
+            .flatMap(portfolioGetLogic)
+      )
+
+  def portfolioCreateLogic(toCreate: ApiPortfolioCreate): ZIO[ApiEnv, ApiInternalError, ApiPortfolio] = {
+    for {
+      created <- MediaService
+                   .portfolioCreate(toCreate.name, toCreate.description)
+                   .logError("Couldn't create portfolio")
+                   .orElseFail(ApiInternalError("Couldn't create portfolio"))
+    } yield portfolio2Api(created)
+  }
+
+  val portfolioCreateEndpoint =
+    securePortfolioEndpoint()
+      .name("Create portfolio")
+      .summary("Create a new portfolio")
+      .post
+      .in(jsonBody[ApiPortfolioCreate])
+      .out(jsonBody[ApiPortfolio])
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => toCreate => portfolioCreateLogic(toCreate))
+
+  def portfolioUpdateLogic(portfolioId: PortfolioId, toUpdate: ApiPortfolioUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
+    for {
+      _ <- MediaService
+             .portfolioUpdate(portfolioId, toUpdate.name, toUpdate.description)
+             .logError("Couldn't update portfolio")
+             .mapError(err => ApiInternalError("Couldn't update portfolio"))
+             .someOrFail(ApiResourceNotFound("Couldn't find portfolio"))
+    } yield ()
+  }
+
+  val portfolioUpdateEndpoint =
+    securePortfolioEndpoint()
+      .name("Update portfolio")
+      .summary("Update portfolio name and description")
+      .put
+      .in(path[String]("portfolioId"))
+      .in(jsonBody[ApiPortfolioUpdate])
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawPortfolioId, toUpdate) =>
+          extractPortfolioId(rawPortfolioId)
+            .flatMap(portfolioUpdateLogic(_, toUpdate))
+      )
+
+  def portfolioDeleteLogic(portfolioId: PortfolioId): ZIO[ApiEnv, ApiIssue, Unit] = {
+    MediaService
+      .portfolioDelete(portfolioId)
+      .logError("Couldn't delete portfolio")
+      .orElseFail(ApiInternalError("Couldn't delete portfolio"))
+  }
+
+  val portfolioDeleteEndpoint =
+    securePortfolioEndpoint()
+      .name("Delete portfolio")
+      .summary("Delete the portfolio and all its assets")
+      .delete
+      .in(path[String]("portfolioId"))
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawPortfolioId =>
+          extractPortfolioId(rawPortfolioId)
+            .flatMap(portfolioDeleteLogic)
+      )
+
+  def portfolioAssetAddLogic(portfolioId: PortfolioId, toAdd: ApiAsset): ZIO[ApiEnv, ApiIssue, ApiAsset] = {
+    for {
+      asset <- ZIO.succeed(toAdd.transformInto[Asset])
+      added <- MediaService
+                 .portfolioAssetAdd(portfolioId, asset)
+                 .logError("Couldn't add portfolio asset")
+                 .mapError {
+                   case _: fr.janalyse.sotohp.service.ServiceUserIssue => ApiResourceNotFound("Couldn't find portfolio")
+                   case _                                              => ApiInternalError("Couldn't add portfolio asset")
+                 }
+    } yield added.transformInto[ApiAsset]
+  }
+
+  val portfolioAssetAddEndpoint =
+    securePortfolioEndpoint()
+      .name("Add asset to portfolio")
+      .summary("Add a photo (optionally cropped) to the portfolio")
+      .post
+      .in(path[String]("portfolioId"))
+      .in("asset")
+      .in(jsonBody[ApiAsset])
+      .out(jsonBody[ApiAsset])
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawPortfolioId, toAdd) =>
+          extractPortfolioId(rawPortfolioId)
+            .flatMap(portfolioAssetAddLogic(_, toAdd))
+      )
+
+  def portfolioAssetUpdateLogic(portfolioId: PortfolioId, toUpdate: ApiAsset): ZIO[ApiEnv, ApiIssue, ApiAsset] = {
+    for {
+      asset   <- ZIO.succeed(toUpdate.transformInto[Asset])
+      updated <- MediaService
+                   .portfolioAssetUpdate(portfolioId, asset)
+                   .logError("Couldn't update portfolio asset")
+                   .mapError(err => ApiInternalError("Couldn't update portfolio asset"))
+                   .someOrFail(ApiResourceNotFound("Asset not found in portfolio"))
+    } yield updated.transformInto[ApiAsset]
+  }
+
+  val portfolioAssetUpdateEndpoint =
+    securePortfolioEndpoint()
+      .name("Update asset in portfolio")
+      .summary("Update an asset's description (identified by originalId + selectedBox)")
+      .put
+      .in(path[String]("portfolioId"))
+      .in("asset")
+      .in(jsonBody[ApiAsset])
+      .out(jsonBody[ApiAsset])
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawPortfolioId, toUpdate) =>
+          extractPortfolioId(rawPortfolioId)
+            .flatMap(portfolioAssetUpdateLogic(_, toUpdate))
+      )
+
+  def portfolioAssetRemoveLogic(portfolioId: PortfolioId, toRemove: ApiAsset): ZIO[ApiEnv, ApiIssue, Unit] = {
+    for {
+      asset   <- ZIO.succeed(toRemove.transformInto[Asset])
+      removed <- MediaService
+                   .portfolioAssetRemove(portfolioId, asset)
+                   .logError("Couldn't remove portfolio asset")
+                   .orElseFail(ApiInternalError("Couldn't remove portfolio asset"))
+      _       <- ZIO.fail(ApiResourceNotFound("Asset not found in portfolio")).when(!removed)
+    } yield ()
+  }
+
+  val portfolioAssetRemoveEndpoint =
+    securePortfolioEndpoint()
+      .name("Remove asset from portfolio")
+      .summary("Remove a specific asset from the portfolio (exact match on originalId + selectedBox)")
+      .delete
+      .in(path[String]("portfolioId"))
+      .in("asset")
+      .in(jsonBody[ApiAsset])
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawPortfolioId, toRemove) =>
+          extractPortfolioId(rawPortfolioId)
+            .flatMap(portfolioAssetRemoveLogic(_, toRemove))
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
   val serviceStatusLogic = ZIO.succeed(ApiStatus(alive = true))
 
   val serviceStatusEndpoint =
@@ -1588,6 +1815,15 @@ object ApiApp extends ZIOAppDefault {
     eventUpdateEndpoint,
     eventUpdateCoverEndpoint,
     eventDeleteEndpoint,
+
+    portfolioListEndpoint,
+    portfolioCreateEndpoint,
+    portfolioGetEndpoint,
+    portfolioUpdateEndpoint,
+    portfolioDeleteEndpoint,
+    portfolioAssetAddEndpoint,
+    portfolioAssetUpdateEndpoint,
+    portfolioAssetRemoveEndpoint,
     // -------------------------
     ownerCreateEndpoint,
     ownerListEndpoint,

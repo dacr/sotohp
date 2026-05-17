@@ -131,6 +131,16 @@ trait MediaService {
   ): IO[ServiceIssue, Option[Event]]
 
   // -------------------------------------------------------------------------------------------------------------------
+  def portfolioList(): Stream[ServiceStreamIssue, Portfolio]
+  def portfolioGet(portfolioId: PortfolioId): IO[ServiceIssue, Option[Portfolio]]
+  def portfolioCreate(name: PortfolioName, description: Option[PortfolioDescription]): IO[ServiceIssue, Portfolio]
+  def portfolioUpdate(portfolioId: PortfolioId, name: PortfolioName, description: Option[PortfolioDescription]): IO[ServiceIssue, Option[Portfolio]]
+  def portfolioDelete(portfolioId: PortfolioId): IO[ServiceIssue, Unit]
+  def portfolioAssetAdd(portfolioId: PortfolioId, asset: Asset): IO[ServiceIssue, Asset]
+  def portfolioAssetUpdate(portfolioId: PortfolioId, asset: Asset): IO[ServiceIssue, Option[Asset]]
+  def portfolioAssetRemove(portfolioId: PortfolioId, asset: Asset): IO[ServiceIssue, Boolean]
+
+  // -------------------------------------------------------------------------------------------------------------------
   def ownerList(): Stream[ServiceIssue, Owner]
   def ownerGet(ownerId: OwnerId): IO[ServiceIssue, Option[Owner]]
   def ownerDelete(ownerId: OwnerId): IO[ServiceIssue, Unit]
@@ -336,6 +346,19 @@ object MediaService {
     keywords: Set[Keyword]
   ): ZIO[MediaService, ServiceIssue, Option[Event]] =
     ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, location, timestamp, coverOriginalId, publishedOn, keywords))
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  def portfolioList(): ZStream[MediaService, ServiceStreamIssue, Portfolio]                                = ZStream.serviceWithStream(_.portfolioList())
+  def portfolioGet(portfolioId: PortfolioId): ZIO[MediaService, ServiceIssue, Option[Portfolio]]           = ZIO.serviceWithZIO(_.portfolioGet(portfolioId))
+  def portfolioCreate(name: PortfolioName, description: Option[PortfolioDescription]): ZIO[MediaService, ServiceIssue, Portfolio] =
+    ZIO.serviceWithZIO(_.portfolioCreate(name, description))
+  def portfolioUpdate(portfolioId: PortfolioId, name: PortfolioName, description: Option[PortfolioDescription]): ZIO[MediaService, ServiceIssue, Option[Portfolio]] =
+    ZIO.serviceWithZIO(_.portfolioUpdate(portfolioId, name, description))
+  def portfolioDelete(portfolioId: PortfolioId): ZIO[MediaService, ServiceIssue, Unit]                     = ZIO.serviceWithZIO(_.portfolioDelete(portfolioId))
+  def portfolioAssetAdd(portfolioId: PortfolioId, asset: Asset): ZIO[MediaService, ServiceIssue, Asset]      = ZIO.serviceWithZIO(_.portfolioAssetAdd(portfolioId, asset))
+  def portfolioAssetUpdate(portfolioId: PortfolioId, asset: Asset): ZIO[MediaService, ServiceIssue, Option[Asset]] = ZIO.serviceWithZIO(_.portfolioAssetUpdate(portfolioId, asset))
+  def portfolioAssetRemove(portfolioId: PortfolioId, asset: Asset): ZIO[MediaService, ServiceIssue, Boolean] = ZIO.serviceWithZIO(_.portfolioAssetRemove(portfolioId, asset))
 
   // -------------------------------------------------------------------------------------------------------------------
 

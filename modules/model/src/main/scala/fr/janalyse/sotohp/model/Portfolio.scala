@@ -1,16 +1,14 @@
 package fr.janalyse.sotohp.model
 
-import java.time.Instant
-
 case class Asset(
   originalId: OriginalId,
-  selectedBox: Option[BoundingBox]
+  selectedBox: Option[BoundingBox],
+  description: Option[AssetDescription]
 )
 
 case class Portfolio(
-  name: String,
-  description: String,
-  created: Instant,
-  updated: Instant,
+  id: PortfolioId,
+  name: PortfolioName,
+  description: Option[PortfolioDescription],
   assets: List[Asset]
 )

@@ -3,7 +3,7 @@ package fr.janalyse.sotohp.service.model
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.dao.*
 import zio.lmdb.keycodecs.geo.GEOTools
-import zio.lmdb.{LMDBCollection, LMDBIndex}
+import zio.lmdb.{LMDBCollection, LMDBIndex, LMDBMulti}
 
 import java.time.Instant
 
@@ -29,5 +29,7 @@ case class MediaServiceDatabase(
   objects: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
   miniatures: LMDBCollection[OriginalId, DaoOriginalMiniatures],
   normalized: LMDBCollection[OriginalId, DaoOriginalNormalized],
-  persons: LMDBCollection[PersonId, DaoPerson]
+  persons: LMDBCollection[PersonId, DaoPerson],
+  portfolios: LMDBCollection[PortfolioId, DaoPortfolio],
+  portfolioAssets: LMDBMulti[PortfolioId, DaoAsset]
 )

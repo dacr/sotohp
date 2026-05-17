@@ -936,6 +936,141 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  private def daoPortfolio2Portfolio(daoPortfolio: DaoPortfolio, assets: List[Asset]): Portfolio =
+    daoPortfolio
+      .into[Portfolio]
+      .withFieldConst(_.assets, assets)
+      .transform
+
+  override def portfolioList(): Stream[ServiceStreamIssue, Portfolio] = {
+    collections.portfolios
+      .stream()
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect portfolios : $err"))
+      .mapZIO { daoPortfolio =>
+        collections.portfolioAssets
+          .fetch(daoPortfolio.id)
+          .mapBoth(
+            err => ServiceStreamInternalIssue(s"Couldn't fetch portfolio assets : $err"),
+            daoAssets => daoPortfolio2Portfolio(daoPortfolio, daoAssets.map(_.transformInto[Asset]))
+          )
+      }
+  }
+
+  override def portfolioGet(portfolioId: PortfolioId): IO[ServiceIssue, Option[Portfolio]] = {
+    for {
+      maybeDao <- collections.portfolios
+                    .fetch(portfolioId)
+                    .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch portfolio : $err"))
+      result   <- ZIO.foreach(maybeDao) { dao =>
+                    collections.portfolioAssets
+                      .fetch(portfolioId)
+                      .mapBoth(
+                        err => ServiceDatabaseIssue(s"Couldn't fetch portfolio assets : $err"),
+                        daoAssets => daoPortfolio2Portfolio(dao, daoAssets.map(_.transformInto[Asset]))
+                      )
+                  }
+    } yield result
+  }
+
+  override def portfolioCreate(
+    name: PortfolioName,
+    description: Option[PortfolioDescription]
+  ): IO[ServiceIssue, Portfolio] = {
+    for {
+      portfolioId <- Random.nextUUID.map(PortfolioId.apply)
+      portfolio    = Portfolio(portfolioId, name, description, Nil)
+      _           <- collections.portfolios
+                       .upsert(portfolioId, _ => portfolio.transformInto[DaoPortfolio])
+                       .mapError(err => ServiceDatabaseIssue(s"Couldn't create portfolio : $err"))
+    } yield portfolio
+  }
+
+  override def portfolioUpdate(
+    portfolioId: PortfolioId,
+    name: PortfolioName,
+    description: Option[PortfolioDescription]
+  ): IO[ServiceIssue, Option[Portfolio]] = {
+    for {
+      maybeDao <- collections.portfolios
+                    .update(
+                      portfolioId,
+                      _.copy(name = name, description = description)
+                    )
+                    .mapError(err => ServiceDatabaseIssue(s"Couldn't update portfolio : $err"))
+      result   <- ZIO.foreach(maybeDao) { dao =>
+                    collections.portfolioAssets
+                      .fetch(portfolioId)
+                      .mapBoth(
+                        err => ServiceDatabaseIssue(s"Couldn't fetch portfolio assets : $err"),
+                        daoAssets => daoPortfolio2Portfolio(dao, daoAssets.map(_.transformInto[Asset]))
+                      )
+                  }
+    } yield result
+  }
+
+  override def portfolioDelete(portfolioId: PortfolioId): IO[ServiceIssue, Unit] = {
+    for {
+      _ <- collections.portfolioAssets
+             .deleteAll(portfolioId)
+             .mapError(err => ServiceDatabaseIssue(s"Couldn't delete portfolio assets : $err"))
+      _ <- collections.portfolios
+             .delete(portfolioId)
+             .mapError(err => ServiceDatabaseIssue(s"Couldn't delete portfolio : $err"))
+    } yield ()
+  }
+
+  override def portfolioAssetAdd(
+    portfolioId: PortfolioId,
+    asset: Asset
+  ): IO[ServiceIssue, Asset] = {
+    for {
+      _ <- collections.portfolios
+             .fetch(portfolioId)
+             .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch portfolio : $err"))
+             .someOrFail(ServiceUserIssue(s"Portfolio not found : ${portfolioId.asString}"))
+      _ <- collections.portfolioAssets
+             .put(portfolioId, asset.transformInto[DaoAsset])
+             .mapError(err => ServiceDatabaseIssue(s"Couldn't add portfolio asset : $err"))
+    } yield asset
+  }
+
+  override def portfolioAssetUpdate(
+    portfolioId: PortfolioId,
+    asset: Asset
+  ): IO[ServiceIssue, Option[Asset]] = {
+    val newDao = asset.transformInto[DaoAsset]
+    for {
+      existing <- collections.portfolioAssets
+                    .fetch(portfolioId)
+                    .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch portfolio assets : $err"))
+      // Identity = (originalId, selectedBox) — description is the only mutable field
+      matched   = existing.find(a => a.originalId == newDao.originalId && a.selectedBox == newDao.selectedBox)
+      result   <- matched match {
+                    case None         => ZIO.succeed(Option.empty[Asset])
+                    case Some(oldDao) =>
+                      for {
+                        _ <- collections.portfolioAssets
+                               .delete(portfolioId, oldDao)
+                               .mapError(err => ServiceDatabaseIssue(s"Couldn't remove old portfolio asset : $err"))
+                        _ <- collections.portfolioAssets
+                               .put(portfolioId, newDao)
+                               .mapError(err => ServiceDatabaseIssue(s"Couldn't put updated portfolio asset : $err"))
+                      } yield Some(asset)
+                  }
+    } yield result
+  }
+
+  override def portfolioAssetRemove(
+    portfolioId: PortfolioId,
+    asset: Asset
+  ): IO[ServiceIssue, Boolean] = {
+    collections.portfolioAssets
+      .delete(portfolioId, asset.transformInto[DaoAsset])
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't remove portfolio asset : $err"))
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+
   override def ownerList(): Stream[ServiceIssue, Owner] = {
     collections.owners
       .stream()
@@ -1511,12 +1646,13 @@ object MediaServiceLive {
     def decode(b: ByteBuffer): Either[KeyCodecError, B] = base.decode(b).map(to)
   }
 
-  given KeyCodec[OriginalId] = mapCodec(summon[KeyCodec[UUID]], OriginalId.apply, _.asUUID)
-  given KeyCodec[EventId]    = mapCodec(summon[KeyCodec[UUID]], EventId.apply, _.asUUID)
-  given KeyCodec[StoreId]    = mapCodec(summon[KeyCodec[UUID]], StoreId.apply, _.asUUID)
-  given KeyCodec[PersonId]   = mapCodec(summon[KeyCodec[ULID]], PersonId.apply, _.asULID)
-  given KeyCodec[FaceId]     = mapCodec(summon[KeyCodec[ULID]], FaceId.apply, _.asULID)
-  given KeyCodec[OwnerId]    = mapCodec(summon[KeyCodec[ULID]], OwnerId.apply, _.asULID)
+  given KeyCodec[OriginalId]  = mapCodec(summon[KeyCodec[UUID]], OriginalId.apply, _.asUUID)
+  given KeyCodec[EventId]     = mapCodec(summon[KeyCodec[UUID]], EventId.apply, _.asUUID)
+  given KeyCodec[StoreId]     = mapCodec(summon[KeyCodec[UUID]], StoreId.apply, _.asUUID)
+  given KeyCodec[PortfolioId] = mapCodec(summon[KeyCodec[UUID]], PortfolioId.apply, _.asUUID)
+  given KeyCodec[PersonId]    = mapCodec(summon[KeyCodec[ULID]], PersonId.apply, _.asULID)
+  given KeyCodec[FaceId]      = mapCodec(summon[KeyCodec[ULID]], FaceId.apply, _.asULID)
+  given KeyCodec[OwnerId]     = mapCodec(summon[KeyCodec[ULID]], OwnerId.apply, _.asULID)
 
   // -------------------------------------------------------------------------------------------------------------------
   private val originalsCollectionName            = "originals"
@@ -1535,6 +1671,8 @@ object MediaServiceLive {
   private val miniaturesCollectionName           = "miniatures"
   private val normalizedCollectionName           = "normalized"
   private val personsCollectionName              = "persons"
+  private val portfoliosCollectionName           = "portfolios"
+  private val portfolioAssetsCollectionName      = "portfolioAssets"
 
   private val allCollections = List(
     originalsCollectionName,
@@ -1552,7 +1690,8 @@ object MediaServiceLive {
     objectsCollectionName,
     miniaturesCollectionName,
     normalizedCollectionName,
-    personsCollectionName
+    personsCollectionName,
+    portfoliosCollectionName
   )
 
   def setupMediaServiceDatabase(lmdb: LMDB): ZIO[Any, LMDBIssues, MediaServiceDatabase] = for {
@@ -1600,6 +1739,8 @@ object MediaServiceLive {
     collectionMiniatures           <- lmdb.collectionCreate[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName, false)
     collectionNormalized           <- lmdb.collectionCreate[OriginalId, DaoOriginalNormalized](normalizedCollectionName, false)
     collectionPersons              <- lmdb.collectionCreate[PersonId, DaoPerson](personsCollectionName, false)
+    collectionPortfolios           <- lmdb.collectionCreate[PortfolioId, DaoPortfolio](portfoliosCollectionName, false)
+    collectionPortfolioAssets      <- lmdb.multiCreate[PortfolioId, DaoAsset](portfolioAssetsCollectionName, false)
     collections                     = MediaServiceDatabase(
                                         originalIdByTimestamp = indexOriginalIdByTimestamp,
                                         originalIdByEventId = indexOriginalIdByEventId,
@@ -1621,7 +1762,9 @@ object MediaServiceLive {
                                         objects = collectionObjects,
                                         miniatures = collectionMiniatures,
                                         normalized = collectionNormalized,
-                                        persons = collectionPersons
+                                        persons = collectionPersons,
+                                        portfolios = collectionPortfolios,
+                                        portfolioAssets = collectionPortfolioAssets
                                       )
   } yield collections
 

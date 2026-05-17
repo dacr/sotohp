@@ -2538,6 +2538,687 @@
         ]
       }
     },
+    "/api/portfolios" : {
+      "get" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Stream all defined portfolios",
+        "operationId" : "List portfolios",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Portfolio JSON object per line, with empty assets list for performance)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Portfolio"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/portfolio" : {
+      "post" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Create a new portfolio",
+        "operationId" : "Create portfolio",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PortfolioCreate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Portfolio"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/portfolio/{portfolioId}" : {
+      "get" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Get a portfolio with all its assets",
+        "operationId" : "Get portfolio",
+        "parameters" : [
+          {
+            "name" : "portfolioId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Portfolio"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      },
+      "put" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Update portfolio name and description",
+        "operationId" : "Update portfolio",
+        "parameters" : [
+          {
+            "name" : "portfolioId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PortfolioUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      },
+      "delete" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Delete the portfolio and all its assets",
+        "operationId" : "Delete portfolio",
+        "parameters" : [
+          {
+            "name" : "portfolioId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/portfolio/{portfolioId}/asset" : {
+      "put" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Update an asset's description (identified by originalId + selectedBox)",
+        "operationId" : "Update asset in portfolio",
+        "parameters" : [
+          {
+            "name" : "portfolioId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/Asset"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      },
+      "post" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Add a photo (optionally cropped) to the portfolio",
+        "operationId" : "Add asset to portfolio",
+        "parameters" : [
+          {
+            "name" : "portfolioId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/Asset"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      },
+      "delete" : {
+        "tags" : [
+          "Portfolio"
+        ],
+        "summary" : "Remove a specific asset from the portfolio (exact match on originalId + selectedBox)",
+        "operationId" : "Remove asset from portfolio",
+        "parameters" : [
+          {
+            "name" : "portfolioId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/Asset"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/owner" : {
       "post" : {
         "tags" : [
@@ -3667,6 +4348,25 @@
           }
         }
       },
+      "Asset" : {
+        "title" : "Asset",
+        "type" : "object",
+        "required" : [
+          "originalId"
+        ],
+        "properties" : {
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "selectedBox" : {
+            "$ref" : "#/components/schemas/BoundingBox"
+          },
+          "description" : {
+            "type" : "string"
+          }
+        }
+      },
       "BoundingBox" : {
         "title" : "BoundingBox",
         "type" : "object",
@@ -4338,6 +5038,67 @@
             "type" : "string"
           },
           "chosenFaceId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Portfolio" : {
+        "title" : "Portfolio",
+        "type" : "object",
+        "required" : [
+          "id",
+          "name",
+          "assetCount"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "assetCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "assets" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Asset"
+            }
+          }
+        }
+      },
+      "PortfolioCreate" : {
+        "title" : "PortfolioCreate",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PortfolioUpdate" : {
+        "title" : "PortfolioUpdate",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
             "type" : "string"
           }
         }

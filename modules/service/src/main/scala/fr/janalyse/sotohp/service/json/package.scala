@@ -26,6 +26,26 @@ package object json {
     (trace: List[JsonError], in: RetractReader) => EventId(JsonDecoder.uuid.unsafeDecode(trace, in))
   )
 
+  given portfolioIdCodec: JsonCodec[PortfolioId] = new JsonCodec(
+    (a: PortfolioId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
+    (trace: List[JsonError], in: RetractReader) => PortfolioId(JsonDecoder.uuid.unsafeDecode(trace, in))
+  )
+
+  given portfolioNameCodec: JsonCodec[PortfolioName] = new JsonCodec(
+    (a: PortfolioName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
+    (trace: List[JsonError], in: RetractReader) => PortfolioName(JsonDecoder.string.unsafeDecode(trace, in))
+  )
+
+  given portfolioDescriptionCodec: JsonCodec[PortfolioDescription] = new JsonCodec(
+    (a: PortfolioDescription, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
+    (trace: List[JsonError], in: RetractReader) => PortfolioDescription(JsonDecoder.string.unsafeDecode(trace, in))
+  )
+
+  given assetDescriptionCodec: JsonCodec[AssetDescription] = new JsonCodec(
+    (a: AssetDescription, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
+    (trace: List[JsonError], in: RetractReader) => AssetDescription(JsonDecoder.string.unsafeDecode(trace, in))
+  )
+
   given basicDirectoryPathCodec: JsonCodec[BaseDirectoryPath] = new JsonCodec(
     (a: BaseDirectoryPath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
     (trace: List[JsonError], in: RetractReader) => BaseDirectoryPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))

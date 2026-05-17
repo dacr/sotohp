@@ -26,9 +26,10 @@ package object protocol {
   private inline def enumerationAs[T]: Schema[T]    = Schema.derivedEnumeration[T].defaultStringBased
 
   // UUID-based wrappers
-  given Schema[OriginalId] = uuidAs
-  given Schema[StoreId]    = uuidAs
-  given Schema[EventId]    = uuidAs
+  given Schema[OriginalId]  = uuidAs
+  given Schema[StoreId]     = uuidAs
+  given Schema[EventId]     = uuidAs
+  given Schema[PortfolioId] = uuidAs
 
   // ULID- / String-based wrappers
   given Schema[OwnerId]  = strAs
@@ -68,11 +69,14 @@ package object protocol {
   // Simple string wrappers
   given Schema[CameraName]        = strAs
   given Schema[ArtistInfo]        = strAs
-  given Schema[EventName]         = strAs
-  given Schema[StoreName]         = strAs
-  given Schema[FirstName]         = strAs
-  given Schema[LastName]          = strAs
-  given Schema[EventDescription]  = strAs
+  given Schema[EventName]            = strAs
+  given Schema[StoreName]            = strAs
+  given Schema[FirstName]            = strAs
+  given Schema[LastName]             = strAs
+  given Schema[EventDescription]     = strAs
+  given Schema[PortfolioName]        = strAs
+  given Schema[PortfolioDescription] = strAs
+  given Schema[AssetDescription]     = strAs
   given Schema[MediaDescription]  = strAs
   given Schema[PersonDescription] = strAs
   given Schema[PersonEmail]       = strAs
