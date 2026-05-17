@@ -137,7 +137,7 @@ trait MediaService {
   def portfolioUpdate(portfolioId: PortfolioId, name: PortfolioName, description: Option[PortfolioDescription]): IO[ServiceIssue, Option[Portfolio]]
   def portfolioDelete(portfolioId: PortfolioId): IO[ServiceIssue, Unit]
   def portfolioAssetAdd(portfolioId: PortfolioId, asset: Asset): IO[ServiceIssue, Asset]
-  def portfolioAssetUpdate(portfolioId: PortfolioId, asset: Asset): IO[ServiceIssue, Option[Asset]]
+  def portfolioAssetUpdate(portfolioId: PortfolioId, oldAsset: Asset, newAsset: Asset): IO[ServiceIssue, Option[Asset]]
   def portfolioAssetRemove(portfolioId: PortfolioId, asset: Asset): IO[ServiceIssue, Boolean]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -357,7 +357,7 @@ object MediaService {
     ZIO.serviceWithZIO(_.portfolioUpdate(portfolioId, name, description))
   def portfolioDelete(portfolioId: PortfolioId): ZIO[MediaService, ServiceIssue, Unit]                     = ZIO.serviceWithZIO(_.portfolioDelete(portfolioId))
   def portfolioAssetAdd(portfolioId: PortfolioId, asset: Asset): ZIO[MediaService, ServiceIssue, Asset]      = ZIO.serviceWithZIO(_.portfolioAssetAdd(portfolioId, asset))
-  def portfolioAssetUpdate(portfolioId: PortfolioId, asset: Asset): ZIO[MediaService, ServiceIssue, Option[Asset]] = ZIO.serviceWithZIO(_.portfolioAssetUpdate(portfolioId, asset))
+  def portfolioAssetUpdate(portfolioId: PortfolioId, oldAsset: Asset, newAsset: Asset): ZIO[MediaService, ServiceIssue, Option[Asset]] = ZIO.serviceWithZIO(_.portfolioAssetUpdate(portfolioId, oldAsset, newAsset))
   def portfolioAssetRemove(portfolioId: PortfolioId, asset: Asset): ZIO[MediaService, ServiceIssue, Boolean] = ZIO.serviceWithZIO(_.portfolioAssetRemove(portfolioId, asset))
 
   // -------------------------------------------------------------------------------------------------------------------

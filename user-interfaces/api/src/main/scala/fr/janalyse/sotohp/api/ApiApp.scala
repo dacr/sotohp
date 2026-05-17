@@ -1658,25 +1658,26 @@ object ApiApp extends ZIOAppDefault {
             .flatMap(portfolioAssetAddLogic(_, toAdd))
       )
 
-  def portfolioAssetUpdateLogic(portfolioId: PortfolioId, toUpdate: ApiAsset): ZIO[ApiEnv, ApiIssue, ApiAsset] = {
+  def portfolioAssetUpdateLogic(portfolioId: PortfolioId, toUpdate: ApiAssetUpdate): ZIO[ApiEnv, ApiIssue, ApiAsset] = {
     for {
-      asset   <- ZIO.succeed(toUpdate.transformInto[Asset])
-      updated <- MediaService
-                   .portfolioAssetUpdate(portfolioId, asset)
-                   .logError("Couldn't update portfolio asset")
-                   .mapError(err => ApiInternalError("Couldn't update portfolio asset"))
-                   .someOrFail(ApiResourceNotFound("Asset not found in portfolio"))
+      oldAsset <- ZIO.succeed(toUpdate.oldAsset.transformInto[Asset])
+      newAsset <- ZIO.succeed(toUpdate.newAsset.transformInto[Asset])
+      updated  <- MediaService
+                    .portfolioAssetUpdate(portfolioId, oldAsset, newAsset)
+                    .logError("Couldn't update portfolio asset")
+                    .mapError(err => ApiInternalError("Couldn't update portfolio asset"))
+                    .someOrFail(ApiResourceNotFound("Asset not found in portfolio"))
     } yield updated.transformInto[ApiAsset]
   }
 
   val portfolioAssetUpdateEndpoint =
     securePortfolioEndpoint()
       .name("Update asset in portfolio")
-      .summary("Update an asset's description (identified by originalId + selectedBox)")
+      .summary("Replace an existing asset with an updated one (description and/or crop region)")
       .put
       .in(path[String]("portfolioId"))
       .in("asset")
-      .in(jsonBody[ApiAsset])
+      .in(jsonBody[ApiAssetUpdate])
       .out(jsonBody[ApiAsset])
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
