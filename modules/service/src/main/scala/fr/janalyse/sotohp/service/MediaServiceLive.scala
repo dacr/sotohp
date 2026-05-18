@@ -890,10 +890,30 @@ class MediaServiceLive private (
   } yield maybeEvent
 
   override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = {
-    collections.events
-      .delete(eventId)
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
-      .unit
+    for {
+      maybeDaoEvent <- collections.events
+                         .fetch(eventId)
+                         .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
+      _             <- ZIO.foreachDiscard(maybeDaoEvent) { daoEvent =>
+                         for {
+                           // Refuse delete if the event still has an attachment (directory binding)
+                           _              <- ZIO
+                                               .fail(ServiceUserIssue(s"Event ${eventId.asString} has an attachment - delete its attachment first"))
+                                               .when(daoEvent.attachment.nonEmpty)
+                           // Refuse delete if any media still references this event
+                           firstLinkedMedia <- collections.originalIdByEventId
+                                                 .indexed(eventId)
+                                                 .runHead
+                                                 .mapError(err => ServiceDatabaseIssue(s"Couldn't check event links : $err"))
+                           _              <- ZIO
+                                               .fail(ServiceUserIssue(s"Event ${eventId.asString} is still linked to one or more medias - unlink them first"))
+                                               .when(firstLinkedMedia.isDefined)
+                           _              <- collections.events
+                                               .delete(eventId)
+                                               .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
+                         } yield ()
+                       }
+    } yield ()
   }
 
   override def eventCreate(

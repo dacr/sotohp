@@ -1407,21 +1407,20 @@ object ApiApp extends ZIOAppDefault {
   }
 
   def eventDeleteLogic(eventId: EventId): ZIO[ApiEnv, ApiIssue, Unit] = {
-    val logic = for {
-      event <- MediaService
-                 .eventGet(eventId)
-                 .logError("Couldn't get event")
-                 .orElseFail(ApiInternalError("Couldn't get event"))
-                 .someOrFail(ApiResourceNotFound("Couldn't find event"))
-      _     <- ZIO
-                 .fail(ApiInvalidOrMissingInput("Event can't be deleted because it has an attachment"))
-                 .when(event.attachment.nonEmpty)
-      _     <- MediaService
-                 .eventDelete(eventId)
-                 .logError("Couldn't delete event")
-                 .orElseFail(ApiInternalError("Couldn't delete event"))
+    for {
+      _ <- MediaService
+             .eventGet(eventId)
+             .logError("Couldn't get event")
+             .mapError(_ => ApiInternalError("Couldn't get event"))
+             .someOrFail(ApiResourceNotFound("Couldn't find event"))
+      _ <- MediaService
+             .eventDelete(eventId)
+             .logError("Couldn't delete event")
+             .mapError {
+               case e: fr.janalyse.sotohp.service.ServiceUserIssue => ApiInvalidOrMissingInput(e.message)
+               case _                                              => ApiInternalError("Couldn't delete event")
+             }
     } yield ()
-    logic
   }
 
   val eventDeleteEndpoint =
