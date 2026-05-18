@@ -1,5 +1,12 @@
 // Compiled JavaScript (manually authored) corresponding to TypeScript sources.
 // Uses axios (via CDN) and Leaflet (via CDN). ES module for clarity.
+
+import { $, $$, escapeHtml, wireOnce } from './lib/dom.js';
+import { openModal } from './lib/modal.js';
+import { resolveMediaAccessKey, clearMediaResolverCache } from './lib/media-resolver.js';
+import { ApiClient } from './lib/api.js';
+import { showToast, showSuccess, showError, showWarning, showInfo } from './lib/toast.js';
+
 // Keycloak instance - will be initialized dynamically after fetching config from server
 let keycloak = null;
 let api = null; // Will be initialized after config is ready
@@ -22,175 +29,15 @@ function sendTokenToSW(token) {
   }
 }
 
-class ApiClient {
-  constructor(baseURL = '') {
-    this.http = axios.create({ baseURL });
-    this.http.interceptors.request.use(async (config) => {
-      if (keycloak && keycloak.token) {
-        try {
-          // Attempt refresh if nearly expired
-          await keycloak.updateToken(30);
-        } catch (e) {
-        }
-        const token = keycloak.token;
-        config.headers.Authorization = `Bearer ${token}`;
-        
-        // Robustness: Add token as query param too, in case headers are stripped or for SW fallback
-        // Check if config.params exists, if not create it
-        if (!config.params) config.params = {};
-        config.params.token = token;
-        
-        sendTokenToSW(token);
-      }
-      return config;
-    });
-  }
-  
-  // Update image URLs to include token query param for direct access (bypassing SW reliance)
-  mediaNormalizedUrl(mediaAccessKey) { 
-      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
-      return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized${t}`; 
-  }
-  mediaMiniatureUrl(mediaAccessKey) { 
-      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
-      return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature${t}`; 
-  }
-  mediaOriginalUrl(mediaAccessKey) { 
-      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
-      return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original${t}`; 
-  }
-  faceImageUrl(faceId) { 
-      const t = keycloak?.token ? `?token=${encodeURIComponent(keycloak.token)}` : '';
-      return `/api/face/${encodeURIComponent(faceId)}/content${t}`; 
-  }
-
-  async getMedia(select, referenceMediaAccessKey, referenceMediaTimestamp) {
-    const params = { select };
-    if (referenceMediaAccessKey) params.referenceMediaAccessKey = referenceMediaAccessKey;
-    if (referenceMediaTimestamp) params.referenceMediaTimestamp = referenceMediaTimestamp;
-    const res = await this.http.get('/api/media', { params });
-    return res.data;
-  }
-  async getMediaByKey(mediaAccessKey) {
-    const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}`);
-    return res.data;
-  }
-  async listEvents() { return await this.#fetchNdjson('/api/events'); }
-  async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
-  async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
-  async updateEvent(eventId, body) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body); }
-  async updateMedia(mediaAccessKey, body) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}`, body); }
-  async updateMediaStarred(mediaAccessKey, state) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}/starred`, null, { params: { state } }); }
-  async listOwners() { return await this.#fetchNdjson('/api/owners'); }
-  async getOwner(ownerId) { const res = await this.http.get(`/api/owner/${encodeURIComponent(ownerId)}`); return res.data; }
-  async updateOwner(ownerId, body) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}`, body); }
-  async createOwner(body) { const res = await this.http.post('/api/owner', body); return res.data; }
-  async listPersons() { return await this.#fetchNdjson('/api/persons'); }
-  async getPerson(personId) { const res = await this.http.get(`/api/person/${encodeURIComponent(personId)}`); return res.data; }
-  async createPerson(body) { const res = await this.http.post('/api/person', body); return res.data; }
-  async updatePerson(personId, body) { await this.http.put(`/api/person/${encodeURIComponent(personId)}`, body); }
-  async deletePerson(personId) { await this.http.delete(`/api/person/${encodeURIComponent(personId)}`); }
-  async updatePersonFace(personId, faceId) { await this.http.put(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`); }
-  async listPersonFaces(personId) { return await this.#fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`); }
-  async listFaces() { return await this.#fetchNdjson('/api/faces'); }
-  async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
-  async getFace(faceId) { const res = await this.http.get(`/api/face/${encodeURIComponent(faceId)}`); return res.data; }
-  async setFacePerson(faceId, personId) {
-    await this.http.put(
-      `/api/face/${encodeURIComponent(faceId)}/person/${encodeURIComponent(personId)}`,
-      null
-    );
-  }
-  async removeFacePerson(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}/person`); }
-  async deleteFace(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}`); }
-  async createFace(body) { const res = await this.http.post('/api/face', body); return res.data; }
-  async listStores() { return await this.#fetchNdjson('/api/stores'); }
-  async getStore(storeId) { const res = await this.http.get(`/api/store/${encodeURIComponent(storeId)}`); return res.data; }
-  async updateStore(storeId, body) { await this.http.put(`/api/store/${encodeURIComponent(storeId)}`, body); }
-  async createStore(body) { const res = await this.http.post('/api/store', body); return res.data; }
-  async synchronize(days) { 
-      const params = {};
-      if (days) params.addedThoseLastDays = days;
-      await this.http.post('/api/admin/synchronize', null, { params }); 
-  }
-  async synchronizeStatus() { const res = await this.http.get('/api/admin/synchronize'); return res.data; }
-  async synchronizeStart(addedThoseLastDays) { const params = {}; if (typeof addedThoseLastDays === 'number' && Number.isFinite(addedThoseLastDays)) params.addedThoseLastDays = addedThoseLastDays; await this.http.put('/api/admin/synchronize', null, { params }); }
-  async setEventCover(eventId, mediaAccessKey) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
-  async listPortfolios() { return await this.#fetchNdjson('/api/portfolios'); }
-  async getPortfolio(portfolioId) { const res = await this.http.get(`/api/portfolio/${encodeURIComponent(portfolioId)}`); return res.data; }
-  async createPortfolio(body) { const res = await this.http.post('/api/portfolio', body); return res.data; }
-  async updatePortfolio(portfolioId, body) { await this.http.put(`/api/portfolio/${encodeURIComponent(portfolioId)}`, body); }
-  async deletePortfolio(portfolioId) { await this.http.delete(`/api/portfolio/${encodeURIComponent(portfolioId)}`); }
-  async addPortfolioAsset(portfolioId, body) { const res = await this.http.post(`/api/portfolio/${encodeURIComponent(portfolioId)}/asset`, body); return res.data; }
-  async updatePortfolioAsset(portfolioId, oldAsset, newAsset) {
-    const res = await this.http.put(`/api/portfolio/${encodeURIComponent(portfolioId)}/asset`, { oldAsset, newAsset });
-    return res.data;
-  }
-  async removePortfolioAsset(portfolioId, body) { await this.http.delete(`/api/portfolio/${encodeURIComponent(portfolioId)}/asset`, { data: body }); }
-  async setOwnerCover(ownerId, mediaAccessKey) { await this.http.put(`/api/owner/${encodeURIComponent(ownerId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
-  async mediasWithLocations(onItem) { await this.#fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
-  
-  async #fetchNdjson(url) {
-    // Use native fetch to support streaming properly
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${keycloak?.token || ''}`
-      }
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    const results = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        if (line.trim()) {
-          try { results.push(JSON.parse(line)); } catch (e) { console.error('NDJSON parse error', e); }
-        }
-      }
-    }
-    if (buffer.trim()) {
-        try { results.push(JSON.parse(buffer)); } catch {}
-    }
-    return results;
-  }
-
-  async #fetchNdjsonStream(url, onItem) {
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${keycloak?.token || ''}`
-      }
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        if (line.trim()) {
-          try { onItem(JSON.parse(line)); } catch (e) { console.error('NDJSON parse error', e); }
-        }
-      }
-    }
-    if (buffer.trim()) {
-        try { onItem(JSON.parse(buffer)); } catch {}
-    }
-  }
+function buildApiClient() {
+  return new ApiClient('', {
+    getToken: () => keycloak?.token || null,
+    refreshToken: async () => { if (keycloak) await keycloak.updateToken(30); },
+    onToken: sendTokenToSW,
+  });
 }
 
-api = new ApiClient('');
+api = buildApiClient();
 let currentMedia = null;
 let slideshowTimer = null;
 let facesEnabled = false;
@@ -281,63 +128,6 @@ document.addEventListener('keydown', (e) => {
 const ownerCache = new Map(); // ownerId -> owner object
 const storeCache = new Map(); // storeId -> store object
 
-// Toast notification system
-function ensureToastContainer() {
-  let container = document.querySelector('.toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.className = 'toast-container';
-    document.body.appendChild(container);
-  }
-  return container;
-}
-
-function showToast(message, type = 'info', duration = 4000) {
-  const container = ensureToastContainer();
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  
-  container.appendChild(toast);
-  
-  // Trigger show animation
-  requestAnimationFrame(() => {
-    toast.classList.add('show');
-  });
-  
-  // Auto-dismiss
-  setTimeout(() => {
-    toast.classList.remove('show');
-    toast.classList.add('hide');
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.parentNode.removeChild(toast);
-      }
-      // Clean up container if empty
-      if (container.children.length === 0) {
-        container.remove();
-      }
-    }, 200);
-  }, duration);
-}
-
-function showSuccess(message, duration = 4000) {
-  showToast(message, 'success', duration);
-}
-
-function showError(message, duration = 5000) {
-  showToast(message, 'error', duration);
-}
-
-function showWarning(message, duration = 4500) {
-  showToast(message, 'warning', duration);
-}
-
-function showInfo(message, duration = 4000) {
-  showToast(message, 'info', duration);
-}
-
-function $(sel) { return document.querySelector(sel); }
 function setActiveTab(name) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('main .tab').forEach(s => s.classList.toggle('active', s.id === `tab-${name}`));
@@ -650,26 +440,26 @@ function openMediaEditModal(media) {
       </header>
       <div class="content">
         <div style="margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
-          <button type="button" id="md-event-cover-btn" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:14px">Use for event cover</button>
-          <button type="button" id="md-owner-cover-btn" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:14px">Use for owner cover</button>
-          <button type="button" id="md-portfolio-add-btn" style="background:#10b981;color:#fff;border:1px solid #059669;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:14px">＋ Add to portfolio…</button>
+          <button type="button" id="md-event-cover-btn" class="btn btn-primary btn-pill">Use for event cover</button>
+          <button type="button" id="md-owner-cover-btn" class="btn btn-primary btn-pill">Use for owner cover</button>
+          <button type="button" id="md-portfolio-add-btn" class="btn btn-success btn-pill">＋ Add to portfolio…</button>
         </div>
         <div class="row">
           <div>
             <label>Description</label>
             <input type="text" id="md-desc" value="${(descVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Shoot date/time</label>
+            <label class="form-label">Shoot date/time</label>
             <input type="datetime-local" id="md-ts" value="${tsVal||''}">
-            <label style="margin-top:8px">Keywords</label>
+            <label class="form-label">Keywords</label>
             <div class="chips" id="md-chips"></div>
           </div>
           <div>
             <label>User-defined location</label>
             <div style="margin:4px 0 6px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
-              <button id="md-copy-loc" type="button" title="Copy from media GPS location if available" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Copy from media location</button>
-              <button id="md-remember-loc" type="button" title="Remember current selected location for later reuse" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Remember selection</button>
-              <button id="md-use-last-loc" type="button" title="Use last selected location" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Use last selection</button>
-              <button id="md-reset-loc" type="button" title="Remove user-defined location" style="background:#fee2e2;border:1px solid #fecaca;padding:4px 8px;border-radius:6px;cursor:pointer">Reset location</button>
+              <button id="md-copy-loc" type="button" title="Copy from media GPS location if available" class="btn btn-soft btn-sm">Copy from media location</button>
+              <button id="md-remember-loc" type="button" title="Remember current selected location for later reuse" class="btn btn-soft btn-sm">Remember selection</button>
+              <button id="md-use-last-loc" type="button" title="Use last selected location" class="btn btn-soft btn-sm">Use last selection</button>
+              <button id="md-reset-loc" type="button" title="Remove user-defined location" class="btn btn-danger-soft btn-sm">Reset location</button>
             </div>
             <div id="media-edit-map"></div>
           </div>
@@ -677,7 +467,7 @@ function openMediaEditModal(media) {
       </div>
       <footer>
         <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:6px 10px;border-radius:6px;cursor:pointer">Save</button>
+        <button type="button" class="save">Save</button>
       </footer>
     </div>`;
   overlay.innerHTML = overlayHtml;
@@ -1610,11 +1400,7 @@ function initViewerControls() {
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });
   // Faces toggle wiring
-  const facesBtn = document.getElementById('btn-faces');
-  if (facesBtn && !facesBtn.__wired) {
-    facesBtn.addEventListener('click', () => setFacesEnabled(!facesEnabled));
-    facesBtn.__wired = true;
-  }
+  wireOnce(document.getElementById('btn-faces'), 'click', () => setFacesEnabled(!facesEnabled));
   // Restore persisted faces toggle
   try { const saved = localStorage.getItem('viewer.facesEnabled'); if (saved != null) facesEnabled = saved === '1'; } catch {}
   setFacesEnabled(facesEnabled);
@@ -2001,21 +1787,21 @@ function openEventEditModal(ev) {
           <div>
             <label>Name</label>
             <input type="text" id="ev-name" value="${nameVal.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Description</label>
+            <label class="form-label">Description</label>
             <textarea id="ev-desc">${(descVal||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea>
-            <label style="margin-top:8px">Timestamp</label>
+            <label class="form-label">Timestamp</label>
             <input type="datetime-local" id="ev-ts" value="${tsVal}">
-            <label style="margin-top:8px">Published On (URL)</label>
+            <label class="form-label">Published On (URL)</label>
             <input type="url" id="ev-published" placeholder="https://example.com/album" value="${pubVal.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Keywords</label>
+            <label class="form-label">Keywords</label>
             <div class="chips" id="ev-chips"></div>
           </div>
           <div>
             <label>Location</label>
             <div style="margin:4px 0 6px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
-              <button id="ev-remember-loc" type="button" title="Remember current selected location for later reuse" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Remember selection</button>
-              <button id="ev-use-last-loc" type="button" title="Use last selected location" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 8px;border-radius:6px;cursor:pointer">Use last selection</button>
-              <button id="ev-reset-loc" type="button" title="Remove event location" style="background:#fee2e2;border:1px solid #fecaca;padding:4px 8px;border-radius:6px;cursor:pointer">Reset location</button>
+              <button id="ev-remember-loc" type="button" title="Remember current selected location for later reuse" class="btn btn-soft btn-sm">Remember selection</button>
+              <button id="ev-use-last-loc" type="button" title="Use last selected location" class="btn btn-soft btn-sm">Use last selection</button>
+              <button id="ev-reset-loc" type="button" title="Remove event location" class="btn btn-danger-soft btn-sm">Reset location</button>
             </div>
             <div id="event-edit-map"></div>
           </div>
@@ -2023,7 +1809,7 @@ function openEventEditModal(ev) {
       </div>
       <footer>
         <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #2563eb;padding:6px 10px;border-radius:6px;cursor:pointer">Save</button>
+        <button type="button" class="save">Save</button>
       </footer>
     </div>`;
   overlay.innerHTML = overlayHtml;
@@ -2268,7 +2054,6 @@ async function loadEvents(options = {}) { const { force = false } = options;
     });
 
     // Lazy load state/images per tile when needed
-    const stateCache = new Map(); // originalId -> Promise<State>
     const limit = 4; // small concurrency for state->image resolution
     let inFlight = 0;
     const pending = [];
@@ -2278,15 +2063,10 @@ async function loadEvents(options = {}) { const { force = false } = options;
       inFlight++;
       try {
         if (!ev.originalId) return;
-        let p = stateCache.get(ev.originalId);
-        if (!p) {
-          p = api.getState(ev.originalId).catch(err => { stateCache.delete(ev.originalId); throw err; });
-          stateCache.set(ev.originalId, p);
-        }
-        const st = await p;
-        if (!st || !st.mediaAccessKey) return;
+        const key = await resolveMediaAccessKey(api, ev.originalId);
+        if (!key) return;
         const img = new Image();
-        img.src = api.mediaNormalizedUrl(st.mediaAccessKey);
+        img.src = api.mediaNormalizedUrl(key);
         img.alt = ev.name || '';
         img.loading = 'lazy';
         img.decoding = 'async';
@@ -2337,7 +2117,7 @@ async function loadEvents(options = {}) { const { force = false } = options;
       const pinSvgGreen = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1em\" height=\"1em\" viewBox=\"0 0 24 24\" fill=\"#10b981\" style=\"vertical-align:-0.15em;margin-right:6px\"><path d=\"M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z\"/></svg>`;
       const tsWithPin = (ev.location ? pinSvgGreen + ' ' : '') + tsStr;
       li.innerHTML = `
-        <div class=\"ev-thumb\" style=\"width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;\">No preview</div>
+        <div class=\"ev-thumb list-thumb\">No preview</div>
         <h4 style=\"margin:0 0 4px 0;\">${ev.name || '(no name)'}</h4>
         <div class=\"ev-ts\" style=\"font-size:12px;color:#555\">${tsWithPin}</div>
         <button class=\"ev-edit-btn\" title=\"Edit\">✎ Edit</button>
@@ -2368,45 +2148,53 @@ async function loadEvents(options = {}) { const { force = false } = options;
 }
 
 function openEventCreateModal() {
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Create event</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div>
-            <label>Name</label>
-            <input type="text" id="evc-name" value="" required>
-            <label style="margin-top:8px">Description</label>
-            <input type="text" id="evc-desc" value="">
-            <label style="margin-top:8px">Keywords</label>
-            <div class="chips" id="evc-chips"></div>
-          </div>
-        </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(()=>{ (modal.querySelector('#evc-name')||modal).focus(); }, 0);
-
-  // Keywords chips management
-  const chipsEl = overlay.querySelector('#evc-chips');
   let keywords = [];
+  const handle = openModal({
+    title: 'Create event',
+    saveLabel: 'Create',
+    focusSelector: '#evc-name',
+    body: `
+      <div class="row">
+        <div>
+          <label>Name</label>
+          <input type="text" id="evc-name" value="" required>
+          <label class="form-label">Description</label>
+          <input type="text" id="evc-desc" value="">
+          <label class="form-label">Keywords</label>
+          <div class="chips" id="evc-chips"></div>
+        </div>
+      </div>`,
+    onSave: async ({ modal }) => {
+      const name = modal.querySelector('#evc-name').value.trim();
+      const description = modal.querySelector('#evc-desc').value.trim();
+      if (!name) { showWarning('Event name is required'); return false; }
+      const body = { name };
+      if (description) body.description = description;
+      if (keywords.length > 0) body.keywords = keywords;
+      try {
+        await api.createEvent(body);
+        await loadEvents({ force: true });
+      } catch (e) {
+        showError('Failed to create event');
+        return false;
+      }
+    },
+  });
+  if (!handle) return;
+  const { modal } = handle;
+  wireKeywordsChips(modal.querySelector('#evc-chips'), keywords, (next) => { keywords = next; });
+}
+
+/**
+ * Helper for the keyword chips UI used in event modals.
+ * Mutates the caller's array via the `onChange(newArray)` callback.
+ */
+function wireKeywordsChips(chipsEl, initial, onChange) {
+  let keywords = Array.isArray(initial) ? [...initial] : [];
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'Add keyword and press Enter';
+  function commit() { onChange(keywords); }
   function renderChips() {
     chipsEl.innerHTML = '';
     for (const kw of keywords) {
@@ -2415,7 +2203,7 @@ function openEventCreateModal() {
       chip.textContent = kw;
       const rm = document.createElement('button');
       rm.className = 'remove'; rm.type = 'button'; rm.textContent = '×';
-      rm.addEventListener('click', () => { keywords = keywords.filter(k => k !== kw); renderChips(); });
+      rm.addEventListener('click', () => { keywords = keywords.filter(k => k !== kw); commit(); renderChips(); });
       chip.appendChild(rm);
       chipsEl.appendChild(chip);
     }
@@ -2423,30 +2211,19 @@ function openEventCreateModal() {
   }
   function addKeywordFromInput() {
     const val = input.value.trim();
-    if (!val) return; if (!keywords.includes(val)) keywords.push(val); input.value=''; renderChips(); input.focus();
+    if (!val) return;
+    if (!keywords.includes(val)) keywords.push(val);
+    input.value = '';
+    commit();
+    renderChips();
+    input.focus();
   }
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addKeywordFromInput(); }
-    else if (e.key === 'Backspace' && !input.value && keywords.length > 0) { keywords.pop(); renderChips(); }
+    else if (e.key === 'Backspace' && !input.value && keywords.length > 0) { keywords.pop(); commit(); renderChips(); }
   });
   input.addEventListener('blur', () => { addKeywordFromInput(); });
   renderChips();
-
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const name = modal.querySelector('#evc-name').value.trim();
-    const description = modal.querySelector('#evc-desc').value.trim();
-    if (!name) { showWarning('Event name is required'); return; }
-    const body = { name };
-    if (description) body.description = description;
-    if (keywords.length > 0) body.keywords = keywords;
-    try {
-      await api.createEvent(body);
-      close();
-      await loadEvents({ force: true });
-    } catch (e) {
-      showError('Failed to create event');
-    }
-  });
 }
 
 // ============================================================================
@@ -2455,10 +2232,6 @@ function openEventCreateModal() {
 
 let portfoliosLoaded = false;
 let currentPortfolio = null; // portfolio object when in detail view
-
-function pfEscapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-}
 
 function ensurePortfoliosLoaded() { try { if (!portfoliosLoaded) loadPortfolios({ force: false }); } catch {} }
 
@@ -2487,7 +2260,7 @@ function buildAssetThumbImg(mediaAccessKey, asset) {
   return wrapper;
 }
 
-async function renderPortfolioMosaic(container, assets, stateCache) {
+async function renderPortfolioMosaic(container, assets) {
   if (!container) return;
   const preview = (assets || []).slice(0, 4);
   if (preview.length === 0) return; // keep fallback "0 asset(s)"
@@ -2500,9 +2273,6 @@ async function renderPortfolioMosaic(container, assets, stateCache) {
   } else if (preview.length === 2) {
     grid.style.gridTemplateColumns = '1fr 1fr';
     grid.style.gridTemplateRows = '1fr';
-  } else if (preview.length === 3) {
-    grid.style.gridTemplateColumns = '1fr 1fr';
-    grid.style.gridTemplateRows = '1fr 1fr';
   } else {
     grid.style.gridTemplateColumns = '1fr 1fr';
     grid.style.gridTemplateRows = '1fr 1fr';
@@ -2514,21 +2284,12 @@ async function renderPortfolioMosaic(container, assets, stateCache) {
     grid.appendChild(cell);
     return { cell, asset };
   });
-  // Hide the fallback once we have something to render
   const fallback = container.querySelector('.pf-thumb-fallback');
   if (fallback) fallback.style.display = 'none';
   container.appendChild(grid);
   await Promise.all(cells.map(async ({ cell, asset }) => {
-    try {
-      let p = stateCache.get(asset.originalId);
-      if (!p) {
-        p = api.getState(asset.originalId).catch(err => { stateCache.delete(asset.originalId); throw err; });
-        stateCache.set(asset.originalId, p);
-      }
-      const st = await p;
-      if (!st || !st.mediaAccessKey) return;
-      cell.appendChild(buildAssetThumbImg(st.mediaAccessKey, asset));
-    } catch {}
+    const key = await resolveMediaAccessKey(api, asset.originalId);
+    if (key) cell.appendChild(buildAssetThumbImg(key, asset));
   }));
 }
 
@@ -2559,21 +2320,20 @@ async function loadPortfolios(options = {}) {
     if (portfolios.length === 0) {
       list.innerHTML = '<li style="color:#9ca3af;text-align:center;padding:24px">No portfolio yet. Click "Create portfolio" to start.</li>';
     }
-    const stateCache = new Map(); // shared across tiles
     for (const p of portfolios) {
       const li = document.createElement('li');
       li.dataset.portfolioId = p.id;
       li.innerHTML = `
-        <div class="pf-thumb" style="position:relative;width:100%;height:160px;border-radius:6px;background:#f3f4f6;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:13px;display:flex;align-items:center;justify-content:center;">
+        <div class="pf-thumb list-thumb">
           <span class="pf-thumb-fallback">${p.assetCount || 0} asset(s)</span>
         </div>
-        <h4 style="margin:0 0 4px 0;">${pfEscapeHtml(p.name) || '(no name)'}</h4>
-        <div style="font-size:12px;color:#555">${pfEscapeHtml(p.description)}</div>
+        <h4 style="margin:0 0 4px 0;">${escapeHtml(p.name) || '(no name)'}</h4>
+        <div style="font-size:12px;color:#555">${escapeHtml(p.description)}</div>
       `;
       li.style.cursor = 'pointer';
       li.onclick = () => openPortfolioDetail(p.id);
       list.appendChild(li);
-      renderPortfolioMosaic(li.querySelector('.pf-thumb'), p.assets || [], stateCache);
+      renderPortfolioMosaic(li.querySelector('.pf-thumb'), p.assets || []);
     }
     portfoliosLoaded = true;
   } catch (e) {
@@ -2594,19 +2354,18 @@ async function openPortfolioDetail(portfolioId) {
     if (assets.length === 0) {
       list.innerHTML = '<li style="color:#9ca3af;text-align:center;padding:24px">No asset yet. Open a photo in the Viewer and use "Add to portfolio…" to add one.</li>';
     }
-    const stateCache = new Map();
     for (let i = 0; i < assets.length; i++) {
       const asset = assets[i];
       const li = document.createElement('li');
       li.style.position = 'relative';
       li.dataset.originalId = asset.originalId;
       li.dataset.assetIndex = String(i);
-      const cropBadge = asset.selectedBox ? '<span style="background:rgba(0,0,0,0.6);color:#fff;font-size:10px;padding:2px 6px;border-radius:3px;position:absolute;top:6px;right:6px;">✂ Cropped</span>' : '';
+      const cropBadge = asset.selectedBox ? '<span class="icon-badge">✂ Cropped</span>' : '';
       const descText = asset.description
-        ? `<span style="color:#374151;font-style:italic;">${pfEscapeHtml(asset.description)}</span>`
+        ? `<span style="color:#374151;font-style:italic;">${escapeHtml(asset.description)}</span>`
         : '<span style="color:#9ca3af;font-style:italic;">No description</span>';
       li.innerHTML = `
-        <div class="pf-asset-thumb" style="position:relative;width:100%;height:160px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px;color:#9ca3af;font-size:12px;">
+        <div class="pf-asset-thumb list-thumb">
           <span class="pf-thumb-placeholder">Loading…</span>
           ${cropBadge}
         </div>
@@ -2632,38 +2391,33 @@ async function openPortfolioDetail(portfolioId) {
         openAssetEditModal(portfolioId, asset);
       };
       (async () => {
-        try {
-          let p = stateCache.get(asset.originalId);
-          if (!p) {
-            p = api.getState(asset.originalId).catch(err => { stateCache.delete(asset.originalId); throw err; });
-            stateCache.set(asset.originalId, p);
-          }
-          const st = await p;
-          if (!st || !st.mediaAccessKey) return;
-          const thumb = li.querySelector('.pf-asset-thumb');
-          const placeholder = thumb?.querySelector('.pf-thumb-placeholder');
-          if (placeholder) placeholder.remove();
-          if (thumb) { thumb.style.background = 'transparent'; }
-          if (thumb) thumb.insertBefore(buildAssetThumbImg(st.mediaAccessKey, asset), thumb.firstChild);
-          li.style.cursor = 'pointer';
-          li.onclick = (e) => {
-            if (e.target.closest('.pf-asset-remove')) return;
-            if (e.target.closest('.pf-asset-edit')) return;
-            if (e.target.closest('.pf-asset-view')) return;
-            openPortfolioAssetViewer(currentPortfolio, i);
+        const key = await resolveMediaAccessKey(api, asset.originalId);
+        if (!key) return;
+        const thumb = li.querySelector('.pf-asset-thumb');
+        const placeholder = thumb?.querySelector('.pf-thumb-placeholder');
+        if (placeholder) placeholder.remove();
+        if (thumb) {
+          thumb.style.background = 'transparent';
+          thumb.insertBefore(buildAssetThumbImg(key, asset), thumb.firstChild);
+        }
+        li.style.cursor = 'pointer';
+        li.onclick = (e) => {
+          if (e.target.closest('.pf-asset-remove')) return;
+          if (e.target.closest('.pf-asset-edit')) return;
+          if (e.target.closest('.pf-asset-view')) return;
+          openPortfolioAssetViewer(currentPortfolio, i);
+        };
+        const viewBtn = li.querySelector('.pf-asset-view');
+        if (viewBtn) {
+          viewBtn.onclick = async (e) => {
+            e.stopPropagation();
+            try {
+              setActiveTab('viewer');
+              const media = await api.getMediaByKey(key);
+              showMedia(media);
+            } catch (err) { console.warn('Open in viewer failed', err); showError('Failed to open in viewer'); }
           };
-          const viewBtn = li.querySelector('.pf-asset-view');
-          if (viewBtn) {
-            viewBtn.onclick = async (e) => {
-              e.stopPropagation();
-              try {
-                setActiveTab('viewer');
-                const media = await api.getMediaByKey(st.mediaAccessKey);
-                showMedia(media);
-              } catch (err) { console.warn('Open in viewer failed', err); showError('Failed to open in viewer'); }
-            };
-          }
-        } catch {}
+        }
       })();
     }
     showPortfolioDetailView();
@@ -2674,100 +2428,79 @@ async function openPortfolioDetail(portfolioId) {
 }
 
 function openPortfolioCreateModal(onCreated) {
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Create portfolio</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div>
-            <label>Name</label>
-            <input type="text" id="pfc-name" required>
-            <label style="margin-top:8px">Description (optional)</label>
-            <input type="text" id="pfc-desc">
-          </div>
+  openModal({
+    title: 'Create portfolio',
+    saveLabel: 'Create',
+    focusSelector: '#pfc-name',
+    body: `
+      <div class="row">
+        <div>
+          <label>Name</label>
+          <input type="text" id="pfc-name" required>
+          <label class="form-label">Description (optional)</label>
+          <input type="text" id="pfc-desc">
         </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;cursor:pointer">Create</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(() => { (modal.querySelector('#pfc-name') || modal).focus(); }, 0);
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const name = modal.querySelector('#pfc-name').value.trim();
-    const description = modal.querySelector('#pfc-desc').value.trim();
-    if (!name) { showWarning('Portfolio name is required'); return; }
-    const body = { name };
-    if (description) body.description = description;
-    try {
-      const created = await api.createPortfolio(body);
-      close();
-      portfoliosLoaded = false;
-      if (typeof onCreated === 'function') {
-        try { await onCreated(created); } catch {}
-      } else {
-        await loadPortfolios({ force: true });
+      </div>`,
+    onSave: async ({ modal }) => {
+      const name = modal.querySelector('#pfc-name').value.trim();
+      const description = modal.querySelector('#pfc-desc').value.trim();
+      if (!name) { showWarning('Portfolio name is required'); return false; }
+      const body = { name };
+      if (description) body.description = description;
+      try {
+        const created = await api.createPortfolio(body);
+        portfoliosLoaded = false;
+        if (typeof onCreated === 'function') {
+          try { await onCreated(created); } catch {}
+        } else {
+          await loadPortfolios({ force: true });
+        }
+      } catch (e) {
+        console.warn('createPortfolio failed', e);
+        showError('Failed to create portfolio');
+        return false;
       }
-    } catch (e) { console.warn('createPortfolio failed', e); showError('Failed to create portfolio'); }
+    },
   });
 }
 
 function openPortfolioEditModal(portfolio) {
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Edit portfolio</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
+  openModal({
+    title: 'Edit portfolio',
+    focusSelector: '#pfe-name',
+    body: ({ modal }) => {
+      const html = `
         <div class="row">
           <div>
             <label>Name</label>
             <input type="text" id="pfe-name" required>
-            <label style="margin-top:8px">Description (optional)</label>
+            <label class="form-label">Description (optional)</label>
             <input type="text" id="pfe-desc">
           </div>
-        </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;cursor:pointer">Save</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  modal.querySelector('#pfe-name').value = portfolio.name || '';
-  modal.querySelector('#pfe-desc').value = portfolio.description || '';
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(() => { (modal.querySelector('#pfe-name') || modal).focus(); }, 0);
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const name = modal.querySelector('#pfe-name').value.trim();
-    const description = modal.querySelector('#pfe-desc').value.trim();
-    if (!name) { showWarning('Portfolio name is required'); return; }
-    const body = { name };
-    if (description) body.description = description;
-    try {
-      await api.updatePortfolio(portfolio.id, body);
-      close();
-      portfoliosLoaded = false;
-      await openPortfolioDetail(portfolio.id);
-    } catch (e) { console.warn('updatePortfolio failed', e); showError('Failed to update portfolio'); }
+        </div>`;
+      // Use a temp container so we can pre-populate values after parsing.
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      tmp.querySelector('#pfe-name').value = portfolio.name || '';
+      tmp.querySelector('#pfe-desc').value = portfolio.description || '';
+      return tmp;
+    },
+    onSave: async ({ modal }) => {
+      const name = modal.querySelector('#pfe-name').value.trim();
+      const description = modal.querySelector('#pfe-desc').value.trim();
+      if (!name) { showWarning('Portfolio name is required'); return false; }
+      const body = { name };
+      if (description) body.description = description;
+      try {
+        await api.updatePortfolio(portfolio.id, body);
+        portfoliosLoaded = false;
+        await openPortfolioDetail(portfolio.id);
+      } catch (e) {
+        console.warn('updatePortfolio failed', e);
+        showError('Failed to update portfolio');
+        return false;
+      }
+    },
   });
 }
 
@@ -2790,7 +2523,6 @@ function openPortfolioAssetViewer(portfolio, startIndex) {
 
   const stage = overlay.querySelector('.pav-stage');
   const info = overlay.querySelector('.pav-info');
-  const stateCache = new Map();
   let currentImg = null;
   let token = 0;
 
@@ -2800,53 +2532,44 @@ function openPortfolioAssetViewer(portfolio, startIndex) {
     if (!asset) return;
     if (currentImg) { try { currentImg.src = ''; } catch {} currentImg = null; }
     stage.innerHTML = '<span>Loading original…</span>';
-    const descPart = asset.description ? ` — ${pfEscapeHtml(asset.description)}` : '';
+    const descPart = asset.description ? ` — ${escapeHtml(asset.description)}` : '';
     const cropPart = asset.selectedBox ? ' · ✂ cropped' : '';
     info.innerHTML = `${idx + 1} / ${assets.length}${cropPart}${descPart}`;
-    try {
-      let p = stateCache.get(asset.originalId);
-      if (!p) {
-        p = api.getState(asset.originalId).catch(err => { stateCache.delete(asset.originalId); throw err; });
-        stateCache.set(asset.originalId, p);
-      }
-      const st = await p;
+    const key = await resolveMediaAccessKey(api, asset.originalId);
+    if (myToken !== token) return;
+    if (!key) { stage.innerHTML = '<span class="text-danger">Failed to load image</span>'; return; }
+    const img = new Image();
+    currentImg = img;
+    img.draggable = false;
+    img.onload = () => {
       if (myToken !== token) return;
-      if (!st || !st.mediaAccessKey) { stage.innerHTML = '<span style="color:#dc2626">Failed to load image</span>'; return; }
-      const img = new Image();
-      currentImg = img;
-      img.draggable = false;
-      img.onload = () => {
-        if (myToken !== token) return;
-        stage.innerHTML = '';
-        const stageW = stage.clientWidth;
-        const stageH = stage.clientHeight;
-        const b = (asset.selectedBox && asset.selectedBox.width > 0 && asset.selectedBox.height > 0) ? asset.selectedBox : null;
-        const cropNatW = b ? img.naturalWidth * b.width : img.naturalWidth;
-        const cropNatH = b ? img.naturalHeight * b.height : img.naturalHeight;
-        const cropAspect = cropNatW / cropNatH;
-        const stageAspect = stageW / stageH;
-        let wrapW, wrapH;
-        if (cropAspect > stageAspect) { wrapW = stageW; wrapH = stageW / cropAspect; }
-        else { wrapH = stageH; wrapW = stageH * cropAspect; }
-        const wrapper = document.createElement('div');
-        wrapper.style.cssText = `position:relative;width:${wrapW}px;height:${wrapH}px;overflow:hidden;background:#000;`;
-        if (b) {
-          const wPct = (1 / b.width) * 100;
-          const hPct = (1 / b.height) * 100;
-          const lPct = -(b.x / b.width) * 100;
-          const tPct = -(b.y / b.height) * 100;
-          img.style.cssText = `position:absolute;width:${wPct}%;height:${hPct}%;left:${lPct}%;top:${tPct}%;display:block;`;
-        } else {
-          img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;';
-        }
-        wrapper.appendChild(img);
-        stage.appendChild(wrapper);
-      };
-      img.onerror = () => { if (myToken === token) stage.innerHTML = '<span style="color:#dc2626">Failed to load image</span>'; };
-      img.src = api.mediaOriginalUrl(st.mediaAccessKey);
-    } catch (e) {
-      if (myToken === token) stage.innerHTML = '<span style="color:#dc2626">Failed to load image</span>';
-    }
+      stage.innerHTML = '';
+      const stageW = stage.clientWidth;
+      const stageH = stage.clientHeight;
+      const b = (asset.selectedBox && asset.selectedBox.width > 0 && asset.selectedBox.height > 0) ? asset.selectedBox : null;
+      const cropNatW = b ? img.naturalWidth * b.width : img.naturalWidth;
+      const cropNatH = b ? img.naturalHeight * b.height : img.naturalHeight;
+      const cropAspect = cropNatW / cropNatH;
+      const stageAspect = stageW / stageH;
+      let wrapW, wrapH;
+      if (cropAspect > stageAspect) { wrapW = stageW; wrapH = stageW / cropAspect; }
+      else { wrapH = stageH; wrapW = stageH * cropAspect; }
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = `position:relative;width:${wrapW}px;height:${wrapH}px;overflow:hidden;background:#000;`;
+      if (b) {
+        const wPct = (1 / b.width) * 100;
+        const hPct = (1 / b.height) * 100;
+        const lPct = -(b.x / b.width) * 100;
+        const tPct = -(b.y / b.height) * 100;
+        img.style.cssText = `position:absolute;width:${wPct}%;height:${hPct}%;left:${lPct}%;top:${tPct}%;display:block;`;
+      } else {
+        img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;';
+      }
+      wrapper.appendChild(img);
+      stage.appendChild(wrapper);
+    };
+    img.onerror = () => { if (myToken === token) stage.innerHTML = '<span class="text-danger">Failed to load image</span>'; };
+    img.src = api.mediaOriginalUrl(key);
   }
 
   function close() { overlay.remove(); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); }
@@ -2870,65 +2593,69 @@ function openPortfolioAssetViewer(portfolio, startIndex) {
 }
 
 function openAssetEditModal(portfolioId, asset) {
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1" style="max-width:760px;width:90%">
-      <header>
-        <div>Edit asset</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row" style="flex-direction:column;gap:12px;">
-          <div>
-            <label>Description (optional)</label>
-            <input type="text" id="ae-desc" placeholder="A note about this asset…">
-          </div>
-          <div>
-            <label>Crop region (drag to move, drag corners to resize)</label>
-            <div id="ae-crop-controls" style="display:flex;gap:8px;margin:4px 0">
-              <button type="button" id="ae-crop-draw" style="background:#f3f4f6;border:1px solid #e5e7eb;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">＋ Draw new crop</button>
-              <button type="button" id="ae-crop-remove" style="background:#fee2e2;border:1px solid #fecaca;color:#991b1b;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🗑 Remove crop</button>
-              <span id="ae-crop-status" style="font-size:11px;color:#6b7280;align-self:center"></span>
-            </div>
-            <div id="ae-stage" style="position:relative;width:100%;background:#0f172a;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:200px;">
-              <span id="ae-stage-loading" style="color:#9ca3af;font-size:13px">Loading image…</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;cursor:pointer">Save</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  modal.querySelector('#ae-desc').value = asset.description || '';
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(() => { (modal.querySelector('#ae-desc') || modal).focus(); }, 0);
-
   // Crop state — values are relative (0..1)
   let cropBox = asset.selectedBox ? { ...asset.selectedBox } : null;
-  const stage = modal.querySelector('#ae-stage');
-  const status = modal.querySelector('#ae-crop-status');
-  const drawBtn = modal.querySelector('#ae-crop-draw');
-  const removeBtn = modal.querySelector('#ae-crop-remove');
   let drawMode = false;
   let img = null;
   let overlayEl = null;
+  let stage, status, drawBtn, removeBtn;
+  const onResize = () => renderOverlay();
+
+  const handle = openModal({
+    title: 'Edit asset',
+    modalAttrs: 'max-width:760px;width:90%',
+    focusSelector: '#ae-desc',
+    body: `
+      <div class="row" style="flex-direction:column;gap:12px;">
+        <div>
+          <label>Description (optional)</label>
+          <input type="text" id="ae-desc" placeholder="A note about this asset…">
+        </div>
+        <div>
+          <label>Crop region (drag to move, drag corners to resize)</label>
+          <div id="ae-crop-controls" style="display:flex;gap:8px;margin:4px 0">
+            <button type="button" id="ae-crop-draw" class="btn btn-soft btn-sm">＋ Draw new crop</button>
+            <button type="button" id="ae-crop-remove" class="btn btn-danger-soft btn-sm">🗑 Remove crop</button>
+            <span id="ae-crop-status" style="font-size:11px;color:#6b7280;align-self:center"></span>
+          </div>
+          <div id="ae-stage" style="position:relative;width:100%;background:#0f172a;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:200px;">
+            <span id="ae-stage-loading" style="color:#9ca3af;font-size:13px">Loading image…</span>
+          </div>
+        </div>
+      </div>`,
+    onSave: async ({ modal }) => {
+      const description = modal.querySelector('#ae-desc').value.trim();
+      const newAsset = { originalId: asset.originalId };
+      if (cropBox) newAsset.selectedBox = cropBox;
+      if (description) newAsset.description = description;
+      const oldAssetBody = { originalId: asset.originalId };
+      if (asset.selectedBox) oldAssetBody.selectedBox = asset.selectedBox;
+      if (asset.description) oldAssetBody.description = asset.description;
+      try {
+        await api.updatePortfolioAsset(portfolioId, oldAssetBody, newAsset);
+        portfoliosLoaded = false;
+        await openPortfolioDetail(portfolioId);
+      } catch (e) {
+        console.warn('updatePortfolioAsset failed', e);
+        showError('Failed to update asset');
+        return false;
+      }
+    },
+    onClose: () => { window.removeEventListener('resize', onResize); },
+  });
+  if (!handle) return;
+  const { modal } = handle;
+  modal.querySelector('#ae-desc').value = asset.description || '';
+  stage = modal.querySelector('#ae-stage');
+  status = modal.querySelector('#ae-crop-status');
+  drawBtn = modal.querySelector('#ae-crop-draw');
+  removeBtn = modal.querySelector('#ae-crop-remove');
 
   function updateStatus() {
     if (!cropBox) status.textContent = 'No crop — full image';
     else status.textContent = `x: ${cropBox.x.toFixed(3)}, y: ${cropBox.y.toFixed(3)}, w: ${cropBox.width.toFixed(3)}, h: ${cropBox.height.toFixed(3)}`;
     removeBtn.disabled = !cropBox;
-    removeBtn.style.opacity = cropBox ? '1' : '0.4';
-    removeBtn.style.cursor = cropBox ? 'pointer' : 'not-allowed';
-    drawBtn.style.background = drawMode ? '#dbeafe' : '#f3f4f6';
-    drawBtn.style.borderColor = drawMode ? '#93c5fd' : '#e5e7eb';
+    drawBtn.classList.toggle('is-active', drawMode);
     drawBtn.textContent = drawMode ? '× Cancel draw' : '＋ Draw new crop';
   }
   function renderOverlay() {
@@ -3040,83 +2767,50 @@ function openAssetEditModal(portfolioId, asset) {
 
   // Resolve image URL via state lookup
   (async () => {
-    try {
-      const st = await api.getState(asset.originalId);
-      if (!st || !st.mediaAccessKey) throw new Error('No media access key');
-      img = new Image();
-      img.src = api.mediaNormalizedUrl(st.mediaAccessKey);
-      img.style.cssText = 'display:block;max-width:100%;max-height:50vh;width:auto;height:auto;user-select:none;-webkit-user-drag:none;';
-      img.draggable = false;
-      img.onload = () => {
-        const loading = modal.querySelector('#ae-stage-loading');
-        if (loading) loading.remove();
-        renderOverlay();
-      };
-      stage.appendChild(img);
-    } catch (e) {
+    const key = await resolveMediaAccessKey(api, asset.originalId);
+    if (!key) {
       const loading = modal.querySelector('#ae-stage-loading');
       if (loading) loading.textContent = 'Failed to load image';
+      return;
     }
+    img = new Image();
+    img.src = api.mediaNormalizedUrl(key);
+    img.style.cssText = 'display:block;max-width:100%;max-height:50vh;width:auto;height:auto;user-select:none;-webkit-user-drag:none;';
+    img.draggable = false;
+    img.onload = () => {
+      const loading = modal.querySelector('#ae-stage-loading');
+      if (loading) loading.remove();
+      renderOverlay();
+    };
+    stage.appendChild(img);
   })();
 
-  // Re-render overlay on window resize
-  const onResize = () => renderOverlay();
   window.addEventListener('resize', onResize);
-  const origClose = close;
-
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const description = modal.querySelector('#ae-desc').value.trim();
-    const newAsset = { originalId: asset.originalId };
-    if (cropBox) newAsset.selectedBox = cropBox;
-    if (description) newAsset.description = description;
-    const oldAssetBody = { originalId: asset.originalId };
-    if (asset.selectedBox) oldAssetBody.selectedBox = asset.selectedBox;
-    if (asset.description) oldAssetBody.description = asset.description;
-    try {
-      await api.updatePortfolioAsset(portfolioId, oldAssetBody, newAsset);
-      window.removeEventListener('resize', onResize);
-      origClose();
-      portfoliosLoaded = false;
-      await openPortfolioDetail(portfolioId);
-    } catch (e) { console.warn('updatePortfolioAsset failed', e); showError('Failed to update asset'); }
-  });
-
   updateStatus();
 }
 
 function openAddToPortfolioModal(media) {
   if (!media) { showWarning('No media loaded'); return; }
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Add to portfolio</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div style="flex:1">
-            <label>Description (optional)</label>
-            <input type="text" id="atp-desc" placeholder="A note about this asset…" style="width:100%;margin-bottom:10px">
-            <label>Select a portfolio</label>
-            <ul id="atp-list" class="list" style="max-height:280px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;padding:4px;list-style:none;margin:4px 0">
-              <li style="color:#9ca3af;padding:8px">Loading…</li>
-            </ul>
-            <button type="button" id="atp-new" style="margin-top:8px;background:#f3f4f6;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;cursor:pointer">＋ Create new portfolio</button>
-          </div>
+  const handle = openModal({
+    title: 'Add to portfolio',
+    hideSave: true,
+    cancelLabel: 'Close',
+    focusSelector: '#atp-desc',
+    body: `
+      <div class="row">
+        <div style="flex:1">
+          <label>Description (optional)</label>
+          <input type="text" id="atp-desc" placeholder="A note about this asset…" style="width:100%;margin-bottom:10px">
+          <label>Select a portfolio</label>
+          <ul id="atp-list" class="list" style="max-height:280px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;padding:4px;list-style:none;margin:4px 0">
+            <li style="color:#9ca3af;padding:8px">Loading…</li>
+          </ul>
+          <button type="button" id="atp-new" style="margin-top:8px;background:#f3f4f6;border:1px solid #e5e7eb;padding:6px 10px;border-radius:6px;cursor:pointer">＋ Create new portfolio</button>
         </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Close</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
+      </div>`,
+  });
+  if (!handle) return;
+  const { modal, close } = handle;
 
   async function addAsset(portfolio) {
     const desc = (modal.querySelector('#atp-desc')?.value || '').trim();
@@ -3148,7 +2842,7 @@ function openAddToPortfolioModal(media) {
         li.style.cssText = 'padding:8px;border-bottom:1px solid #f3f4f6;cursor:pointer;display:flex;justify-content:space-between;align-items:center';
         li.innerHTML = `
           <div>
-            <div style="font-weight:600">${pfEscapeHtml(p.name) || '(no name)'}</div>
+            <div style="font-weight:600">${escapeHtml(p.name) || '(no name)'}</div>
             <div style="font-size:11px;color:#888">${p.assetCount || 0} asset(s)</div>
           </div>
           <span style="color:#2563eb;font-size:12px">＋ Add</span>
@@ -3172,58 +2866,40 @@ function openAddToPortfolioModal(media) {
 }
 
 function initPortfoliosTab() {
-  const refreshBtn = document.getElementById('refresh-portfolios');
-  if (refreshBtn && !refreshBtn.__wired) {
-    refreshBtn.addEventListener('click', () => loadPortfolios({ force: true }));
-    refreshBtn.__wired = true;
-  }
-  const createBtn = document.getElementById('create-portfolio');
-  if (createBtn && !createBtn.__wired) {
-    createBtn.addEventListener('click', () => openPortfolioCreateModal());
-    createBtn.__wired = true;
-  }
-  const backBtn = document.getElementById('portfolio-back');
-  if (backBtn && !backBtn.__wired) {
-    backBtn.addEventListener('click', () => { showPortfoliosListView(); loadPortfolios({ force: true }); });
-    backBtn.__wired = true;
-  }
-  const viewBtn = document.getElementById('portfolio-view');
-  if (viewBtn && !viewBtn.__wired) {
-    viewBtn.addEventListener('click', () => {
-      if (!currentPortfolio || !(currentPortfolio.assets || []).length) { showWarning('No asset in this portfolio'); return; }
-      openPortfolioAssetViewer(currentPortfolio, 0);
-    });
-    viewBtn.__wired = true;
-  }
-  const editBtn = document.getElementById('portfolio-edit');
-  if (editBtn && !editBtn.__wired) {
-    editBtn.addEventListener('click', () => { if (currentPortfolio) openPortfolioEditModal(currentPortfolio); });
-    editBtn.__wired = true;
-  }
-  const deleteBtn = document.getElementById('portfolio-delete');
-  if (deleteBtn && !deleteBtn.__wired) {
-    deleteBtn.addEventListener('click', async () => {
-      if (!currentPortfolio) return;
-      if (!confirm(`Delete portfolio "${currentPortfolio.name}" and all its assets?`)) return;
-      try {
-        await api.deletePortfolio(currentPortfolio.id);
-        portfoliosLoaded = false;
-        showPortfoliosListView();
-        await loadPortfolios({ force: true });
-      } catch (e) { console.warn('deletePortfolio failed', e); showError('Failed to delete portfolio'); }
-    });
-    deleteBtn.__wired = true;
-  }
+  wireOnce(document.getElementById('refresh-portfolios'), 'click', () => loadPortfolios({ force: true }));
+  wireOnce(document.getElementById('create-portfolio'), 'click', () => openPortfolioCreateModal());
+  wireOnce(document.getElementById('portfolio-back'), 'click', () => {
+    showPortfoliosListView();
+    loadPortfolios({ force: true });
+  });
+  wireOnce(document.getElementById('portfolio-view'), 'click', () => {
+    if (!currentPortfolio || !(currentPortfolio.assets || []).length) {
+      showWarning('No asset in this portfolio');
+      return;
+    }
+    openPortfolioAssetViewer(currentPortfolio, 0);
+  });
+  wireOnce(document.getElementById('portfolio-edit'), 'click', () => {
+    if (currentPortfolio) openPortfolioEditModal(currentPortfolio);
+  });
+  wireOnce(document.getElementById('portfolio-delete'), 'click', async () => {
+    if (!currentPortfolio) return;
+    if (!confirm(`Delete portfolio "${currentPortfolio.name}" and all its assets?`)) return;
+    try {
+      await api.deletePortfolio(currentPortfolio.id);
+      portfoliosLoaded = false;
+      showPortfoliosListView();
+      await loadPortfolios({ force: true });
+    } catch (e) {
+      console.warn('deletePortfolio failed', e);
+      showError('Failed to delete portfolio');
+    }
+  });
 }
 
 function initEventsTab() {
-  const refreshBtn = document.getElementById('refresh-events');
-  if (refreshBtn && !refreshBtn.__wired) {
-    refreshBtn.addEventListener('click', () => loadEvents({ force: true }));
-    refreshBtn.__wired = true;
-  }
-  const createBtn = document.getElementById('create-event');
-  if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openEventCreateModal()); createBtn.__wired = true; }
+  wireOnce(document.getElementById('refresh-events'), 'click', () => loadEvents({ force: true }));
+  wireOnce(document.getElementById('create-event'), 'click', () => openEventCreateModal());
   // Wire scroll persistence once
   const sec = document.getElementById('tab-events');
   if (sec && !sec.__scrollWired) {
@@ -3306,16 +2982,13 @@ function applyMosaicSize(sz) {
 function initMosaicSize() {
   applyMosaicSize(getMosaicStoredSize());
   const ctl = document.getElementById('mosaic-size-ctl');
-  if (ctl && !ctl.__wired) {
-    ctl.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const sz = btn.getAttribute('data-size') || 'max';
-        setMosaicStoredSize(sz);
-        applyMosaicSize(sz);
-      });
-    });
-    ctl.__wired = true;
-  }
+  wireOnce(ctl, 'click', (e) => {
+    const btn = e.target.closest('button[data-size]');
+    if (!btn || !ctl.contains(btn)) return;
+    const sz = btn.getAttribute('data-size') || 'max';
+    setMosaicStoredSize(sz);
+    applyMosaicSize(sz);
+  });
 }
 
 // Logarithmic scale mapping for timeline
@@ -3917,7 +3590,7 @@ function renderPersonsList() {
     const meta = metaParts.join(' • ');
     li.innerHTML = `
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="person-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">${p.chosenFaceId ? 'Loading…' : 'No image'}</div>
+        <div class="person-thumb list-thumb list-thumb-sm">${p.chosenFaceId ? 'Loading…' : 'No image'}</div>
         <div style="flex:1;">
           <h4 style="margin:0 0 4px 0;">${p.firstName} ${p.lastName}</h4>
           <div style="font-size:12px;color:#555">${meta}</div>
@@ -4224,14 +3897,11 @@ async function openPersonFacesView(person) {
   `;
   tab.appendChild(view);
   const backBtn = view.querySelector('button.back');
-  if (backBtn && !backBtn.__wired) {
-    backBtn.addEventListener('click', () => {
-      try { view.remove(); } catch {}
-      if (actions) actions.style.display = '';
-      if (list) { list.style.display = ''; try { list.scrollIntoView({ block: 'nearest' }); } catch {} }
-    });
-    backBtn.__wired = true;
-  }
+  wireOnce(backBtn, 'click', () => {
+    try { view.remove(); } catch {}
+    if (actions) actions.style.display = '';
+    if (list) { list.style.display = ''; try { list.scrollIntoView({ block: 'nearest' }); } catch {} }
+  });
   // Load faces
   let faces = [];
   try {
@@ -4274,18 +3944,14 @@ async function openPersonFacesView(person) {
   const initialSize = getStoredSize();
   applySizeClass(initialSize);
   // Wire size control buttons
-  sizeBtns.forEach(btn => {
-    if (btn.__wired) return;
-    btn.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      const sz = btn.getAttribute('data-size') || 'max';
-      setStoredSize(sz);
-      applySizeClass(sz);
-      // No need to re-render; CSS grid reacts to class change. Keep header states in sync just in case.
-      try { if (typeof view.__updateActions === 'function') view.__updateActions(); } catch {}
-    });
-    btn.__wired = true;
-  });
+  sizeBtns.forEach(btn => wireOnce(btn, 'click', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const sz = btn.getAttribute('data-size') || 'max';
+    setStoredSize(sz);
+    applySizeClass(sz);
+    // No need to re-render; CSS grid reacts to class change. Keep header states in sync just in case.
+    try { if (typeof view.__updateActions === 'function') view.__updateActions(); } catch {}
+  }));
 
   // Helper: refetch the latest faces for this person and refresh UI
   async function refetchFacesAndRefresh({ keepMode = true } = {}) {
@@ -4403,15 +4069,12 @@ async function openPersonFacesView(person) {
   // Expose a safe refresh hook for child handlers (e.g., inside grid renderers)
   view.__refreshGrid = refreshGrid;
 
-  if (toggleBtn && !toggleBtn.__wired) {
-    toggleBtn.addEventListener('click', () => {
-      if (toggleBtn.disabled) return;
-      view.__mode = (view.__mode === 'validate') ? 'identified' : 'validate';
-      view.__selected = new Set();
-      refreshGrid();
-    });
-    toggleBtn.__wired = true;
-  }
+  wireOnce(toggleBtn, 'click', () => {
+    if (toggleBtn.disabled) return;
+    view.__mode = (view.__mode === 'validate') ? 'identified' : 'validate';
+    view.__selected = new Set();
+    refreshGrid();
+  });
 
   async function confirmFaces(faceIds) {
     if (!faceIds || faceIds.length === 0) return;
@@ -4437,32 +4100,26 @@ async function openPersonFacesView(person) {
     }
   }
 
-  if (confirmAllBtn && !confirmAllBtn.__wired) {
-    confirmAllBtn.addEventListener('click', () => {
-      const gridFaces = (view.__mode === 'validate')
-        ? (view.__allFaces||[]).filter(f => !f.identifiedPersonId && idEq(f.inferredIdentifiedPersonId, person.id))
-        : [];
-      const ids = gridFaces.map(f => f.faceId || f.id);
-      if (ids.length === 0) return;
-      const pname = `${person.firstName || ''} ${person.lastName || ''}`.trim() || 'this person';
-      const msg = `Confirm all ${ids.length} inferred face(s) for ${pname}?`;
-      if (!confirm(msg)) return;
-      confirmFaces(ids);
-    });
-    confirmAllBtn.__wired = true;
-  }
+  wireOnce(confirmAllBtn, 'click', () => {
+    const gridFaces = (view.__mode === 'validate')
+      ? (view.__allFaces||[]).filter(f => !f.identifiedPersonId && idEq(f.inferredIdentifiedPersonId, person.id))
+      : [];
+    const ids = gridFaces.map(f => f.faceId || f.id);
+    if (ids.length === 0) return;
+    const pname = `${person.firstName || ''} ${person.lastName || ''}`.trim() || 'this person';
+    const msg = `Confirm all ${ids.length} inferred face(s) for ${pname}?`;
+    if (!confirm(msg)) return;
+    confirmFaces(ids);
+  });
 
-  if (confirmSelBtn && !confirmSelBtn.__wired) {
-    confirmSelBtn.addEventListener('click', () => {
-      const ids = Array.from(view.__selected || []);
-      if (ids.length === 0) return;
-      const pname = `${person.firstName || ''} ${person.lastName || ''}`.trim() || 'this person';
-      const msg = `Confirm ${ids.length} selected face(s) for ${pname}?`;
-      if (!confirm(msg)) return;
-      confirmFaces(ids);
-    });
-    confirmSelBtn.__wired = true;
-  }
+  wireOnce(confirmSelBtn, 'click', () => {
+    const ids = Array.from(view.__selected || []);
+    if (ids.length === 0) return;
+    const pname = `${person.firstName || ''} ${person.lastName || ''}`.trim() || 'this person';
+    const msg = `Confirm ${ids.length} selected face(s) for ${pname}?`;
+    if (!confirm(msg)) return;
+    confirmFaces(ids);
+  });
 
   // First render (default identified-only)
   refreshGrid();
@@ -4835,63 +4492,45 @@ function renderPersonFacesGrid(view, person, faces, opts) {
 }
 
 function openPersonCreateModal() {
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Create person</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div>
-            <label>First name</label>
-            <input type="text" id="pc-first" value="">
-            <label style="margin-top:8px">Last name</label>
-            <input type="text" id="pc-last" value="">
-            <label style="margin-top:8px">Birthdate</label>
-            <input type="date" id="pc-birth" value="">
-            <label style="margin-top:8px">Email</label>
-            <input type="email" id="pc-email" value="">
-            <label style="margin-top:8px">Description</label>
-            <input type="text" id="pc-desc" value="">
-          </div>
+  openModal({
+    title: 'Create person',
+    saveLabel: 'Create',
+    focusSelector: '#pc-first',
+    body: `
+      <div class="row">
+        <div>
+          <label>First name</label>
+          <input type="text" id="pc-first" value="">
+          <label class="form-label">Last name</label>
+          <input type="text" id="pc-last" value="">
+          <label class="form-label">Birthdate</label>
+          <input type="date" id="pc-birth" value="">
+          <label class="form-label">Email</label>
+          <input type="email" id="pc-email" value="">
+          <label class="form-label">Description</label>
+          <input type="text" id="pc-desc" value="">
         </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(()=>{ (modal.querySelector('#pc-first')||modal).focus(); }, 0);
-
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const firstName = modal.querySelector('#pc-first').value.trim();
-    const lastName  = modal.querySelector('#pc-last').value.trim();
-    const birth     = modal.querySelector('#pc-birth').value; // yyyy-mm-dd or ''
-    const email     = modal.querySelector('#pc-email').value.trim();
-    const desc      = modal.querySelector('#pc-desc').value.trim();
-    if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
-    const body = { firstName, lastName };
-    if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
-    if (email) body.email = email;
-    if (desc) body.description = desc;
-    try {
-      await api.createPerson(body);
-      close();
-      // Invalidate Viewer persons cache so newly created person appears in the Viewer face edit modal without full page reload
-      try { personsCache = null; } catch {}
-      await loadPersons();
-    } catch (e) {
-      showError('Failed to create person');
-    }
+      </div>`,
+    onSave: async ({ modal }) => {
+      const firstName = modal.querySelector('#pc-first').value.trim();
+      const lastName  = modal.querySelector('#pc-last').value.trim();
+      const birth     = modal.querySelector('#pc-birth').value;
+      const email     = modal.querySelector('#pc-email').value.trim();
+      const desc      = modal.querySelector('#pc-desc').value.trim();
+      if (!firstName || !lastName) { showWarning('First name and Last name are required'); return false; }
+      const body = { firstName, lastName };
+      body.birthDate = birth ? `${birth}T00:00:00Z` : null;
+      if (email) body.email = email;
+      if (desc) body.description = desc;
+      try {
+        await api.createPerson(body);
+        try { personsCache = null; } catch {}
+        await loadPersons();
+      } catch (e) {
+        showError('Failed to create person');
+        return false;
+      }
+    },
   });
 }
 
@@ -4920,83 +4559,66 @@ function refreshPersonTile(updated) {
 
 function openPersonEditModal(person) {
   if (!person) return;
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
   const birthVal = person.birthDate ? new Date(person.birthDate) : null;
   const toDateInput = (d) => { try { if (!d) return ''; const yyyy=d.getFullYear(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${yyyy}-${mm}-${dd}`; } catch { return ''; } };
   const faceUrl = person.chosenFaceId ? api.faceImageUrl(person.chosenFaceId) : null;
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1" style="width:600px;max-width:95vw">
-      <header>
-        <div>Edit person</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row" style="display:flex;gap:16px">
-          <div style="flex:1">
-            <label>First name</label>
-            <input type="text" id="pe-first" value="${(person.firstName||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Last name</label>
-            <input type="text" id="pe-last" value="${(person.lastName||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Birthdate</label>
-            <input type="date" id="pe-birth" value="${toDateInput(birthVal)}">
-            <label style="margin-top:8px">Email</label>
-            <input type="email" id="pe-email" value="${(person.email||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Description</label>
-            <input type="text" id="pe-desc" value="${(person.description||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <input type="hidden" id="pe-chosen" value="${(person.chosenFaceId||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-          </div>
-          <div style="width:200px;display:flex;flex-direction:column;align-items:center">
-            ${faceUrl ? `<img src="${faceUrl}" style="width:100%;border-radius:4px;object-fit:contain;max-height:300px;background:#eee">` : '<div style="width:100%;height:150px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;border-radius:4px">No face</div>'}
-          </div>
+  openModal({
+    title: 'Edit person',
+    modalAttrs: 'width:600px;max-width:95vw',
+    focusSelector: '#pe-first',
+    body: `
+      <div class="row" style="display:flex;gap:16px">
+        <div style="flex:1">
+          <label>First name</label>
+          <input type="text" id="pe-first" value="${escapeHtml(person.firstName)}">
+          <label class="form-label">Last name</label>
+          <input type="text" id="pe-last" value="${escapeHtml(person.lastName)}">
+          <label class="form-label">Birthdate</label>
+          <input type="date" id="pe-birth" value="${toDateInput(birthVal)}">
+          <label class="form-label">Email</label>
+          <input type="email" id="pe-email" value="${escapeHtml(person.email)}">
+          <label class="form-label">Description</label>
+          <input type="text" id="pe-desc" value="${escapeHtml(person.description)}">
+          <input type="hidden" id="pe-chosen" value="${escapeHtml(person.chosenFaceId)}">
         </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(()=>{ (modal.querySelector('#pe-first')||modal).focus(); }, 0);
-
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const firstName = modal.querySelector('#pe-first').value.trim();
-    const lastName  = modal.querySelector('#pe-last').value.trim();
-    const birth     = modal.querySelector('#pe-birth').value;
-    const email     = modal.querySelector('#pe-email').value.trim();
-    const desc      = modal.querySelector('#pe-desc').value.trim();
-    const chosen    = modal.querySelector('#pe-chosen').value.trim();
-    if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
-    const body = { firstName, lastName };
-    body.birthDate = birth ? `${birth}T00:00:00Z` : null;
-    if (email) body.email = email; else body.email = null;
-    if (desc) body.description = desc; else body.description = null;
-    if (chosen) body.chosenFaceId = chosen; else body.chosenFaceId = null;
-    try {
-      await api.updatePerson(person.id, body);
-      close();
-      // Invalidate Viewer persons cache so edits are reflected in Viewer face edit modal (typeahead)
-      try { personsCache = null; } catch {}
-      // Refetch person list to get canonical data and refresh tile
-      const persons = await api.listPersons();
-      const updated = persons.find(x => x.id === person.id) || { ...person, ...body };
-      refreshPersonTile(updated);
-    } catch (e) { showError('Failed to update person'); }
+        <div style="width:200px;display:flex;flex-direction:column;align-items:center">
+          ${faceUrl ? `<img src="${faceUrl}" style="width:100%;border-radius:4px;object-fit:contain;max-height:300px;background:#eee">` : '<div style="width:100%;height:150px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;border-radius:4px">No face</div>'}
+        </div>
+      </div>`,
+    onSave: async ({ modal }) => {
+      const firstName = modal.querySelector('#pe-first').value.trim();
+      const lastName  = modal.querySelector('#pe-last').value.trim();
+      const birth     = modal.querySelector('#pe-birth').value;
+      const email     = modal.querySelector('#pe-email').value.trim();
+      const desc      = modal.querySelector('#pe-desc').value.trim();
+      const chosen    = modal.querySelector('#pe-chosen').value.trim();
+      if (!firstName || !lastName) { showWarning('First name and Last name are required'); return false; }
+      const body = { firstName, lastName };
+      body.birthDate = birth ? `${birth}T00:00:00Z` : null;
+      body.email = email || null;
+      body.description = desc || null;
+      body.chosenFaceId = chosen || null;
+      try {
+        await api.updatePerson(person.id, body);
+        try { personsCache = null; } catch {}
+        const persons = await api.listPersons();
+        const updated = persons.find(x => x.id === person.id) || { ...person, ...body };
+        refreshPersonTile(updated);
+      } catch (e) {
+        showError('Failed to update person');
+        return false;
+      }
+    },
   });
 }
 
 function initPersonsTab() {
   const refreshBtn = document.getElementById('refresh-persons');
-  if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadPersons); refreshBtn.__wired = true; }
+  wireOnce(refreshBtn, 'click', loadPersons);
   const createBtn = document.getElementById('create-person');
-  if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openPersonCreateModal()); createBtn.__wired = true; }
+  wireOnce(createBtn, 'click', () => openPersonCreateModal());
   const allInferredBtn = document.getElementById('all-inferred-faces');
-  if (allInferredBtn && !allInferredBtn.__wired) { allInferredBtn.addEventListener('click', () => openAllInferredFacesView()); allInferredBtn.__wired = true; }
+  wireOnce(allInferredBtn, 'click', () => openAllInferredFacesView());
   const filterInput = document.getElementById('persons-filter');
   const resetBtn = document.getElementById('reset-persons-filter');
   // Restore filter from session storage (persist across reloads in the session)
@@ -5009,24 +4631,18 @@ function initPersonsTab() {
     }
   } catch {}
 
-  if (filterInput && !filterInput.__wired) {
-    filterInput.addEventListener('input', (e) => {
-      personsFilter = String(e.target.value || '').trim();
-      try { sessionStorage.setItem(ssKey, personsFilter); } catch {}
-      renderPersonsList();
-    });
-    filterInput.__wired = true;
-  }
-  if (resetBtn && !resetBtn.__wired) {
-    resetBtn.addEventListener('click', () => {
-      personsFilter = '';
-      if (filterInput) filterInput.value = '';
-      try { sessionStorage.removeItem(ssKey); } catch {}
-      renderPersonsList();
-      try { if (filterInput) filterInput.focus(); } catch {}
-    });
-    resetBtn.__wired = true;
-  }
+  wireOnce(filterInput, 'input', (e) => {
+    personsFilter = String(e.target.value || '').trim();
+    try { sessionStorage.setItem(ssKey, personsFilter); } catch {}
+    renderPersonsList();
+  });
+  wireOnce(resetBtn, 'click', () => {
+    personsFilter = '';
+    if (filterInput) filterInput.value = '';
+    try { sessionStorage.removeItem(ssKey); } catch {}
+    renderPersonsList();
+    try { if (filterInput) filterInput.focus(); } catch {}
+  });
 }
 
 // Owners
@@ -5043,10 +4659,6 @@ function refreshOwnerTile(updated) {
 
 function openOwnerEditModal(owner) {
   if (!owner) { showWarning('No owner'); return; }
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  const firstVal = owner.firstName || '';
-  const lastVal = owner.lastName || '';
   const birthVal = owner.birthDate ? new Date(owner.birthDate) : null;
   const toDateInput = (d) => {
     try {
@@ -5057,123 +4669,87 @@ function openOwnerEditModal(owner) {
       return `${yyyy}-${mm}-${dd}`;
     } catch { return ''; }
   };
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Edit owner</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div>
-            <label>First name</label>
-            <input type="text" id="ow-first" value="${(firstVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Last name</label>
-            <input type="text" id="ow-last" value="${(lastVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Birthdate</label>
-            <input type="date" id="ow-birth" value="${toDateInput(birthVal)}">
-          </div>
+  openModal({
+    title: 'Edit owner',
+    focusSelector: '#ow-first',
+    body: `
+      <div class="row">
+        <div>
+          <label>First name</label>
+          <input type="text" id="ow-first" value="${escapeHtml(owner.firstName)}">
+          <label class="form-label">Last name</label>
+          <input type="text" id="ow-last" value="${escapeHtml(owner.lastName)}">
+          <label class="form-label">Birthdate</label>
+          <input type="date" id="ow-birth" value="${toDateInput(birthVal)}">
         </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(()=>{ (modal.querySelector('#ow-first')||modal).focus(); }, 0);
-
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const firstName = modal.querySelector('#ow-first').value.trim();
-    const lastName = modal.querySelector('#ow-last').value.trim();
-    const birth = modal.querySelector('#ow-birth').value; // yyyy-mm-dd or ''
-    const body = { firstName, lastName };
-    if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
-    try {
-      await api.updateOwner(owner.id, body);
-      close();
-      // refetch to get canonical data
-      const owners = await api.listOwners();
-      const updated = owners.find(x => x.id === owner.id) || { ...owner, firstName, lastName, birthDate: birth || null };
-      refreshOwnerTile(updated);
-      // Invalidate owners map cache used by Stores tab and refresh the owner select options
-      ownersMapCache = null;
-      const ownerSelect = document.getElementById('store-owner');
-      if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
-    } catch (e) {
-      showError('Failed to update owner');
-    }
+      </div>`,
+    onSave: async ({ modal }) => {
+      const firstName = modal.querySelector('#ow-first').value.trim();
+      const lastName = modal.querySelector('#ow-last').value.trim();
+      const birth = modal.querySelector('#ow-birth').value;
+      const body = { firstName, lastName };
+      body.birthDate = birth ? `${birth}T00:00:00Z` : null;
+      try {
+        await api.updateOwner(owner.id, body);
+        const owners = await api.listOwners();
+        const updated = owners.find(x => x.id === owner.id) || { ...owner, firstName, lastName, birthDate: birth || null };
+        refreshOwnerTile(updated);
+        ownersMapCache = null;
+        const ownerSelect = document.getElementById('store-owner');
+        if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
+      } catch (e) {
+        showError('Failed to update owner');
+        return false;
+      }
+    },
   });
 }
 
 function openOwnerCreateModal() {
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Create owner</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div>
-            <label>First name</label>
-            <input type="text" id="owc-first" value="">
-            <label style="margin-top:8px">Last name</label>
-            <input type="text" id="owc-last" value="">
-            <label style="margin-top:8px">Birthdate</label>
-            <input type="date" id="owc-birth" value="">
-          </div>
+  openModal({
+    title: 'Create owner',
+    saveLabel: 'Create',
+    focusSelector: '#owc-first',
+    body: `
+      <div class="row">
+        <div>
+          <label>First name</label>
+          <input type="text" id="owc-first" value="">
+          <label class="form-label">Last name</label>
+          <input type="text" id="owc-last" value="">
+          <label class="form-label">Birthdate</label>
+          <input type="date" id="owc-birth" value="">
         </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(()=>{ (modal.querySelector('#owc-first')||modal).focus(); }, 0);
-
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const firstName = modal.querySelector('#owc-first').value.trim();
-    const lastName = modal.querySelector('#owc-last').value.trim();
-    const birth = modal.querySelector('#owc-birth').value; // yyyy-mm-dd or ''
-    if (!firstName || !lastName) { showWarning('First name and Last name are required'); return; }
-    const body = { firstName, lastName };
-    if (!birth) body.birthDate = null; else body.birthDate = `${birth}T00:00:00Z`;
-    try {
-      await api.createOwner(body);
-      close();
-      // Refresh owners list and stores owner select
-      await loadOwners();
-      ownersMapCache = null;
+      </div>`,
+    onSave: async ({ modal }) => {
+      const firstName = modal.querySelector('#owc-first').value.trim();
+      const lastName = modal.querySelector('#owc-last').value.trim();
+      const birth = modal.querySelector('#owc-birth').value;
+      if (!firstName || !lastName) { showWarning('First name and Last name are required'); return false; }
+      const body = { firstName, lastName };
+      body.birthDate = birth ? `${birth}T00:00:00Z` : null;
       try {
-        const owners = await api.listOwners();
-        const ownerSelect = document.getElementById('store-owner');
-        if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
-      } catch {}
-    } catch (e) {
-      showError('Failed to create owner');
-    }
+        await api.createOwner(body);
+        await loadOwners();
+        ownersMapCache = null;
+        try {
+          const owners = await api.listOwners();
+          const ownerSelect = document.getElementById('store-owner');
+          if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
+        } catch {}
+      } catch (e) {
+        showError('Failed to create owner');
+        return false;
+      }
+    },
   });
 }
 
 function initOwnersTab() {
   const refreshBtn = document.getElementById('refresh-owners');
-  if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadOwners); refreshBtn.__wired = true; }
+  wireOnce(refreshBtn, 'click', loadOwners);
   const createBtn = document.getElementById('create-owner');
-  if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openOwnerCreateModal()); createBtn.__wired = true; }
+  wireOnce(createBtn, 'click', () => openOwnerCreateModal());
 }
 
 async function loadOwners() {
@@ -5184,7 +4760,6 @@ async function loadOwners() {
     if (ownerSelect) ownerSelect.innerHTML = owners.map(o => `<option value="${o.id}">${o.firstName} ${o.lastName}</option>`).join('');
 
     // Lazy load thumbnails per owner when needed (similar to Events)
-    const stateCache = new Map(); // originalId -> Promise<State>
     const limit = 4; // small concurrency for state->image resolution
     let inFlight = 0;
     const pending = [];
@@ -5194,15 +4769,10 @@ async function loadOwners() {
       inFlight++;
       try {
         if (!owner.originalId) return;
-        let p = stateCache.get(owner.originalId);
-        if (!p) {
-          p = api.getState(owner.originalId).catch(err => { stateCache.delete(owner.originalId); throw err; });
-          stateCache.set(owner.originalId, p);
-        }
-        const st = await p;
-        if (!st || !st.mediaAccessKey) return;
+        const key = await resolveMediaAccessKey(api, owner.originalId);
+        if (!key) return;
         const img = new Image();
-        img.src = api.mediaMiniatureUrl(st.mediaAccessKey);
+        img.src = api.mediaMiniatureUrl(key);
         img.alt = `${owner.firstName} ${owner.lastName}`;
         img.loading = 'lazy';
         img.decoding = 'async';
@@ -5248,7 +4818,7 @@ async function loadOwners() {
       const birthStr = o.birthDate ? new Date(o.birthDate).toLocaleDateString() : '';
       li.innerHTML = `
         <div style="display: flex; align-items: center; gap: 12px;">
-          <div class="owner-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">No image</div>
+          <div class="owner-thumb list-thumb list-thumb-sm">No image</div>
           <div style="flex: 1;">
             <h4 style="margin: 0 0 4px 0;">${o.firstName} ${o.lastName}</h4>
             <div style="font-size:12px;color:#555">id: ${o.id}${birthStr ? ' • birth: '+birthStr : ''}</div>
@@ -5278,7 +4848,6 @@ async function loadStores() {
     const [stores, ownersMap] = await Promise.all([api.listStores(), getOwnersMap()]);
     
     // Lazy load thumbnails per store using owner originalId when needed
-    const stateCache = new Map(); // originalId -> Promise<State>
     const ownerCache = new Map(); // ownerId -> Promise<Owner>
     const limit = 4; // small concurrency for state->image resolution
     let inFlight = 0;
@@ -5296,17 +4865,12 @@ async function loadStores() {
         }
         const owner = await ownerPromise;
         if (!owner || !owner.originalId) return;
-        
-        let statePromise = stateCache.get(owner.originalId);
-        if (!statePromise) {
-          statePromise = api.getState(owner.originalId).catch(err => { stateCache.delete(owner.originalId); throw err; });
-          stateCache.set(owner.originalId, statePromise);
-        }
-        const st = await statePromise;
-        if (!st || !st.mediaAccessKey) return;
-        
+
+        const key = await resolveMediaAccessKey(api, owner.originalId);
+        if (!key) return;
+
         const img = new Image();
-        img.src = api.mediaMiniatureUrl(st.mediaAccessKey);
+        img.src = api.mediaMiniatureUrl(key);
         img.alt = `${store.name || store.baseDirectory}`;
         img.loading = 'lazy';
         img.decoding = 'async';
@@ -5353,7 +4917,7 @@ async function loadStores() {
       const ownerName = ownersMap.get(s.ownerId) || s.ownerName || s.ownerId || '';
       li.innerHTML = `
         <div style="display: flex; align-items: center; gap: 12px;">
-          <div class="store-thumb" style="width:60px;height:60px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#9ca3af;font-size:10px;flex-shrink:0;">No image</div>
+          <div class="store-thumb list-thumb list-thumb-sm">No image</div>
           <div style="flex: 1;">
             <h4 style="margin: 0 0 4px 0;">${title}</h4>
             <div style="font-size:12px;color:#555">id: ${s.id} • owner: ${ownerName}</div>
@@ -5395,161 +4959,120 @@ function refreshStoreTile(updated) {
 
 function openStoreEditModal(store) {
   if (!store) { showWarning('No store'); return; }
-  if (document.querySelector('.modal-overlay')) return;
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
-  const nameVal = store.name || '';
-  const baseDirVal = store.baseDirectory || '';
-  const includeVal = store.includeMask || '';
-  const ignoreVal = store.ignoreMask || '';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Edit store</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div>
-            <label>Name</label>
-            <input type="text" id="st-name" value="${(nameVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Base directory</label>
-            <input type="text" id="st-basedir" placeholder="/path/to/base/directory" value="${(baseDirVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Include mask</label>
-            <input type="text" id="st-include" value="${(includeVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-            <label style="margin-top:8px">Ignore mask</label>
-            <input type="text" id="st-ignore" value="${(ignoreVal||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
-          </div>
+  openModal({
+    title: 'Edit store',
+    focusSelector: '#st-name',
+    body: `
+      <div class="row">
+        <div>
+          <label>Name</label>
+          <input type="text" id="st-name" value="${escapeHtml(store.name)}">
+          <label class="form-label">Base directory</label>
+          <input type="text" id="st-basedir" placeholder="/path/to/base/directory" value="${escapeHtml(store.baseDirectory)}">
+          <label class="form-label">Include mask</label>
+          <input type="text" id="st-include" value="${escapeHtml(store.includeMask)}">
+          <label class="form-label">Ignore mask</label>
+          <input type="text" id="st-ignore" value="${escapeHtml(store.ignoreMask)}">
         </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Save</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(()=>{ (modal.querySelector('#st-name')||modal).focus(); }, 0);
-
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const name = modal.querySelector('#st-name').value;
-    const baseDirectory = modal.querySelector('#st-basedir').value;
-    const includeMask = modal.querySelector('#st-include').value;
-    const ignoreMask = modal.querySelector('#st-ignore').value;
-    const body = { name, baseDirectory, includeMask, ignoreMask };
-    try {
-      await api.updateStore(store.id, body);
-      close();
-      // refetch this store from list to get latest values
-      const stores = await api.listStores();
-      const updated = stores.find(x => x.id === store.id) || { ...store, name, baseDirectory, includeMask, ignoreMask };
-      refreshStoreTile(updated);
-    } catch (e) {
-      showError('Failed to update store');
-    }
+      </div>`,
+    onSave: async ({ modal }) => {
+      const name = modal.querySelector('#st-name').value;
+      const baseDirectory = modal.querySelector('#st-basedir').value;
+      const includeMask = modal.querySelector('#st-include').value;
+      const ignoreMask = modal.querySelector('#st-ignore').value;
+      const body = { name, baseDirectory, includeMask, ignoreMask };
+      try {
+        await api.updateStore(store.id, body);
+        const stores = await api.listStores();
+        const updated = stores.find(x => x.id === store.id) || { ...store, name, baseDirectory, includeMask, ignoreMask };
+        refreshStoreTile(updated);
+      } catch (e) {
+        showError('Failed to update store');
+        return false;
+      }
+    },
   });
 }
 
 async function openStoreCreateModal() {
-  if (document.querySelector('.modal-overlay')) return;
-  // Render modal immediately; owners will be fetched asynchronously to avoid UI freeze
   let ownerNames = [];
-  const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
   const datalistId = 'stc-owner-list';
-  overlay.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" tabindex="-1">
-      <header>
-        <div>Create store</div>
-        <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div>
-            <label>Name</label>
-            <input type="text" id="stc-name" value="">
-            <label style="margin-top:8px">Base directory</label>
-            <input type="text" id="stc-basedir" value="" placeholder="/path/to/photos" required>
-            <label style="margin-top:8px">Owner</label>
-            <input type="text" id="stc-owner" list="${datalistId}" placeholder="Loading owners…" autocomplete="off" disabled>
-            <datalist id="${datalistId}"></datalist>
-            <label style="margin-top:8px">Include mask</label>
-            <input type="text" id="stc-include" value="">
-            <label style="margin-top:8px">Ignore mask</label>
-            <input type="text" id="stc-ignore" value="">
-          </div>
-        </div>
-      </div>
-      <footer>
-        <button type="button" class="cancel">Cancel</button>
-        <button type="button" class="save" style="background:#2563eb;color:#fff;border:1px solid #1d4ed8;border-radius:6px;padding:6px 10px;">Create</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(overlay);
-  const modal = overlay.querySelector('.modal');
-  const close = () => { overlay.remove(); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('button.close')?.addEventListener('click', close);
-  overlay.querySelector('button.cancel')?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); close(); });
-  setTimeout(()=>{ (modal.querySelector('#stc-name')||modal).focus(); }, 0);
-
-  // Fetch owners asynchronously and populate the datalist
-  (async () => {
-    try {
-      const owners = await api.listOwners();
-      ownerNames = owners.map(o => ({ id: o.id, name: `${o.firstName || ''} ${o.lastName || ''}`.trim() }));
-      const optionsHtml = ownerNames.map(o => `<option value="${o.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}"></option>`).join('');
-      const dl = overlay.querySelector(`#${datalistId}`);
-      if (dl) dl.innerHTML = optionsHtml;
-      const ownerInput = overlay.querySelector('#stc-owner');
-      if (ownerInput) {
-        ownerInput.disabled = false;
-        ownerInput.placeholder = 'Type owner name…';
-      }
-    } catch (e) {
-      const ownerInput = overlay.querySelector('#stc-owner');
-      if (ownerInput) {
-        ownerInput.disabled = true;
-        ownerInput.placeholder = 'Failed to load owners';
-      }
-    }
-  })();
 
   function resolveOwnerId(name) {
     const n = (name||'').trim(); if (!n) return null;
     const match = ownerNames.find(o => o.name.toLowerCase() === n.toLowerCase());
     if (match) return match.id;
-    // try startsWith unique
     const candidates = ownerNames.filter(o => o.name.toLowerCase().startsWith(n.toLowerCase()));
     if (candidates.length === 1) return candidates[0].id;
     return null;
   }
 
-  overlay.querySelector('button.save')?.addEventListener('click', async () => {
-    const name = modal.querySelector('#stc-name').value.trim();
-    const baseDirectory = modal.querySelector('#stc-basedir').value.trim();
-    const ownerName = modal.querySelector('#stc-owner').value.trim();
-    const includeMask = modal.querySelector('#stc-include').value.trim();
-    const ignoreMask = modal.querySelector('#stc-ignore').value.trim();
-    if (!baseDirectory) { showWarning('Base directory is required'); return; }
-    const ownerId = resolveOwnerId(ownerName);
-    if (!ownerId) { showWarning('Please select a valid owner by name'); return; }
-    const body = { name: name || null, ownerId, baseDirectory, includeMask: includeMask || null, ignoreMask: ignoreMask || null };
-    try {
-      await api.createStore(body);
-      close();
-      await loadStores();
-    } catch(e) {
-      showError('Failed to create store');
-    }
+  const handle = openModal({
+    title: 'Create store',
+    saveLabel: 'Create',
+    focusSelector: '#stc-name',
+    body: `
+      <div class="row">
+        <div>
+          <label>Name</label>
+          <input type="text" id="stc-name" value="">
+          <label class="form-label">Base directory</label>
+          <input type="text" id="stc-basedir" value="" placeholder="/path/to/photos" required>
+          <label class="form-label">Owner</label>
+          <input type="text" id="stc-owner" list="${datalistId}" placeholder="Loading owners…" autocomplete="off" disabled>
+          <datalist id="${datalistId}"></datalist>
+          <label class="form-label">Include mask</label>
+          <input type="text" id="stc-include" value="">
+          <label class="form-label">Ignore mask</label>
+          <input type="text" id="stc-ignore" value="">
+        </div>
+      </div>`,
+    onSave: async ({ modal }) => {
+      const name = modal.querySelector('#stc-name').value.trim();
+      const baseDirectory = modal.querySelector('#stc-basedir').value.trim();
+      const ownerName = modal.querySelector('#stc-owner').value.trim();
+      const includeMask = modal.querySelector('#stc-include').value.trim();
+      const ignoreMask = modal.querySelector('#stc-ignore').value.trim();
+      if (!baseDirectory) { showWarning('Base directory is required'); return false; }
+      const ownerId = resolveOwnerId(ownerName);
+      if (!ownerId) { showWarning('Please select a valid owner by name'); return false; }
+      const body = { name: name || null, ownerId, baseDirectory, includeMask: includeMask || null, ignoreMask: ignoreMask || null };
+      try {
+        await api.createStore(body);
+        await loadStores();
+      } catch(e) {
+        showError('Failed to create store');
+        return false;
+      }
+    },
   });
+  if (!handle) return;
+  const { modal } = handle;
+
+  // Fetch owners asynchronously and populate the datalist
+  try {
+    const owners = await api.listOwners();
+    ownerNames = owners.map(o => ({ id: o.id, name: `${o.firstName || ''} ${o.lastName || ''}`.trim() }));
+    const optionsHtml = ownerNames.map(o => `<option value="${escapeHtml(o.name)}"></option>`).join('');
+    const dl = modal.querySelector(`#${datalistId}`);
+    if (dl) dl.innerHTML = optionsHtml;
+    const ownerInput = modal.querySelector('#stc-owner');
+    if (ownerInput) {
+      ownerInput.disabled = false;
+      ownerInput.placeholder = 'Type owner name…';
+    }
+  } catch (e) {
+    const ownerInput = modal.querySelector('#stc-owner');
+    if (ownerInput) {
+      ownerInput.disabled = true;
+      ownerInput.placeholder = 'Failed to load owners';
+    }
+  }
 }
 
 function initStoresTab() {
-  const refreshBtn = document.getElementById('refresh-stores'); if (refreshBtn && !refreshBtn.__wired) { refreshBtn.addEventListener('click', loadStores); refreshBtn.__wired = true; }
-  const createBtn = document.getElementById('create-store'); if (createBtn && !createBtn.__wired) { createBtn.addEventListener('click', () => openStoreCreateModal()); createBtn.__wired = true; }
+  wireOnce(document.getElementById('refresh-stores'), 'click', loadStores);
+  wireOnce(document.getElementById('create-store'), 'click', () => openStoreCreateModal());
 }
 
 // Settings
@@ -5573,12 +5096,17 @@ function formatDuration(startedAt) {
   return result;
 }
 
+let lastSyncRunning = false;
 async function refreshSyncStatus() {
   const statusEl = document.getElementById('sync-status');
   const btn = document.getElementById('btn-sync');
   try {
     const st = await api.synchronizeStatus();
     const running = !!st?.running;
+    // When a sync run just finished, drop the resolver cache so newly indexed
+    // media show up on next thumbnail load.
+    if (lastSyncRunning && !running) clearMediaResolverCache();
+    lastSyncRunning = running;
     const processed = typeof st?.processedCount === 'number' ? st.processedCount : 0;
     const checked = typeof st?.checkedCount === 'number' ? st.checkedCount : 0;
     const updated = st?.lastUpdated ? new Date(st.lastUpdated).toLocaleString() : 'never';
@@ -5625,47 +5153,37 @@ function initSettings() {
   };
   updateButtonLabel();
 
-  if (cbFast && !cbFast.__wired) {
-    cbFast.addEventListener('change', () => {
-      try { localStorage.setItem('settings.syncFastEnabled', cbFast.checked ? 'true' : 'false'); } catch {}
-      updateButtonLabel();
-    });
-    cbFast.__wired = true;
-  }
-  if (inputDays && !inputDays.__wired) {
-    inputDays.addEventListener('change', () => {
-      const v = inputDays.value.trim();
-      if (v) { try { localStorage.setItem('settings.syncDays', v); } catch {} }
-    });
-    inputDays.__wired = true;
-  }
-
-  if (btn && !btn.__wired) {
-    btn.addEventListener('click', async () => {
-      const statusEl = document.getElementById('sync-status');
-      statusEl.textContent = 'Starting synchronization…';
-      btn.disabled = true;
-      let daysParam = undefined;
-      try {
-        if (cbFast && cbFast.checked) {
-          const raw = (inputDays?.value || '').trim();
-          const n = parseInt(raw, 10);
-          if (!Number.isFinite(n) || n <= 0) {
-            showWarning('Please provide a valid number of days (> 0).');
-            btn.disabled = false;
-            return;
-          }
-          daysParam = n;
+  wireOnce(cbFast, 'change', () => {
+    try { localStorage.setItem('settings.syncFastEnabled', cbFast.checked ? 'true' : 'false'); } catch {}
+    updateButtonLabel();
+  });
+  wireOnce(inputDays, 'change', () => {
+    const v = inputDays.value.trim();
+    if (v) { try { localStorage.setItem('settings.syncDays', v); } catch {} }
+  });
+  wireOnce(btn, 'click', async () => {
+    const statusEl = document.getElementById('sync-status');
+    statusEl.textContent = 'Starting synchronization…';
+    btn.disabled = true;
+    let daysParam = undefined;
+    try {
+      if (cbFast && cbFast.checked) {
+        const raw = (inputDays?.value || '').trim();
+        const n = parseInt(raw, 10);
+        if (!Number.isFinite(n) || n <= 0) {
+          showWarning('Please provide a valid number of days (> 0).');
+          btn.disabled = false;
+          return;
         }
-        await api.synchronizeStart(daysParam);
-        await refreshSyncStatus();
-      } catch(e) {
-        statusEl.textContent = 'Failed to start synchronization.';
-        btn.disabled = false;
+        daysParam = n;
       }
-    });
-    btn.__wired = true;
-  }
+      await api.synchronizeStart(daysParam);
+      await refreshSyncStatus();
+    } catch(e) {
+      statusEl.textContent = 'Failed to start synchronization.';
+      btn.disabled = false;
+    }
+  });
   // Don't automatically start polling - it will be started when Settings tab is activated
 }
 
@@ -5803,7 +5321,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 2. Decide if we need Keycloak
   if (authConfig && !authConfig.enabled) {
-    api = new ApiClient('');
+    api = buildApiClient();
     init();
     return;
   }
@@ -5837,7 +5355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.history.replaceState({}, document.title, url.toString());
       }
 
-      api = new ApiClient('');
+      api = buildApiClient();
       init();
 
       // Setup logout buttons
