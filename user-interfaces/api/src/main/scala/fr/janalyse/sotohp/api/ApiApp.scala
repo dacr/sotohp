@@ -5,7 +5,7 @@ import fr.janalyse.sotohp.search.SearchService
 import zio.*
 import zio.json.*
 import sttp.apispec.openapi.Info
-import sttp.model.{Header, HeaderNames, MediaType, StatusCode}
+import sttp.model.{Header, MediaType, StatusCode}
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.zio.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
@@ -1859,25 +1859,20 @@ object ApiApp extends ZIOAppDefault {
     )
   )
 
-  def htmlUserInterfaceRedirect(uiBaseDir: String): ZServerEndpoint[ApiEnv, Any] = {
-    endpoint.get
-      .in("")
-      .out(statusCode(StatusCode.TemporaryRedirect))
-      .out(header(HeaderNames.Location, s"/ui/index.html"))
-      .serverLogicSuccess(_ => ZIO.succeed(()))
-  }
-
   def htmlStaticAssets(uiBaseDir: String): List[ZServerEndpoint[ApiEnv, Any]] = {
     List(
-      staticFilesGetServerEndpoint("ui" / "assets")(s"$uiBaseDir/assets").widen[ApiEnv],
-      staticFilesGetServerEndpoint("ui" / "favicon.svg")(s"$uiBaseDir/favicon.svg").widen[ApiEnv],
-      staticFilesGetServerEndpoint("ui" / "index.html")(s"$uiBaseDir/index.html").widen[ApiEnv]
+      staticFilesGetServerEndpoint("assets")(s"$uiBaseDir/assets").widen[ApiEnv],
+      staticFilesGetServerEndpoint("favicon.svg")(s"$uiBaseDir/favicon.svg").widen[ApiEnv],
+      staticFilesGetServerEndpoint("index.html")(s"$uiBaseDir/index.html").widen[ApiEnv],
+      // Served at the root path so its default scope is `/` — required for the
+      // SW to intercept `/api/.../content/...` image fetches and inject the
+      // Authorization header. Without root scope, the SW can't see /api/*.
+      staticFilesGetServerEndpoint("service-worker.js")(s"$uiBaseDir/assets/js/service-worker.js").widen[ApiEnv]
     )
   }
 
   def htmlRouteFallback(uiBaseDir: String): ZServerEndpoint[ApiEnv, Any] = {
     endpoint.get
-      .in("ui")
       .in(paths)
       .out(htmlBodyUtf8)
       .serverLogicSuccess { _ =>
@@ -1903,9 +1898,7 @@ object ApiApp extends ZIOAppDefault {
                    .logError("Issue with the user interface resources path")
     _         <- ZIO.logInfo(s"User interface resources path: $uiBaseDir")
   } yield {
-    htmlStaticAssets(uiBaseDir)
-      :+ htmlRouteFallback(uiBaseDir)
-      :+ htmlUserInterfaceRedirect(uiBaseDir)
+    htmlStaticAssets(uiBaseDir) :+ htmlRouteFallback(uiBaseDir)
   }
 
   def server = for {

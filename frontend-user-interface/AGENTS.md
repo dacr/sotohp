@@ -111,7 +111,7 @@
     - the backend OpenAPI specification is available at `docs/sotohp-api-docs.json`
     - the backend implements the openapi through the `/api` relative path
     - the backend serves all assets (images, css, js, svg) through the `/assets` relative path
-    - the backend provides routing fallbacks to `/ui/` (with the same `index.html` content) for all other paths dedicated to the front end user interface
+    - the backend serves the UI from the root path `/` (no prefix), and provides a routing fallback at `/*` returning the same `index.html` content for all paths not matched by `/api/*` or `/docs/*`
 - ONLY LOOK TO THE API SPECS TO DESIGN THE FRONT END USER INTERFACE
     - ignore all the scala code, do not modify any scala files when working on the front end user interface
     - if something is missing ask me

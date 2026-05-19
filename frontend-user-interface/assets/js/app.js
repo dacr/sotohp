@@ -25,13 +25,34 @@ import { toLocalInputValue, fromLocalInputValue } from './lib/datetime.js';
 let keycloak = null;
 let api = null; // Will be initialized after config is ready
 
-// Service Worker Registration
+// Service Worker Registration — served from `/service-worker.js` so its
+// default scope is `/`, which is required for the SW to intercept `/api/.../content/...`
+// image fetches and inject the Authorization header.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('assets/js/service-worker.js')
+  navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
     .then(reg => {
       console.log('Service Worker registered', reg);
+      // First-install race: the SW activates and calls clients.claim(), but
+      // `navigator.serviceWorker.controller` isn't always updated on the
+      // registering page before our image fetches go out. Reload once so the
+      // SW is definitely the controller. A sessionStorage flag prevents an
+      // infinite reload loop.
+      if (reg.active && !navigator.serviceWorker.controller && !sessionStorage.getItem('sw-first-claim')) {
+        sessionStorage.setItem('sw-first-claim', '1');
+        window.location.reload();
+      } else {
+        sessionStorage.removeItem('sw-first-claim');
+      }
     })
     .catch(err => console.error('Service Worker registration failed', err));
+
+  // The SW asks for the current token right after it activates (it has none
+  // until SET_TOKEN arrives). Reply with whatever Keycloak has at that moment.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'REQUEST_TOKEN') {
+      sendTokenToSW(keycloak?.token);
+    }
+  });
 }
 
 function sendTokenToSW(token) {
@@ -41,6 +62,50 @@ function sendTokenToSW(token) {
       token: token
     });
   }
+}
+
+// Robustly push the current Keycloak token to the service worker. There are
+// several race conditions to handle:
+//   - `navigator.serviceWorker.ready` resolves when the SW is active, but
+//     `controller` may not yet point at it (clients.claim() hasn't propagated).
+//   - The SW's `controllerchange` event may have fired before any of our code
+//     attached a listener (so a `once`-listener would wait forever).
+//   - On an insecure origin (HTTP non-localhost), SW registration is refused
+//     entirely and `ready` would hang — we cap the whole wait at 2 seconds.
+//
+// We therefore:
+//   1. Permanently re-push the token on every `controllerchange` event.
+//   2. After `ready`, post to `reg.active` directly — that bypasses the
+//      "controller" check and reaches the SW as soon as it has an active worker.
+//   3. Also call `sendTokenToSW`, which posts via `controller` if it's set.
+let _controllerChangeWired = false;
+function wireControllerChangeRepush() {
+  if (_controllerChangeWired || !('serviceWorker' in navigator)) return;
+  _controllerChangeWired = true;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    sendTokenToSW(keycloak?.token);
+  });
+}
+async function pushTokenToServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  wireControllerChangeRepush();
+  try {
+    const reg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise(resolve => setTimeout(() => resolve(null), 2000)),
+    ]);
+    if (reg && reg.active && keycloak?.token) {
+      reg.active.postMessage({ type: 'SET_TOKEN', token: keycloak.token });
+    }
+    sendTokenToSW(keycloak?.token);
+    if (!navigator.serviceWorker.controller && window.isSecureContext === false) {
+      console.warn(
+        '[sotohp] Service Worker not registered: the origin is insecure ' +
+        '(plain HTTP non-localhost). Image URLs fall back to ?token= query auth. ' +
+        'Use HTTPS or localhost/127.0.0.1 to drop the token from URLs.'
+      );
+    }
+  } catch {}
 }
 
 function buildApiClient() {
@@ -1697,21 +1762,29 @@ function loadMapData({ clear = false } = {}) {
     if (mapAddedKeys.has(m.accessKey)) return; // keep existing data, avoid duplicates
     mapAddedKeys.add(m.accessKey);
     const marker = L.marker([loc.latitude, loc.longitude]);
-    const thumbUrl = api.mediaNormalizedUrl(m.accessKey);
     const date = m.shootDateTime || m.original?.cameraShootDateTime || '';
     const eventName = (m.events && m.events.length > 0) ? m.events[0].name : '';
     const starred = m.starred ? '⭐' : '☆';
+    // The img src is deliberately left empty here — the popup may be opened
+    // long after the markers were built and any token baked into the URL would
+    // be expired. The popupopen handler refreshes the token and sets src then.
     marker.bindPopup(`
         <div style="min-width:200px">
           <div style="font-weight:600">${eventName} ${starred}</div>
           <div style="font-size:12px;color:#555">${date ? new Date(date).toLocaleString() : ''}</div>
-          <img src="${thumbUrl}" alt="media" style="width:100%;height:auto;border-radius:6px;margin-top:6px"/>
+          <img id="thumb-${m.accessKey}" alt="media" style="width:100%;height:auto;border-radius:6px;margin-top:6px"/>
           <button id="goto-${m.accessKey}" style="margin-top:6px">Open</button>
         </div>
       `);
-    marker.on('popupopen', () => {
+    marker.on('popupopen', async () => {
       const b = document.getElementById(`goto-${m.accessKey}`);
       if (b) b.onclick = () => { setActiveTab('viewer'); showMedia(m); };
+      const imgEl = document.getElementById(`thumb-${m.accessKey}`);
+      if (imgEl) {
+        try { if (keycloak) await keycloak.updateToken(30); } catch {}
+        sendTokenToSW(keycloak?.token);
+        imgEl.src = api.mediaNormalizedUrl(m.accessKey);
+      }
     });
     mapMarkersByKey.set(m.accessKey, marker);
     markersToAdd.push(marker);
@@ -3689,6 +3762,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       api = buildApiClient();
+      // Wait for the service worker to be controlling the page, then push the
+      // token, so the very first image fetch (mosaic tiles, map popups, etc.)
+      // already carries the Authorization header — instead of failing with 401
+      // because the SW had no token yet.
+      await pushTokenToServiceWorker();
       init();
 
       // Setup logout buttons

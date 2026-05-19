@@ -84,7 +84,7 @@ publish: ui
 # -----------------------------------------------------------------------------
 # Frontend UI build
 # Sources live in frontend-user-interface and are built/copied into
-# frontend-user-interface-dist which is served by the API under /ui
+# frontend-user-interface-dist which is served by the API at the root path /
 # -----------------------------------------------------------------------------
 
 UI_SRC := frontend-user-interface
@@ -99,7 +99,7 @@ ui: ui-openapi ui-ts
 	cp $(UI_SRC)/index.html $(UI_DIST)/
 	cp $(UI_SRC)/favicon.svg $(UI_DIST)/
 	cp -r $(UI_SRC)/assets/* $(UI_DIST)/assets/ 2>/dev/null || true
-	@echo "[UI] Done. Serve at http://127.0.0.1:8080/ui/ (after 'make api')"
+	@echo "[UI] Done. Serve at http://127.0.0.1:8080/ (after 'make api')"
 
 ui-openapi: openapi-spec
 	@echo "[UI] OpenAPI spec generated (docs/sotohp-api-docs.json)"

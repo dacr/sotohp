@@ -24,8 +24,6 @@ export class ApiClient {
       const token = await this._ensureToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-        if (!config.params) config.params = {};
-        config.params.token = token;
       }
       return config;
     });
@@ -46,16 +44,27 @@ export class ApiClient {
     return typeof this.auth.getToken === 'function' ? (this.auth.getToken() || null) : null;
   }
 
-  _tokenQuery() {
+  // -- Direct image URLs ------------------------------------------------------
+  // Preferred path: the service worker (scope `/`) intercepts these endpoints
+  // and injects the Authorization header from its cached token, so the JWT
+  // never appears in the URL.
+  //
+  // Fallback path: browsers refuse to register a service worker on insecure
+  // origins (anything other than HTTPS / localhost / 127.0.0.1). On a plain-
+  // HTTP LAN IP (e.g. http://192.168.x.y/) there's no SW and no other way for
+  // <img> tags to carry an Authorization header — so we fall back to the
+  // token in the query string. Switch the deployment to HTTPS to keep tokens
+  // out of URLs entirely.
+  _imageUrlAuth() {
+    const insecure = typeof window !== 'undefined' && window.isSecureContext === false;
+    if (!insecure) return '';
     const t = this._token();
     return t ? `?token=${encodeURIComponent(t)}` : '';
   }
-
-  // -- Direct image URLs (need token in the query string for <img> tags) -----
-  mediaNormalizedUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized${this._tokenQuery()}`; }
-  mediaMiniatureUrl(mediaAccessKey)  { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature${this._tokenQuery()}`; }
-  mediaOriginalUrl(mediaAccessKey)   { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original${this._tokenQuery()}`; }
-  faceImageUrl(faceId)               { return `/api/face/${encodeURIComponent(faceId)}/content${this._tokenQuery()}`; }
+  mediaNormalizedUrl(mediaAccessKey) { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/normalized${this._imageUrlAuth()}`; }
+  mediaMiniatureUrl(mediaAccessKey)  { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/miniature${this._imageUrlAuth()}`; }
+  mediaOriginalUrl(mediaAccessKey)   { return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original${this._imageUrlAuth()}`; }
+  faceImageUrl(faceId)               { return `/api/face/${encodeURIComponent(faceId)}/content${this._imageUrlAuth()}`; }
 
   // -- Media ------------------------------------------------------------------
   async getMedia(select, referenceMediaAccessKey, referenceMediaTimestamp) {
