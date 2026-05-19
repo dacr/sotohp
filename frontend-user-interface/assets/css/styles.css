@@ -80,6 +80,10 @@ main { flex: 1; position: relative; }
 /* Reserved: placeholder class no longer used; keep for compatibility */
 .mosaic-placeholder { display: none; }
 
+/* Empty cells inserted at the top after prependNewer when the batch isn't a
+   multiple of the current column count — keeps existing tiles column-aligned. */
+.mosaic-tile-filler { aspect-ratio: 1; pointer-events: none; }
+
 /* Mosaic sizing variants */
 .mosaic-container.size-small .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 0.35rem; }
 .mosaic-container.size-medium .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.45rem; }

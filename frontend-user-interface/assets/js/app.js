@@ -1785,13 +1785,21 @@ function applyMosaicSize(sz) {
   container.classList.remove('size-small', 'size-medium', 'size-max');
   const cls = sz === 'small' ? 'size-small' : (sz === 'medium' ? 'size-medium' : 'size-max');
   container.classList.add(cls);
-  
+
   const ctl = document.getElementById('mosaic-size-ctl');
   if (ctl) {
     Array.from(ctl.querySelectorAll('button')).forEach(b => {
       b.classList.toggle('active', b.getAttribute('data-size') === sz);
     });
   }
+  // Tile size change can leave the viewport unfilled (e.g., max → small turns
+  // 50 large tiles into 50 tiny ones). Trigger the auto-fill cascade.
+  setTimeout(() => {
+    if (mosaicLoadedMedia.length > 0 &&
+        container.scrollHeight <= container.clientHeight + MOSAIC_SCROLL_THRESHOLD) {
+      appendOlder();
+    }
+  }, 80);
 }
 
 function initMosaicSize() {
@@ -1969,6 +1977,18 @@ function ensureMosaicGrid() {
   return grid;
 }
 
+// Count the rendered columns of the mosaic grid. The grid uses
+// `repeat(auto-fill, minmax(N, 1fr))`, so the actual column count depends on
+// container width AND the current size class — we have to ask the browser.
+function getMosaicColumns(grid) {
+  if (!grid) return 1;
+  try {
+    const tmpl = window.getComputedStyle(grid).getPropertyValue('grid-template-columns') || '';
+    const tracks = tmpl.trim().split(/\s+/).filter(t => t && t !== 'none');
+    return Math.max(1, tracks.length);
+  } catch { return 1; }
+}
+
 // Fetch a batch of media relative to a reference
 async function fetchMediaBatch(direction, referenceMedia, count = MOSAIC_BATCH_SIZE) {
   try {
@@ -2050,14 +2070,26 @@ async function appendOlder() {
     const last = getOldestLoaded();
     if (!last) return;
     mosaicIsLoading = true;
+    let gotItems = false;
     try {
         const batch = await fetchMediaBatch('previous', last, MOSAIC_BATCH_SIZE);
         if (batch.length > 0) {
+            gotItems = true;
             mosaicLoadedMedia.push(...batch);
             const grid = ensureMosaicGrid();
             if (grid) batch.forEach(m => grid.appendChild(createMosaicTile(m)));
         }
     } finally { mosaicIsLoading = false; }
+    // Auto-fill: if the container isn't scrollable yet (small tiles + small batch
+    // leave a partial first screen), keep loading until it is, or until we hit
+    // the end of the dataset. Without this the `scroll` event never fires and
+    // the user has to wheel-scroll to wake the loader up.
+    if (gotItems) {
+        const container = document.getElementById('mosaic-container');
+        if (container && container.scrollHeight <= container.clientHeight + MOSAIC_SCROLL_THRESHOLD) {
+            setTimeout(() => appendOlder(), 0);
+        }
+    }
 }
 
 async function prependNewer() {
@@ -2068,35 +2100,42 @@ async function prependNewer() {
     const container = document.getElementById('mosaic-container');
     const oldScrollHeight = container.scrollHeight;
     try {
-        // Fetch newer items. Note: 'next' from a media goes chronologically forward (newer)
-        // fetchMediaBatch('next', ...) returns [new1, new2, new3...] ascending from reference?
-        // Wait, `getMedia('next')` gets the NEXT media in the sort order. 
-        // If default sort is newest-first, 'next' means older?
-        // Let's verify standard: usually 'next' means "next in list".
-        // SOTOHP `MediaService.mediaNext` usually implies chronological next (newer)? Or sequence next?
-        // In most photo apps, "next" = newer, "previous" = older.
-        // But `mediaSelectNextLogic` in ApiApp relies on `MediaService.mediaNext`.
-        // Let's assume:
-        // - 'previous' -> older (towards past)
-        // - 'next' -> newer (towards future)
-        // Based on `fetchAroundTimestamp` logic above which puts `next` items at start of list (newest first).
-        
-        const batch = await fetchMediaBatch('next', first, MOSAIC_BATCH_SIZE);
-        if (batch.length > 0) {
-            // batch is [newer1, newer2...]. We want newest at top.
-            // We need to reverse for the array state (to be [newer3, newer2, newer1, current...])
-            // But we need ORIGINAL order for DOM insertBefore (insert newer1 -> top=newer1; insert newer2 -> top=newer2...)
-            mosaicLoadedMedia.unshift(...[...batch].reverse());
-            
-            const grid = ensureMosaicGrid();
-            if (grid) {
-                // Iterate original batch order for DOM insertion
-                batch.forEach(m => grid.insertBefore(createMosaicTile(m), grid.firstChild));
-                // Adjust scroll position to maintain view
-                const newScrollHeight = container.scrollHeight;
-                container.scrollTop += (newScrollHeight - oldScrollHeight);
-            }
+        const grid = ensureMosaicGrid();
+        if (!grid) return;
+
+        // To keep existing tiles in their current columns when items are inserted
+        // above them, the number of inserted cells must be a multiple of the
+        // current column count. Otherwise the grid (auto-fill, row-major) reflows
+        // every existing tile sideways — the user sees photos "moving through
+        // columns" instead of the view shifting down by whole rows.
+        const cols = getMosaicColumns(grid);
+        const requested = Math.ceil(MOSAIC_BATCH_SIZE / cols) * cols;
+        const batch = await fetchMediaBatch('next', first, requested);
+        if (batch.length === 0) return;
+
+        // Drop any filler cells left over from a previous prepend — we'll re-pad
+        // for the new batch below.
+        grid.querySelectorAll(':scope > .mosaic-tile-filler').forEach(el => el.remove());
+
+        // 'next' from a reference returns newer items in chronological order;
+        // the array state stores newest-first, so reverse on the way in.
+        mosaicLoadedMedia.unshift(...[...batch].reverse());
+        batch.forEach(m => grid.insertBefore(createMosaicTile(m), grid.firstChild));
+
+        // When we hit the start of the dataset (partial batch), pad the very top
+        // with empty cells so the inserted group still lands on a row boundary
+        // and existing tiles keep their column position.
+        const pad = (cols - (batch.length % cols)) % cols;
+        for (let i = 0; i < pad; i++) {
+            const f = document.createElement('div');
+            f.className = 'mosaic-tile-filler';
+            grid.insertBefore(f, grid.firstChild);
         }
+
+        // Maintain the user's scroll position so the view doesn't jump as rows
+        // are inserted above.
+        const newScrollHeight = container.scrollHeight;
+        container.scrollTop += (newScrollHeight - oldScrollHeight);
     } finally { mosaicIsLoading = false; }
 }
 
@@ -2145,6 +2184,13 @@ async function refreshMosaicAtTimestamp(ts) {
         mosaicIsLoading = false;
         setTimeout(() => indicator?.classList.remove('show'), 1000);
     }
+    // Kick the auto-fill cascade so the initial batch grows until the viewport
+    // is scrollable (small tiles need many more than MOSAIC_BATCH_SIZE items).
+    setTimeout(() => {
+        if (container.scrollHeight <= container.clientHeight + MOSAIC_SCROLL_THRESHOLD) {
+            appendOlder();
+        }
+    }, 80);
 }
 
 // Build the left-side clickable timeline with year markers
