@@ -3,7 +3,6 @@ package fr.janalyse.sotohp.cli
 import fr.janalyse.sotohp.core.*
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.processor.model.FaceFeatures
 import fr.janalyse.sotohp.processor.{FacesDetectionIssue, NormalizeProcessor}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
