@@ -753,14 +753,15 @@ object ApiApp extends ZIOAppDefault {
   }
 
   val mediaSelectRandomLogic = for {
-    count <- MediaService
-               .originalCount()
-               .mapError(err => ApiInternalError("Couldn't get medias count"))
-    index <- Random.nextLongBounded(count)
-    media <- MediaService
-               .mediaGetAt(index)
-               .some // TODO Remember mediaGetAt is not performance optimal due to the nature of lmdb
-               .mapError(err => ApiInternalError("Couldn't get a random media"))
+    maxPosition <- MediaService
+                     .mediaMaxPosition()
+                     .mapError(err => ApiInternalError("Couldn't get medias max position"))
+                     .someOrFail(ApiResourceNotFound("No media available"))
+    index       <- Random.nextLongBounded(maxPosition + 1L)
+    media       <- MediaService
+                     .mediaGetAt(index)
+                     .some
+                     .mapError(err => ApiInternalError("Couldn't get a random media"))
   } yield media
 
   val mediaSelectFirstLogic = {

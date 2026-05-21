@@ -286,10 +286,12 @@ function showMedia(media) {
       if (facesEnabled) { try { renderFaces(); } catch {} }
       try { img.style.opacity = '1'; } catch {}
       try {
-        // Update zoom duration from slideshow controls (fallback 20s)
+        // Update zoom duration from slideshow controls (fallback 20s) — set on
+        // the container so both the image and the faces overlay inherit it.
         const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
         const secs = parseInt(durActive?.dataset?.secs || '20', 10) || 20;
-        img.style.setProperty('--viewer-zoom-duration', `${secs}s`);
+        const cont = document.querySelector('.image-container');
+        if (cont) cont.style.setProperty('--viewer-zoom-duration', `${secs}s`);
       } catch {}
       if (slideshowPlaying) {
         // Restart animation in sync with display time
@@ -1511,7 +1513,7 @@ function initViewerControls() {
         try {
           const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
           const secs = parseInt(durActive?.dataset?.secs || '20', 10) || 20;
-          img.style.setProperty('--viewer-zoom-duration', `${secs}s`);
+          if (cont) cont.style.setProperty('--viewer-zoom-duration', `${secs}s`);
         } catch {}
         if (slideshowPlaying) {
           img.classList.remove('zooming');
@@ -1570,7 +1572,8 @@ function initViewerControls() {
       if (img) {
         const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
         const secs = parseInt(durActive?.dataset?.secs || '20', 10) || 20;
-        img.style.setProperty('--viewer-zoom-duration', `${secs}s`);
+        const cont = document.querySelector('.image-container');
+        if (cont) cont.style.setProperty('--viewer-zoom-duration', `${secs}s`);
         img.classList.remove('zooming');
         void img.offsetWidth;
         img.classList.add('zooming');
