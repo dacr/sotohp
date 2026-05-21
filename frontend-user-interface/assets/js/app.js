@@ -2333,38 +2333,64 @@ async function refreshMosaicAtTimestamp(ts) {
         }
         if (!startMedia || !isMediaDated(startMedia)) return;
 
-        // Paint the starting tile immediately and bring it into view so the user
-        // gets feedback within one round-trip.
+        // Paint the starting tile immediately so the user gets feedback within
+        // one round-trip.
         mosaicLoadedMedia.push(startMedia);
         const startTile = createMosaicTile(startMedia);
         grid.appendChild(startTile);
         persistMosaicTimestamp(ts);
         updateTimelineCursor(ts);
-        // Defer scrollIntoView one frame so the grid has laid out the tile.
+
+        // 2) Pre-allocate filler cells above the start tile for the newer items.
+        //    Each filler is a pre-sized grid slot (`aspect-ratio: 1`), so newer
+        //    items drop into already-laid-out slots — no column reshuffle as
+        //    each item arrives, no scrollTop juggling per insert.
+        const olderCount = Math.floor(MOSAIC_BATCH_SIZE / 2);
+        const newerCount = MOSAIC_BATCH_SIZE - olderCount;
+        const placeholders = [];
+        const preHeight = container.scrollHeight;
+        for (let i = 0; i < newerCount; i++) {
+            const ph = document.createElement('div');
+            ph.className = 'mosaic-tile-filler';
+            grid.insertBefore(ph, grid.firstChild);
+            placeholders.push(ph);
+        }
+        // The grid just got taller above the start tile; keep the start tile
+        // visually anchored where it was before centering it in the viewport.
+        const postHeight = container.scrollHeight;
+        container.scrollTop += (postHeight - preHeight);
         requestAnimationFrame(() => {
             try { startTile.scrollIntoView({ block: 'center' }); } catch {}
         });
 
-        // 2) Stream older items (below the start tile) — appending in a grid
+        // 3) Stream older items (below the start tile) — appending in a grid
         //    extends rows without reflowing existing tiles.
-        const olderCount = Math.floor(MOSAIC_BATCH_SIZE / 2);
         await fetchMediaBatch('previous', startMedia, olderCount, (m) => {
             mosaicLoadedMedia.push(m);
             grid.appendChild(createMosaicTile(m));
         });
 
-        // 3) Stream newer items (above the start tile). Prepending shifts the
-        //    viewport — adjust scrollTop after each insert so the start tile
-        //    stays put visually.
-        const newerCount = MOSAIC_BATCH_SIZE - olderCount;
-        let oldH = container.scrollHeight;
+        // 4) Stream newer items into the placeholders from bottom-up (closest
+        //    to the start tile first). `replaceWith` keeps the cell in the
+        //    same grid slot — nothing else moves.
+        let phIdx = placeholders.length - 1;
         await fetchMediaBatch('next', startMedia, newerCount, (m) => {
             mosaicLoadedMedia.unshift(m);
-            grid.insertBefore(createMosaicTile(m), grid.firstChild);
-            const newH = container.scrollHeight;
-            container.scrollTop += (newH - oldH);
-            oldH = newH;
+            if (phIdx >= 0) {
+                placeholders[phIdx].replaceWith(createMosaicTile(m));
+                phIdx--;
+            }
         });
+
+        // 5) Clean up any unused placeholders (the dataset had fewer newer
+        //    items than expected). Adjust scrollTop so the visible area stays
+        //    put when the grid shrinks above.
+        if (phIdx >= 0) {
+            const before = container.scrollHeight;
+            for (let i = phIdx; i >= 0; i--) placeholders[i].remove();
+            const after = container.scrollHeight;
+            container.scrollTop = Math.max(0, container.scrollTop - (before - after));
+        }
     } finally {
         mosaicIsLoading = false;
         setTimeout(() => indicator?.classList.remove('show'), 1000);
