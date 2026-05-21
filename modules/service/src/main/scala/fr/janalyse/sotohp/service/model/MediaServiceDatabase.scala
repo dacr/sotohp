@@ -9,6 +9,7 @@ import java.time.Instant
 
 case class MediaServiceDatabase(
   originalIdByTimestamp: LMDBIndex[(Instant, OriginalId), OriginalId],
+  originalIdByPosition: LMDBIndex[Long, OriginalId],
   originalIdByEventId: LMDBIndex[EventId, (Instant, OriginalId)],
   faceIdByPersonId: LMDBIndex[PersonId, (Instant, FaceId)],
   originalIdByStoreId: LMDBIndex[StoreId, OriginalId],

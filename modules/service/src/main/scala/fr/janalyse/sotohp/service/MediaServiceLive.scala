@@ -195,12 +195,37 @@ class MediaServiceLive private (
       .logError(s"Couldn't fetch media for id $id")
   }
 
+  // Atomically allocate the next position slot for a newly inserted media.
+  // Idempotent: re-running for an originalId already indexed is a no-op.
+  private def assignNextPosition(originalId: OriginalId): IO[LMDBIssues, Unit] = {
+    collections.originalIdByPosition.readWrite { ops =>
+      ops.last().flatMap {
+        case Some((maxPos, existingId)) if existingId == originalId => ZIO.unit
+        case Some((maxPos, _))                                      => ops.index(maxPos + 1L, originalId)
+        case None                                                   => ops.index(0L, originalId)
+      }
+    }
+  }
+
+  override def mediaMaxPosition(): IO[ServiceIssue, Option[Long]] = {
+    collections.originalIdByPosition
+      .last()
+      .map(_.map(_._1))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't get media max position : $err"))
+  }
+
   override def mediaGetAt(position: Long): IO[ServiceIssue, Option[MediaTuple]] = {
-    collections.originalIdByTimestamp
-      .fetchAt(position)
+    val lookup =
+      collections.originalIdByPosition
+        .fetch(position)
+        .flatMap {
+          case Some(originalId) => ZIO.some(originalId)
+          case None             => collections.originalIdByPosition.next(position).map(_.map(_._2)) // gap from deletion: nearest higher slot
+        }
+    lookup
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch at $position media : $err"))
       .some
-      .flatMap { (_, originalId) =>
+      .flatMap { originalId =>
         collections.medias
           .fetch(originalId)
           .mapError(err => Option(ServiceDatabaseIssue(s"Couldn't get media: $err")))
@@ -1309,6 +1334,7 @@ class MediaServiceLive private (
                                )
                                collections.medias
                                  .upsert(input.original.id, _ => daoMedia)
+                                 .zipLeft(assignNextPosition(input.original.id))
                                  .flatMap(daoMedia => daoMedia2Media(daoMedia).map(media => (buildMediaAccessKey(media), media)))
                                  .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
                              }
@@ -1519,12 +1545,27 @@ class MediaServiceLive private (
   }
 
   override def reindexAll(): IO[ServiceIssue, Unit] = {
+    // The positional index is not attached via withIndexFull because assigning a
+    // position requires reading the current max — withIndexFull's extractor is pure.
+    // Rebuild it by walking the medias collection and writing sequential positions.
+    val rebuildPositional =
+      collections.originalIdByPosition.readWrite { ops =>
+        for {
+          _ <- ops.ops.indexClear(collections.originalIdByPosition.name)
+          _ <- collections.medias
+                 .streamWithKeys()
+                 .zipWithIndex
+                 .runForeach { case ((originalId, _), idx) => ops.index(idx, originalId) }
+        } yield ()
+      }
     (collections.medias.rebuildIndexes() *>
       ZIO.logInfo("medias indexes rebuilt !") *>
       collections.originals.rebuildIndexes() *>
       ZIO.logInfo("originals indexes rebuilt !") *>
       collections.detectedFaces.rebuildIndexes() *>
-      ZIO.logInfo("detectedFaces indexes rebuilt !"))
+      ZIO.logInfo("detectedFaces indexes rebuilt !") *>
+      rebuildPositional *>
+      ZIO.logInfo("originalIdByPosition index rebuilt !"))
       .logError("Reindex failed")
       .mapError(err => ServiceDatabaseIssue(s"Reindex failed: $err"))
       .unit
@@ -1723,6 +1764,7 @@ object MediaServiceLive {
     // ----------------------------------------------------------------------------------------
     // INDEXES
     indexOriginalIdByTimestamp <- lmdb.indexCreate[(Instant, OriginalId), OriginalId]("originalIdByTimestamp", false)
+    indexOriginalIdByPosition  <- lmdb.indexCreate[Long, OriginalId]("originalIdByPosition", false)
     indexOriginalIdByEventId   <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
     indexFaceIdByPersonId      <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
     indexOriginalIdByStoreId   <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
@@ -1768,6 +1810,7 @@ object MediaServiceLive {
     collectionPortfolioAssets      <- lmdb.multiCreate[PortfolioId, DaoAsset](portfolioAssetsCollectionName, false)
     collections                     = MediaServiceDatabase(
                                         originalIdByTimestamp = indexOriginalIdByTimestamp,
+                                        originalIdByPosition = indexOriginalIdByPosition,
                                         originalIdByEventId = indexOriginalIdByEventId,
                                         faceIdByPersonId = indexFaceIdByPersonId,
                                         originalIdByStoreId = indexOriginalIdByStoreId,
@@ -1807,9 +1850,26 @@ object MediaServiceLive {
 
   } yield processors
 
+  // Backfill the positional index on first run after upgrade: if it's empty but
+  // medias exist, walk them once and assign sequential positions. After this,
+  // new medias get appended on creation by assignNextPosition.
+  private def backfillPositionalIndex(collections: MediaServiceDatabase): IO[LMDBIssues, Unit] = {
+    collections.originalIdByPosition.readWrite { ops =>
+      ops.head().flatMap {
+        case Some(_) => ZIO.unit
+        case None    =>
+          collections.medias
+            .streamWithKeys()
+            .zipWithIndex
+            .runForeach { case ((originalId, _), idx) => ops.index(idx, originalId) }
+      }
+    }.unit
+  }
+
   def setup(lmdb: LMDB, search: SearchService): IO[LMDBIssues | CoreIssue, MediaService] = for {
     _                          <- ZIO.foreachDiscard(allCollections)(col => lmdb.collectionAllocate(col).ignore)
     mediaServiceDatabase       <- setupMediaServiceDatabase(lmdb)
+    _                          <- backfillPositionalIndex(mediaServiceDatabase)
     processors                 <- setupProcessors()
     synchronizeStatusReference <- Ref.make(SynchronizeStatus.empty)
     synchronizeFiberReference  <- Ref.make(Option.empty[Fiber[ServiceIssue, Unit]])
