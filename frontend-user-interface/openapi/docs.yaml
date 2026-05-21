@@ -1715,6 +1715,8 @@ components:
           uniqueItems: true
           items:
             type: string
+        orientation:
+          $ref: '#/components/schemas/Orientation'
         shootDateTime:
           type: string
           format: date-time

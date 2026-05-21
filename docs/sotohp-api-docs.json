@@ -4785,6 +4785,9 @@
               "type" : "string"
             }
           },
+          "orientation" : {
+            "$ref" : "#/components/schemas/Orientation"
+          },
           "shootDateTime" : {
             "type" : "string",
             "format" : "date-time"

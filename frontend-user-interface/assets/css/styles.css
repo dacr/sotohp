@@ -21,7 +21,7 @@ main { flex: 1; position: relative; }
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) rotate(var(--img-rotate, 0deg));
   /* Scale image up or down to fit available space while keeping proportions */
   width: 100%;
   height: 100%;
@@ -31,8 +31,8 @@ main { flex: 1; position: relative; }
 }
 /* Zoom-in (Ken Burns-like) animation applied while an image is displayed in Viewer */
 @keyframes viewer-zoom-in {
-  from { transform: translate(-50%, -50%) scale(1); }
-  to   { transform: translate(-50%, -50%) scale(1.25); }
+  from { transform: translate(-50%, -50%) rotate(var(--img-rotate, 0deg)) scale(1); }
+  to   { transform: translate(-50%, -50%) rotate(var(--img-rotate, 0deg)) scale(1.25); }
 }
 /* Class toggled by JS to start the animation; duration can be customized via --viewer-zoom-duration */
 #main-image.zooming { animation: viewer-zoom-in var(--viewer-zoom-duration, 20s) linear forwards; }
@@ -70,9 +70,9 @@ main { flex: 1; position: relative; }
 #mosaic-scroll-spacer { position: relative; }
 .mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
 .mosaic-tile { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; cursor: pointer; background: #f3f4f6; }
-.mosaic-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.mosaic-tile img.layer-hi { transform: scale(1); transition: transform 180ms ease-out; will-change: transform; }
-.mosaic-tile:hover img.layer-hi { transform: scale(1.18); transition: transform 1400ms ease-out; }
+.mosaic-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transform: rotate(var(--img-rotate, 0deg)); }
+.mosaic-tile img.layer-hi { transform: rotate(var(--img-rotate, 0deg)) scale(1); transition: transform 180ms ease-out; will-change: transform; }
+.mosaic-tile:hover img.layer-hi { transform: rotate(var(--img-rotate, 0deg)) scale(1.18); transition: transform 1400ms ease-out; }
 /* Layered images to avoid white flash when upgrading miniature -> normalized */
 .mosaic-tile img.layer-mini,
 .mosaic-tile img.layer-hi { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -211,8 +211,17 @@ section#tab-mosaic.tab.active { display: flex; }
 .image-container:fullscreen .img-download-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-download-btn { display: none !important; }
 
+/* Rotate buttons (Viewer) - icon-only, share the edit button color */
+.img-rotate-btn { position: absolute; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 8px; font-size: 14px; line-height: 1; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease, background 120ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.img-rotate-right-btn { right: 88px; }
+.img-rotate-left-btn { right: 126px; }
+.image-container:hover .img-rotate-btn { opacity: 1; transform: translateY(0); }
+.img-rotate-btn:hover { background: #1d4ed8; }
+.image-container:fullscreen .img-rotate-btn { display: none !important; }
+.image-container:-webkit-full-screen .img-rotate-btn { display: none !important; }
+
 /* Add face button (Viewer) */
-.img-add-btn { position: absolute; right: 92px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.img-add-btn { position: absolute; right: 168px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
 .image-container:hover .img-add-btn { opacity: 1; transform: translateY(0); }
 .img-add-btn:hover { background: #1d4ed8; }
 .image-container:fullscreen .img-add-btn { display: none !important; }
@@ -243,14 +252,14 @@ section#tab-mosaic.tab.active { display: flex; }
 .pf-asset-icon.pf-asset-remove:hover { background: #fee2e2; color: #991b1b; }
 
 /* Add to portfolio button (Viewer) */
-.img-portfolio-btn { position: absolute; right: 185px; bottom: 8px; background: rgba(16,185,129,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
+.img-portfolio-btn { position: absolute; right: 261px; bottom: 8px; background: rgba(16,185,129,0.92); color: #fff; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; }
 .image-container:hover .img-portfolio-btn { opacity: 1; transform: translateY(0); }
 .img-portfolio-btn:hover { background: #059669; }
 .image-container:fullscreen .img-portfolio-btn { display: none !important; }
 .image-container:-webkit-full-screen .img-portfolio-btn { display: none !important; }
 
 /* Confirm-all inferred faces button (Viewer) */
-.img-confirm-btn { position: absolute; right: 200px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
+.img-confirm-btn { position: absolute; right: 276px; bottom: 8px; background: rgba(245,158,11,0.95); color: #111827; border: none; border-radius: 16px; padding: 6px 10px; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 5; display: none; }
 .image-container:hover .img-confirm-btn { opacity: 1; transform: translateY(0); }
 .img-confirm-btn:hover { background: rgba(245,158,11,1); }
 /* Hide confirm-all button in fullscreen mode (same as edit) */

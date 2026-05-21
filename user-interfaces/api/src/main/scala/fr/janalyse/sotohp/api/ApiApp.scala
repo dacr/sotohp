@@ -530,6 +530,7 @@ object ApiApp extends ZIOAppDefault {
                           description = toUpdate.description,
                           starred = toUpdate.starred,
                           keywords = toUpdate.keywords,
+                          orientation = toUpdate.orientation,
                           shootDateTime = toUpdate.shootDateTime,
                           userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]]
                         )

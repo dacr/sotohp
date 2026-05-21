@@ -24,6 +24,24 @@ let currentPortfolio = null;
 
 const api = () => ctx.getApi();
 
+// Orientation is serialized by the API as an integer ordinal of the
+// Orientation enum (0 Horizontal, 2 Rotate180, 4 MirrorH+R270CW, 5 Rotate90CW,
+// 6 MirrorH+R90CW, 7 Rotate270CW).
+function orientationDegreesFor(o) {
+  switch (o) {
+    case 5:
+    case 6:
+      return 90;
+    case 2:
+      return 180;
+    case 4:
+    case 7:
+      return 270;
+    default:
+      return 0;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public entry points
 // ---------------------------------------------------------------------------
@@ -145,7 +163,7 @@ export function openAddToPortfolioModal(media) {
 // Internal: list / detail rendering
 // ---------------------------------------------------------------------------
 
-function buildAssetThumbImg(mediaAccessKey, asset) {
+function buildAssetThumbImg(mediaAccessKey, asset, rotateDeg = 0) {
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;';
   const img = new Image();
@@ -162,6 +180,10 @@ function buildAssetThumbImg(mediaAccessKey, asset) {
     img.style.cssText = `position:absolute;width:${wPct}%;height:${hPct}%;left:${lPct}%;top:${tPct}%;object-fit:cover;display:block;`;
   } else {
     img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;';
+  }
+  if (rotateDeg) {
+    img.style.transform = `rotate(${rotateDeg}deg)`;
+    img.style.transformOrigin = '50% 50%';
   }
   wrapper.appendChild(img);
   return wrapper;
@@ -299,12 +321,14 @@ async function openPortfolioDetail(portfolioId) {
       (async () => {
         const key = await resolveMediaAccessKey(api(), asset.originalId);
         if (!key) return;
+        let rotateDeg = 0;
+        try { const m = await api().getMediaByKey(key); rotateDeg = orientationDegreesFor(m && m.orientation); } catch {}
         const thumb = li.querySelector('.pf-asset-thumb');
         const placeholder = thumb?.querySelector('.pf-thumb-placeholder');
         if (placeholder) placeholder.remove();
         if (thumb) {
           thumb.style.background = 'transparent';
-          thumb.insertBefore(buildAssetThumbImg(key, asset), thumb.firstChild);
+          thumb.insertBefore(buildAssetThumbImg(key, asset, rotateDeg), thumb.firstChild);
         }
         li.style.cursor = 'pointer';
         li.onclick = (e) => {
@@ -446,6 +470,13 @@ function openPortfolioAssetViewer(portfolio, startIndex) {
     const key = await resolveMediaAccessKey(api(), asset.originalId);
     if (myToken !== token) return;
     if (!key) { stage.innerHTML = '<span class="text-danger">Failed to load image</span>'; return; }
+    // Fetch the media to read the user-defined orientation override (best effort)
+    let rotateDeg = 0;
+    try {
+      const m = await api().getMediaByKey(key);
+      if (myToken !== token) return;
+      rotateDeg = orientationDegreesFor(m && m.orientation);
+    } catch {}
     const img = new Image();
     currentImg = img;
     img.draggable = false;
@@ -457,13 +488,23 @@ function openPortfolioAssetViewer(portfolio, startIndex) {
       const b = (asset.selectedBox && asset.selectedBox.width > 0 && asset.selectedBox.height > 0) ? asset.selectedBox : null;
       const cropNatW = b ? img.naturalWidth * b.width : img.naturalWidth;
       const cropNatH = b ? img.naturalHeight * b.height : img.naturalHeight;
-      const cropAspect = cropNatW / cropNatH;
+      // For 90/270 rotations, the visible cropped region's aspect ratio inverts
+      const swapAspect = rotateDeg === 90 || rotateDeg === 270;
+      const cropAspect = swapAspect ? (cropNatH / cropNatW) : (cropNatW / cropNatH);
       const stageAspect = stageW / stageH;
       let wrapW, wrapH;
       if (cropAspect > stageAspect) { wrapW = stageW; wrapH = stageW / cropAspect; }
       else { wrapH = stageH; wrapW = stageH * cropAspect; }
       const wrapper = document.createElement('div');
       wrapper.style.cssText = `position:relative;width:${wrapW}px;height:${wrapH}px;overflow:hidden;background:#000;`;
+      // Inner box that handles the rotation while keeping crop math intact
+      const rotator = document.createElement('div');
+      // For 90/270, swap inner box dimensions so the rotated content matches the wrapper
+      const innerW = swapAspect ? wrapH : wrapW;
+      const innerH = swapAspect ? wrapW : wrapH;
+      const tx = (wrapW - innerW) / 2;
+      const ty = (wrapH - innerH) / 2;
+      rotator.style.cssText = `position:absolute;left:${tx}px;top:${ty}px;width:${innerW}px;height:${innerH}px;transform-origin:50% 50%;transform:rotate(${rotateDeg}deg);`;
       if (b) {
         const wPct = (1 / b.width) * 100;
         const hPct = (1 / b.height) * 100;
@@ -473,7 +514,8 @@ function openPortfolioAssetViewer(portfolio, startIndex) {
       } else {
         img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block;';
       }
-      wrapper.appendChild(img);
+      rotator.appendChild(img);
+      wrapper.appendChild(rotator);
       stage.appendChild(wrapper);
     };
     img.onerror = () => { if (myToken === token) stage.innerHTML = '<span class="text-danger">Failed to load image</span>'; };

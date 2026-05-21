@@ -12,7 +12,7 @@ case class ApiMediaUpdate(
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],
-  // orientation: Option[Orientation],         // override original's orientation
+  orientation: Option[Orientation],         // override original's orientation
   shootDateTime: Option[ShootDateTime], // override original's cameraShotDateTime
   userDefinedLocation: Option[ApiLocation] // replace the original's location (user-defined or deducted location)
 )

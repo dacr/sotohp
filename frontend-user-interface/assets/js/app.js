@@ -278,10 +278,14 @@ function showMedia(media) {
     if (facesEnabled) { clearFacesOverlay(); }
     const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
     const srcUrl = (isFs ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey));
+    // Apply user-defined orientation override before loading the new source
+    applyImageRotation(media);
     // Smooth fade transition for image swaps
     try { img.style.opacity = '0'; } catch {}
     // Start zoom exactly when the new image is displayed
     img.onload = () => {
+      // Recompute rotation-driven dimensions now that the container size is known
+      applyImageRotation(media);
       // When the image is displayed, re-render faces overlay to match actual size
       if (facesEnabled) { try { renderFaces(); } catch {} }
       try { img.style.opacity = '1'; } catch {}
@@ -499,6 +503,91 @@ function showMedia(media) {
         starBtn.disabled = false;
       }
     };
+  }
+}
+
+// Orientation is serialized by the API as an integer ordinal of the
+// Orientation enum (see modules/service/.../json/package.scala). The ordinal
+// order is: 0 Horizontal, 1 MirrorHorizontal, 2 Rotate180, 3 MirrorVertical,
+// 4 MirrorHorizontalAndRotate270CW, 5 Rotate90CW, 6 MirrorHorizontalAndRotate90CW,
+// 7 Rotate270CW.
+function orientationToDegrees(o) {
+  switch (o) {
+    case 5: // Rotate90ClockWise
+    case 6: // MirrorHorizontalAndRotate90ClockWise
+      return 90;
+    case 2: // Rotate180
+      return 180;
+    case 4: // MirrorHorizontalAndRotate270ClockWise
+    case 7: // Rotate270ClockWise
+      return 270;
+    default:
+      return 0;
+  }
+}
+
+function degreesToOrientation(deg) {
+  switch (((deg % 360) + 360) % 360) {
+    case 90: return 5; // Rotate90ClockWise
+    case 180: return 2; // Rotate180
+    case 270: return 7; // Rotate270ClockWise
+    default: return 0; // Horizontal
+  }
+}
+
+function getMediaDisplayDegrees(media) {
+  return orientationToDegrees(media && media.orientation);
+}
+
+function applyImageRotation(media) {
+  const img = document.getElementById('main-image');
+  const cont = document.querySelector('.image-container');
+  if (!img || !cont) return;
+  const deg = getMediaDisplayDegrees(media);
+  img.style.setProperty('--img-rotate', `${deg}deg`);
+  if (deg === 90 || deg === 270) {
+    const cw = cont.clientWidth;
+    const ch = cont.clientHeight;
+    if (cw > 0 && ch > 0) {
+      // Swap pre-rotation dimensions so the rotated bounding box fits the container
+      img.style.width = `${ch}px`;
+      img.style.height = `${cw}px`;
+    } else {
+      img.style.width = '';
+      img.style.height = '';
+    }
+  } else {
+    img.style.width = '';
+    img.style.height = '';
+  }
+}
+
+async function rotateCurrentMedia(deltaDeg) {
+  if (!currentMedia) { showWarning('No media loaded'); return; }
+  const currentDeg = getMediaDisplayDegrees(currentMedia);
+  const newDeg = (((currentDeg + deltaDeg) % 360) + 360) % 360;
+  const newOrientation = degreesToOrientation(newDeg);
+  const body = {
+    starred: !!currentMedia.starred,
+    orientation: newOrientation,
+    keywords: Array.isArray(currentMedia.keywords) ? [...currentMedia.keywords] : [],
+  };
+  if (typeof currentMedia.description === 'string' && currentMedia.description) body.description = currentMedia.description;
+  if (currentMedia.shootDateTime) body.shootDateTime = currentMedia.shootDateTime;
+  if (currentMedia.userDefinedLocation) body.userDefinedLocation = currentMedia.userDefinedLocation;
+  const previousOrientation = currentMedia.orientation;
+  // Optimistic UI update
+  currentMedia.orientation = newOrientation;
+  applyImageRotation(currentMedia);
+  if (facesEnabled) { try { renderFaces(); } catch {} }
+  try {
+    await api.updateMedia(currentMedia.accessKey, body);
+  } catch (e) {
+    // Revert on failure
+    currentMedia.orientation = previousOrientation;
+    applyImageRotation(currentMedia);
+    if (facesEnabled) { try { renderFaces(); } catch {} }
+    showError('Failed to rotate media');
   }
 }
 
@@ -760,6 +849,7 @@ function openMediaEditModal(media) {
     if (description) body.description = description;
     if (shootDateTime) body.shootDateTime = shootDateTime;
     body.keywords = Array.isArray(keywords) ? keywords : [];
+    if (media.orientation != null) body.orientation = media.orientation;
     if (clearedUserLoc) body.userDefinedLocation = null; else if (currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number') body.userDefinedLocation = currentLoc;
     try {
       await api.updateMedia(media.accessKey, body);
@@ -793,14 +883,40 @@ function getRenderedImageRect() {
   const cw = cont.clientWidth || 0;
   const ch = cont.clientHeight || 0;
   if (cw <= 0 || ch <= 0) return { left: 0, top: 0, width: 0, height: 0 };
-  const nw = img.naturalWidth;
-  const nh = img.naturalHeight;
+  const deg = getMediaDisplayDegrees(currentMedia);
+  const swap = (deg === 90 || deg === 270);
+  const nw = swap ? img.naturalHeight : img.naturalWidth;
+  const nh = swap ? img.naturalWidth : img.naturalHeight;
   const scale = Math.min(cw / nw, ch / nh);
   const w = Math.max(0, Math.round(nw * scale));
   const h = Math.max(0, Math.round(nh * scale));
   const left = Math.round((cw - w) / 2);
   const top = Math.round((ch - h) / 2);
   return { left, top, width: w, height: h };
+}
+
+// Rotate a normalized [0,1] box from the natural image coordinate system into
+// the displayed (rotated) coordinate system.
+function transformFaceBoxForDisplay(box, deg) {
+  const x = box.x, y = box.y, w = box.width, h = box.height;
+  switch (((deg % 360) + 360) % 360) {
+    case 90:  return { x: 1 - y - h, y: x, width: h, height: w };
+    case 180: return { x: 1 - x - w, y: 1 - y - h, width: w, height: h };
+    case 270: return { x: y, y: 1 - x - w, width: h, height: w };
+    default:  return { x, y, width: w, height: h };
+  }
+}
+
+// Inverse of transformFaceBoxForDisplay: from rotated display coords back to
+// natural image coords (used when the user draws a new face on a rotated image).
+function transformFaceBoxFromDisplay(box, deg) {
+  const x = box.x, y = box.y, w = box.width, h = box.height;
+  switch (((deg % 360) + 360) % 360) {
+    case 90:  return { x: y, y: 1 - x - w, width: h, height: w };
+    case 180: return { x: 1 - x - w, y: 1 - y - h, width: w, height: h };
+    case 270: return { x: 1 - y - h, y: x, width: h, height: w };
+    default:  return { x, y, width: w, height: h };
+  }
 }
 
 function clearFacesOverlay() {
@@ -975,12 +1091,21 @@ async function handleAddFacePointerUp(ev) {
     addFacePosting = false;
     return;
   }
-  // Compute normalized box relative to the image top-left
+  // Compute normalized box relative to the displayed (rotated) image rect,
+  // then convert back to the natural image coordinate system the backend expects.
   const nx = imgRect.width > 0 ? (left - imgRect.left) / imgRect.width : 0;
   const ny = imgRect.height > 0 ? (top - imgRect.top) / imgRect.height : 0;
   const nw = imgRect.width > 0 ? widthPx / imgRect.width : 0;
   const nh = imgRect.height > 0 ? heightPx / imgRect.height : 0;
-  const box = { x: clamp01(nx), y: clamp01(ny), width: clamp01(nw), height: clamp01(nh) };
+  const displayedBox = { x: clamp01(nx), y: clamp01(ny), width: clamp01(nw), height: clamp01(nh) };
+  const rotateDeg = getMediaDisplayDegrees(currentMedia);
+  const natural = transformFaceBoxFromDisplay(displayedBox, rotateDeg);
+  const box = {
+    x: clamp01(natural.x),
+    y: clamp01(natural.y),
+    width: clamp01(natural.width),
+    height: clamp01(natural.height),
+  };
   // Get originalId
   const originalId = currentMedia?.original?.id;
   if (!originalId) {
@@ -1082,13 +1207,18 @@ function renderFaces() {
   ov.innerHTML = '';
   const rect = getRenderedImageRect();
   if (rect.width <= 0 || rect.height <= 0) return;
+  const rotateDeg = getMediaDisplayDegrees(currentMedia);
   for (const face of currentFaces) {
     try {
       const b = face.box || face.boundingBox || face;
-      const x = Math.max(0, Math.min(1, b.x || 0));
-      const y = Math.max(0, Math.min(1, b.y || 0));
-      const w = Math.max(0, Math.min(1, b.width || 0));
-      const h = Math.max(0, Math.min(1, b.height || 0));
+      const raw = {
+        x: Math.max(0, Math.min(1, b.x || 0)),
+        y: Math.max(0, Math.min(1, b.y || 0)),
+        width: Math.max(0, Math.min(1, b.width || 0)),
+        height: Math.max(0, Math.min(1, b.height || 0)),
+      };
+      const rb = transformFaceBoxForDisplay(raw, rotateDeg);
+      const x = rb.x, y = rb.y, w = rb.width, h = rb.height;
       const left = rect.left + Math.round(x * rect.width);
       const top = rect.top + Math.round(y * rect.height);
       const pxw = Math.round(w * rect.width);
@@ -1488,7 +1618,10 @@ function initViewerControls() {
   const imgContainer = document.querySelector('.image-container');
   let clickTimer = null;
   // Re-render faces overlay on window resize
-  window.addEventListener('resize', () => { if (facesEnabled) { try { renderFaces(); } catch {} } });
+  window.addEventListener('resize', () => {
+    if (currentMedia) { try { applyImageRotation(currentMedia); } catch {} }
+    if (facesEnabled) { try { renderFaces(); } catch {} }
+  });
 
 
   // Add Face drawing event listeners
@@ -1506,9 +1639,12 @@ function initViewerControls() {
       if (!img || !currentMedia) return;
       const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
       const newUrl = (isFs ? api.mediaOriginalUrl(currentMedia.accessKey) : api.mediaNormalizedUrl(currentMedia.accessKey));
+      // Re-apply rotation: container size changes between windowed and fullscreen
+      applyImageRotation(currentMedia);
       // Fade and restart zoom timing on the newly displayed variant
       try { img.style.opacity = '0'; } catch {}
       img.onload = () => {
+        applyImageRotation(currentMedia);
         try { img.style.opacity = '1'; } catch {}
         try {
           const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
@@ -1960,10 +2096,13 @@ function createMosaicTile(media) {
   const tile = document.createElement('div');
   tile.className = 'mosaic-tile';
   tile.dataset.mediaKey = media.accessKey;
-  
+  // Apply user-defined orientation override (consumed by .mosaic-tile img CSS)
+  const tileDeg = getMediaDisplayDegrees(media);
+  if (tileDeg) tile.style.setProperty('--img-rotate', `${tileDeg}deg`);
+
   const tsStr = mediaTimestamp(media);
   if (tsStr) tile.dataset.timestamp = tsStr;
-  
+
   tile.onclick = async () => {
     try {
       // Use locally available media object first
@@ -1971,7 +2110,7 @@ function createMosaicTile(media) {
       showMedia(media);
     } catch (e) { console.warn('Failed to load media:', e); }
   };
-  
+
   const miniatureUrl = api.mediaMiniatureUrl(media.accessKey);
   const normalizedUrl = api.mediaNormalizedUrl(media.accessKey);
 
@@ -3609,6 +3748,30 @@ function init() {
     btn.textContent = '✎';
     btn.addEventListener('click', (e) => { e.stopPropagation(); if (currentMedia) openMediaEditModal(currentMedia); else alert('No media loaded'); });
     cont.appendChild(btn);
+  }
+  // Inject Rotate Right button (left of Edit)
+  if (cont && !document.getElementById('img-rotate-right-btn')) {
+    const rrBtn = document.createElement('button');
+    rrBtn.id = 'img-rotate-right-btn';
+    rrBtn.className = 'img-rotate-btn img-rotate-right-btn';
+    rrBtn.type = 'button';
+    rrBtn.title = 'Rotate right';
+    rrBtn.setAttribute('aria-label', 'Rotate right');
+    rrBtn.textContent = '⟳';
+    rrBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); rotateCurrentMedia(90); });
+    cont.appendChild(rrBtn);
+  }
+  // Inject Rotate Left button (left of Rotate Right)
+  if (cont && !document.getElementById('img-rotate-left-btn')) {
+    const rlBtn = document.createElement('button');
+    rlBtn.id = 'img-rotate-left-btn';
+    rlBtn.className = 'img-rotate-btn img-rotate-left-btn';
+    rlBtn.type = 'button';
+    rlBtn.title = 'Rotate left';
+    rlBtn.setAttribute('aria-label', 'Rotate left');
+    rlBtn.textContent = '⟲';
+    rlBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); rotateCurrentMedia(-90); });
+    cont.appendChild(rlBtn);
   }
   // Inject Download button (bottom-right, right of edit button)
   if (cont && !document.getElementById('img-download-btn')) {
