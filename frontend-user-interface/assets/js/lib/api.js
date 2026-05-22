@@ -148,8 +148,9 @@ export class ApiClient {
 
   // -- NDJSON helpers ---------------------------------------------------------
   async _fetchNdjson(url) {
-    const t = this._token() || '';
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
+    const t = this._token();
+    const headers = t ? { Authorization: `Bearer ${t}` } : {};
+    const response = await fetch(url, { headers });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
@@ -175,8 +176,9 @@ export class ApiClient {
   }
 
   async _fetchNdjsonStream(url, onItem) {
-    const t = this._token() || '';
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
+    const t = this._token();
+    const headers = t ? { Authorization: `Bearer ${t}` } : {};
+    const response = await fetch(url, { headers });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');

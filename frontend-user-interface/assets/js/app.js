@@ -28,7 +28,10 @@ let api = null; // Will be initialized after config is ready
 // Service Worker Registration — served from `/service-worker.js` so its
 // default scope is `/`, which is required for the SW to intercept `/api/.../content/...`
 // image fetches and inject the Authorization header.
-if ('serviceWorker' in navigator) {
+// Only registered when auth is enabled — otherwise images can be fetched
+// directly with no token to inject, and the SW would just add a wait per tile.
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
     .then(reg => {
       console.log('Service Worker registered', reg);
@@ -53,6 +56,16 @@ if ('serviceWorker' in navigator) {
       sendTokenToSW(keycloak?.token);
     }
   });
+}
+
+// When auth is disabled, unregister any previously installed SW so cached image
+// fetches don't keep waiting on a non-existent token.
+async function unregisterServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister().catch(() => {})));
+  } catch {}
 }
 
 function sendTokenToSW(token) {
@@ -3889,10 +3902,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 2. Decide if we need Keycloak
   if (authConfig && !authConfig.enabled) {
+    // Hide logout button — there's no session to end.
+    const logoutBtn = document.getElementById('nav-logout');
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    // No bearer token to inject into image requests — skip the SW entirely so
+    // image fetches go out directly instead of waiting on the SW's token poll.
+    await unregisterServiceWorker();
     api = buildApiClient();
     init();
     return;
   }
+
+  // Auth is enabled — install the SW so it can inject bearer tokens into
+  // <img> requests that can't carry an Authorization header themselves.
+  registerServiceWorker();
 
   // 3. Setup Keycloak
   keycloak = new Keycloak({
