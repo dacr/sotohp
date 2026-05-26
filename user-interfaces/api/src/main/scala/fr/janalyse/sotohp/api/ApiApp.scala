@@ -741,6 +741,54 @@ object ApiApp extends ZIOAppDefault {
       )
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  // Stream up to `limit` medias starting just after `fromKey`, walking the
+  // timestamp index in either direction. Lets the mosaic UI fetch a whole
+  // page of tiles in one HTTP call instead of one round trip per neighbour.
+  // Hard caps the limit so a misbehaving client can't ask for the world.
+  val mediaStreamMaxLimit = 200
+
+  def mediaStreamLogic(fromKey: String, backward: Boolean, limit: Option[Int]): ZStream[MediaService, Throwable, ApiMedia] = {
+    val effectiveLimit = limit.getOrElse(50).max(0).min(mediaStreamMaxLimit)
+    val key            = MediaAccessKey(fromKey)
+    MediaService
+      .mediaStream(key, backward, effectiveLimit)
+      .map { mediaTuple =>
+        mediaTuple.media.into[ApiMedia]
+          .withFieldConst(_.accessKey, mediaTuple.key)
+          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .transform
+      }
+      .mapError(err => ApiInternalError("Couldn't stream medias"))
+  }
+
+  val mediaStreamEndpoint =
+    secureMediaEndpoint(true)
+      .name("Stream medias from a key")
+      .summary("Stream up to `limit` medias starting just after `fromKey`, forward (newer, default) or backward (older)")
+      .in("stream")
+      .in(query[String]("fromKey").description("media access key to start streaming from (exclusive)"))
+      .in(query[Option[Boolean]]("backward").description("if true, walk toward older medias instead of newer"))
+      .in(query[Option[Int]]("limit").description(s"maximum number of medias to return (default 50, max $mediaStreamMaxLimit)"))
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Media JSON object per line)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        (fromKey, backward, limit) =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = mediaStreamLogic(fromKey, backward.getOrElse(false), limit)
+                           .map(_.toJson)
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
   enum MediaSelector {
     case random
     case first
@@ -1785,6 +1833,7 @@ object ApiApp extends ZIOAppDefault {
   val apiRoutes = List(
     // -------------------------
     mediaListEndpoint,
+    mediaStreamEndpoint,
     mediaSelectEndpoint,
     mediaGetEndpoint,
     mediaUpdateEndpoint,

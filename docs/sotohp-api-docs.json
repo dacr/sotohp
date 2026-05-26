@@ -86,6 +86,106 @@
         ]
       }
     },
+    "/api/medias/stream" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Stream up to `limit` medias starting just after `fromKey`, forward (newer, default) or backward (older)",
+        "operationId" : "Stream medias from a key",
+        "parameters" : [
+          {
+            "name" : "fromKey",
+            "in" : "query",
+            "description" : "media access key to start streaming from (exclusive)",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "backward",
+            "in" : "query",
+            "description" : "if true, walk toward older medias instead of newer",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
+          },
+          {
+            "name" : "limit",
+            "in" : "query",
+            "description" : "maximum number of medias to return (default 50, max 200)",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Media JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Media"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter fromKey, Invalid value for: query parameter backward, Invalid value for: query parameter limit",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/media" : {
       "get" : {
         "tags" : [

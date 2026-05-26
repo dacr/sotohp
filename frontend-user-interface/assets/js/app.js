@@ -1985,6 +1985,25 @@ let mosaicOldestTimestamp = null; // Timestamp of first (oldest) media globally
 let mosaicNewestTimestamp = null; // Timestamp of last (newest) media globally
 let mosaicIsLoading = false;
 let mosaicLoadedMedia = []; // Array of media objects currently in DOM, sorted newest -> oldest
+// Bumped every time we throw away the current view (e.g. clicking the timeline).
+// In-flight fetch loops compare their captured generation against this so they
+// stop pushing stale media into a freshly cleared array.
+let mosaicGen = 0;
+// Cached column count for the current grid; invalidated on resize / size change.
+let mosaicCachedCols = 0;
+// Defensive set of every accessKey currently rendered. Any tile insertion goes
+// through claim/release so two code paths can never put the same media in the
+// grid twice (e.g. an in-flight appendOlder racing with a scroll-triggered
+// appendOlder, or an API returning an item we already have).
+const mosaicSeenKeys = new Set();
+function mosaicClaimKey(key) {
+  if (!key || mosaicSeenKeys.has(key)) return false;
+  mosaicSeenKeys.add(key);
+  return true;
+}
+function mosaicResetSeen() {
+  mosaicSeenKeys.clear();
+}
 // We keep a reference to the oldest and newest loaded media to know where to fetch next
 function getOldestLoaded() { return mosaicLoadedMedia.length > 0 ? mosaicLoadedMedia[mosaicLoadedMedia.length - 1] : null; }
 function getNewestLoaded() { return mosaicLoadedMedia.length > 0 ? mosaicLoadedMedia[0] : null; }
@@ -2010,6 +2029,7 @@ function applyMosaicSize(sz) {
   container.classList.remove('size-small', 'size-medium', 'size-max');
   const cls = sz === 'small' ? 'size-small' : (sz === 'medium' ? 'size-medium' : 'size-max');
   container.classList.add(cls);
+  invalidateMosaicColumns();
 
   const ctl = document.getElementById('mosaic-size-ctl');
   if (ctl) {
@@ -2065,10 +2085,22 @@ function timestampToScrollPosition(timestamp, oldestTime, newestTime) {
   return Math.max(0, Math.min(1, scrollRatio));
 }
 
+// Effective timestamp used by the backend to order media:
+//   shootDateTime (user override) → original.cameraShootDateTime → first event timestamp.
+// Backend has a further fileLastModified fallback we don't expose to the API.
+// Used for display/timeline only — display order trusts the backend's own
+// "next"/"previous" traversal, never a frontend resort.
 function mediaTimestamp(media) {
-  try { return media?.shootDateTime || media?.original?.cameraShootDateTime || null; } catch { return null; }
+  try {
+    if (!media) return null;
+    if (media.shootDateTime) return media.shootDateTime;
+    if (media.original && media.original.cameraShootDateTime) return media.original.cameraShootDateTime;
+    if (Array.isArray(media.events)) {
+      for (const ev of media.events) { if (ev && ev.timestamp) return ev.timestamp; }
+    }
+    return null;
+  } catch { return null; }
 }
-function isMediaDated(media) { return !!mediaTimestamp(media); }
 
 // Helper: Create a tile element for a media
 // Note: We reuse the createMosaicTile function but without the cache-busting complexity which was removed
@@ -2208,114 +2240,86 @@ function ensureMosaicGrid() {
 // Count the rendered columns of the mosaic grid. The grid uses
 // `repeat(auto-fill, minmax(N, 1fr))`, so the actual column count depends on
 // container width AND the current size class — we have to ask the browser.
+// Cached because getComputedStyle is expensive and we run this on every
+// prepend; invalidated by applyMosaicSize and a ResizeObserver on the grid.
 function getMosaicColumns(grid) {
   if (!grid) return 1;
+  if (mosaicCachedCols > 0) return mosaicCachedCols;
   try {
     const tmpl = window.getComputedStyle(grid).getPropertyValue('grid-template-columns') || '';
     const tracks = tmpl.trim().split(/\s+/).filter(t => t && t !== 'none');
-    return Math.max(1, tracks.length);
+    mosaicCachedCols = Math.max(1, tracks.length);
+    return mosaicCachedCols;
   } catch { return 1; }
 }
+function invalidateMosaicColumns() { mosaicCachedCols = 0; }
 
-// Fetch a batch of media relative to a reference
-async function fetchMediaBatch(direction, referenceMedia, count = MOSAIC_BATCH_SIZE) {
-  try {
-    if (!referenceMedia) return [];
-    // We manually fetch neighbors one by one or in small groups?
-    // The API only supports getMedia(next/prev) relative to ONE media.
-    // It doesn't support "get next N medias".
-    // We have to iterate. This is slow for large batches.
-    // Optimization: Use `mediaListLogic` (stream) is not efficient for "get 50 starting at X".
-    // Ideally we need a `list` endpoint with cursor/offset. We don't have one.
-    // We only have `getMedia` (next/prev) or `mediasList` (full stream).
-    // WORKAROUND: Parallelize requests to fill the batch.
-
-    // Actually, `ApiApp.scala` doesn't seem to expose a ranged fetch.
-    // We will chain requests. To make it faster, we can speculate or just accept it.
-    // Or we use the timeline timestamp to jump if gaps are large.
-
-    // For "smooth" scrolling, we fetch one by one.
-    const batch = [];
-    let currentRef = referenceMedia.accessKey;
-    // Limit concurrent to avoid flooding if it's slow
-    // But sequential is safer for ordering.
-    for (let i=0; i<count; i++) {
-        try {
-            const m = await api.getMedia(direction, currentRef);
-            if (!m || m.accessKey === currentRef) break; // End of list
-            if (isMediaDated(m)) batch.push(m);
-            currentRef = m.accessKey;
-        } catch (e) { break; }
+// Walk the timestamp index from `referenceMedia`, calling `onItem(m)` for
+// each media as it arrives over an NDJSON stream. Returns the number of
+// items emitted. `direction` is "next" (newer) or "previous" (older). If
+// `onItem` returns false the stream is aborted so the server stops sending.
+//
+// One HTTP request per batch replaces what used to be N sequential
+// getMedia round-trips — by far the biggest cost in mosaic loading.
+async function streamMediaBatch(direction, referenceMedia, count, onItem) {
+    if (!referenceMedia) return 0;
+    const backward = direction === 'previous';
+    const controller = new AbortController();
+    let appended = 0;
+    let stopped = false;
+    try {
+        await api.mediasStreamFromKey(referenceMedia.accessKey, {
+            backward,
+            limit: count,
+            signal: controller.signal,
+            onItem: (m) => {
+                if (stopped) return;
+                if (!m || m.accessKey === referenceMedia.accessKey) return;
+                const cont = onItem(m);
+                if (cont === false) {
+                    stopped = true;
+                    try { controller.abort(); } catch {}
+                    return;
+                }
+                appended++;
+            },
+        });
+    } catch (e) {
+        if (e?.name !== 'AbortError' && !stopped) {
+            console.warn('mediaStream failed:', e);
+        }
     }
-    return batch;
-  } catch { return []; }
-}
-
-// Specialized fetch: Get N media "around" a timestamp.
-// Since API doesn't support "around", we fetch "next" (newer) and "previous" (older) from that timestamp.
-async function fetchAroundTimestamp(ts, count = MOSAIC_BATCH_SIZE) {
-    // Try to get a starting point
-    let startMedia = null;
-    try { startMedia = await api.getMedia('next', null, ts); } catch {}
-    if (!startMedia) {
-        try { startMedia = await api.getMedia('previous', null, ts); } catch {}
-    }
-    if (!startMedia) return []; // No media at all?
-
-    const loaded = [startMedia];
-
-    // Fetch older
-    let curr = startMedia.accessKey;
-    const olderCount = Math.floor(count / 2);
-    for(let i=0; i<olderCount; i++) {
-        try {
-            const m = await api.getMedia('previous', curr);
-            if(!m || m.accessKey === curr) break;
-            if(isMediaDated(m)) loaded.push(m);
-            curr = m.accessKey;
-        } catch { break; }
-    }
-
-    // Fetch newer
-    curr = startMedia.accessKey;
-    const newerCount = count - olderCount;
-    for(let i=0; i<newerCount; i++) {
-        try {
-            const m = await api.getMedia('next', curr);
-            if(!m || m.accessKey === curr) break;
-            if(isMediaDated(m)) loaded.unshift(m); // Newer goes to start of list
-            curr = m.accessKey;
-        } catch { break; }
-    }
-
-    // Sort overall newest -> oldest
-    loaded.sort((a,b) => new Date(b.shootDateTime||0).getTime() - new Date(a.shootDateTime||0).getTime());
-    return loaded;
+    return appended;
 }
 
 async function appendOlder() {
     if (mosaicIsLoading) return;
     const last = getOldestLoaded();
     if (!last) return;
+    const startGen = mosaicGen;
     mosaicIsLoading = true;
+    const grid = ensureMosaicGrid();
     let gotItems = false;
     try {
-        const batch = await fetchMediaBatch('previous', last, MOSAIC_BATCH_SIZE);
-        if (batch.length > 0) {
+        await streamMediaBatch('previous', last, MOSAIC_BATCH_SIZE, (m) => {
+            if (mosaicGen !== startGen) return false; // canceled by refresh
+            if (!mosaicClaimKey(m.accessKey)) return true; // dedupe: skip but keep walking
+            mosaicLoadedMedia.push(m);
+            if (grid) grid.appendChild(createMosaicTile(m));
             gotItems = true;
-            mosaicLoadedMedia.push(...batch);
-            const grid = ensureMosaicGrid();
-            if (grid) batch.forEach(m => grid.appendChild(createMosaicTile(m)));
-        }
-    } finally { mosaicIsLoading = false; }
+            return true;
+        });
+    } finally {
+        if (mosaicGen === startGen) mosaicIsLoading = false;
+    }
     // Auto-fill: if the container isn't scrollable yet (small tiles + small batch
     // leave a partial first screen), keep loading until it is, or until we hit
     // the end of the dataset. Without this the `scroll` event never fires and
     // the user has to wheel-scroll to wake the loader up.
-    if (gotItems) {
+    if (gotItems && mosaicGen === startGen) {
         const container = document.getElementById('mosaic-container');
         if (container && container.scrollHeight <= container.clientHeight + MOSAIC_SCROLL_THRESHOLD) {
-            setTimeout(() => appendOlder(), 0);
+            appendOlder();
         }
     }
 }
@@ -2324,47 +2328,71 @@ async function prependNewer() {
     if (mosaicIsLoading) return;
     const first = getNewestLoaded();
     if (!first) return;
+    const startGen = mosaicGen;
     mosaicIsLoading = true;
     const container = document.getElementById('mosaic-container');
-    const oldScrollHeight = container.scrollHeight;
-    try {
-        const grid = ensureMosaicGrid();
-        if (!grid) return;
+    const grid = ensureMosaicGrid();
+    if (!grid) { mosaicIsLoading = false; return; }
 
-        // To keep existing tiles in their current columns when items are inserted
-        // above them, the number of inserted cells must be a multiple of the
-        // current column count. Otherwise the grid (auto-fill, row-major) reflows
-        // every existing tile sideways — the user sees photos "moving through
-        // columns" instead of the view shifting down by whole rows.
-        const cols = getMosaicColumns(grid);
-        const requested = Math.ceil(MOSAIC_BATCH_SIZE / cols) * cols;
-        const batch = await fetchMediaBatch('next', first, requested);
-        if (batch.length === 0) return;
+    // To keep existing tiles in their current columns when items are inserted
+    // above them, the number of inserted cells must be a multiple of the
+    // current column count. Otherwise the grid (auto-fill, row-major) reflows
+    // every existing tile sideways — the user sees photos "moving through
+    // columns" instead of the view shifting down by whole rows.
+    const cols = getMosaicColumns(grid);
+    const requested = Math.ceil(MOSAIC_BATCH_SIZE / cols) * cols;
+    const oldScrollHeight = container.scrollHeight;
+
+    // 'next' from a reference returns newer items in chronological order; we
+    // buffer them so we can insert as one row-aligned block (with leading
+    // fillers if the batch isn't a clean multiple of `cols`). Inserting tile
+    // by tile here would jiggle the scroll anchor every step and shift the
+    // remaining tiles between columns.
+    const batch = [];
+    try {
+        await streamMediaBatch('next', first, requested, (m) => {
+            if (mosaicGen !== startGen) return false;
+            if (!mosaicClaimKey(m.accessKey)) return true; // dedupe
+            batch.push(m);
+            return true;
+        });
+        if (mosaicGen !== startGen || batch.length === 0) return;
 
         // Drop any filler cells left over from a previous prepend — we'll re-pad
         // for the new batch below.
         grid.querySelectorAll(':scope > .mosaic-tile-filler').forEach(el => el.remove());
 
-        // 'next' from a reference returns newer items in chronological order;
-        // the array state stores newest-first, so reverse on the way in.
-        mosaicLoadedMedia.unshift(...[...batch].reverse());
-        batch.forEach(m => grid.insertBefore(createMosaicTile(m), grid.firstChild));
-
-        // When we hit the start of the dataset (partial batch), pad the very top
-        // with empty cells so the inserted group still lands on a row boundary
-        // and existing tiles keep their column position.
+        // batch is oldest-first within the newer-than-first range (batch[0]
+        // is the item right after `first`, batch[N-1] is the globally-newest
+        // we just discovered). The grid and the array both want newest-first,
+        // so:
+        //  - DOM: append tiles to the fragment in reverse, then insertBefore
+        //    the whole fragment so the newest ends up nearest grid.firstChild.
+        //  - Array: unshift each item in forward order so batch[N-1] ends up
+        //    at index 0 (the new `mosaicLoadedMedia[0]` must be the newest,
+        //    or the next prependNewer will fetch items already on screen).
+        const frag = document.createDocumentFragment();
         const pad = (cols - (batch.length % cols)) % cols;
         for (let i = 0; i < pad; i++) {
             const f = document.createElement('div');
             f.className = 'mosaic-tile-filler';
-            grid.insertBefore(f, grid.firstChild);
+            frag.appendChild(f);
+        }
+        for (let i = batch.length - 1; i >= 0; i--) {
+            frag.appendChild(createMosaicTile(batch[i]));
+        }
+        grid.insertBefore(frag, grid.firstChild);
+        for (let i = 0; i < batch.length; i++) {
+            mosaicLoadedMedia.unshift(batch[i]);
         }
 
         // Maintain the user's scroll position so the view doesn't jump as rows
         // are inserted above.
         const newScrollHeight = container.scrollHeight;
         container.scrollTop += (newScrollHeight - oldScrollHeight);
-    } finally { mosaicIsLoading = false; }
+    } finally {
+        if (mosaicGen === startGen) mosaicIsLoading = false;
+    }
 }
 
 async function refreshMosaicAtTimestamp(ts) {
@@ -2373,9 +2401,15 @@ async function refreshMosaicAtTimestamp(ts) {
     const grid = ensureMosaicGrid();
     if (!container || !grid) return;
 
+    // Invalidate any in-flight appendOlder/prependNewer/refresh — they'll see
+    // the bumped generation on their next await and stop pushing into the
+    // about-to-be-cleared array.
+    mosaicGen++;
+    const startGen = mosaicGen;
     mosaicIsLoading = true;
-    grid.innerHTML = ''; // Clear current
+    grid.innerHTML = '';
     mosaicLoadedMedia = [];
+    mosaicResetSeen();
 
     const indicator = document.getElementById('mosaic-scroll-indicator');
     if (indicator) {
@@ -2384,41 +2418,81 @@ async function refreshMosaicAtTimestamp(ts) {
     }
 
     try {
-        const batch = await fetchAroundTimestamp(ts, MOSAIC_BATCH_SIZE);
-        mosaicLoadedMedia = batch;
-        batch.forEach(m => grid.appendChild(createMosaicTile(m)));
+        // Find a starting media at/near the timestamp: prefer the first newer
+        // (so the visible block trends "newest first"), fall back to older.
+        let startMedia = null;
+        try { startMedia = await api.getMedia('next', null, ts); } catch {}
+        if (mosaicGen !== startGen) return;
+        if (!startMedia) {
+            try { startMedia = await api.getMedia('previous', null, ts); } catch {}
+        }
+        if (mosaicGen !== startGen || !startMedia) return;
 
-        // Scroll to middle/top roughly?
-        // We probably want the requested timestamp to be visible.
-        // It's roughly in the middle of the batch.
-        // Wait for layout?
-        setTimeout(() => {
-             // Scroll to center of container?
-             // Or find the specific tile.
-             // Let's just scroll to top if we fetched "around".
-             // Actually `fetchAroundTimestamp` put target near middle/start.
-             // We can scroll to the element with closest timestamp.
-             const tile = Array.from(grid.children).find(t => {
-                 const tts = t.dataset.timestamp;
-                 return tts && Math.abs(new Date(tts) - new Date(ts)) < 10000;
-             });
-             if (tile) tile.scrollIntoView({ block: "center" });
-             else container.scrollTop = 0; // fallback
-        }, 50);
+        // Seed with the anchor item then stream older items below it and newer
+        // items above it. We render as we go — first tile shows up after one
+        // round trip instead of waiting for ~50.
+        mosaicClaimKey(startMedia.accessKey);
+        mosaicLoadedMedia = [startMedia];
+        grid.appendChild(createMosaicTile(startMedia));
+
+        const olderCount = Math.floor(MOSAIC_BATCH_SIZE / 2);
+        const newerCount = MOSAIC_BATCH_SIZE - olderCount;
+
+        // Older items go past the anchor; "previous" walks the index downward
+        // (toward smaller timestamps) so they arrive newest-to-oldest from the
+        // anchor's perspective — push to the end of both array and grid.
+        const olderTask = streamMediaBatch('previous', startMedia, olderCount, (m) => {
+            if (mosaicGen !== startGen) return false;
+            if (!mosaicClaimKey(m.accessKey)) return true; // dedupe
+            mosaicLoadedMedia.push(m);
+            grid.appendChild(createMosaicTile(m));
+            return true;
+        });
+
+        // Newer items go above the anchor; "next" walks upward (toward larger
+        // timestamps) so each new item is newer than the previous one. Insert
+        // each one at the very top of array and grid to keep the array
+        // strictly newest-first and the DOM in matching order. No filler/
+        // column-alignment dance because this is the initial fill, not a
+        // mid-scroll prepend.
+        const newerTask = streamMediaBatch('next', startMedia, newerCount, (m) => {
+            if (mosaicGen !== startGen) return false;
+            if (!mosaicClaimKey(m.accessKey)) return true; // dedupe
+            mosaicLoadedMedia.unshift(m);
+            grid.insertBefore(createMosaicTile(m), grid.firstChild);
+            return true;
+        });
+
+        await Promise.all([olderTask, newerTask]);
+        if (mosaicGen !== startGen) return;
+
+        // Center the anchor tile in the viewport — it's the one tagged with
+        // exactly the timestamp the user clicked.
+        requestAnimationFrame(() => {
+            if (mosaicGen !== startGen) return;
+            const tile = grid.querySelector(`.mosaic-tile[data-media-key="${CSS.escape(startMedia.accessKey)}"]`);
+            if (tile) tile.scrollIntoView({ block: 'center' });
+            else container.scrollTop = 0;
+        });
 
         persistMosaicTimestamp(ts);
         updateTimelineCursor(ts);
     } finally {
-        mosaicIsLoading = false;
-        setTimeout(() => indicator?.classList.remove('show'), 1000);
+        if (mosaicGen === startGen) {
+            mosaicIsLoading = false;
+            setTimeout(() => indicator?.classList.remove('show'), 1000);
+        }
     }
     // Kick the auto-fill cascade so the initial batch grows until the viewport
     // is scrollable (small tiles need many more than MOSAIC_BATCH_SIZE items).
-    setTimeout(() => {
-        if (container.scrollHeight <= container.clientHeight + MOSAIC_SCROLL_THRESHOLD) {
-            appendOlder();
-        }
-    }, 80);
+    if (mosaicGen === startGen) {
+        setTimeout(() => {
+            if (mosaicGen !== startGen) return;
+            if (container.scrollHeight <= container.clientHeight + MOSAIC_SCROLL_THRESHOLD) {
+                appendOlder();
+            }
+        }, 80);
+    }
 }
 
 // Build the left-side clickable timeline with year markers
@@ -2483,48 +2557,39 @@ async function loadMosaic() {
   const tabSection = document.getElementById('tab-mosaic');
   if (!container || !tabSection) return;
 
-  // Initialize scroll handler for infinite scrolling
+  // Initialize scroll handler for infinite scrolling.
+  // Scroll fires at display rate (sometimes faster than rAF); we coalesce so
+  // the loader checks, layout reads, and timeline cursor update happen at
+  // most once per frame.
   if (!container.__scrollWired) {
-      container.addEventListener('scroll', () => {
+      let scrollScheduled = false;
+      const onScrollFrame = () => {
+          scrollScheduled = false;
           const st = container.scrollTop;
           const sh = container.scrollHeight;
           const ch = container.clientHeight;
-          
-          // Check edges for loading
+
           if (st < MOSAIC_SCROLL_THRESHOLD) {
               prependNewer();
           } else if (st + ch > sh - MOSAIC_SCROLL_THRESHOLD) {
               appendOlder();
           }
-          
-          // Update timeline cursor based on visible center
-          // Find element in center
-          const centerY = st + ch / 2;
-          const grid = container.querySelector('.mosaic-grid');
-          if (grid) {
-              // Quick approx: find a tile that overlaps center
-              // Since tiles are in a grid, we can just sample one
-              // Or just take the median of loadedMedia list? No, that depends on what's loaded.
-              // Better to use actual DOM position logic or simple ratio if strictly linear (it's not).
-              // Let's use the first visible tile's timestamp
-              // Since looking up elements from point is heavy on scroll, throttle or use simple logic.
-              // We'll update cursor based on the `getNewestLoaded()` and `getOldestLoaded()`?
-              // No, user wants to see *current* position.
-              // Let's rely on the middle item in the `mosaicLoadedMedia` array? No, the array is what's loaded, not what's visible.
-              // We need to know which index is visible. 
-              // Simple heuristic: 
-              // pct = st / (sh - ch). 
-              // visibleIndex = Math.floor(pct * mosaicLoadedMedia.length).
-              // ts = mosaicLoadedMedia[visibleIndex].timestamp.
-              if (mosaicLoadedMedia.length > 0) {
-                  const pct = Math.max(0, Math.min(1, st / (sh - ch || 1)));
-                  const idx = Math.floor(pct * (mosaicLoadedMedia.length - 1));
-                  const item = mosaicLoadedMedia[idx];
-                  if (item) {
-                      updateTimelineCursor(mediaTimestamp(item));
-                  }
-              }
+
+          // The grid is non-uniform in time density (more photos in some
+          // years), but the user only needs an approximate position cue —
+          // mapping scroll ratio onto the loaded array index is cheap and
+          // good enough, and avoids per-frame elementFromPoint hit-testing.
+          if (mosaicLoadedMedia.length > 0) {
+              const pct = Math.max(0, Math.min(1, st / (sh - ch || 1)));
+              const idx = Math.floor(pct * (mosaicLoadedMedia.length - 1));
+              const item = mosaicLoadedMedia[idx];
+              if (item) updateTimelineCursor(mediaTimestamp(item));
           }
+      };
+      container.addEventListener('scroll', () => {
+          if (scrollScheduled) return;
+          scrollScheduled = true;
+          requestAnimationFrame(onScrollFrame);
       }, { passive: true });
 
       // Handle "stuck at top" edge case:
@@ -2535,6 +2600,15 @@ async function loadMosaic() {
               prependNewer();
           }
       }, { passive: true });
+
+      // Container width can change without a class change (window resize,
+      // sidebar open/close, devtools, etc.). When it does the column count
+      // changes too, invalidating the cached value the prepend math relies
+      // on for row-aligned inserts.
+      if (typeof ResizeObserver !== 'undefined') {
+          const ro = new ResizeObserver(() => invalidateMosaicColumns());
+          ro.observe(container);
+      }
 
       container.__scrollWired = true;
   }

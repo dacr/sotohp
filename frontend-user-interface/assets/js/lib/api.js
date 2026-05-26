@@ -80,6 +80,18 @@ export class ApiClient {
   async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
   async mediasWithLocations(onItem) { await this._fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
 
+  // Stream up to `limit` medias starting just after `fromKey`, walking the
+  // timestamp index forward (newer) by default, or backward (older) when
+  // `backward` is true. Calls `onItem(media)` for each ApiMedia as it arrives;
+  // the abort signal can short-circuit the stream when the caller no longer
+  // wants the rest.
+  async mediasStreamFromKey(fromKey, { backward = false, limit = 50, signal, onItem } = {}) {
+    const params = new URLSearchParams({ fromKey });
+    if (backward) params.set('backward', 'true');
+    if (limit && limit > 0) params.set('limit', String(limit));
+    await this._fetchNdjsonStream(`/api/medias/stream?${params.toString()}`, onItem, signal);
+  }
+
   // -- State ------------------------------------------------------------------
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
 
@@ -175,10 +187,10 @@ export class ApiClient {
     return results;
   }
 
-  async _fetchNdjsonStream(url, onItem) {
+  async _fetchNdjsonStream(url, onItem, signal) {
     const t = this._token();
     const headers = t ? { Authorization: `Bearer ${t}` } : {};
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, signal });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');

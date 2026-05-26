@@ -175,6 +175,46 @@ class MediaServiceLive private (
       .logError("Couldn't get last media")
   }
 
+  // Walk the (timestamp, originalId) index from `fromKey` in the requested
+  // direction, emitting up to `limit` items as a stream. Collecting the index
+  // entries inside a single LMDB read transaction means the per-step cursor
+  // open/close stays in the microsecond range — vs. the client doing N HTTP
+  // round-trips, each paying request/response/serialization latency.
+  override def mediaStream(fromKey: MediaAccessKey, backward: Boolean, limit: Int): Stream[ServiceStreamIssue, MediaTuple] = {
+    val safeLimit = math.max(0, limit)
+    val collectKeys: IO[ServiceStreamIssue, List[(Instant, OriginalId)]] =
+      collections.originalIdByTimestamp
+        .readOnly { ops =>
+          def loop(currentKey: (Instant, OriginalId), remaining: Int, acc: List[(Instant, OriginalId)]): IO[zio.lmdb.FetchErrors, List[(Instant, OriginalId)]] = {
+            if (remaining <= 0) ZIO.succeed(acc.reverse)
+            else {
+              val step = if (backward) ops.previous(currentKey) else ops.next(currentKey)
+              step.flatMap {
+                case None              => ZIO.succeed(acc.reverse)
+                case Some((newKey, _)) => loop(newKey, remaining - 1, newKey :: acc)
+              }
+            }
+          }
+          loop(fromKey.toNative, safeLimit, Nil)
+        }
+        .mapError(err => ServiceStreamInternalIssue(s"Couldn't walk media timestamp index: $err"))
+
+    ZStream
+      .fromIterableZIO(collectKeys)
+      .mapZIO { case (timestamp, originalId) =>
+        collections.medias
+          .fetch(originalId)
+          .mapError(err => ServiceStreamInternalIssue(s"Couldn't fetch media: $err"))
+          .flatMap {
+            case None           => ZIO.fail(ServiceStreamInternalIssue(s"Media $originalId is in the timestamp index but missing from the medias collection"))
+            case Some(daoMedia) =>
+              daoMedia2Media(daoMedia)
+                .mapError(err => ServiceStreamInternalIssue(s"Couldn't convert media: $err"))
+                .map(media => MediaAccessKey(timestamp, originalId) -> media)
+          }
+      }
+  }
+
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
     collections.medias
       .fetch(key.toNative.originalId)
