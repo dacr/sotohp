@@ -95,7 +95,7 @@ object modules extends Module {
   object service extends SotohpModule with Publishable {
     def artifactName             = "sotohp-service"
     def moduleDeps               = Seq(core, search, processor)
-    lazy private val lmdbRelease = "2.8.5"
+    lazy private val lmdbRelease = "2.8.6"
     def mvnDeps                  = Seq(
       mvn"fr.janalyse::zio-lmdb:$lmdbRelease",
       mvn"fr.janalyse::query-dsl:$lmdbRelease",
@@ -125,7 +125,7 @@ object `user-interfaces` extends Module {
       mvn"com.softwaremill.sttp.tapir::tapir-json-zio:1.13.19",
       mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.13.19",
       mvn"com.github.jwt-scala::jwt-zio-json:11.0.4",
-      mvn"com.softwaremill.sttp.client4::zio:4.0.23"
+      mvn"com.softwaremill.sttp.client4::zio:4.0.24"
     )
 
     override def packageVersion = publishVersion
@@ -153,7 +153,7 @@ object `user-interfaces` extends Module {
     def mvnDeps      = Seq(
       mvn"dev.zio::zio-logging:2.5.3",
       mvn"dev.zio::zio-json:0.9.2",
-      mvn"com.softwaremill.sttp.client4::zio:4.0.23"
+      mvn"com.softwaremill.sttp.client4::zio:4.0.24"
     )
 
     override def packageVersion = publishVersion
