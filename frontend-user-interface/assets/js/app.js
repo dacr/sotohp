@@ -1155,6 +1155,7 @@ async function confirmAllInferredFaces(btnRef) {
   const targets = (currentFaces || []).filter(f => (!f.identifiedPersonId) && f.inferredIdentifiedPersonId);
   if (!targets || targets.length === 0) { updateConfirmAllButtonVisibility(); return; }
   const namesCount = targets.length;
+  if (!confirm(`Confirm all ${namesCount} inferred face${namesCount > 1 ? 's' : ''} on this image?`)) return;
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Confirming…'; }
   } catch {}
@@ -2759,19 +2760,12 @@ function renderPersonsList() {
           <div style="font-size:12px;color:#555">${meta}</div>
         </div>
         <button class="ev-edit-btn" title="Edit">✎ Edit</button>
-        <button class="ev-del-btn" title="Delete">🗑 Delete</button>
       </div>`;
     list.appendChild(li);
     const editBtn = li.querySelector('.ev-edit-btn');
     if (editBtn) editBtn.onclick = (e) => { e.stopPropagation(); openPersonEditModal(p); };
-    const delBtn = li.querySelector('.ev-del-btn');
-    if (delBtn) delBtn.onclick = async (e) => {
-      e.stopPropagation();
-      if (!confirm(`Delete person ${p.firstName} ${p.lastName}?`)) return;
-      try { await api.deletePerson(p.id); showSuccess('Person deleted'); await loadPersons(); }
-      catch { showError('Failed to delete person'); }
-    };
-    // Navigate to person faces view when clicking the tile background
+    // Navigate to person faces view when clicking the tile background.
+    // Delete now lives in the faces-view header (mirrors the portfolios UX).
     li.addEventListener('click', () => openPersonFacesView(p));
 
     if (observer && p.chosenFaceId) observer.observe(li);
@@ -3051,6 +3045,8 @@ async function openPersonFacesView(person) {
         </div>
         <div class="pf-right-actions">
           <button type="button" class="toggle-validate" title="Switch validation mode" style="border:1px solid #1d4ed8;background:#2563eb;color:#fff;border-radius:6px;padding:6px 10px;">to validate</button>
+          <button type="button" class="person-edit" title="Edit person" style="border:1px solid #1d4ed8;background:#2563eb;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer">✎ Edit</button>
+          <button type="button" class="person-delete" title="Delete person" style="background:#ef4444;color:#fff;border:1px solid #b91c1c;padding:6px 10px;border-radius:6px;cursor:pointer">🗑 Delete</button>
         </div>
       </div>
     </div>
@@ -3059,11 +3055,27 @@ async function openPersonFacesView(person) {
     </div>
   `;
   tab.appendChild(view);
-  const backBtn = view.querySelector('button.back');
-  wireOnce(backBtn, 'click', () => {
+  function closeFacesView() {
     try { view.remove(); } catch {}
     if (actions) actions.style.display = '';
     if (list) { list.style.display = ''; try { list.scrollIntoView({ block: 'nearest' }); } catch {} }
+  }
+  const backBtn = view.querySelector('button.back');
+  wireOnce(backBtn, 'click', closeFacesView);
+  const editPersonBtn = view.querySelector('button.person-edit');
+  wireOnce(editPersonBtn, 'click', () => openPersonEditModal(person));
+  const deletePersonBtn = view.querySelector('button.person-delete');
+  wireOnce(deletePersonBtn, 'click', async () => {
+    if (!confirm(`Delete person ${person.firstName} ${person.lastName}?`)) return;
+    try {
+      await api.deletePerson(person.id);
+      showSuccess('Person deleted');
+      closeFacesView();
+      await loadPersons();
+    } catch (e) {
+      console.warn('deletePerson failed', e);
+      showError('Failed to delete person');
+    }
   });
   // Load faces
   let faces = [];
