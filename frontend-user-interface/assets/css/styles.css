@@ -21,7 +21,9 @@ main { flex: 1; position: relative; }
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) rotate(var(--img-rotate, 0deg));
+  /* --user-zoom / --pan-x / --pan-y drive the manual zoom & pan controls; they
+     default to a no-op so the resting transform matches the original layout. */
+  transform: translate(calc(-50% + var(--pan-x, 0px)), calc(-50% + var(--pan-y, 0px))) rotate(var(--img-rotate, 0deg)) scale(var(--user-zoom, 1));
   /* Scale image up or down to fit available space while keeping proportions */
   width: 100%;
   height: 100%;

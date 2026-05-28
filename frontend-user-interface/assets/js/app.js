@@ -145,6 +145,112 @@ let personsCache = null; // Map personId -> person object
 let mediaFacesSeq = 0; // sequence to cancel stale loads
 let slideshowPlaying = false;
 
+// Manual zoom/pan state for the Viewer. viewerZoom === 1 means "fit", pan is in
+// screen pixels (applied before rotation so it stays in container space).
+let viewerZoom = 1;
+let viewerPanX = 0;
+let viewerPanY = 0;
+// Which media variant is currently loaded into #main-image ('normalized' | 'original').
+// We upgrade to the original whenever the user zooms in (or in fullscreen) so the
+// magnified pixels stay sharp.
+let viewerImageVariant = 'normalized';
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 6;
+const ZOOM_STEP = 1.25;
+
+// True when the original (full-resolution) variant should be shown: either the
+// container is fullscreen, or the user has zoomed past the fit scale.
+function viewerWantsOriginal() {
+  const cont = document.querySelector('.image-container');
+  const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
+  return isFs || viewerZoom > 1;
+}
+
+function desiredViewerSrc(media) {
+  return viewerWantsOriginal() ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey);
+}
+
+// Push the current zoom/pan onto #main-image (via CSS vars) and the faces overlay
+// (via an inline transform), keeping face boxes aligned with the magnified image.
+function applyViewerZoom() {
+  const cont = document.querySelector('.image-container');
+  const img = document.getElementById('main-image');
+  if (!img) return;
+  const cw = cont ? cont.clientWidth : 0;
+  const ch = cont ? cont.clientHeight : 0;
+  // Clamp the pan so the image cannot be dragged entirely out of view.
+  const maxX = Math.max(0, (viewerZoom - 1) * cw / 2);
+  const maxY = Math.max(0, (viewerZoom - 1) * ch / 2);
+  viewerPanX = Math.min(maxX, Math.max(-maxX, viewerPanX));
+  viewerPanY = Math.min(maxY, Math.max(-maxY, viewerPanY));
+  img.style.setProperty('--user-zoom', String(viewerZoom));
+  img.style.setProperty('--pan-x', `${viewerPanX}px`);
+  img.style.setProperty('--pan-y', `${viewerPanY}px`);
+  // Manual zoom and the slideshow Ken Burns animation both drive the transform,
+  // so suppress the animation while the user is zoomed in.
+  if (viewerZoom !== 1) img.classList.remove('zooming');
+  const ov = cont ? cont.querySelector('.faces-overlay') : null;
+  if (ov) {
+    ov.style.transform = (viewerZoom !== 1 || viewerPanX !== 0 || viewerPanY !== 0)
+      ? `translate(${viewerPanX}px, ${viewerPanY}px) scale(${viewerZoom})`
+      : '';
+  }
+  if (cont) cont.style.cursor = viewerZoom > 1 ? 'grab' : '';
+  const lvl = document.getElementById('zoom-level');
+  if (lvl) lvl.textContent = `${Math.round(viewerZoom * 100)}%`;
+}
+
+// Swap #main-image between the normalized and original variants when the desired
+// resolution changes (e.g. crossing the zoom threshold), preserving the zoom/pan.
+function ensureViewerImageVariant() {
+  const img = document.getElementById('main-image');
+  if (!img || !currentMedia) return;
+  const want = viewerWantsOriginal() ? 'original' : 'normalized';
+  if (want === viewerImageVariant) return;
+  viewerImageVariant = want;
+  const url = want === 'original'
+    ? api.mediaOriginalUrl(currentMedia.accessKey)
+    : api.mediaNormalizedUrl(currentMedia.accessKey);
+  img.onload = () => {
+    applyImageRotation(currentMedia);
+    applyViewerZoom();
+    if (facesEnabled) { try { renderFaces(); } catch {} }
+    img.onload = null;
+  };
+  img.src = url;
+}
+
+// Zoom by a multiplicative factor, keeping the point under (clientX, clientY)
+// stationary. Omit the coordinates to zoom about the container center.
+function zoomViewerBy(factor, clientX, clientY) {
+  const cont = document.querySelector('.image-container');
+  if (!cont || !currentMedia) return;
+  const s0 = viewerZoom;
+  const s1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s0 * factor));
+  if (s1 === s0) return;
+  const rect = cont.getBoundingClientRect();
+  let ux = 0, uy = 0;
+  if (typeof clientX === 'number' && typeof clientY === 'number') {
+    ux = clientX - (rect.left + rect.width / 2);
+    uy = clientY - (rect.top + rect.height / 2);
+  }
+  const ratio = s1 / s0;
+  viewerPanX = viewerPanX * ratio + ux * (1 - ratio);
+  viewerPanY = viewerPanY * ratio + uy * (1 - ratio);
+  viewerZoom = s1;
+  if (s1 === 1) { viewerPanX = 0; viewerPanY = 0; }
+  applyViewerZoom();
+  ensureViewerImageVariant();
+}
+
+function resetViewerZoom() {
+  viewerZoom = 1;
+  viewerPanX = 0;
+  viewerPanY = 0;
+  applyViewerZoom();
+  ensureViewerImageVariant();
+}
+
 // Recent persons selection (LRU of up to 10 personIds) persisted in localStorage
 function getRecentPersonsIds() {
   try {
@@ -289,8 +395,10 @@ function showMedia(media) {
     const cont = document.querySelector('.image-container');
     // Clear faces overlay immediately while new image loads to avoid misaligned boxes
     if (facesEnabled) { clearFacesOverlay(); }
-    const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
-    const srcUrl = (isFs ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey));
+    // Each new media starts at the fit scale with no pan.
+    viewerZoom = 1; viewerPanX = 0; viewerPanY = 0;
+    const srcUrl = desiredViewerSrc(media);
+    viewerImageVariant = viewerWantsOriginal() ? 'original' : 'normalized';
     // Apply user-defined orientation override before loading the new source
     applyImageRotation(media);
     // Smooth fade transition for image swaps
@@ -299,6 +407,8 @@ function showMedia(media) {
     img.onload = () => {
       // Recompute rotation-driven dimensions now that the container size is known
       applyImageRotation(media);
+      // Reset the manual zoom CSS vars / overlay transform for the fresh image
+      applyViewerZoom();
       // When the image is displayed, re-render faces overlay to match actual size
       if (facesEnabled) { try { renderFaces(); } catch {} }
       try { img.style.opacity = '1'; } catch {}
@@ -1622,6 +1732,10 @@ function initViewerControls() {
     const cont = document.querySelector('.image-container');
     if (!document.fullscreenElement) cont.requestFullscreen?.(); else document.exitFullscreen?.();
   });
+  // Zoom controls
+  $('#btn-zoom-in')?.addEventListener('click', () => zoomViewerBy(ZOOM_STEP));
+  $('#btn-zoom-out')?.addEventListener('click', () => zoomViewerBy(1 / ZOOM_STEP));
+  $('#btn-zoom-reset')?.addEventListener('click', () => resetViewerZoom());
   // Faces toggle wiring
   wireOnce(document.getElementById('btn-faces'), 'click', () => setFacesEnabled(!facesEnabled));
   // Restore persisted faces toggle
@@ -1634,9 +1748,40 @@ function initViewerControls() {
   // Re-render faces overlay on window resize
   window.addEventListener('resize', () => {
     if (currentMedia) { try { applyImageRotation(currentMedia); } catch {} }
+    try { applyViewerZoom(); } catch {}
     if (facesEnabled) { try { renderFaces(); } catch {} }
   });
 
+  // Mouse wheel ("molette") zooms toward the cursor. Non-passive so we can stop
+  // the page/tab from scrolling while zooming.
+  imgContainer?.addEventListener('wheel', (e) => {
+    if (!currentMedia) return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+    zoomViewerBy(factor, e.clientX, e.clientY);
+  }, { passive: false });
+
+  // Drag to pan while zoomed in (skip while the Add-Face draw tool is active).
+  let panning = false, panStartX = 0, panStartY = 0, panOrigX = 0, panOrigY = 0;
+  imgContainer?.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || isAddFaceModeActive() || viewerZoom <= 1) return;
+    panning = true;
+    panStartX = e.clientX; panStartY = e.clientY;
+    panOrigX = viewerPanX; panOrigY = viewerPanY;
+    imgContainer.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!panning) return;
+    viewerPanX = panOrigX + (e.clientX - panStartX);
+    viewerPanY = panOrigY + (e.clientY - panStartY);
+    applyViewerZoom();
+  });
+  window.addEventListener('mouseup', () => {
+    if (!panning) return;
+    panning = false;
+    if (imgContainer) imgContainer.style.cursor = viewerZoom > 1 ? 'grab' : '';
+  });
 
   // Add Face drawing event listeners
   imgContainer?.addEventListener('mousedown', handleAddFacePointerDown);
@@ -1651,14 +1796,17 @@ function initViewerControls() {
       const img = document.getElementById('main-image');
       const cont = document.querySelector('.image-container');
       if (!img || !currentMedia) return;
-      const isFs = !!(document.fullscreenElement && cont && document.fullscreenElement === cont);
-      const newUrl = (isFs ? api.mediaOriginalUrl(currentMedia.accessKey) : api.mediaNormalizedUrl(currentMedia.accessKey));
+      // Reset manual zoom when toggling fullscreen so the variant follows fullscreen.
+      viewerZoom = 1; viewerPanX = 0; viewerPanY = 0;
+      const newUrl = desiredViewerSrc(currentMedia);
+      viewerImageVariant = viewerWantsOriginal() ? 'original' : 'normalized';
       // Re-apply rotation: container size changes between windowed and fullscreen
       applyImageRotation(currentMedia);
       // Fade and restart zoom timing on the newly displayed variant
       try { img.style.opacity = '0'; } catch {}
       img.onload = () => {
         applyImageRotation(currentMedia);
+        applyViewerZoom();
         try { img.style.opacity = '1'; } catch {}
         try {
           const durActive = document.querySelector('#ss-duration button.active') || document.querySelector('#ss-duration button[data-secs="20"]');
@@ -1795,6 +1943,16 @@ function initViewerControls() {
       case 'PageUp':
         if (currentMedia) loadMedia('previous', currentMedia.accessKey); else loadMedia('last');
         handled = true; break;
+      case '+':
+      case '=':
+      case 'Add':
+        zoomViewerBy(ZOOM_STEP); handled = true; break;
+      case '-':
+      case '_':
+      case 'Subtract':
+        zoomViewerBy(1 / ZOOM_STEP); handled = true; break;
+      case '0':
+        resetViewerZoom(); handled = true; break;
     }
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   });
