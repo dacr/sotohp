@@ -157,6 +157,8 @@ let viewerImageVariant = 'normalized';
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 6;
 const ZOOM_STEP = 1.25;
+// Pixels moved per arrow-key press when panning a zoomed-in photo.
+const PAN_STEP = 60;
 
 // True when the original (full-resolution) variant should be shown: either the
 // container is fullscreen, or the user has zoomed past the fit scale.
@@ -249,6 +251,15 @@ function resetViewerZoom() {
   viewerPanY = 0;
   applyViewerZoom();
   ensureViewerImageVariant();
+}
+
+// Move the zoomed-in photo by (dx, dy) screen pixels. No-op when at fit scale.
+// applyViewerZoom() clamps the pan so the image can't be dragged out of view.
+function panViewerBy(dx, dy) {
+  if (viewerZoom <= 1) return;
+  viewerPanX += dx;
+  viewerPanY += dy;
+  applyViewerZoom();
 }
 
 // Recent persons selection (LRU of up to 10 personIds) persisted in localStorage
@@ -374,6 +385,25 @@ function setActiveTab(name) {
 
 function initTabs() {
   document.querySelectorAll('nav.tabs button').forEach(btn => btn.addEventListener('click', () => setActiveTab(btn.dataset.tab)));
+  // Alt+Page Down / Alt+Page Up cycle to the next / previous tab. Works from any
+  // tab; ignored while typing in a form field.
+  document.addEventListener('keydown', (e) => {
+    if (!e.altKey) return;
+    if (e.key !== 'PageDown' && e.key !== 'PageUp') return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    const tabs = Array.from(document.querySelectorAll('nav.tabs button[data-tab]'));
+    if (tabs.length === 0) return;
+    const names = tabs.map(b => b.dataset.tab);
+    const active = document.querySelector('nav.tabs button.active');
+    let idx = names.indexOf(active?.dataset?.tab);
+    if (idx < 0) idx = 0;
+    const delta = (e.key === 'PageDown') ? 1 : -1;
+    const next = (idx + delta + names.length) % names.length;
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveTab(names[next]);
+  });
   const initialRaw = location.hash?.slice(1) || 'viewer';
   const initial = (initialRaw === 'world') ? 'map' : initialRaw;
   setActiveTab(initial);
@@ -1924,6 +1954,8 @@ function initViewerControls() {
     if (!viewerActive) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    // Let Alt+PageUp/PageDown fall through to the global tab switcher.
+    if (e.altKey) return;
     let handled = false;
     switch (e.key) {
       case ' ':
@@ -1953,6 +1985,14 @@ function initViewerControls() {
         zoomViewerBy(1 / ZOOM_STEP); handled = true; break;
       case '0':
         resetViewerZoom(); handled = true; break;
+      case 'ArrowLeft':
+        if (viewerZoom > 1) { panViewerBy(PAN_STEP, 0); handled = true; } break;
+      case 'ArrowRight':
+        if (viewerZoom > 1) { panViewerBy(-PAN_STEP, 0); handled = true; } break;
+      case 'ArrowUp':
+        if (viewerZoom > 1) { panViewerBy(0, PAN_STEP); handled = true; } break;
+      case 'ArrowDown':
+        if (viewerZoom > 1) { panViewerBy(0, -PAN_STEP); handled = true; } break;
     }
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   });
@@ -1992,6 +2032,8 @@ function initViewerControls() {
     if (!eventsActive) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    // Let Alt+PageUp/PageDown fall through to the global tab switcher.
+    if (e.altKey) return;
     const sec = document.getElementById('tab-events');
     if (!sec) return;
     const line = 40; // px per arrow step

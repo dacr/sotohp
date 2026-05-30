@@ -14,15 +14,15 @@
   <header>
     <h1><img src="favicon.svg" alt="" width="20" height="20" style="vertical-align:middle;margin-right:8px">Sotohp</h1>
     <nav class="tabs">
-      <button data-tab="viewer" class="active">Viewer</button>
-      <button data-tab="mosaic">Mosaic</button>
-      <button data-tab="events">Events</button>
-      <button data-tab="portfolios">Portfolios</button>
-      <button data-tab="map">Map</button>
-      <button data-tab="persons">Persons</button>
-      <button data-tab="owners">Owners</button>
-      <button data-tab="stores">Stores</button>
-      <button data-tab="settings">Settings</button>
+      <button data-tab="viewer" class="active" title="Viewer (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Viewer</button>
+      <button data-tab="mosaic" title="Mosaic (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Mosaic</button>
+      <button data-tab="events" title="Events (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Events</button>
+      <button data-tab="portfolios" title="Portfolios (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Portfolios</button>
+      <button data-tab="map" title="Map (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Map</button>
+      <button data-tab="persons" title="Persons (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Persons</button>
+      <button data-tab="owners" title="Owners (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Owners</button>
+      <button data-tab="stores" title="Stores (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Stores</button>
+      <button data-tab="settings" title="Settings (next tab: Alt+Page Down · previous tab: Alt+Page Up)">Settings</button>
       <button id="nav-logout" style="margin-left:auto;background:#ef4444;color:white;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;">Logout</button>
     </nav>
   </header>
@@ -37,21 +37,21 @@
         <div class="sidebar">
           <div class="controls">
             <div class="row">
-              <button id="btn-first" title="First">⏮️</button>
-              <button id="btn-prev" title="Previous">◀️</button>
-              <button id="btn-next" title="Next">▶️</button>
-              <button id="btn-last" title="Last">⏭️</button>
+              <button id="btn-first" title="First (Home)">⏮️</button>
+              <button id="btn-prev" title="Previous (Page Up)">◀️</button>
+              <button id="btn-next" title="Next (Page Down)">▶️</button>
+              <button id="btn-last" title="Last (End)">⏭️</button>
             </div>
             <div class="row">
               <button id="btn-zoom-out" title="Zoom out (− / mouse wheel down)" aria-label="Zoom out">🔍−</button>
               <button id="btn-zoom-in" title="Zoom in (+ / mouse wheel up)" aria-label="Zoom in">🔍+</button>
-              <button id="btn-zoom-reset" title="Reset zoom (0)" aria-label="Reset zoom"><span id="zoom-level">100%</span></button>
+              <button id="btn-zoom-reset" title="Reset zoom (0) · arrow keys pan when zoomed in" aria-label="Reset zoom"><span id="zoom-level">100%</span></button>
             </div>
             <div class="row">
               <button id="btn-fullscreen" title="Fullscreen">⛶</button>
               <button id="btn-star" title="Toggle starred">☆</button>
               <button id="btn-random" title="Random">🎲</button>
-              <button id="btn-play" title="Play/Pause">▷</button>
+              <button id="btn-play" title="Play/Pause (Space)">▷</button>
               <button id="btn-faces" title="Show faces" aria-label="Show faces">🙂</button>
               <div class="ss-group">
                 <div id="ss-duration" class="segmented" role="group" aria-label="Slideshow delay">
@@ -204,6 +204,6 @@
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/keycloak-js@25.0.4/dist/keycloak.min.js"></script>
   <!-- App -->
-  <script type="module" src="assets/js/app.js?v=48"></script>
+  <script type="module" src="assets/js/app.js?v=49"></script>
 </body>
 </html>
