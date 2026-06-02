@@ -15,6 +15,17 @@ import java.util.regex.Pattern
 
 type MediaTuple = (key: MediaAccessKey, media: Media)
 
+// Minimal projection used for the map tab: avoids the Original + Events
+// joins and trims the wire payload to just what a Leaflet marker needs.
+case class MediaLocation(
+  accessKey: MediaAccessKey,
+  latitude: LatitudeDecimalDegrees,
+  longitude: LongitudeDecimalDegrees,
+  shootDateTime: Option[ShootDateTime],
+  starred: Starred,
+  eventId: Option[EventId]
+)
+
 trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -22,6 +33,7 @@ trait MediaService {
   def mediaSearch(keywordsFilter: Set[Keyword]): Stream[ServiceStreamIssue, MediaTuple]
 
   def mediaList(): Stream[ServiceStreamIssue, MediaTuple]
+  def mediaLocationList(): Stream[ServiceStreamIssue, MediaLocation]
   def mediaFirst(): IO[ServiceIssue, Option[MediaTuple]]
   def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
   def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
@@ -224,6 +236,8 @@ object MediaService {
   def mediaSearch(keywordsFilter: Set[Keyword]): ZStream[MediaService, ServiceStreamIssue, MediaTuple] = ZStream.serviceWithStream(_.mediaSearch(keywordsFilter))
 
   def mediaList(): ZStream[MediaService, ServiceStreamIssue, MediaTuple] = ZStream.serviceWithStream(_.mediaList())
+
+  def mediaLocationList(): ZStream[MediaService, ServiceStreamIssue, MediaLocation] = ZStream.serviceWithStream(_.mediaLocationList())
 
   def mediaFirst(): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaFirst())
 

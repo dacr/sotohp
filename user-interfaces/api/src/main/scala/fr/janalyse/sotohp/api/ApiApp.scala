@@ -742,6 +742,49 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  // Slim NDJSON projection used by the map tab. Walks the GEO index so only
+  // located medias are read, and skips the Original+Events join entirely.
+  def mediaLocationListLogic: ZStream[MediaService, Throwable, ApiMediaLocation] = {
+    MediaService
+      .mediaLocationList()
+      .map { mediaLocation =>
+        ApiMediaLocation(
+          accessKey = mediaLocation.accessKey,
+          latitude = mediaLocation.latitude,
+          longitude = mediaLocation.longitude,
+          shootDateTime = mediaLocation.shootDateTime,
+          starred = mediaLocation.starred,
+          eventId = mediaLocation.eventId
+        )
+      }
+      .mapError(err => ApiInternalError("Couldn't list media locations"))
+  }
+
+  val mediaLocationListEndpoint =
+    secureMediaEndpoint(true)
+      .name("List media locations")
+      .summary("Stream the slim location-only projection of every located media (for the map tab)")
+      .in("locations")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiMediaLocation.apiMediaLocationSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one MediaLocation JSON object per line)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = mediaLocationListLogic
+                           .map(writeToString(_))
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
   // Stream up to `limit` medias starting just after `fromKey`, walking the
   // timestamp index in either direction. Lets the mosaic UI fetch a whole
   // page of tiles in one HTTP call instead of one round trip per neighbour.
@@ -1832,6 +1875,7 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   val apiRoutes = List(
     // -------------------------
+    mediaLocationListEndpoint,
     mediaListEndpoint,
     mediaStreamEndpoint,
     mediaSelectEndpoint,

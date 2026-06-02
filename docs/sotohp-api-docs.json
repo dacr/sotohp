@@ -6,6 +6,66 @@
     "description" : "Medias management software by @crodav"
   },
   "paths" : {
+    "/api/medias/locations" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Stream the slim location-only projection of every located media (for the map tab)",
+        "operationId" : "List media locations",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one MediaLocation JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MediaLocation"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/medias" : {
       "get" : {
         "tags" : [
@@ -4904,6 +4964,40 @@
           "Photo",
           "Video"
         ]
+      },
+      "MediaLocation" : {
+        "title" : "MediaLocation",
+        "type" : "object",
+        "required" : [
+          "accessKey",
+          "latitude",
+          "longitude",
+          "starred"
+        ],
+        "properties" : {
+          "accessKey" : {
+            "type" : "string"
+          },
+          "latitude" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "longitude" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "shootDateTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "starred" : {
+            "type" : "boolean"
+          },
+          "eventId" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }
       },
       "MediaSelector" : {
         "title" : "MediaSelector",

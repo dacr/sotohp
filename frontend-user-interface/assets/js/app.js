@@ -2073,28 +2073,58 @@ function goToWorldLocation(loc, accessKey) {
   } catch {}
 }
 
+// Per-eventId name cache so a cluster with N markers from the same event
+// pays one HTTP fetch (or zero if the user never opens the popup).
+const mapEventNameCache = new Map();
+async function getEventNameCached(eventId) {
+  if (!eventId) return '';
+  if (mapEventNameCache.has(eventId)) return mapEventNameCache.get(eventId);
+  const p = (async () => {
+    try { const ev = await api.getEvent(eventId); return ev?.name || ''; }
+    catch { return ''; }
+  })();
+  mapEventNameCache.set(eventId, p);
+  return p;
+}
+
+// Batching: addLayers in chunks while the stream is in flight so users see
+// markers appearing progressively instead of nothing-then-everything.
+const MAP_MARKER_BATCH_SIZE = 200;
+const MAP_MARKER_BATCH_INTERVAL_MS = 250;
+
 function loadMapData({ clear = false } = {}) {
   if (!map) return;
   if (mapLoading) { $('#map-status').textContent = 'Already loading…'; return; }
   if (clear) { cluster.clearLayers(); mapAddedKeys.clear(); }
   $('#map-status').textContent = 'Loading medias with location…';
   mapLoading = true;
-  let received = 0;
-  const markersToAdd = [];
-  api.mediasWithLocations(m => {
-    const loc = m.location || m.userDefinedLocation || m.deductedLocation; if (!loc) return;
-    if (mapAddedKeys.has(m.accessKey)) return; // keep existing data, avoid duplicates
+  let pendingBatch = [];
+  let lastFlush = performance.now();
+  const flush = () => {
+    if (pendingBatch.length === 0) return;
+    const batch = pendingBatch; pendingBatch = [];
+    cluster.addLayers(batch);
+    lastFlush = performance.now();
+    $('#map-status').textContent = `Loaded ${mapAddedKeys.size} markers…`;
+    if (pendingFocusKey && mapMarkersByKey.has(pendingFocusKey)) {
+      const marker = mapMarkersByKey.get(pendingFocusKey);
+      try { cluster.zoomToShowLayer(marker, () => { marker.openPopup(); }); } catch {}
+      pendingFocusKey = null;
+    }
+  };
+  api.mediasLocations(m => {
+    // Slim payload: { accessKey, latitude, longitude, shootDateTime?, starred, eventId? }
+    if (mapAddedKeys.has(m.accessKey)) return;
     mapAddedKeys.add(m.accessKey);
-    const marker = L.marker([loc.latitude, loc.longitude]);
-    const date = m.shootDateTime || m.original?.cameraShootDateTime || '';
-    const eventName = (m.events && m.events.length > 0) ? m.events[0].name : '';
+    const marker = L.marker([m.latitude, m.longitude]);
+    const date = m.shootDateTime || '';
     const starred = m.starred ? '⭐' : '☆';
-    // The img src is deliberately left empty here — the popup may be opened
-    // long after the markers were built and any token baked into the URL would
-    // be expired. The popupopen handler refreshes the token and sets src then.
+    // The popup body is rendered with a placeholder event name. The
+    // popupopen handler resolves the event name and image src lazily —
+    // we don't pay for either unless the user actually opens the marker.
     marker.bindPopup(`
         <div style="min-width:200px">
-          <div style="font-weight:600">${eventName} ${starred}</div>
+          <div style="font-weight:600"><span id="evname-${m.accessKey}">…</span> ${starred}</div>
           <div style="font-size:12px;color:#555">${date ? new Date(date).toLocaleString() : ''}</div>
           <img id="thumb-${m.accessKey}" alt="media" style="width:100%;height:auto;border-radius:6px;margin-top:6px"/>
           <button id="goto-${m.accessKey}" style="margin-top:6px">Open</button>
@@ -2102,7 +2132,18 @@ function loadMapData({ clear = false } = {}) {
       `);
     marker.on('popupopen', async () => {
       const b = document.getElementById(`goto-${m.accessKey}`);
-      if (b) b.onclick = () => { setActiveTab('viewer'); showMedia(m); };
+      if (b) b.onclick = async () => {
+        setActiveTab('viewer');
+        try {
+          const full = await api.getMediaByKey(m.accessKey);
+          showMedia(full);
+        } catch {}
+      };
+      const evEl = document.getElementById(`evname-${m.accessKey}`);
+      if (evEl) {
+        const name = await getEventNameCached(m.eventId);
+        evEl.textContent = name || '(no event)';
+      }
       const imgEl = document.getElementById(`thumb-${m.accessKey}`);
       if (imgEl) {
         try { if (keycloak) await keycloak.updateToken(30); } catch {}
@@ -2111,23 +2152,17 @@ function loadMapData({ clear = false } = {}) {
       }
     });
     mapMarkersByKey.set(m.accessKey, marker);
-    markersToAdd.push(marker);
-    if (pendingFocusKey && m.accessKey === pendingFocusKey) {
-      // Focus will be handled after addLayers
+    pendingBatch.push(marker);
+    const now = performance.now();
+    if (pendingBatch.length >= MAP_MARKER_BATCH_SIZE || (now - lastFlush) >= MAP_MARKER_BATCH_INTERVAL_MS) {
+      flush();
     }
-    received += 1; if (received % 200 === 0) $('#map-status').textContent = `Loaded ${mapAddedKeys.size} markers…`;
   }).then(() => {
-    if (markersToAdd.length > 0) {
-      cluster.addLayers(markersToAdd);
-    }
-    if (pendingFocusKey && mapMarkersByKey.has(pendingFocusKey)) {
-       const marker = mapMarkersByKey.get(pendingFocusKey);
-       try { cluster.zoomToShowLayer(marker, () => { marker.openPopup(); }); } catch {}
-       pendingFocusKey = null;
-    }
+    flush();
     mapLoading = false;
     $('#map-status').textContent = `Done. Markers: ${mapAddedKeys.size}`;
   }).catch(() => {
+    flush();
     mapLoading = false;
     $('#map-status').textContent = `Load interrupted. Markers: ${mapAddedKeys.size}`;
   });

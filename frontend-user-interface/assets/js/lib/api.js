@@ -79,6 +79,7 @@ export class ApiClient {
   async updateMediaStarred(mediaAccessKey, state) { await this.http.put(`/api/media/${encodeURIComponent(mediaAccessKey)}/starred`, null, { params: { state } }); }
   async getMediaFaces(mediaAccessKey) { const res = await this.http.get(`/api/media/${encodeURIComponent(mediaAccessKey)}/faces`); return res.data; }
   async mediasWithLocations(onItem) { await this._fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem); }
+  async mediasLocations(onItem, signal) { await this._fetchNdjsonStream('/api/medias/locations', onItem, signal); }
 
   // Stream up to `limit` medias starting just after `fromKey`, walking the
   // timestamp index forward (newer) by default, or backward (older) when
@@ -97,6 +98,7 @@ export class ApiClient {
 
   // -- Events -----------------------------------------------------------------
   async listEvents() { return this._fetchNdjson('/api/events'); }
+  async getEvent(eventId) { const res = await this.http.get(`/api/event/${encodeURIComponent(eventId)}`); return res.data; }
   async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
   async updateEvent(eventId, body) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body); }
   async deleteEvent(eventId) { await this.http.delete(`/api/event/${encodeURIComponent(eventId)}`); }

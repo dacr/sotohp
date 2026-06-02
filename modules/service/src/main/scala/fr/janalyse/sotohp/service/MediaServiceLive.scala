@@ -99,6 +99,44 @@ class MediaServiceLive private (
     ZStream.unwrapScoped(medias)
   }
 
+  // Walks the GEO index so only medias that actually have a location are
+  // touched, and projects each one into the slim MediaLocation shape used
+  // by the map tab. Skips the Original+Events join and EXIF/keywords —
+  // ~20x smaller payload than mediaList for the same set of medias.
+  override def mediaLocationList(): Stream[ServiceStreamIssue, MediaLocation] = {
+    val locations = for {
+      firstKey <- collections.originalIdByLocation
+                    .head()
+                    .map(_.map((key, _) => key))
+                    .mapError(err => ServiceStreamInternalIssue(s"Couldn't reach first location key : $err"))
+      stream    = firstKey
+                    .map(key => collections.originalIdByLocation.indexed(key, limitToKey = false))
+                    .getOrElse(ZStream.empty)
+                    .mapZIO { case (_, originalId) =>
+                      collections.medias
+                        .fetch(originalId)
+                        .map(_.flatMap(daoMedia =>
+                          // location must be defined for entries in this index;
+                          // flatMap collapses the safety check with no extra cost
+                          daoMedia.location.map(loc =>
+                            MediaLocation(
+                              accessKey = MediaAccessKey(daoMedia.timestamp.toInstant, originalId),
+                              latitude = loc.latitude,
+                              longitude = loc.longitude,
+                              shootDateTime = daoMedia.shootDateTime,
+                              starred = daoMedia.starred,
+                              eventId = daoMedia.events.headOption
+                            )
+                          )
+                        ))
+                    }
+                    .collect { case Some(loc) => loc }
+                    .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect media locations : $err"))
+    } yield stream
+
+    ZStream.unwrapScoped(locations)
+  }
+
   override def mediaFind(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
     // TODO temporary implementation
     mediaNext(nearKey)
@@ -1649,7 +1687,42 @@ class MediaServiceLive private (
                  .runForeach { case ((originalId, _), idx) => ops.index(idx, originalId) }
         } yield ()
       }
-    (collections.medias.rebuildIndexes() *>
+
+    // daoMedia.location is a denormalized field used by the GEO index. It was
+    // added after the initial schema and is only populated when a media is
+    // written via the Media→DaoMedia transformer (which computes the derived
+    // Media.location). Pre-existing DaoMedia rows therefore deserialize with
+    // location = None and the GEO index ends up massively under-populated.
+    // Walk every media, derive the effective location with the same precedence
+    // as Media.location — userDefined → deducted → original.location → first
+    // event with a location — and rewrite the row whenever the stored value
+    // drifts.
+    val rematerializeMediaLocations =
+      collections.medias
+        .streamWithKeys()
+        .mapZIO { case (originalId, daoMedia) =>
+          for {
+            maybeOriginal <- collections.originals.fetch(originalId)
+            eventLocation <- ZIO
+                               .foreach(daoMedia.events)(eventId => collections.events.fetch(eventId))
+                               .map(_.flatten.iterator.flatMap(_.location).nextOption())
+            computed       = daoMedia.userDefinedLocation
+                               .orElse(daoMedia.deductedLocation)
+                               .orElse(maybeOriginal.flatMap(_.location))
+                               .orElse(eventLocation)
+                               .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d)
+            changed       <- if (computed == daoMedia.location) ZIO.succeed(0)
+                             else
+                               collections.medias
+                                 .upsertOverwrite(originalId, daoMedia.copy(location = computed))
+                                 .as(1)
+          } yield changed
+        }
+        .runFold(0L)(_ + _)
+
+    (rematerializeMediaLocations
+      .tap(count => ZIO.logInfo(s"daoMedia.location rematerialized for $count medias")) *>
+      collections.medias.rebuildIndexes() *>
       ZIO.logInfo("medias indexes rebuilt !") *>
       collections.originals.rebuildIndexes() *>
       ZIO.logInfo("originals indexes rebuilt !") *>

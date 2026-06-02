@@ -66,6 +66,9 @@ export class ApiClient {
     async mediasWithLocations(onItem) {
         await this.fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem);
     }
+    async mediasLocations(onItem) {
+        await this.fetchNdjsonStream('/api/medias/locations', onItem);
+    }
     async fetchNdjson(url) {
         // Fallback non-streaming NDJSON reader
         const res = await this.http.get(url, { responseType: 'text' });

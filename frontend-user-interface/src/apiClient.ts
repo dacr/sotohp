@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { Media, MediaSelector, Event as SEvent, Owner, Store, EventCreate, EventUpdate } from './types'
+import type { Media, MediaLocation, MediaSelector, Event as SEvent, Owner, Store, EventCreate, EventUpdate } from './types'
 import { getToken, updateToken } from './auth'
 
 export class ApiClient {
@@ -83,6 +83,10 @@ export class ApiClient {
 
   async mediasWithLocations(onItem: (m: Media) => void): Promise<void> {
     await this.fetchNdjsonStream('/api/medias?filterHasLocation=true', onItem)
+  }
+
+  async mediasLocations(onItem: (m: MediaLocation) => void): Promise<void> {
+    await this.fetchNdjsonStream('/api/medias/locations', onItem)
   }
 
   private async fetchNdjson<T>(url: string): Promise<T[]> {

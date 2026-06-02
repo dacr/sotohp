@@ -90,3 +90,13 @@ export interface Media {
 }
 
 export type MediaSelector = 'first' | 'last' | 'next' | 'previous' | 'random'
+
+// Slim shape used by the map tab — see /api/medias/locations
+export interface MediaLocation {
+  accessKey: string;
+  latitude: number;
+  longitude: number;
+  shootDateTime?: string;
+  starred: boolean;
+  eventId?: string;
+}
