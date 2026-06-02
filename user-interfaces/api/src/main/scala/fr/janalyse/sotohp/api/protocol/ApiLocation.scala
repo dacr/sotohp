@@ -1,11 +1,10 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.*
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
-import zio.lmdb.json.LMDBCodecJson
 import fr.janalyse.sotohp.service.json.{*, given}
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
 
 case class ApiLocation(
   latitude: LatitudeDecimalDegrees,
@@ -14,6 +13,6 @@ case class ApiLocation(
 )
 
 object ApiLocation {
-  given JsonCodec[ApiLocation] = DeriveJsonCodec.gen
-  given Schema[ApiLocation]    = Schema.derived[ApiLocation].name(Schema.SName("Location"))
+  given JsonValueCodec[ApiLocation] = JsonCodecMaker.make
+  given Schema[ApiLocation]         = Schema.derived[ApiLocation].name(Schema.SName("Location"))
 }

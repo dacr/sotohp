@@ -1,7 +1,8 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import sttp.tapir.Schema
-import zio.json.{DeriveJsonCodec, JsonCodec}
 
 import java.time.OffsetDateTime
 
@@ -14,6 +15,6 @@ case class ApiSynchronizeStatus(
 )
 
 object ApiSynchronizeStatus {
-  given JsonCodec[ApiSynchronizeStatus] = DeriveJsonCodec.gen
-  given Schema[ApiSynchronizeStatus]    = Schema.derived[ApiSynchronizeStatus].name(Schema.SName("SynchronizeStatus"))
+  given JsonValueCodec[ApiSynchronizeStatus] = JsonCodecMaker.make
+  given Schema[ApiSynchronizeStatus]         = Schema.derived[ApiSynchronizeStatus].name(Schema.SName("SynchronizeStatus"))
 }

@@ -1,10 +1,11 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.{BirthDate, FirstName, LastName}
 import fr.janalyse.sotohp.model.{PersonDescription, PersonEmail}
-import sttp.tapir.Schema
-import zio.json.{DeriveJsonCodec, JsonCodec}
 import fr.janalyse.sotohp.service.json.{*, given}
+import sttp.tapir.Schema
 
 case class ApiPersonCreate(
   firstName: FirstName,
@@ -15,6 +16,6 @@ case class ApiPersonCreate(
 )
 
 object ApiPersonCreate {
-  given JsonCodec[ApiPersonCreate] = DeriveJsonCodec.gen
-  given Schema[ApiPersonCreate]    = Schema.derived[ApiPersonCreate].name(Schema.SName("PersonCreate"))
+  given JsonValueCodec[ApiPersonCreate] = JsonCodecMaker.make
+  given Schema[ApiPersonCreate]         = Schema.derived[ApiPersonCreate].name(Schema.SName("PersonCreate"))
 }

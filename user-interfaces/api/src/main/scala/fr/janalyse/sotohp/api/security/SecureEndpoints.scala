@@ -4,9 +4,8 @@ import fr.janalyse.sotohp.api.AuthConfig
 import fr.janalyse.sotohp.api.protocol.{ApiIssue, ApiSecurityError}
 import sttp.model.StatusCode
 import sttp.tapir.{EndpointInput, EndpointOutput, Schema, auth, oneOf, oneOfVariant, query, statusCode}
-import sttp.tapir.json.zio.jsonBody
+import sttp.tapir.json.jsoniter.jsonBody
 import zio.*
-import zio.json.*
 
 object SecureEndpoints {
 

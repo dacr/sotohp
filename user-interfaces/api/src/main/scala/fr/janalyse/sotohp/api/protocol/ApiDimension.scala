@@ -1,10 +1,10 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.*
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 import fr.janalyse.sotohp.service.json.{*, given}
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
 
 case class ApiDimension(
   width: Width,
@@ -12,6 +12,6 @@ case class ApiDimension(
 )
 
 object ApiDimension {
-  given JsonCodec[ApiDimension] = DeriveJsonCodec.gen
-  given Schema[ApiDimension]    = Schema.derived[ApiDimension].name(Schema.SName("Dimension"))
+  given JsonValueCodec[ApiDimension] = JsonCodecMaker.make
+  given Schema[ApiDimension]         = Schema.derived[ApiDimension].name(Schema.SName("Dimension"))
 }

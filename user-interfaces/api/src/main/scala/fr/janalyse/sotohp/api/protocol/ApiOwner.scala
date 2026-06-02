@@ -1,9 +1,10 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.{BirthDate, FirstName, LastName, OriginalId, OwnerId}
-import sttp.tapir.Schema
-import zio.json.{DeriveJsonCodec, JsonCodec}
 import fr.janalyse.sotohp.service.json.given
+import sttp.tapir.Schema
 
 case class ApiOwner(
   id: OwnerId,
@@ -14,6 +15,6 @@ case class ApiOwner(
 )
 
 object ApiOwner {
-  given JsonCodec[ApiOwner]              = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiOwner]         = JsonCodecMaker.make
   given apiOwnerSchema: Schema[ApiOwner] = Schema.derived[ApiOwner].name(Schema.SName("Owner"))
 }

@@ -1,8 +1,8 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
-import zio.json.*
 
 case class ApiInfo(
   authors: List[String],
@@ -12,7 +12,6 @@ case class ApiInfo(
 )
 
 object ApiInfo {
-  given JsonCodec[ApiInfo] = DeriveJsonCodec.gen
-  given Schema[ApiInfo]    = Schema.derived[ApiInfo].name(Schema.SName("Info"))
+  given JsonValueCodec[ApiInfo] = JsonCodecMaker.make
+  given Schema[ApiInfo]         = Schema.derived[ApiInfo].name(Schema.SName("Info"))
 }
-

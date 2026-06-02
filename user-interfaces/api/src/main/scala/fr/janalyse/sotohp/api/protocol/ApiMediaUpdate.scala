@@ -1,12 +1,12 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.{Event, Keyword, Location, Media, MediaAccessKey, MediaDescription, Orientation, Original, ShootDateTime, Starred}
 import fr.janalyse.sotohp.service.json.{*, given}
 import io.scalaland.chimney.*
 import io.scalaland.chimney.dsl.*
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
-import zio.json.*
 
 case class ApiMediaUpdate(
   description: Option[MediaDescription],
@@ -18,7 +18,7 @@ case class ApiMediaUpdate(
 )
 
 object ApiMediaUpdate {
-  given JsonCodec[ApiMediaUpdate]              = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiMediaUpdate]         = JsonCodecMaker.make
   given apiMediaSchema: Schema[ApiMediaUpdate] = Schema.derived[ApiMediaUpdate].name(Schema.SName("Media"))
 
   given transformer: Transformer[Media, ApiMediaUpdate] =

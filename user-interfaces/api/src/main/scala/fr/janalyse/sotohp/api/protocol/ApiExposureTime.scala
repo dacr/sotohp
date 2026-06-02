@@ -1,8 +1,8 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 
 case class ApiExposureTime(
   numerator: Long,
@@ -10,6 +10,6 @@ case class ApiExposureTime(
 )
 
 object ApiExposureTime {
-  given JsonCodec[ApiExposureTime] = DeriveJsonCodec.gen
-  given Schema[ApiExposureTime]    = Schema.derived[ApiExposureTime].name(Schema.SName("ExposureTime"))
+  given JsonValueCodec[ApiExposureTime] = JsonCodecMaker.make
+  given Schema[ApiExposureTime]         = Schema.derived[ApiExposureTime].name(Schema.SName("ExposureTime"))
 }

@@ -3,11 +3,11 @@ package fr.janalyse.sotohp.api
 import com.typesafe.config.ConfigFactory
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
-import zio.json.*
+import com.github.plokhotnyuk.jsoniter_scala.core.writeToString
 import sttp.apispec.openapi.Info
 import sttp.model.{Header, MediaType, StatusCode}
 import sttp.tapir.generic.auto.*
-import sttp.tapir.json.zio.*
+import sttp.tapir.json.jsoniter.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import sttp.tapir.ztapir.*
@@ -356,7 +356,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = ownerListLogic
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -475,7 +475,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = storeListLogic
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -733,7 +733,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = mediaListLogic(filterHasLocation)
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -781,7 +781,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = mediaStreamLogic(fromKey, backward.getOrElse(false), limit)
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -936,7 +936,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = faceListLogic
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -1154,7 +1154,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = personListLogic
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -1331,7 +1331,7 @@ object ApiApp extends ZIOAppDefault {
             personId  <- extractPersonId(rawPersonId)
             ms        <- ZIO.service[MediaService]
             byteStream = personFaceListLogic(personId)
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -1506,7 +1506,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = eventListLogic
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
@@ -1577,7 +1577,7 @@ object ApiApp extends ZIOAppDefault {
           for {
             ms        <- ZIO.service[MediaService]
             byteStream = portfolioListLogic
-                           .map(_.toJson)
+                           .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))

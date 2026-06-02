@@ -1,9 +1,10 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.{AddedOn, MediaAccessKey, OriginalId}
 import fr.janalyse.sotohp.service.json.given
 import sttp.tapir.Schema
-import zio.json.{DeriveJsonCodec, JsonCodec}
 
 case class ApiState(
   originalId: OriginalId,
@@ -12,6 +13,6 @@ case class ApiState(
 )
 
 object ApiState {
-  given JsonCodec[ApiState]              = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiState]         = JsonCodecMaker.make
   given apiOwnerSchema: Schema[ApiState] = Schema.derived[ApiState].name(Schema.SName("State"))
 }

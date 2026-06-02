@@ -1,8 +1,6 @@
 package fr.janalyse.sotohp.api
 
 import fr.janalyse.sotohp.model.{Media, MediaAccessKey, Orientation}
-import zio.json.*
-import zio.json.internal.{RetractReader, Write}
 import sttp.tapir.Schema
 import sttp.tapir.SchemaType.SString
 

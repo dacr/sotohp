@@ -1,9 +1,10 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.OriginalId
 import fr.janalyse.sotohp.model.{FaceId, PersonId}
 import fr.janalyse.sotohp.service.json.{*, given}
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 import sttp.tapir.Schema
 
 import java.time.OffsetDateTime
@@ -19,7 +20,7 @@ case class ApiDetectedFace(
 )
 
 object ApiDetectedFace {
-  given JsonCodec[ApiDetectedFace] = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiDetectedFace] = JsonCodecMaker.make
 
   given apiDetectedFaceSchema: Schema[ApiDetectedFace] = Schema.derived[ApiDetectedFace].name(Schema.SName("DetectedFace"))
 }

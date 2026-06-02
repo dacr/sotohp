@@ -15,35 +15,36 @@
  */
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import sttp.tapir.Schema
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonDiscriminator}
 
 sealed trait ApiIssue extends Exception
 
 object ApiIssue {
-  given JsonCodec[ApiIssue] = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiIssue] = JsonCodecMaker.make
 }
 
 case class ApiInvalidOrMissingInput(message: String) extends Exception(message) with ApiIssue
 object ApiInvalidOrMissingInput {
-  given JsonCodec[ApiInvalidOrMissingInput] = DeriveJsonCodec.gen
-  given Schema[ApiInvalidOrMissingInput]    = Schema.derived[ApiInvalidOrMissingInput].name(Schema.SName("InvalidOrMissingInput"))
+  given JsonValueCodec[ApiInvalidOrMissingInput] = JsonCodecMaker.make
+  given Schema[ApiInvalidOrMissingInput]         = Schema.derived[ApiInvalidOrMissingInput].name(Schema.SName("InvalidOrMissingInput"))
 }
 
 case class ApiInternalError(message: String) extends Exception(message) with ApiIssue
 object ApiInternalError {
-  given JsonCodec[ApiInternalError] = DeriveJsonCodec.gen
-  given Schema[ApiInternalError]    = Schema.derived[ApiInternalError].name(Schema.SName("ErrorInternal"))
+  given JsonValueCodec[ApiInternalError] = JsonCodecMaker.make
+  given Schema[ApiInternalError]         = Schema.derived[ApiInternalError].name(Schema.SName("ErrorInternal"))
 }
 
 case class ApiResourceNotFound(message: String) extends Exception(message) with ApiIssue
 object ApiResourceNotFound {
-  given JsonCodec[ApiResourceNotFound] = DeriveJsonCodec.gen
-  given Schema[ApiResourceNotFound]    = Schema.derived[ApiResourceNotFound].name(Schema.SName("ErrorResourceNotFound"))
+  given JsonValueCodec[ApiResourceNotFound] = JsonCodecMaker.make
+  given Schema[ApiResourceNotFound]         = Schema.derived[ApiResourceNotFound].name(Schema.SName("ErrorResourceNotFound"))
 }
 
 case class ApiSecurityError(message: String) extends Exception(message) with ApiIssue
 object ApiSecurityError {
-  given JsonCodec[ApiSecurityError] = DeriveJsonCodec.gen
-  given Schema[ApiSecurityError]    = Schema.derived[ApiSecurityError].name(Schema.SName("ErrorSecurity"))
+  given JsonValueCodec[ApiSecurityError] = JsonCodecMaker.make
+  given Schema[ApiSecurityError]         = Schema.derived[ApiSecurityError].name(Schema.SName("ErrorSecurity"))
 }

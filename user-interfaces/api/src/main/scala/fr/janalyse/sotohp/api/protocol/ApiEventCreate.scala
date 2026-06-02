@@ -1,10 +1,10 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.json.{*, given}
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 
 case class ApiEventCreate(
   name: EventName,
@@ -13,6 +13,6 @@ case class ApiEventCreate(
 )
 
 object ApiEventCreate {
-  given JsonCodec[ApiEventCreate] = DeriveJsonCodec.gen
-  given Schema[ApiEventCreate]    = Schema.derived[ApiEventCreate].name(Schema.SName("EventCreate"))
+  given JsonValueCodec[ApiEventCreate] = JsonCodecMaker.make
+  given Schema[ApiEventCreate]         = Schema.derived[ApiEventCreate].name(Schema.SName("EventCreate"))
 }

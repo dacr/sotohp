@@ -1,12 +1,12 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.json.{*, given}
 import io.scalaland.chimney.*
 import io.scalaland.chimney.dsl.*
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
-import zio.json.*
 
 case class ApiBoundingBox(
   x: Double,
@@ -16,7 +16,7 @@ case class ApiBoundingBox(
 )
 
 object ApiBoundingBox {
-  given JsonCodec[ApiBoundingBox] = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiBoundingBox] = JsonCodecMaker.make
 
   given apiBoundingBoxSchema: Schema[ApiBoundingBox] = Schema.derived[ApiBoundingBox].name(Schema.SName("BoundingBox"))
 
@@ -46,7 +46,7 @@ case class ApiFace(
 )
 
 object ApiFace {
-  given JsonCodec[ApiFace] = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiFace] = JsonCodecMaker.make
 
   given apiFaceSchema: Schema[ApiFace] = Schema.derived[ApiFace].name(Schema.SName("Face"))
 }

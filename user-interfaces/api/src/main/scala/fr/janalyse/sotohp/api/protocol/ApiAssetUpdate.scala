@@ -1,7 +1,8 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import sttp.tapir.Schema
-import zio.json.{DeriveJsonCodec, JsonCodec}
 
 case class ApiAssetUpdate(
   oldAsset: ApiAsset,
@@ -9,6 +10,6 @@ case class ApiAssetUpdate(
 )
 
 object ApiAssetUpdate {
-  given JsonCodec[ApiAssetUpdate] = DeriveJsonCodec.gen
-  given Schema[ApiAssetUpdate]    = Schema.derived[ApiAssetUpdate].name(Schema.SName("AssetUpdate"))
+  given JsonValueCodec[ApiAssetUpdate] = JsonCodecMaker.make
+  given Schema[ApiAssetUpdate]         = Schema.derived[ApiAssetUpdate].name(Schema.SName("AssetUpdate"))
 }

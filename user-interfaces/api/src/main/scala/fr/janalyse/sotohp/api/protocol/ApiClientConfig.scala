@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.api.protocol
 
-import zio.json.*
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 
 case class ApiClientAuth(
   enabled: Boolean,
@@ -10,7 +11,7 @@ case class ApiClientAuth(
 )
 
 object ApiClientAuth {
-  implicit val codec: JsonCodec[ApiClientAuth] = DeriveJsonCodec.gen
+  implicit val codec: JsonValueCodec[ApiClientAuth] = JsonCodecMaker.make
 }
 
 case class ApiClientConfig(
@@ -18,5 +19,5 @@ case class ApiClientConfig(
 )
 
 object ApiClientConfig {
-  implicit val codec: JsonCodec[ApiClientConfig] = DeriveJsonCodec.gen
+  implicit val codec: JsonValueCodec[ApiClientConfig] = JsonCodecMaker.make
 }

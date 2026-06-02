@@ -1,11 +1,11 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.{Aperture, ArtistInfo, CameraName, Dimension, ExposureTime, FileLastModified, FileSize, FocalLength, ISO, Location, MediaKind, Orientation, Original, OriginalId, OriginalPath, ShootDateTime, Store, StoreId}
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 import fr.janalyse.sotohp.service.json.{*, given}
 import io.scalaland.chimney.Transformer
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
 
 case class ApiOriginal(
   id: OriginalId,
@@ -29,6 +29,6 @@ object ApiOriginal {
       .define[Original, ApiOriginal]
       .withFieldComputed(_.storeId, _.store.id)
       .buildTransformer
-  given JsonCodec[ApiOriginal] = DeriveJsonCodec.gen
-  given Schema[ApiOriginal] = Schema.derived[ApiOriginal].name(Schema.SName("Original"))
+  given JsonValueCodec[ApiOriginal] = JsonCodecMaker.make
+  given Schema[ApiOriginal]         = Schema.derived[ApiOriginal].name(Schema.SName("Original"))
 }

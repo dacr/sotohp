@@ -1,12 +1,12 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.{Original, OriginalId}
 import fr.janalyse.sotohp.model.{FaceId}
 import fr.janalyse.sotohp.processor.model.{OriginalFaces}
 import fr.janalyse.sotohp.service.json.{*, given}
-import zio.json.{DeriveJsonCodec, JsonCodec, jsonHint}
 import sttp.tapir.Schema
-import sttp.tapir.Schema.annotations.encodedName
 import io.scalaland.chimney.Transformer
 
 case class ApiOriginalFaces(
@@ -22,7 +22,7 @@ object ApiOriginalFaces {
       .withFieldComputed(_.originalId, _.original.id)
       .buildTransformer
 
-  given JsonCodec[ApiOriginalFaces] = DeriveJsonCodec.gen
+  given JsonValueCodec[ApiOriginalFaces] = JsonCodecMaker.make
 
   given apiDetectedSchema: Schema[ApiOriginalFaces] = Schema.derived[ApiOriginalFaces].name(Schema.SName("OriginalFaces"))
 }

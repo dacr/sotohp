@@ -1,254 +1,261 @@
 package fr.janalyse.sotohp.service
 
+import com.github.plokhotnyuk.jsoniter_scala.core.{JsonReader, JsonValueCodec, JsonWriter}
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.model.*
 import wvlet.airframe.ulid.ULID
-import zio.json.internal.{RetractReader, Write}
-import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder, JsonError}
 
 import java.nio.file.Path
-import scala.util.matching.Regex
 
 package object json {
 
-  given originalIdCodec: JsonCodec[OriginalId] = new JsonCodec(
-    (a: OriginalId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => OriginalId(JsonDecoder.uuid.unsafeDecode(trace, in))
+  private def codec[T](
+    enc: (T, JsonWriter) => Unit,
+    dec: JsonReader => T
+  ): JsonValueCodec[T] = new JsonValueCodec[T] {
+    override def nullValue: T                               = null.asInstanceOf[T]
+    override def encodeValue(x: T, out: JsonWriter): Unit   = enc(x, out)
+    override def decodeValue(in: JsonReader, default: T): T = dec(in)
+  }
+
+  given originalIdCodec: JsonValueCodec[OriginalId] = codec(
+    (x, out) => out.writeVal(x.asUUID),
+    in => OriginalId(in.readUUID(null))
   )
 
-  given storeIdCodec: JsonCodec[StoreId] = new JsonCodec(
-    (a: StoreId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => StoreId(JsonDecoder.uuid.unsafeDecode(trace, in))
+  given storeIdCodec: JsonValueCodec[StoreId] = codec(
+    (x, out) => out.writeVal(x.asUUID),
+    in => StoreId(in.readUUID(null))
   )
 
-  given eventIdCodec: JsonCodec[EventId] = new JsonCodec(
-    (a: EventId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => EventId(JsonDecoder.uuid.unsafeDecode(trace, in))
+  given eventIdCodec: JsonValueCodec[EventId] = codec(
+    (x, out) => out.writeVal(x.asUUID),
+    in => EventId(in.readUUID(null))
   )
 
-  given portfolioIdCodec: JsonCodec[PortfolioId] = new JsonCodec(
-    (a: PortfolioId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => PortfolioId(JsonDecoder.uuid.unsafeDecode(trace, in))
+  given portfolioIdCodec: JsonValueCodec[PortfolioId] = codec(
+    (x, out) => out.writeVal(x.asUUID),
+    in => PortfolioId(in.readUUID(null))
   )
 
-  given portfolioNameCodec: JsonCodec[PortfolioName] = new JsonCodec(
-    (a: PortfolioName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
-    (trace: List[JsonError], in: RetractReader) => PortfolioName(JsonDecoder.string.unsafeDecode(trace, in))
+  given portfolioNameCodec: JsonValueCodec[PortfolioName] = codec(
+    (x, out) => out.writeVal(x.text),
+    in => PortfolioName(in.readString(null))
   )
 
-  given portfolioDescriptionCodec: JsonCodec[PortfolioDescription] = new JsonCodec(
-    (a: PortfolioDescription, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
-    (trace: List[JsonError], in: RetractReader) => PortfolioDescription(JsonDecoder.string.unsafeDecode(trace, in))
+  given portfolioDescriptionCodec: JsonValueCodec[PortfolioDescription] = codec(
+    (x, out) => out.writeVal(x.text),
+    in => PortfolioDescription(in.readString(null))
   )
 
-  given assetDescriptionCodec: JsonCodec[AssetDescription] = new JsonCodec(
-    (a: AssetDescription, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
-    (trace: List[JsonError], in: RetractReader) => AssetDescription(JsonDecoder.string.unsafeDecode(trace, in))
+  given assetDescriptionCodec: JsonValueCodec[AssetDescription] = codec(
+    (x, out) => out.writeVal(x.text),
+    in => AssetDescription(in.readString(null))
   )
 
-  given basicDirectoryPathCodec: JsonCodec[BaseDirectoryPath] = new JsonCodec(
-    (a: BaseDirectoryPath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => BaseDirectoryPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  given basicDirectoryPathCodec: JsonValueCodec[BaseDirectoryPath] = codec(
+    (x, out) => out.writeVal(x.path.toString),
+    in => BaseDirectoryPath(Path.of(in.readString(null)))
   )
 
-  given originalPathCodec: JsonCodec[OriginalPath] = new JsonCodec(
-    (a: OriginalPath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => OriginalPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  given originalPathCodec: JsonValueCodec[OriginalPath] = codec(
+    (x, out) => out.writeVal(x.path.toString),
+    in => OriginalPath(Path.of(in.readString(null)))
   )
 
-  given detectedFacePathCodec: JsonCodec[FacePath] = new JsonCodec(
-    (a: FacePath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FacePath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  given detectedFacePathCodec: JsonValueCodec[FacePath] = codec(
+    (x, out) => out.writeVal(x.path.toString),
+    in => FacePath(Path.of(in.readString(null)))
   )
 
-  given normalizedPathCodec: JsonCodec[NormalizedPath] = new JsonCodec(
-    (a: NormalizedPath, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => NormalizedPath(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  given normalizedPathCodec: JsonValueCodec[NormalizedPath] = codec(
+    (x, out) => out.writeVal(x.path.toString),
+    in => NormalizedPath(Path.of(in.readString(null)))
   )
 
-  given eventMediaDirectoryCodec: JsonCodec[EventMediaDirectory] = new JsonCodec(
-    (a: EventMediaDirectory, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.path.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => EventMediaDirectory(Path.of(JsonDecoder.string.unsafeDecode(trace, in)))
+  given eventMediaDirectoryCodec: JsonValueCodec[EventMediaDirectory] = codec(
+    (x, out) => out.writeVal(x.path.toString),
+    in => EventMediaDirectory(Path.of(in.readString(null)))
   )
 
-  given ownerIdCodec: JsonCodec[OwnerId] = new JsonCodec(
-    (a: OwnerId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => OwnerId(ULID(JsonDecoder.string.unsafeDecode(trace, in)))
+  given ownerIdCodec: JsonValueCodec[OwnerId] = codec(
+    (x, out) => out.writeVal(x.asString),
+    in => OwnerId(ULID(in.readString(null)))
   )
 
-  given faceIdCodec: JsonCodec[FaceId] = new JsonCodec(
-    (a: FaceId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FaceId(ULID(JsonDecoder.string.unsafeDecode(trace, in)))
+  given faceIdCodec: JsonValueCodec[FaceId] = codec(
+    (x, out) => out.writeVal(x.asString),
+    in => FaceId(ULID(in.readString(null)))
   )
 
-  given personIdCodec: JsonCodec[PersonId] = new JsonCodec(
-    (a: PersonId, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => PersonId(ULID(JsonDecoder.string.unsafeDecode(trace, in)))
+  given personIdCodec: JsonValueCodec[PersonId] = codec(
+    (x, out) => out.writeVal(x.asString),
+    in => PersonId(ULID(in.readString(null)))
   )
 
-  given mediaAccessKeyCodec: JsonCodec[MediaAccessKey] = new JsonCodec(
-    (a: MediaAccessKey, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.asString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => MediaAccessKey(JsonDecoder.string.unsafeDecode(trace, in))
+  given mediaAccessKeyCodec: JsonValueCodec[MediaAccessKey] = codec(
+    (x, out) => out.writeVal(x.asString),
+    in => MediaAccessKey(in.readString(null))
   )
 
-  given originalHashCodec: JsonCodec[OriginalHash] = new JsonCodec(
-    (a: OriginalHash, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => OriginalHash(JsonDecoder.string.unsafeDecode(trace, in))
+  given originalHashCodec: JsonValueCodec[OriginalHash] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => OriginalHash(in.readString(null))
   )
 
-  given fileSizeCodec: JsonCodec[FileSize] = new JsonCodec(
-    (a: FileSize, indent: Option[Int], out: Write) => JsonEncoder.long.unsafeEncode(a.value, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FileSize(JsonDecoder.long.unsafeDecode(trace, in))
+  given fileSizeCodec: JsonValueCodec[FileSize] = codec(
+    (x, out) => out.writeVal(x.value),
+    in => FileSize(in.readLong())
   )
 
-  given widthCodec: JsonCodec[Width] = new JsonCodec(
-    (a: Width, indent: Option[Int], out: Write) => JsonEncoder.int.unsafeEncode(a.value, indent, out),
-    (trace: List[JsonError], in: RetractReader) => Width(JsonDecoder.int.unsafeDecode(trace, in))
+  given widthCodec: JsonValueCodec[Width] = codec(
+    (x, out) => out.writeVal(x.value),
+    in => Width(in.readInt())
   )
 
-  given heightCodec: JsonCodec[Height] = new JsonCodec(
-    (a: Height, indent: Option[Int], out: Write) => JsonEncoder.int.unsafeEncode(a.value, indent, out),
-    (trace: List[JsonError], in: RetractReader) => Height(JsonDecoder.int.unsafeDecode(trace, in))
+  given heightCodec: JsonValueCodec[Height] = codec(
+    (x, out) => out.writeVal(x.value),
+    in => Height(in.readInt())
   )
 
-  given latitudeDecimalDegreesCodec: JsonCodec[LatitudeDecimalDegrees] = new JsonCodec(
-    (a: LatitudeDecimalDegrees, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.doubleValue, indent, out),
-    (trace: List[JsonError], in: RetractReader) => LatitudeDecimalDegrees(JsonDecoder.double.unsafeDecode(trace, in))
+  given latitudeDecimalDegreesCodec: JsonValueCodec[LatitudeDecimalDegrees] = codec(
+    (x, out) => out.writeVal(x.doubleValue),
+    in => LatitudeDecimalDegrees(in.readDouble())
   )
 
-  given longitudeDecimalDegreesCodec: JsonCodec[LongitudeDecimalDegrees] = new JsonCodec(
-    (a: LongitudeDecimalDegrees, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.doubleValue, indent, out),
-    (trace: List[JsonError], in: RetractReader) => LongitudeDecimalDegrees(JsonDecoder.double.unsafeDecode(trace, in))
+  given longitudeDecimalDegreesCodec: JsonValueCodec[LongitudeDecimalDegrees] = codec(
+    (x, out) => out.writeVal(x.doubleValue),
+    in => LongitudeDecimalDegrees(in.readDouble())
   )
 
-  given altitudeMeanSeaLevelCodec: JsonCodec[AltitudeMeanSeaLevel] = new JsonCodec(
-    (a: AltitudeMeanSeaLevel, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.value, indent, out),
-    (trace: List[JsonError], in: RetractReader) => AltitudeMeanSeaLevel(JsonDecoder.double.unsafeDecode(trace, in))
+  given altitudeMeanSeaLevelCodec: JsonValueCodec[AltitudeMeanSeaLevel] = codec(
+    (x, out) => out.writeVal(x.value),
+    in => AltitudeMeanSeaLevel(in.readDouble())
   )
 
-  given apertureCodec: JsonCodec[Aperture] = new JsonCodec(
-    (a: Aperture, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.selected, indent, out),
-    (trace: List[JsonError], in: RetractReader) => Aperture(JsonDecoder.double.unsafeDecode(trace, in))
+  given apertureCodec: JsonValueCodec[Aperture] = codec(
+    (x, out) => out.writeVal(x.selected),
+    in => Aperture(in.readDouble())
   )
 
-  given isoCodec: JsonCodec[ISO] = new JsonCodec(
-    (a: ISO, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.selected, indent, out),
-    (trace: List[JsonError], in: RetractReader) => ISO(JsonDecoder.double.unsafeDecode(trace, in))
+  given isoCodec: JsonValueCodec[ISO] = codec(
+    (x, out) => out.writeVal(x.selected),
+    in => ISO(in.readDouble())
   )
 
-  given focalLengthCodec: JsonCodec[FocalLength] = new JsonCodec(
-    (a: FocalLength, indent: Option[Int], out: Write) => JsonEncoder.double.unsafeEncode(a.selected, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FocalLength(JsonDecoder.double.unsafeDecode(trace, in))
+  given focalLengthCodec: JsonValueCodec[FocalLength] = codec(
+    (x, out) => out.writeVal(x.selected),
+    in => FocalLength(in.readDouble())
   )
 
-  given fileLastModifiedCodec: JsonCodec[FileLastModified] = new JsonCodec(
-    (a: FileLastModified, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FileLastModified(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
+  given fileLastModifiedCodec: JsonValueCodec[FileLastModified] = codec(
+    (x, out) => out.writeVal(x.offsetDateTime),
+    in => FileLastModified(in.readOffsetDateTime(null))
   )
 
-  given shootDateTimeCodec: JsonCodec[ShootDateTime] = new JsonCodec(
-    (a: ShootDateTime, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
-    (trace: List[JsonError], in: RetractReader) => ShootDateTime(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
+  given shootDateTimeCodec: JsonValueCodec[ShootDateTime] = codec(
+    (x, out) => out.writeVal(x.offsetDateTime),
+    in => ShootDateTime(in.readOffsetDateTime(null))
   )
 
-  given birthDateCodec: JsonCodec[BirthDate] = new JsonCodec(
-    (a: BirthDate, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
-    (trace: List[JsonError], in: RetractReader) => BirthDate(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
+  given birthDateCodec: JsonValueCodec[BirthDate] = codec(
+    (x, out) => out.writeVal(x.offsetDateTime),
+    in => BirthDate(in.readOffsetDateTime(null))
   )
 
-  given addedOnCodec: JsonCodec[AddedOn] = new JsonCodec(
-    (a: AddedOn, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
-    (trace: List[JsonError], in: RetractReader) => AddedOn(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
+  given addedOnCodec: JsonValueCodec[AddedOn] = codec(
+    (x, out) => out.writeVal(x.offsetDateTime),
+    in => AddedOn(in.readOffsetDateTime(null))
   )
 
-  given lastCheckedCodec: JsonCodec[LastChecked] = new JsonCodec(
-    (a: LastChecked, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
-    (trace: List[JsonError], in: RetractReader) => LastChecked(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
+  given lastCheckedCodec: JsonValueCodec[LastChecked] = codec(
+    (x, out) => out.writeVal(x.offsetDateTime),
+    in => LastChecked(in.readOffsetDateTime(null))
   )
 
-  given lastSynchronizedCodec: JsonCodec[LastSynchronized] = new JsonCodec(
-    (a: LastSynchronized, indent: Option[Int], out: Write) => JsonEncoder.offsetDateTime.unsafeEncode(a.offsetDateTime, indent, out),
-    (trace: List[JsonError], in: RetractReader) => LastSynchronized(JsonDecoder.offsetDateTime.unsafeDecode(trace, in))
+  given lastSynchronizedCodec: JsonValueCodec[LastSynchronized] = codec(
+    (x, out) => out.writeVal(x.offsetDateTime),
+    in => LastSynchronized(in.readOffsetDateTime(null))
   )
 
-  given cameraNameCodec: JsonCodec[CameraName] = new JsonCodec(
-    (a: CameraName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => CameraName(JsonDecoder.string.unsafeDecode(trace, in))
+  given cameraNameCodec: JsonValueCodec[CameraName] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => CameraName(in.readString(null))
   )
 
-  given artistInfoCodec: JsonCodec[ArtistInfo] = new JsonCodec(
-    (a: ArtistInfo, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => ArtistInfo(JsonDecoder.string.unsafeDecode(trace, in))
+  given artistInfoCodec: JsonValueCodec[ArtistInfo] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => ArtistInfo(in.readString(null))
   )
 
-  given eventNameCodec: JsonCodec[EventName] = new JsonCodec(
-    (a: EventName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => EventName(JsonDecoder.string.unsafeDecode(trace, in))
+  given eventNameCodec: JsonValueCodec[EventName] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => EventName(in.readString(null))
   )
 
-  given storeNameCodec: JsonCodec[StoreName] = new JsonCodec(
-    (a: StoreName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => StoreName(JsonDecoder.string.unsafeDecode(trace, in))
+  given storeNameCodec: JsonValueCodec[StoreName] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => StoreName(in.readString(null))
   )
 
-  given firstNameCodec: JsonCodec[FirstName] = new JsonCodec(
-    (a: FirstName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => FirstName(JsonDecoder.string.unsafeDecode(trace, in))
+  given firstNameCodec: JsonValueCodec[FirstName] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => FirstName(in.readString(null))
   )
 
-  given lastNameCodec: JsonCodec[LastName] = new JsonCodec(
-    (a: LastName, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => LastName(JsonDecoder.string.unsafeDecode(trace, in))
+  given lastNameCodec: JsonValueCodec[LastName] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => LastName(in.readString(null))
   )
 
-  given eventDescriptionCodec: JsonCodec[EventDescription] = new JsonCodec(
-    (a: EventDescription, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => EventDescription(JsonDecoder.string.unsafeDecode(trace, in))
+  given eventDescriptionCodec: JsonValueCodec[EventDescription] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => EventDescription(in.readString(null))
   )
 
-  given mediaDescriptionCodec: JsonCodec[MediaDescription] = new JsonCodec(
-    (a: MediaDescription, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => MediaDescription(JsonDecoder.string.unsafeDecode(trace, in))
+  given mediaDescriptionCodec: JsonValueCodec[MediaDescription] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => MediaDescription(in.readString(null))
   )
 
-  given personDescriptionCodec: JsonCodec[PersonDescription] = new JsonCodec(
-    (a: PersonDescription, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => PersonDescription(JsonDecoder.string.unsafeDecode(trace, in))
+  given personDescriptionCodec: JsonValueCodec[PersonDescription] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => PersonDescription(in.readString(null))
   )
 
-  given personEmailCodec: JsonCodec[PersonEmail] = new JsonCodec(
-    (a: PersonEmail, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.text, indent, out),
-    (trace: List[JsonError], in: RetractReader) => PersonEmail(JsonDecoder.string.unsafeDecode(trace, in))
+  given personEmailCodec: JsonValueCodec[PersonEmail] = codec(
+    (x, out) => out.writeVal(x.text),
+    in => PersonEmail(in.readString(null))
   )
 
-  given orientationCodec: JsonCodec[Orientation] = new JsonCodec(
-    (a: Orientation, indent: Option[Int], out: Write) => JsonEncoder.int.unsafeEncode(a.ordinal, indent, out),
-    (trace: List[JsonError], in: RetractReader) => Orientation.fromOrdinal(JsonDecoder.int.unsafeDecode(trace, in))
+  given orientationCodec: JsonValueCodec[Orientation] = codec(
+    (x, out) => out.writeVal(x.ordinal),
+    in => Orientation.fromOrdinal(in.readInt())
   )
 
-  given mediaKindCodec: JsonCodec[MediaKind] = new JsonCodec(
-    (a: MediaKind, indent: Option[Int], out: Write) => JsonEncoder.int.unsafeEncode(a.ordinal, indent, out),
-    (trace: List[JsonError], in: RetractReader) => MediaKind.fromOrdinal(JsonDecoder.int.unsafeDecode(trace, in))
+  given mediaKindCodec: JsonValueCodec[MediaKind] = codec(
+    (x, out) => out.writeVal(x.ordinal),
+    in => MediaKind.fromOrdinal(in.readInt())
   )
 
-  given keywordCodec: JsonCodec[Keyword] = new JsonCodec(
-    (a: Keyword, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => Keyword(JsonDecoder.string.unsafeDecode(trace, in))
+  given keywordCodec: JsonValueCodec[Keyword] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => Keyword(in.readString(null))
   )
 
-  given starredCodec: JsonCodec[Starred] = new JsonCodec(
-    (a: Starred, indent: Option[Int], out: Write) => JsonEncoder.boolean.unsafeEncode(a.value, indent, out),
-    (trace: List[JsonError], in: RetractReader) => Starred(JsonDecoder.boolean.unsafeDecode(trace, in))
+  given starredCodec: JsonValueCodec[Starred] = codec(
+    (x, out) => out.writeVal(x.value),
+    in => Starred(in.readBoolean())
   )
 
-  given includeMaskCodec: JsonCodec[IncludeMask] = new JsonCodec(
-    (a: IncludeMask, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.regex.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => IncludeMask(JsonDecoder.string.unsafeDecode(trace, in).r)
+  given includeMaskCodec: JsonValueCodec[IncludeMask] = codec(
+    (x, out) => out.writeVal(x.regex.toString),
+    in => IncludeMask(in.readString(null).r)
   )
 
-  given ignoreMaskCodec: JsonCodec[IgnoreMask] = new JsonCodec(
-    (a: IgnoreMask, indent: Option[Int], out: Write) => JsonEncoder.string.unsafeEncode(a.regex.toString, indent, out),
-    (trace: List[JsonError], in: RetractReader) => IgnoreMask(JsonDecoder.string.unsafeDecode(trace, in).r)
+  given ignoreMaskCodec: JsonValueCodec[IgnoreMask] = codec(
+    (x, out) => out.writeVal(x.regex.toString),
+    in => IgnoreMask(in.readString(null).r)
   )
 
 }

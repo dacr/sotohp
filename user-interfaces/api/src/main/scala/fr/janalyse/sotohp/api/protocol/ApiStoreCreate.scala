@@ -1,9 +1,10 @@
 package fr.janalyse.sotohp.api.protocol
 
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service.json.given
 import sttp.tapir.Schema
-import zio.json.{DeriveJsonCodec, JsonCodec}
 
 case class ApiStoreCreate(
   name: Option[StoreName],
@@ -14,6 +15,6 @@ case class ApiStoreCreate(
 )
 
 object ApiStoreCreate {
-  given JsonCodec[ApiStoreCreate] = DeriveJsonCodec.gen
-  given apiStoreSchema:Schema[ApiStoreCreate]    = Schema.derived[ApiStoreCreate].name(Schema.SName("StoreCreate"))
+  given JsonValueCodec[ApiStoreCreate]         = JsonCodecMaker.make
+  given apiStoreSchema: Schema[ApiStoreCreate] = Schema.derived[ApiStoreCreate].name(Schema.SName("StoreCreate"))
 }
