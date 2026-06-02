@@ -1048,30 +1048,6 @@ function getRenderedImageRect() {
   return { left, top, width: w, height: h };
 }
 
-// Rotate a normalized [0,1] box from the natural image coordinate system into
-// the displayed (rotated) coordinate system.
-function transformFaceBoxForDisplay(box, deg) {
-  const x = box.x, y = box.y, w = box.width, h = box.height;
-  switch (((deg % 360) + 360) % 360) {
-    case 90:  return { x: 1 - y - h, y: x, width: h, height: w };
-    case 180: return { x: 1 - x - w, y: 1 - y - h, width: w, height: h };
-    case 270: return { x: y, y: 1 - x - w, width: h, height: w };
-    default:  return { x, y, width: w, height: h };
-  }
-}
-
-// Inverse of transformFaceBoxForDisplay: from rotated display coords back to
-// natural image coords (used when the user draws a new face on a rotated image).
-function transformFaceBoxFromDisplay(box, deg) {
-  const x = box.x, y = box.y, w = box.width, h = box.height;
-  switch (((deg % 360) + 360) % 360) {
-    case 90:  return { x: y, y: 1 - x - w, width: h, height: w };
-    case 180: return { x: 1 - x - w, y: 1 - y - h, width: w, height: h };
-    case 270: return { x: 1 - y - h, y: x, width: h, height: w };
-    default:  return { x, y, width: w, height: h };
-  }
-}
-
 function clearFacesOverlay() {
   const ov = ensureFacesOverlay();
   if (ov) ov.innerHTML = '';
@@ -1244,20 +1220,17 @@ async function handleAddFacePointerUp(ev) {
     addFacePosting = false;
     return;
   }
-  // Compute normalized box relative to the displayed (rotated) image rect,
-  // then convert back to the natural image coordinate system the backend expects.
+  // Compute normalized box relative to the displayed image rect; store as-is
+  // (no rotation transform) so boxes stay aligned with the displayed image.
   const nx = imgRect.width > 0 ? (left - imgRect.left) / imgRect.width : 0;
   const ny = imgRect.height > 0 ? (top - imgRect.top) / imgRect.height : 0;
   const nw = imgRect.width > 0 ? widthPx / imgRect.width : 0;
   const nh = imgRect.height > 0 ? heightPx / imgRect.height : 0;
-  const displayedBox = { x: clamp01(nx), y: clamp01(ny), width: clamp01(nw), height: clamp01(nh) };
-  const rotateDeg = getMediaDisplayDegrees(currentMedia);
-  const natural = transformFaceBoxFromDisplay(displayedBox, rotateDeg);
   const box = {
-    x: clamp01(natural.x),
-    y: clamp01(natural.y),
-    width: clamp01(natural.width),
-    height: clamp01(natural.height),
+    x: clamp01(nx),
+    y: clamp01(ny),
+    width: clamp01(nw),
+    height: clamp01(nh),
   };
   // Get originalId
   const originalId = currentMedia?.original?.id;
@@ -1361,17 +1334,15 @@ function renderFaces() {
   ov.innerHTML = '';
   const rect = getRenderedImageRect();
   if (rect.width <= 0 || rect.height <= 0) return;
-  const rotateDeg = getMediaDisplayDegrees(currentMedia);
   for (const face of currentFaces) {
     try {
       const b = face.box || face.boundingBox || face;
-      const raw = {
+      const rb = {
         x: Math.max(0, Math.min(1, b.x || 0)),
         y: Math.max(0, Math.min(1, b.y || 0)),
         width: Math.max(0, Math.min(1, b.width || 0)),
         height: Math.max(0, Math.min(1, b.height || 0)),
       };
-      const rb = transformFaceBoxForDisplay(raw, rotateDeg);
       const x = rb.x, y = rb.y, w = rb.width, h = rb.height;
       const left = rect.left + Math.round(x * rect.width);
       const top = rect.top + Math.round(y * rect.height);

@@ -153,6 +153,58 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
       @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
   }
 
+  /** Detects faces using the provided buffered image instead of loading via the normalized cache.
+    * Useful when the rotation to apply differs from `original.orientation` (e.g. user-customized media orientation).
+    */
+  def extractFaces(original: Original, originalImage: BufferedImage): IO[CoreIssue, OriginalFaces] = {
+    val logic = for {
+      now        <- Clock.currentDateTime
+      mayBeFaces <- doDetectFaces(original, originalImage)
+                      .tap(faces => ZIO.log(s"found ${faces.size} faces"))
+                      .logError("Faces detection issue")
+                      .option
+      status      = ProcessedStatus(successful = mayBeFaces.isDefined, timestamp = now)
+      faces       = mayBeFaces.getOrElse(Nil)
+    } yield OriginalFaces(original, status, faces)
+    logic
+      @@ annotated("originalId" -> original.id.asString)
+      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+  }
+
+  private def doDetectFaces(original: Original, originalImage: BufferedImage): IO[FacesDetectionIssue, List[Face]] = {
+    for {
+      detectedObjects <- ZIO
+                           .attemptBlocking {
+                             val loadedImage: Image         = ImageFactory.getInstance().fromImage(originalImage)
+                             val detection: DetectedObjects = facesPredictor.predict(loadedImage)
+                             detection
+                               .items()
+                               .iterator()
+                               .asScala
+                               .toList
+                               .asInstanceOf[List[DetectedObjects.DetectedObject]]
+                               .filter(_.getProbability >= 0.7d) // TODO hardcoded config
+                               .filter { ob =>
+                                 val bounds           = ob.getBoundingBox.getBounds
+                                 val widthInOriginal  = original.dimension.map(_.width.value).getOrElse(0) * bounds.getWidth
+                                 val heightInOriginal = original.dimension.map(_.height.value).getOrElse(0) * bounds.getHeight
+                                 (heightInOriginal >= 32 && widthInOriginal >= 32) // TODO hardcoded config
+                               }
+                           }
+                           .mapError(th => FacesDetectionIssue("Unable to detect people faces", th))
+      detectedFaces   <- ZIO.foreach(detectedObjects) { ob =>
+                           val box = BoundingBox(
+                             x = XAxis(ob.getBoundingBox.getBounds.getX),
+                             y = YAxis(ob.getBoundingBox.getBounds.getY),
+                             width = BoxWidth(ob.getBoundingBox.getBounds.getWidth),
+                             height = BoxHeight(ob.getBoundingBox.getBounds.getHeight)
+                           )
+                           buildDetectedFace(original, box)
+                         }
+      _               <- ZIO.foreachDiscard(detectedFaces)(face => extractThenCacheFaceImageFromOriginal(face, originalImage))
+    } yield detectedFaces.filter(_.path.path.toFile.exists())
+  }
+
 }
 
 object FacesProcessor {

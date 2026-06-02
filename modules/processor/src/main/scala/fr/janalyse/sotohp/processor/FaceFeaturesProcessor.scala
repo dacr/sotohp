@@ -71,10 +71,19 @@ class FaceFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends P
     *   an `IO` effect resulting in either a `CoreIssue` (in case of an error) or an `OriginalFaceFeatures` containing the processed face features
     */
   def extractFaceFeatures(faces: OriginalFaces): IO[CoreIssue, OriginalFaceFeatures] = {
+    for {
+      originalImage <- loadOriginalBestInputFileForProcessors(faces.original)
+      result        <- extractFaceFeatures(faces, originalImage)
+    } yield result
+  }
+
+  /** Extracts features from faces using the provided image instead of loading it from the normalized cache.
+    * Useful when the rotation to apply differs from `original.orientation` (e.g. the user customized media orientation).
+    */
+  def extractFaceFeatures(faces: OriginalFaces, originalImage: BufferedImage): IO[CoreIssue, OriginalFaceFeatures] = {
     val minRatio = 70d / 1900d // TODO use config parameter
     val logic    = for {
       now               <- Clock.currentDateTime
-      originalImage     <- loadOriginalBestInputFileForProcessors(faces.original)
       selectedFaces      = faces.faces
                              .filter(face => face.box.width.value >= minRatio || face.box.height.value >= minRatio)
       mayBeFaceFeatures <- ZIO

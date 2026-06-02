@@ -52,6 +52,11 @@ trait MediaService {
   def originalClassifications(originalId: OriginalId): IO[ServiceIssue, Option[OriginalClassifications]]
   def originalFaces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]]
   def originalFacesFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]]
+
+  /** Force-recompute face features for the given media using its (possibly user-customized) orientation.
+    * Refreshes cached face crops on disk so the visual representation stays consistent with the new features.
+    */
+  def originalFacesFeaturesRecompute(media: Media): IO[ServiceIssue, Option[OriginalFaceFeatures]]
   def originalObjects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]]
   def originalNormalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
   def originalMiniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
@@ -255,6 +260,7 @@ object MediaService {
   def originalClassifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalClassifications]] = ZIO.serviceWithZIO(_.originalClassifications(originalId))
   def originalFaces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaces]]                     = ZIO.serviceWithZIO(_.originalFaces(originalId))
   def originalFacesFeatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]]      = ZIO.serviceWithZIO(_.originalFacesFeatures(originalId))
+  def originalFacesFeaturesRecompute(media: Media): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]]      = ZIO.serviceWithZIO(_.originalFacesFeaturesRecompute(media))
   def originalObjects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.originalObjects(originalId))
   def originalNormalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.originalNormalized(originalId))
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))
