@@ -1697,31 +1697,31 @@ class MediaServiceLive private (
     // as Media.location — userDefined → deducted → original.location → first
     // event with a location — and rewrite the row whenever the stored value
     // drifts.
-    val rematerializeMediaLocations =
-      collections.medias
-        .streamWithKeys()
-        .mapZIO { case (originalId, daoMedia) =>
-          for {
-            maybeOriginal <- collections.originals.fetch(originalId)
-            eventLocation <- ZIO
-                               .foreach(daoMedia.events)(eventId => collections.events.fetch(eventId))
-                               .map(_.flatten.iterator.flatMap(_.location).nextOption())
-            computed       = daoMedia.userDefinedLocation
-                               .orElse(daoMedia.deductedLocation)
-                               .orElse(maybeOriginal.flatMap(_.location))
-                               .orElse(eventLocation)
-                               .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d)
-            changed       <- if (computed == daoMedia.location) ZIO.succeed(0)
-                             else
-                               collections.medias
-                                 .upsertOverwrite(originalId, daoMedia.copy(location = computed))
-                                 .as(1)
-          } yield changed
-        }
-        .runFold(0L)(_ + _)
+//    val rematerializeMediaLocations =
+//      collections.medias
+//        .streamWithKeys()
+//        .mapZIO { case (originalId, daoMedia) =>
+//          for {
+//            maybeOriginal <- collections.originals.fetch(originalId)
+//            eventLocation <- ZIO
+//                               .foreach(daoMedia.events)(eventId => collections.events.fetch(eventId))
+//                               .map(_.flatten.iterator.flatMap(_.location).nextOption())
+//            computed       = daoMedia.userDefinedLocation
+//                               .orElse(daoMedia.deductedLocation)
+//                               .orElse(maybeOriginal.flatMap(_.location))
+//                               .orElse(eventLocation)
+//                               .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d)
+//            changed       <- if (computed == daoMedia.location) ZIO.succeed(0)
+//                             else
+//                               collections.medias
+//                                 .upsertOverwrite(originalId, daoMedia.copy(location = computed))
+//                                 .as(1)
+//          } yield changed
+//        }
+//        .runFold(0L)(_ + _)
 
-    (rematerializeMediaLocations
-      .tap(count => ZIO.logInfo(s"daoMedia.location rematerialized for $count medias")) *>
+    (//rematerializeMediaLocations
+      //.tap(count => ZIO.logInfo(s"daoMedia.location rematerialized for $count medias")) *>
       collections.medias.rebuildIndexes() *>
       ZIO.logInfo("medias indexes rebuilt !") *>
       collections.originals.rebuildIndexes() *>
