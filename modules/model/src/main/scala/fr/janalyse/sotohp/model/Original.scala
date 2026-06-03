@@ -1,7 +1,5 @@
 package fr.janalyse.sotohp.model
 
-import fr.janalyse.sotohp.model
-
 import java.nio.file.Path
 import java.time.OffsetDateTime
 
