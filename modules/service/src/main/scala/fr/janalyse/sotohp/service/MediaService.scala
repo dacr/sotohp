@@ -129,15 +129,6 @@ trait MediaService {
   def eventList(): Stream[ServiceStreamIssue, Event]
   def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]]
   def eventDelete(eventId: EventId): IO[ServiceIssue, Unit]
-  def eventCreate(
-    attachment: Option[EventAttachment],
-    name: EventName,
-    description: Option[EventDescription],
-    keywords: Set[Keyword],
-    location: Option[Location],
-    timestamp: Option[ShootDateTime],
-    originalId: Option[OriginalId]
-  ): IO[ServiceIssue, Event]
   def eventUpdate(
     eventId: EventId,
     name: EventName,
@@ -350,17 +341,6 @@ object MediaService {
   def eventGet(eventId: EventId): ZIO[MediaService, ServiceIssue, Option[Event]] = ZIO.serviceWithZIO(_.eventGet(eventId))
 
   def eventDelete(eventId: EventId): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.eventDelete(eventId))
-
-  def eventCreate(
-    attachment: Option[EventAttachment],
-    name: EventName,
-    description: Option[EventDescription],
-    keywords: Set[Keyword],
-    location: Option[Location],
-    timestamp: Option[ShootDateTime],
-    originalId: Option[OriginalId]
-  ): ZIO[MediaService, ServiceIssue, Event] =
-    ZIO.serviceWithZIO(_.eventCreate(attachment, name, description, keywords, location, timestamp, originalId))
 
   def eventUpdate(
     eventId: EventId,

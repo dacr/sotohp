@@ -493,6 +493,7 @@ object ApiApp extends ZIOAppDefault {
       taoMedia = tuple.media.into[ApiMedia]
                    .withFieldConst(_.accessKey, tuple.key)
                    .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+                   .withFieldComputed(_.event, media => media.event.map(_.transformInto[ApiEvent]))
                    .transform
     } yield taoMedia
 
@@ -711,6 +712,7 @@ object ApiApp extends ZIOAppDefault {
         mediaTuple.media.into[ApiMedia]
           .withFieldConst(_.accessKey, mediaTuple.key)
           .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.event, media => media.event.map(_.transformInto[ApiEvent]))
           .transform
       }
       .mapError(err => ApiInternalError("Couldn't list medias"))
@@ -1558,37 +1560,6 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def eventCreateLogic(toCreate: ApiEventCreate): ZIO[ApiEnv, ApiInternalError, ApiEvent] = {
-    val logic = for {
-      created <- MediaService
-                   .eventCreate(
-                     attachment = None, // user-defined event, no attachment
-                     name = toCreate.name,
-                     description = toCreate.description,
-                     keywords = toCreate.keywords,
-                     location = None,
-                     timestamp = None,
-                     originalId = None
-                   )
-                   .logError("Couldn't create event")
-                   .orElseFail(ApiInternalError("Couldn't create event"))
-      api      = created.transformInto[ApiEvent]
-    } yield api
-    logic
-  }
-
-  val eventCreateEndpoint =
-    secureEventEndpoint()
-      .name("Create event")
-      .summary("Create a user-defined event")
-      .post
-      .in(jsonBody[ApiEventCreate])
-      .out(jsonBody[ApiEvent])
-      .errorOutVariantPrepend(statusForApiInternalError)
-      .serverLogic[ApiEnv](user => toCreate => eventCreateLogic(toCreate))
-
-  // -------------------------------------------------------------------------------------------------------------------
-
   def portfolio2Api(portfolio: Portfolio): ApiPortfolio =
     ApiPortfolio(
       id = portfolio.id,
@@ -1905,7 +1876,6 @@ object ApiApp extends ZIOAppDefault {
     personFaceListEndpoint,
     // -------------------------
     eventListEndpoint,
-    eventCreateEndpoint,
     eventGetEndpoint,
     eventUpdateEndpoint,
     eventUpdateCoverEndpoint,

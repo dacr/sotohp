@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { Media, MediaLocation, MediaSelector, Event as SEvent, Owner, Store, EventCreate, EventUpdate } from './types'
+import type { Media, MediaLocation, MediaSelector, Event as SEvent, Owner, Store, EventUpdate } from './types'
 import { getToken, updateToken } from './auth'
 
 export class ApiClient {
@@ -59,12 +59,7 @@ export class ApiClient {
     return res.data
   }
 
-  async createEvent(body: EventCreate): Promise<SEvent> {
-    const res = await this.http.post<SEvent>('/api/event', body)
-    return res.data
-  }
-
-  async listOwners(): Promise<Owner[]> {
+async listOwners(): Promise<Owner[]> {
     return await this.fetchNdjson<Owner>('/api/owners')
   }
 

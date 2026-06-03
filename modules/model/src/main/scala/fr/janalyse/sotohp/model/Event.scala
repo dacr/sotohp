@@ -9,7 +9,7 @@ case class EventAttachment(
 
 case class Event(
   id: EventId,
-  attachment: Option[EventAttachment], // for event based on a relative directory path within a given store
+  attachment: EventAttachment,         // event is always backed by a relative directory path within a given store
   name: EventName,
   description: Option[EventDescription],
   location: Option[Location],          // reference location for this event

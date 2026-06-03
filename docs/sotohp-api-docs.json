@@ -2265,86 +2265,6 @@
         ]
       }
     },
-    "/api/event" : {
-      "post" : {
-        "tags" : [
-          "Event"
-        ],
-        "summary" : "Create a user-defined event",
-        "operationId" : "Create event",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/EventCreate"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "description" : "",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/Event"
-                }
-              }
-            }
-          },
-          "400" : {
-            "description" : "Invalid value for: body",
-            "content" : {
-              "text/plain" : {
-                "schema" : {
-                  "type" : "string"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "Authentication failed",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorSecurity"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "Insufficient permissions",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorSecurity"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "Something went wrong with the backend",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorInternal"
-                }
-              }
-            }
-          }
-        },
-        "security" : [
-          {
-            
-          },
-          {
-            "httpAuth" : [
-            ]
-          }
-        ]
-      }
-    },
     "/api/event/{eventId}" : {
       "get" : {
         "tags" : [
@@ -4702,28 +4622,6 @@
           }
         }
       },
-      "EventCreate" : {
-        "title" : "EventCreate",
-        "type" : "object",
-        "required" : [
-          "name"
-        ],
-        "properties" : {
-          "name" : {
-            "type" : "string"
-          },
-          "description" : {
-            "type" : "string"
-          },
-          "keywords" : {
-            "type" : "array",
-            "uniqueItems" : true,
-            "items" : {
-              "type" : "string"
-            }
-          }
-        }
-      },
       "EventUpdate" : {
         "title" : "EventUpdate",
         "type" : "object",
@@ -4888,11 +4786,8 @@
           "original" : {
             "$ref" : "#/components/schemas/Original"
           },
-          "events" : {
-            "type" : "array",
-            "items" : {
-              "$ref" : "#/components/schemas/Event"
-            }
+          "event" : {
+            "$ref" : "#/components/schemas/Event"
           },
           "description" : {
             "type" : "string"

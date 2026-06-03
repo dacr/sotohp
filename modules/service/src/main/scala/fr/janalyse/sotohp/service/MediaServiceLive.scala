@@ -60,11 +60,11 @@ class MediaServiceLive private (
   private def daoMedia2Media(daoMedia: DaoMedia): IO[ServiceIssue, Media] = {
     for {
       original <- originalGet(daoMedia.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${daoMedia.originalId}"))
-      events   <- ZIO.foreach(daoMedia.events)(eventId => eventGet(eventId).some.mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err")))
+      event    <- ZIO.foreach(daoMedia.eventId)(eventId => eventGet(eventId).some.mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err")))
       media     = daoMedia
                     .into[Media]
                     .withFieldConst(_.original, original)
-                    .withFieldConst(_.events, events.toList)
+                    .withFieldConst(_.event, event)
                     .transform
     } yield media
   }
@@ -125,7 +125,7 @@ class MediaServiceLive private (
                               longitude = loc.longitude,
                               shootDateTime = daoMedia.shootDateTime,
                               starred = daoMedia.starred,
-                              eventId = daoMedia.events.headOption
+                              eventId = daoMedia.eventId
                             )
                           )
                         ))
@@ -1015,19 +1015,14 @@ class MediaServiceLive private (
 
   def daoEvent2Event(daoEvent: DaoEvent): IO[ServiceIssue, Event] = {
     for {
-      maybeAttachment <- ZIO
-                           .foreach(daoEvent.attachment) { daoAttachment =>
-                             storeGet(daoAttachment.storeId)
-                               .map { maybeStore =>
-                                 maybeStore.map(store => EventAttachment(store, daoAttachment.eventMediaDirectory))
-                               }
-                               .someOrFail(ServiceDatabaseIssue(s"Couldn't find store for event attachment : ${daoAttachment.storeId}"))
-                           }
-      event            = daoEvent
-                           .into[Event]
-                           .withFieldConst(_.attachment, maybeAttachment)
-                           .withFieldComputed(_.publishedOn, in => in.publishedOn.flatMap(uri => Try(java.net.URI(uri).toURL).toOption))
-                           .transform
+      store <- storeGet(daoEvent.attachment.storeId)
+                 .someOrFail(ServiceDatabaseIssue(s"Couldn't find store for event attachment : ${daoEvent.attachment.storeId}"))
+      attachment = EventAttachment(store, daoEvent.attachment.eventMediaDirectory)
+      event      = daoEvent
+                     .into[Event]
+                     .withFieldConst(_.attachment, attachment)
+                     .withFieldComputed(_.publishedOn, in => in.publishedOn.flatMap(uri => Try(java.net.URI(uri).toURL).toOption))
+                     .transform
     } yield event
   }
 
@@ -1048,44 +1043,22 @@ class MediaServiceLive private (
       maybeDaoEvent <- collections.events
                          .fetch(eventId)
                          .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
-      _             <- ZIO.foreachDiscard(maybeDaoEvent) { daoEvent =>
+      _             <- ZIO.foreachDiscard(maybeDaoEvent) { _ =>
                          for {
-                           // Refuse delete if the event still has an attachment (directory binding)
-                           _              <- ZIO
-                                               .fail(ServiceUserIssue(s"Event ${eventId.asString} has an attachment - delete its attachment first"))
-                                               .when(daoEvent.attachment.nonEmpty)
                            // Refuse delete if any media still references this event
                            firstLinkedMedia <- collections.originalIdByEventId
                                                  .indexed(eventId)
                                                  .runHead
                                                  .mapError(err => ServiceDatabaseIssue(s"Couldn't check event links : $err"))
-                           _              <- ZIO
-                                               .fail(ServiceUserIssue(s"Event ${eventId.asString} is still linked to one or more medias - unlink them first"))
-                                               .when(firstLinkedMedia.isDefined)
-                           _              <- collections.events
-                                               .delete(eventId)
-                                               .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
+                           _                <- ZIO
+                                                 .fail(ServiceUserIssue(s"Event ${eventId.asString} is still linked to one or more medias - unlink them first"))
+                                                 .when(firstLinkedMedia.isDefined)
+                           _                <- collections.events
+                                                 .delete(eventId)
+                                                 .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
                          } yield ()
                        }
     } yield ()
-  }
-
-  override def eventCreate(
-    attachment: Option[EventAttachment],
-    name: EventName,
-    description: Option[EventDescription],
-    keywords: Set[Keyword],
-    location: Option[Location],
-    timestamp: Option[ShootDateTime],
-    originalId: Option[OriginalId]
-  ): IO[ServiceIssue, Event] = {
-    for {
-      eventId <- Random.nextUUID.map(EventId.apply)
-      event    = Event(eventId, attachment, name, description, location, timestamp, originalId, None, keywords)
-      _       <- collections.events
-                   .upsert(eventId, _ => event.into[DaoEvent].transform)
-                   .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
-    } yield event
   }
 
   override def eventUpdate(
@@ -1383,24 +1356,30 @@ class MediaServiceLive private (
   private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
     // TODO first basic and naive implementation - not good for complexity
     collections.events
-      .collect(valueFilter = daoFilter => daoFilter.attachment.exists(thatAttachment => thatAttachment.storeId == attachment.store.id && thatAttachment.eventMediaDirectory == attachment.eventMediaDirectory))
+      .collect(valueFilter = daoFilter => daoFilter.attachment.storeId == attachment.store.id && daoFilter.attachment.eventMediaDirectory == attachment.eventMediaDirectory)
       .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"), _.headOption)
       .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
   }
 
   private def createDefaultEvent(original: Original, attachment: EventAttachment): IO[ServiceIssue, Event] = {
-    // TODO add automatic keywords extraction
-    keywordSentenceToKeywords(attachment.store.id, attachment.eventMediaDirectory.toString).flatMap { autoKeywords =>
-      eventCreate(
-        attachment = Some(attachment),
-        name = EventName(attachment.eventMediaDirectory.toString),
-        description = None,
-        keywords = autoKeywords,
-        location = original.location,
-        timestamp = original.cameraShootDateTime,
-        originalId = Some(original.id)
-      )
-    }
+    for {
+      autoKeywords <- keywordSentenceToKeywords(attachment.store.id, attachment.eventMediaDirectory.toString)
+      eventId      <- Random.nextUUID.map(EventId.apply)
+      event         = Event(
+                        id = eventId,
+                        attachment = attachment,
+                        name = EventName(attachment.eventMediaDirectory.toString),
+                        description = None,
+                        location = original.location,
+                        timestamp = original.cameraShootDateTime,
+                        originalId = Some(original.id),
+                        publishedOn = None,
+                        keywords = autoKeywords
+                      )
+      _            <- collections.events
+                        .upsert(eventId, _ => event.into[DaoEvent].transform)
+                        .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
+    } yield event
   }
 
   private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
@@ -1445,12 +1424,11 @@ class MediaServiceLive private (
                                getEventForAttachment(attachment)
                                  .someOrElseZIO(createDefaultEvent(input.original, attachment))
                              )
-      events             = mayBeEvent.toList
       currentMediaTuple <- mediaGet(input.state.originalId) // already existing media is the source of truth !
                              .someOrElseZIO {
                                val daoMedia = DaoMedia(
                                  originalId = input.original.id,
-                                 events = events.map(_.id),
+                                 eventId = mayBeEvent.map(_.id),
                                  description = None,
                                  starred = Starred(false),
                                  keywords = Set.empty,
@@ -1458,7 +1436,7 @@ class MediaServiceLive private (
                                  shootDateTime = None,
                                  userDefinedLocation = None,
                                  deductedLocation = None,
-                                 timestamp = Media.computeTimestamp(None, events, input.original),
+                                 timestamp = Media.computeTimestamp(None, mayBeEvent, input.original),
                                  location = input.original.location.transformInto[Option[DaoLocation]]
                                )
                                collections.medias
@@ -1804,7 +1782,7 @@ class MediaServiceLive private (
     mediaList()
       .map(_.media)
       .filter(_.original.store.id == storeId)
-      .map(media => (media.keywords.toList ++ media.events.flatMap(_.keywords)).groupMapReduce(_.text)(_ => 1)(_ + _))
+      .map(media => (media.keywords.toList ++ media.event.toList.flatMap(_.keywords)).groupMapReduce(_.text)(_ => 1)(_ + _))
       .runFold(Map.empty[Keyword, Int])((acc, curr) =>
         curr.foldLeft(acc) { case (res, (keyword, count)) =>
           res + (Keyword(keyword) -> (count + res.getOrElse(Keyword(keyword), 0)))
@@ -1819,7 +1797,7 @@ class MediaServiceLive private (
       .map(_.media)
       .filter(_.original.store.id == storeId)
       .map(media => media.copy(keywords = media.keywords.filterNot(_.text == keyword.text)))
-      .flatMap(media => ZStream.fromIterable(media.events))
+      .flatMap(media => ZStream.fromIterable(media.event))
       .map(event => event.copy(keywords = event.keywords.filterNot(_.text == keyword.text)))
       .tap(event =>
         eventUpdate(
@@ -1946,7 +1924,7 @@ object MediaServiceLive {
     collectionMedias               <- lmdb
                                         .collectionCreate[OriginalId, DaoMedia](mediasCollectionName, false)
                                         .map(
-                                          _.withIndexFull(indexOriginalIdByEventId)((id, media) => media.events.map(eventId => eventId -> (media.timestamp.toInstant, media.originalId)))
+                                          _.withIndexFull(indexOriginalIdByEventId)((id, media) => media.eventId.map(eventId => eventId -> (media.timestamp.toInstant, media.originalId)).toList)
                                             .withIndexFull(indexOriginalIdByTimestamp)((id, media) => List((media.timestamp.toInstant, id) -> id))
                                             .withIndexFull(indexOriginalIdByLocation)((id, media) => media.location.map(l => GEOTools.Location(l.latitude.doubleValue, l.longitude.doubleValue) -> id).toList)
                                         )

@@ -32,7 +32,7 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
           baseDirectories.head.path == photoSearchFileRoot.baseDirectory.path,
           mediaPaths.toSet == Set(dataset1Example1, dataset1Example2, dataset1Example3, dataset1Example4, dataset1Example5)
             .map(p => photoSearchFileRoot.baseDirectory.path.relativize(p.path)),
-          medias.forall(_.events.isEmpty)
+          medias.forall(_.event.isEmpty)
         )
       },
       test("collect original photos with tree dataset") {
@@ -45,7 +45,7 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
           medias               = results.collect { case Right(original) => original }
           baseDirectories      = medias.map(_.original.store.baseDirectory)
           mediaPaths           = medias.map(_.original.mediaPath)
-          mediaEvents          = medias.flatMap(_.events.map(_.name.text))
+          mediaEvents          = medias.flatMap(_.event.map(_.name.text))
         } yield assertTrue(
           medias.size == 2,
           baseDirectories.head == dataset2,

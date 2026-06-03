@@ -29,7 +29,7 @@ object StoreEventFix extends CommonsCLI {
     for {
       medias       <- MediaService
                         .mediaList()
-                        .filter(_.media.events.exists(_.id == event.id))
+                        .filter(_.media.event.exists(_.id == event.id))
                         .runCollect
       selectedMedia = medias.find(_.media.original.hasLocation).orElse(medias.headOption)
       _            <- MediaService
@@ -52,7 +52,6 @@ object StoreEventFix extends CommonsCLI {
     val eventsStream = MediaService.eventList()
     for {
       events <- eventsStream
-                  .filter(_.attachment.isDefined)
                   .filter(_.originalId.isEmpty)
                   .runCollect
       _      <- ZIO.foreachDiscard(events)(fixEvent)

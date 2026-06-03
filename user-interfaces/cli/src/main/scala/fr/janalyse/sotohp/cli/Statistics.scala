@@ -58,7 +58,7 @@ object Statistics extends CommonsCLI {
                             .map(_.offsetDateTime)
       fileHash          = state.flatMap(_.originalHash.map(_.code))
       originalFound    <- ZIO.attempt(media.original.absoluteMediaPath.toFile.exists())
-      events            = media.events
+      events            = media.event.toList
       originalModified <- ZIO
                             .attempt(media.original.fileLastModified.offsetDateTime.toInstant.toEpochMilli != media.original.absoluteMediaPath.toFile.lastModified())
                             .when(originalFound)

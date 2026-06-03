@@ -45,12 +45,6 @@ export interface Event {
   publishedOn?: string;
 }
 
-export interface EventCreate {
-  name: string;
-  description?: string;
-  keywords?: string[];
-}
-
 export interface EventUpdate {
   name: string;
   description?: string;
@@ -78,7 +72,7 @@ export interface Store {
 export interface Media {
   accessKey: string;
   original: Original;
-  events?: Event[];
+  event?: Event;
   description?: string;
   starred: boolean;
   keywords?: string[];

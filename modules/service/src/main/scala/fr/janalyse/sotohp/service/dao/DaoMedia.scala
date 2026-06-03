@@ -11,7 +11,7 @@ import java.time.OffsetDateTime
 
 case class DaoMedia(
   originalId: OriginalId,
-  events: List[EventId],
+  eventId: Option[EventId],
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],
@@ -24,10 +24,10 @@ case class DaoMedia(
 ) derives LMDBCodecJson
 
 object DaoMedia {
-  given transformer:Transformer[Media, DaoMedia] =
+  given transformer: Transformer[Media, DaoMedia] =
     Transformer
       .define[Media, DaoMedia]
-      .withFieldComputed(_.events, _.events.map(_.id))
+      .withFieldComputed(_.eventId, _.event.map(_.id))
       .withFieldComputed(_.originalId, _.original.id)
       .withFieldComputed(_.timestamp, _.timestamp)
       .withFieldComputed(_.location, _.location.transformInto[Option[DaoLocation]])

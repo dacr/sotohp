@@ -20,18 +20,17 @@ object DaoEventAttachment {
       .define[EventAttachment, DaoEventAttachment]
       .withFieldComputed(_.storeId, _.store.id)
       .buildTransformer
-
 }
 
 case class DaoEvent(
   id: EventId,
-  attachment: Option[DaoEventAttachment], // for event based on a relative directory path within a given store
+  attachment: DaoEventAttachment,
   name: EventName,
   description: Option[EventDescription],
-  location: Option[DaoLocation],          // reference location for this event
-  timestamp: Option[ShootDateTime],       // reference date time for this event,
-  originalId: Option[OriginalId],         // reference/chosen original, which will be shown as the event cover
-  publishedOn: Option[String],               // URL where this event album has been published
+  location: Option[DaoLocation],
+  timestamp: Option[ShootDateTime],
+  originalId: Option[OriginalId],
+  publishedOn: Option[String],
   keywords: Set[Keyword]
 ) derives LMDBCodecJson
 

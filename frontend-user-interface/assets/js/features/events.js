@@ -28,7 +28,6 @@ const api = () => ctx.getApi();
 export function initEvents(context) {
   ctx = context;
   wireOnce(document.getElementById('refresh-events'), 'click', () => loadEvents({ force: true }));
-  wireOnce(document.getElementById('create-event'), 'click', () => openEventCreateModal());
 
   // Wire scroll persistence once
   const sec = document.getElementById('tab-events');
@@ -265,44 +264,6 @@ function refreshEventTile(ev) {
 // ---------------------------------------------------------------------------
 // Internal: modals
 // ---------------------------------------------------------------------------
-
-function openEventCreateModal() {
-  let keywords = [];
-  const handle = openModal({
-    title: 'Create event',
-    saveLabel: 'Create',
-    focusSelector: '#evc-name',
-    body: `
-      <div class="row">
-        <div>
-          <label>Name</label>
-          <input type="text" id="evc-name" value="" required>
-          <label class="form-label">Description</label>
-          <input type="text" id="evc-desc" value="">
-          <label class="form-label">Keywords</label>
-          <div class="chips" id="evc-chips"></div>
-        </div>
-      </div>`,
-    onSave: async ({ modal }) => {
-      const name = modal.querySelector('#evc-name').value.trim();
-      const description = modal.querySelector('#evc-desc').value.trim();
-      if (!name) { showWarning('Event name is required'); return false; }
-      const body = { name };
-      if (description) body.description = description;
-      if (keywords.length > 0) body.keywords = keywords;
-      try {
-        await api().createEvent(body);
-        await loadEvents({ force: true });
-      } catch (e) {
-        showError('Failed to create event');
-        return false;
-      }
-    },
-  });
-  if (!handle) return;
-  const { modal } = handle;
-  wireKeywordsChips(modal.querySelector('#evc-chips'), keywords, (next) => { keywords = next; });
-}
 
 export function openEventEditModal(ev) {
   if (document.querySelector('.modal-overlay')) { return; }

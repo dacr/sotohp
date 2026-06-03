@@ -50,12 +50,8 @@ object SaoMedia {
 
   def fromMedia(bag: MediaBag): SaoMedia = {
     import bag.media
-    val event =
-      media.events
-        .find(_.attachment.isDefined)
-        .map(_.name.text)
-
-    val keywords           = media.keywords ++ media.events.flatMap(_.keywords)
+    val event              = media.event.map(_.name.text)
+    val keywords           = media.keywords ++ media.event.toList.flatMap(_.keywords)
     val location           = media.location
     val hasProcessingIssue = (
       bag.processedObjects.exists(_.status.successful == false) ||

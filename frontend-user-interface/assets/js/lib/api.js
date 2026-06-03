@@ -99,7 +99,6 @@ export class ApiClient {
   // -- Events -----------------------------------------------------------------
   async listEvents() { return this._fetchNdjson('/api/events'); }
   async getEvent(eventId) { const res = await this.http.get(`/api/event/${encodeURIComponent(eventId)}`); return res.data; }
-  async createEvent(body) { const res = await this.http.post('/api/event', body); return res.data; }
   async updateEvent(eventId, body) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body); }
   async deleteEvent(eventId) { await this.http.delete(`/api/event/${encodeURIComponent(eventId)}`); }
   async setEventCover(eventId, mediaAccessKey) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }

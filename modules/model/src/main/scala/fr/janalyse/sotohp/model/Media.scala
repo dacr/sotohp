@@ -4,41 +4,33 @@ import java.time.OffsetDateTime
 
 case class Media(
   original: Original,
-  events: List[Event],
+  event: Option[Event],
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],
   orientation: Option[Orientation],      // override original's orientation
   shootDateTime: Option[ShootDateTime],  // override original's cameraShotDateTime
   userDefinedLocation: Option[Location], // replace the original's location (user-defined or deducted location)
-  deductedLocation: Option[Location] // location deducted from near-by (time, space) localized photos
+  deductedLocation: Option[Location]     // location deducted from near-by (time, space) localized photos
 ) {
-  def timestamp: OffsetDateTime = Media.computeTimestamp(shootDateTime, events, original)
+  def timestamp: OffsetDateTime = Media.computeTimestamp(shootDateTime, event, original)
 
   def location: Option[Location] =
     userDefinedLocation
       .orElse(deductedLocation)
       .orElse(original.location)
-      .orElse(events.find(_.location.isDefined).flatMap(_.location))
+      .orElse(event.flatMap(_.location))
       .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d) // TODO fix location data
 
-//  def rebuildAccessKey: MediaAccessKey = { // TODO TO BE REMOVED
-//    //val timestamp = original.timestamp
-//    // TODO Migrate to something else as ULID are constrained to start from epoch ! 1947:07:01 15:00:00 +00:00 => -710154000000 for epoch millis !
-//    //val epoch = if (timestamp.getYear >= 1970) Try(timestamp.toInstant.toEpochMilli).toOption.getOrElse(0L) else 0L
-//    //val ulid = ULID.ofMillis(epoch)
-//    MediaAccessKey(timestamp, original.id)
-//  }
-  def allKeywords: Set[Keyword] = keywords ++ events.flatMap(_.keywords)
+  def allKeywords: Set[Keyword] = keywords ++ event.toList.flatMap(_.keywords)
 }
 
 object Media {
-  def computeTimestamp( mediaShootDateTime: Option[ShootDateTime], events: List[Event], original: Original): OffsetDateTime = {
+  def computeTimestamp(mediaShootDateTime: Option[ShootDateTime], event: Option[Event], original: Original): OffsetDateTime = {
     mediaShootDateTime
       .orElse(original.cameraShootDateTime)
-      .orElse(events.find(_.attachment.isDefined).flatMap(_.timestamp))
+      .orElse(event.flatMap(_.timestamp))
       .map(_.offsetDateTime)
       .getOrElse(original.fileLastModified.offsetDateTime)
   }
-
 }

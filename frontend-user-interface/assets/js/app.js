@@ -468,7 +468,7 @@ function showMedia(media) {
   if (facesEnabled) { try { loadFacesForCurrentMedia(); } catch {} }
   const date = media.shootDateTime || media.original?.cameraShootDateTime || '-';
   const dateStr = date ? new Date(date).toLocaleString() : '-';
-  const ev0 = (media.events && media.events.length > 0) ? media.events[0] : null;
+  const ev0 = media.event || null;
   const eventName = ev0 ? (ev0.name || '(no name)') : '-';
   const dateEl = document.getElementById('info-date');
   if (dateEl) {
@@ -636,7 +636,7 @@ function showMedia(media) {
         // Update fullscreen overlay star if present
         const ov2 = document.getElementById('fs-overlay');
         if (ov2) {
-          const evName = (currentMedia.events && currentMedia.events.length > 0) ? currentMedia.events[0].name : '-';
+          const evName = currentMedia.event ? currentMedia.event.name : '-';
           const pinSvg2 = (color) => `\
 <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="${color}" style="vertical-align:-0.15em;margin-left:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
           let pin2 = '';
@@ -955,11 +955,11 @@ function openMediaEditModal(media) {
 
   // Cover button handlers
   overlay.querySelector('#md-event-cover-btn')?.addEventListener('click', async () => {
-    if (!media.events || media.events.length === 0) {
+    if (!media.event) {
       showWarning('This media is not associated with any event');
       return;
     }
-    const eventId = media.events[0].id;
+    const eventId = media.event.id;
     try {
       await api.setEventCover(eventId, media.accessKey);
       showSuccess('Successfully set as event cover');
@@ -2302,9 +2302,7 @@ function mediaTimestamp(media) {
     if (!media) return null;
     if (media.shootDateTime) return media.shootDateTime;
     if (media.original && media.original.cameraShootDateTime) return media.original.cameraShootDateTime;
-    if (Array.isArray(media.events)) {
-      for (const ev of media.events) { if (ev && ev.timestamp) return ev.timestamp; }
-    }
+    if (media.event && media.event.timestamp) return media.event.timestamp;
     return null;
   } catch { return null; }
 }
@@ -2402,7 +2400,7 @@ function createMosaicTile(media) {
   function buildTooltipHtml() {
     const ts = tsStr ? new Date(tsStr) : null;
     const tsHuman = ts && !isNaN(ts.getTime()) ? ts.toLocaleString() : '';
-    const evName = (media.events && media.events.length > 0) ? media.events[0].name : '(no event)';
+    const evName = media.event ? media.event.name : '(no event)';
     return `<div class="title">${evName}</div>${tsHuman ? `<div class="subtitle">${tsHuman}</div>` : ''}`;
   }
   const onMouseMove = (e) => {

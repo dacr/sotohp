@@ -50,21 +50,20 @@ object MediaBuilder {
     val eventAttachment = buildEventAttachment(store, originalMediaPath)
     val eventName       = eventAttachment.map(_.eventMediaDirectory.toString)
 
-    eventName
-      .filter(_.nonEmpty)
-      .map(name =>
-        Event(
-          id = eventId,
-          attachment = eventAttachment,
-          name = EventName(name),
-          description = None,
-          location = mayBeOriginal.flatMap(_.location),
-          timestamp = mayBeOriginal.flatMap(_.cameraShootDateTime),
-          originalId = mayBeOriginal.map(_.id),
-          publishedOn = None,
-          keywords = Set.empty
-        )
-      )
+    for {
+      attachment <- eventAttachment
+      name       <- eventName.filter(_.nonEmpty)
+    } yield Event(
+      id = eventId,
+      attachment = attachment,
+      name = EventName(name),
+      description = None,
+      location = mayBeOriginal.flatMap(_.location),
+      timestamp = mayBeOriginal.flatMap(_.cameraShootDateTime),
+      originalId = mayBeOriginal.map(_.id),
+      publishedOn = None,
+      keywords = Set.empty
+    )
   }
 
   /** Generates a `Media` object from an `Original` object by computing its properties such as timestamp, media access key, event, and media kind.
@@ -83,9 +82,8 @@ object MediaBuilder {
   ): Either[CoreIssue, Media] = Right {
     //val mediaAccessKey = buildDefaultMediaAccessKey(original)
     Media(
-      //accessKey = mediaAccessKey,
       original = original,
-      events = knownEvent.toList,
+      event = knownEvent,
       description = None,
       starred = Starred(false),
       keywords = Set.empty,

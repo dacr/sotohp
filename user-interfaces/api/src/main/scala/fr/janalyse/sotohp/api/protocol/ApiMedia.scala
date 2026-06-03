@@ -11,7 +11,7 @@ import sttp.tapir.Schema
 case class ApiMedia(
   accessKey: MediaAccessKey,
   original: ApiOriginal,
-  events: List[ApiEvent],
+  event: Option[ApiEvent],
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],

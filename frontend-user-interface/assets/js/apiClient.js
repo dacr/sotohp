@@ -46,10 +46,6 @@ export class ApiClient {
         const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`);
         return res.data;
     }
-    async createEvent(body) {
-        const res = await this.http.post('/api/event', body);
-        return res.data;
-    }
     async listOwners() {
         return await this.fetchNdjson('/api/owners');
     }
