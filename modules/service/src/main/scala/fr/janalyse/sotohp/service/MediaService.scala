@@ -15,7 +15,7 @@ import java.util.regex.Pattern
 
 type MediaTuple = (key: MediaAccessKey, media: Media)
 
-// Minimal projection used for the map tab: avoids the Original + Events
+// Minimal projection used for the map tab: avoids the Original + Bags
 // joins and trims the wire payload to just what a Leaflet marker needs.
 case class MediaLocation(
   accessKey: MediaAccessKey,
@@ -23,7 +23,7 @@ case class MediaLocation(
   longitude: LongitudeDecimalDegrees,
   shootDateTime: Option[ShootDateTime],
   starred: Starred,
-  eventId: Option[EventId]
+  bagId: Option[BagId]
 )
 
 trait MediaService {
@@ -126,19 +126,19 @@ trait MediaService {
   def originalUpsert(providedOriginal: Original): IO[ServiceIssue, Original]
 
   // -------------------------------------------------------------------------------------------------------------------
-  def eventList(): Stream[ServiceStreamIssue, Event]
-  def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]]
-  def eventDelete(eventId: EventId): IO[ServiceIssue, Unit]
-  def eventUpdate(
-    eventId: EventId,
-    name: EventName,
-    description: Option[EventDescription],
+  def bagList(): Stream[ServiceStreamIssue, Bag]
+  def bagGet(bagId: BagId): IO[ServiceIssue, Option[Bag]]
+  def bagDelete(bagId: BagId): IO[ServiceIssue, Unit]
+  def bagUpdate(
+    bagId: BagId,
+    name: BagName,
+    description: Option[BagDescription],
     location: Option[Location],
     timestamp: Option[ShootDateTime],
     coverOriginalId: Option[OriginalId],
     publishedOn: Option[URL],
     keywords: Set[Keyword]
-  ): IO[ServiceIssue, Option[Event]]
+  ): IO[ServiceIssue, Option[Bag]]
 
   // -------------------------------------------------------------------------------------------------------------------
   def portfolioList(): Stream[ServiceStreamIssue, Portfolio]
@@ -336,23 +336,23 @@ object MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def eventList(): ZStream[MediaService, ServiceStreamIssue, Event] = ZStream.serviceWithStream(_.eventList())
+  def bagList(): ZStream[MediaService, ServiceStreamIssue, Bag] = ZStream.serviceWithStream(_.bagList())
 
-  def eventGet(eventId: EventId): ZIO[MediaService, ServiceIssue, Option[Event]] = ZIO.serviceWithZIO(_.eventGet(eventId))
+  def bagGet(bagId: BagId): ZIO[MediaService, ServiceIssue, Option[Bag]] = ZIO.serviceWithZIO(_.bagGet(bagId))
 
-  def eventDelete(eventId: EventId): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.eventDelete(eventId))
+  def bagDelete(bagId: BagId): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.bagDelete(bagId))
 
-  def eventUpdate(
-    eventId: EventId,
-    name: EventName,
-    description: Option[EventDescription],
+  def bagUpdate(
+    bagId: BagId,
+    name: BagName,
+    description: Option[BagDescription],
     location: Option[Location],
     timestamp: Option[ShootDateTime],
     coverOriginalId: Option[OriginalId],
     publishedOn: Option[URL],
     keywords: Set[Keyword]
-  ): ZIO[MediaService, ServiceIssue, Option[Event]] =
-    ZIO.serviceWithZIO(_.eventUpdate(eventId, name, description, location, timestamp, coverOriginalId, publishedOn, keywords))
+  ): ZIO[MediaService, ServiceIssue, Option[Bag]] =
+    ZIO.serviceWithZIO(_.bagUpdate(bagId, name, description, location, timestamp, coverOriginalId, publishedOn, keywords))
 
   // -------------------------------------------------------------------------------------------------------------------
 

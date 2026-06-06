@@ -33,14 +33,14 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         _              <- MediaService.synchronizeWait()
         originals      <- MediaService.originalList().runCollect
         count          <- MediaService.originalCount()
-        events         <- MediaService.eventList().runCollect
+        bags           <- MediaService.bagList().runCollect
         states         <- MediaService.stateList().runCollect
         medias         <- MediaService.mediaList().runCollect
         _              <- TestClock.adjust(1.hour)
         _              <- MediaService.synchronizeStart(None) // ------ SECOND SYNC
         _              <- MediaService.synchronizeWait()
         originalsAgain <- MediaService.originalList().runCollect
-        eventsAgain    <- MediaService.eventList().runCollect
+        bagsAgain      <- MediaService.bagList().runCollect
         statesAgain    <- MediaService.stateList().runCollect
         mediasAgain    <- MediaService.mediaList().runCollect
         keywords       <- MediaService.keywordList(store.id)
@@ -57,12 +57,12 @@ object MediaServiceSynchronizeTest extends BaseSpecDefault {
         originals.forall(_.exposureTime.isDefined),
         originals.forall(_.iso.isDefined),
         originals.forall(_.focalLength.isDefined),
-        events.size == 6,
+        bags.size == 6,
         states.size == 13,
         medias.size == 13,
-        medias.filter(_.media.event.isDefined).size == 12,
+        medias.filter(_.media.bag.isDefined).size == 12,
         originals == originalsAgain,
-        events == eventsAgain,
+        bags == bagsAgain,
         states != statesAgain,                    // originalLastChecked should differ :
         states == statesAgain.map(_.copy(originalLastChecked = LastChecked(epoch))),
         mediasAgain == medias,

@@ -10,14 +10,14 @@ import java.time.Instant
 case class MediaServiceDatabase(
   originalIdByTimestamp: LMDBIndex[(Instant, OriginalId), OriginalId],
   originalIdByPosition: LMDBIndex[Long, OriginalId],
-  originalIdByEventId: LMDBIndex[EventId, (Instant, OriginalId)],
+  originalIdByBagId: LMDBIndex[BagId, (Instant, OriginalId)],
   faceIdByPersonId: LMDBIndex[PersonId, (Instant, FaceId)],
   originalIdByStoreId: LMDBIndex[StoreId, OriginalId],
   originalIdByLocation: LMDBIndex[GEOTools.Location, OriginalId],
 
   originals: LMDBCollection[OriginalId, DaoOriginal],
   states: LMDBCollection[OriginalId, DaoState],
-  events: LMDBCollection[EventId, DaoEvent],
+  bags: LMDBCollection[BagId, DaoBag],
   medias: LMDBCollection[OriginalId, DaoMedia],
   owners: LMDBCollection[OwnerId, DaoOwner],
   stores: LMDBCollection[StoreId, DaoStore],

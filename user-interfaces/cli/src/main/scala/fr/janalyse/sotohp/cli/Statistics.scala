@@ -25,7 +25,7 @@ case class Statistics(
   modifiedCount: Int = 0,
   missingShootingDate: Int = 0,
   invalidShootingDateCount: Int = 0,
-  eventsCount: Map[Option[EventName], Int] = Map.empty, // TODO potentially high memory usage
+  bagsCount: Map[Option[BagName], Int] = Map.empty, // TODO potentially high memory usage
   oldestDigitalShootingDate: Option[OffsetDateTime] = None,
   newestDigitalShootingDate: Option[OffsetDateTime] = None,
   missing: List[Original] = Nil
@@ -58,7 +58,7 @@ object Statistics extends CommonsCLI {
                             .map(_.offsetDateTime)
       fileHash          = state.flatMap(_.originalHash.map(_.code))
       originalFound    <- ZIO.attempt(media.original.absoluteMediaPath.toFile.exists())
-      events            = media.event.toList
+      bags              = media.bag.toList
       originalModified <- ZIO
                             .attempt(media.original.fileLastModified.offsetDateTime.toInstant.toEpochMilli != media.original.absoluteMediaPath.toFile.lastModified())
                             .when(originalFound)
@@ -89,17 +89,17 @@ object Statistics extends CommonsCLI {
           })
       }
 
-      val updatedEventsCount = stats.eventsCount ++ (events match {
-        case Nil         =>
-          (stats.eventsCount.get(None) match {
+      val updatedBagsCount = stats.bagsCount ++ (bags match {
+        case Nil       =>
+          (stats.bagsCount.get(None) match {
             case None        => None -> 1
             case Some(count) => None -> (count + 1)
           }) :: Nil
-        case foundEvents =>
-          foundEvents.map(event =>
-            (stats.eventsCount.get(Some(event.name)) match {
-              case None        => Some(event.name) -> 1
-              case Some(count) => Some(event.name) -> (count + 1)
+        case foundBags =>
+          foundBags.map(bag =>
+            (stats.bagsCount.get(Some(bag.name)) match {
+              case None        => Some(bag.name) -> 1
+              case Some(count) => Some(bag.name) -> (count + 1)
             })
           )
       })
@@ -127,7 +127,7 @@ object Statistics extends CommonsCLI {
         modifiedCount = updatedModifiedCount,
         missingShootingDate = updatedMissingShootingDateCount,
         invalidShootingDateCount = updatedInvalidShootingDateCount,
-        eventsCount = updatedEventsCount,
+        bagsCount = updatedBagsCount,
         oldestDigitalShootingDate = updatedOldestValidTimestamp,
         newestDigitalShootingDate = updatedNewestValidTimestamp,
         missing = if (originalFound) stats.missing else media.original :: stats.missing
@@ -138,7 +138,7 @@ object Statistics extends CommonsCLI {
   private def reportStats(stats: Statistics) = {
     import stats.*
     val duplicatedCount = stats.duplicated.count((_, count) => count > 1)
-    val eventCount      = eventsCount.count((k, v) => k.isDefined)
+    val bagCount        = bagsCount.count((k, v) => k.isDefined)
 
     val (digitalShootingMonths, digitalShootingYears) = (oldestDigitalShootingDate, newestDigitalShootingDate) match {
       case (Some(oldest), Some(newest)) => (MONTHS.between(oldest, newest), YEARS.between(oldest, newest))
@@ -150,7 +150,7 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine("-----------------------------------------------------------------------------------------")
       _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo statistics :$RESET")
       _ <- Console.printLine(s"${GREEN}- $count photos$RESET")
-      _ <- Console.printLine(s"${GREEN}- $eventCount events")
+      _ <- Console.printLine(s"${GREEN}- $bagCount bags")
       _ <- Console.printLine(s"${GREEN}- $digitalShootingMonths months of digital/numerized photography ($digitalShootingYears years)$RESET")
       _ <- Console.printLine(s"${GREEN}  - ${oldestDigitalShootingDate.get} -> ${newestDigitalShootingDate.get}$RESET").when(oldestDigitalShootingDate.isDefined && newestDigitalShootingDate.isDefined)
       _ <- Console.printLine(s"${GREEN}- $facesCount people faces$RESET")
@@ -159,7 +159,7 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET").when(duplicatedCount > 0)
       _ <- Console.printLine(s"${YELLOW}- $missingShootingDate photos without shooting date (coming from camera or user given)$RESET").when(missingShootingDate > 0)
       _ <- Console.printLine(s"${YELLOW}- $modifiedCount modified originals$RESET").when(modifiedCount > 0)
-      _ <- Console.printLine(s"${YELLOW}- ${eventsCount.getOrElse(None, 0)} orphan photos (no related event)$RESET")
+      _ <- Console.printLine(s"${YELLOW}- ${bagsCount.getOrElse(None, 0)} orphan photos (no related bag)$RESET")
       _ <- Console.printLine(s"${RED}- $missingCount missing originals !!$RESET").when(missingCount > 0)
       _ <- Console.printLine(s"${RED}- $invalidShootingDateCount invalid shooting date year (< $shootingDateMinimumValidYear)$RESET").when(invalidShootingDateCount > 0)
       _ <- Console.printLine(s"${RED}- $normalizedFailureCount not loadable photos (probably not supported format or corrupted)$RESET").when(normalizedFailureCount > 0)

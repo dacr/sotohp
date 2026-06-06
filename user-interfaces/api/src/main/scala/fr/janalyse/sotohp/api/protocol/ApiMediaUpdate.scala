@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.api.protocol
 
 import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
 import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
-import fr.janalyse.sotohp.model.{Event, Keyword, Location, Media, MediaAccessKey, MediaDescription, Orientation, Original, ShootDateTime, Starred}
+import fr.janalyse.sotohp.model.{Bag, Keyword, Location, Media, MediaAccessKey, MediaDescription, Orientation, Original, ShootDateTime, Starred}
 import fr.janalyse.sotohp.service.json.{*, given}
 import io.scalaland.chimney.*
 import io.scalaland.chimney.dsl.*

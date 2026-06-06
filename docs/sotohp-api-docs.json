@@ -2205,20 +2205,20 @@
         ]
       }
     },
-    "/api/events" : {
+    "/api/bags" : {
       "get" : {
         "tags" : [
-          "Event"
+          "Bag"
         ],
-        "summary" : "Stream all defined events",
-        "operationId" : "List events",
+        "summary" : "Stream all defined bags",
+        "operationId" : "List bags",
         "responses" : {
           "200" : {
-            "description" : "NDJSON (one Event JSON object per line)",
+            "description" : "NDJSON (one Bag JSON object per line)",
             "content" : {
               "application/x-ndjson" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/Event"
+                  "$ref" : "#/components/schemas/Bag"
                 }
               }
             }
@@ -2265,16 +2265,16 @@
         ]
       }
     },
-    "/api/event/{eventId}" : {
+    "/api/bag/{bagId}" : {
       "get" : {
         "tags" : [
-          "Event"
+          "Bag"
         ],
-        "summary" : "Get all event information for the given event identifier",
-        "operationId" : "Get event",
+        "summary" : "Get all bag information for the given bag identifier",
+        "operationId" : "Get bag",
         "parameters" : [
           {
-            "name" : "eventId",
+            "name" : "bagId",
             "in" : "path",
             "required" : true,
             "schema" : {
@@ -2288,7 +2288,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/Event"
+                  "$ref" : "#/components/schemas/Bag"
                 }
               }
             }
@@ -2356,13 +2356,13 @@
       },
       "put" : {
         "tags" : [
-          "Event"
+          "Bag"
         ],
-        "summary" : "Update event configuration for the given event identifier",
-        "operationId" : "Update event",
+        "summary" : "Update bag configuration for the given bag identifier",
+        "operationId" : "Update bag",
         "parameters" : [
           {
-            "name" : "eventId",
+            "name" : "bagId",
             "in" : "path",
             "required" : true,
             "schema" : {
@@ -2374,7 +2374,7 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/EventUpdate"
+                "$ref" : "#/components/schemas/BagUpdate"
               }
             }
           },
@@ -2444,99 +2444,18 @@
             ]
           }
         ]
-      },
-      "delete" : {
-        "tags" : [
-          "Event"
-        ],
-        "summary" : "Delete the event for the given event identifier",
-        "operationId" : "Delete event",
-        "parameters" : [
-          {
-            "name" : "eventId",
-            "in" : "path",
-            "required" : true,
-            "schema" : {
-              "type" : "string"
-            }
-          }
-        ],
-        "responses" : {
-          "200" : {
-            "description" : ""
-          },
-          "400" : {
-            "description" : "Invalid identifier provided",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
-                }
-              }
-            }
-          },
-          "401" : {
-            "description" : "Authentication failed",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorSecurity"
-                }
-              }
-            }
-          },
-          "403" : {
-            "description" : "Insufficient permissions",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorSecurity"
-                }
-              }
-            }
-          },
-          "404" : {
-            "description" : "Couldn't find the request resource",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
-                }
-              }
-            }
-          },
-          "500" : {
-            "description" : "Something went wrong with the backend",
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/ErrorInternal"
-                }
-              }
-            }
-          }
-        },
-        "security" : [
-          {
-            
-          },
-          {
-            "httpAuth" : [
-            ]
-          }
-        ]
       }
     },
-    "/api/event/{eventId}/cover/{mediaAccessKey}" : {
+    "/api/bag/{bagId}/cover/{mediaAccessKey}" : {
       "put" : {
         "tags" : [
-          "Event"
+          "Bag"
         ],
-        "summary" : "Update event image cover for the given event and original identifiers",
-        "operationId" : "Update event image cover",
+        "summary" : "Update bag image cover for the given bag and original identifiers",
+        "operationId" : "Update bag image cover",
         "parameters" : [
           {
-            "name" : "eventId",
+            "name" : "bagId",
             "in" : "path",
             "required" : true,
             "schema" : {
@@ -4463,6 +4382,79 @@
           }
         }
       },
+      "Bag" : {
+        "title" : "Bag",
+        "type" : "object",
+        "required" : [
+          "id",
+          "name"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/Location"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "originalId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "publishedOn" : {
+            "type" : "string"
+          },
+          "keywords" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "BagUpdate" : {
+        "title" : "BagUpdate",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "location" : {
+            "$ref" : "#/components/schemas/Location"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "publishedOn" : {
+            "type" : "string"
+          },
+          "keywords" : {
+            "type" : "array",
+            "uniqueItems" : true,
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
       "BoundingBox" : {
         "title" : "BoundingBox",
         "type" : "object",
@@ -4578,79 +4570,6 @@
         "properties" : {
           "message" : {
             "type" : "string"
-          }
-        }
-      },
-      "Event" : {
-        "title" : "Event",
-        "type" : "object",
-        "required" : [
-          "id",
-          "name"
-        ],
-        "properties" : {
-          "id" : {
-            "type" : "string",
-            "format" : "uuid"
-          },
-          "name" : {
-            "type" : "string"
-          },
-          "description" : {
-            "type" : "string"
-          },
-          "location" : {
-            "$ref" : "#/components/schemas/Location"
-          },
-          "timestamp" : {
-            "type" : "string",
-            "format" : "date-time"
-          },
-          "originalId" : {
-            "type" : "string",
-            "format" : "uuid"
-          },
-          "publishedOn" : {
-            "type" : "string"
-          },
-          "keywords" : {
-            "type" : "array",
-            "uniqueItems" : true,
-            "items" : {
-              "type" : "string"
-            }
-          }
-        }
-      },
-      "EventUpdate" : {
-        "title" : "EventUpdate",
-        "type" : "object",
-        "required" : [
-          "name"
-        ],
-        "properties" : {
-          "name" : {
-            "type" : "string"
-          },
-          "description" : {
-            "type" : "string"
-          },
-          "location" : {
-            "$ref" : "#/components/schemas/Location"
-          },
-          "timestamp" : {
-            "type" : "string",
-            "format" : "date-time"
-          },
-          "publishedOn" : {
-            "type" : "string"
-          },
-          "keywords" : {
-            "type" : "array",
-            "uniqueItems" : true,
-            "items" : {
-              "type" : "string"
-            }
           }
         }
       },
@@ -4786,8 +4705,8 @@
           "original" : {
             "$ref" : "#/components/schemas/Original"
           },
-          "event" : {
-            "$ref" : "#/components/schemas/Event"
+          "bag" : {
+            "$ref" : "#/components/schemas/Bag"
           },
           "description" : {
             "type" : "string"
@@ -4888,7 +4807,7 @@
           "starred" : {
             "type" : "boolean"
           },
-          "eventId" : {
+          "bagId" : {
             "type" : "string",
             "format" : "uuid"
           }

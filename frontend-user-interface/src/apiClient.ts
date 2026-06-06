@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import type { Media, MediaLocation, MediaSelector, Event as SEvent, Owner, Store, EventUpdate } from './types'
+import type { Media, MediaLocation, MediaSelector, Bag as SBag, Owner, Store, BagUpdate } from './types'
 import { getToken, updateToken } from './auth'
 
 export class ApiClient {
@@ -46,12 +46,12 @@ export class ApiClient {
     return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`
   }
 
-  async listEvents(): Promise<SEvent[]> {
-    return await this.fetchNdjson<SEvent>('/api/events')
+  async listBags(): Promise<SBag[]> {
+    return await this.fetchNdjson<SBag>('/api/bags')
   }
 
-  async updateEvent(eventId: string, body: EventUpdate): Promise<void> {
-    await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body)
+  async updateBag(bagId: string, body: BagUpdate): Promise<void> {
+    await this.http.put(`/api/bag/${encodeURIComponent(bagId)}`, body)
   }
 
   async getState(originalId: string): Promise<{ originalId: string; originalAddedOn: string; mediaAccessKey: string }> {

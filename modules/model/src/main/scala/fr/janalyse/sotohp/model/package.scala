@@ -111,14 +111,14 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type EventId = UUID
+  opaque type BagId = UUID
 
-  object EventId {
-    def apply(id: UUID): EventId = id
+  object BagId {
+    def apply(id: UUID): BagId = id
 
-    extension (eventId: EventId) {
-      def asString: String = eventId.toString
-      def asUUID: UUID     = eventId
+    extension (bagId: BagId) {
+      def asString: String = bagId.toString
+      def asUUID: UUID     = bagId
     }
   }
 
@@ -168,35 +168,35 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type EventName = String
+  opaque type BagName = String
 
-  object EventName {
-    def apply(name: String): EventName = name
+  object BagName {
+    def apply(name: String): BagName = name
 
-    extension (eventName: EventName) {
-      def text: String = eventName
+    extension (bagName: BagName) {
+      def text: String = bagName
     }
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type EventDescription = String
+  opaque type BagDescription = String
 
-  object EventDescription {
-    def apply(description: String): EventDescription = description
+  object BagDescription {
+    def apply(description: String): BagDescription = description
 
-    extension (eventDescription: EventDescription) {
-      def text: String = eventDescription
+    extension (bagDescription: BagDescription) {
+      def text: String = bagDescription
     }
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  opaque type EventMediaDirectory = Path
+  opaque type BagMediaDirectory = Path
 
-  object EventMediaDirectory {
-    def apply(path: Path): EventMediaDirectory = path
+  object BagMediaDirectory {
+    def apply(path: Path): BagMediaDirectory = path
 
-    extension (eventMediaDirectory: EventMediaDirectory) {
-      def path: Path = eventMediaDirectory
+    extension (bagMediaDirectory: BagMediaDirectory) {
+      def path: Path = bagMediaDirectory
     }
   }
 

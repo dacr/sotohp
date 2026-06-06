@@ -5,18 +5,19 @@ import fr.janalyse.sotohp.processor.model.OriginalClassifications
 import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 case class DaoDetectedClassification(
   name: String,
   probability: Double
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 case class DaoOriginalClassifications(
   originalId: OriginalId,
   status: DaoProcessedStatus,
   classifications: List[DaoDetectedClassification]
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 object DaoOriginalClassifications {
   given Transformer[OriginalClassifications, DaoOriginalClassifications] =

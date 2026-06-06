@@ -24,7 +24,7 @@ import fr.janalyse.sotohp.service.model.SynchronizeAction.{Stop, WaitForCompleti
 import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.{GetErrors, IndexErrors, LMDB, LMDBCodec, LMDBCollection, StorageSystemError, StorageUserError}
-import zio.lmdb.keycodecs.{KeyCodec, KeyCodecError}
+import zio.lmdb.keycodecs.{KeyCodec, KeyCodecError, KeyTypeId}
 import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
 import zio.ZIOAspect.annotated
@@ -60,11 +60,11 @@ class MediaServiceLive private (
   private def daoMedia2Media(daoMedia: DaoMedia): IO[ServiceIssue, Media] = {
     for {
       original <- originalGet(daoMedia.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${daoMedia.originalId}"))
-      event    <- ZIO.foreach(daoMedia.eventId)(eventId => eventGet(eventId).some.mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err")))
+      bag      <- ZIO.foreach(daoMedia.bagId)(bagId => bagGet(bagId).some.mapError(err => ServiceDatabaseIssue(s"Couldn't fetch bag : $err")))
       media     = daoMedia
                     .into[Media]
                     .withFieldConst(_.original, original)
-                    .withFieldConst(_.event, event)
+                    .withFieldConst(_.bag, bag)
                     .transform
     } yield media
   }
@@ -101,7 +101,7 @@ class MediaServiceLive private (
 
   // Walks the GEO index so only medias that actually have a location are
   // touched, and projects each one into the slim MediaLocation shape used
-  // by the map tab. Skips the Original+Events join and EXIF/keywords —
+  // by the map tab. Skips the Original+Bags join and EXIF/keywords —
   // ~20x smaller payload than mediaList for the same set of medias.
   override def mediaLocationList(): Stream[ServiceStreamIssue, MediaLocation] = {
     val locations = for {
@@ -125,7 +125,7 @@ class MediaServiceLive private (
                               longitude = loc.longitude,
                               shootDateTime = daoMedia.shootDateTime,
                               starred = daoMedia.starred,
-                              eventId = daoMedia.eventId
+                              bagId = daoMedia.bagId
                             )
                           )
                         ))
@@ -1013,81 +1013,81 @@ class MediaServiceLive private (
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def daoEvent2Event(daoEvent: DaoEvent): IO[ServiceIssue, Event] = {
+  def daoBag2Bag(daoBag: DaoBag): IO[ServiceIssue, Bag] = {
     for {
-      store <- storeGet(daoEvent.attachment.storeId)
-                 .someOrFail(ServiceDatabaseIssue(s"Couldn't find store for event attachment : ${daoEvent.attachment.storeId}"))
-      attachment = EventAttachment(store, daoEvent.attachment.eventMediaDirectory)
-      event      = daoEvent
-                     .into[Event]
+      store <- storeGet(daoBag.attachment.storeId)
+                 .someOrFail(ServiceDatabaseIssue(s"Couldn't find store for bag attachment : ${daoBag.attachment.storeId}"))
+      attachment = BagAttachment(store, daoBag.attachment.bagMediaDirectory)
+      bag        = daoBag
+                     .into[Bag]
                      .withFieldConst(_.attachment, attachment)
                      .withFieldComputed(_.publishedOn, in => in.publishedOn.flatMap(uri => Try(java.net.URI(uri).toURL).toOption))
                      .transform
-    } yield event
+    } yield bag
   }
 
-  override def eventList(): Stream[ServiceStreamIssue, Event] = {
-    collections.events
+  override def bagList(): Stream[ServiceStreamIssue, Bag] = {
+    collections.bags
       .stream()
-      .mapZIO(daoEvent2Event)
-      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect events : $err"))
+      .mapZIO(daoBag2Bag)
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect bags : $err"))
   }
 
-  override def eventGet(eventId: EventId): IO[ServiceIssue, Option[Event]] = for {
-    maybeDaoEvent <- collections.events.fetch(eventId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
-    maybeEvent    <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
-  } yield maybeEvent
+  override def bagGet(bagId: BagId): IO[ServiceIssue, Option[Bag]] = for {
+    maybeDaoBag <- collections.bags.fetch(bagId).mapError(err => ServiceDatabaseIssue(s"Couldn't fetch bag : $err"))
+    maybeBag    <- ZIO.foreach(maybeDaoBag)(daoBag2Bag)
+  } yield maybeBag
 
-  override def eventDelete(eventId: EventId): IO[ServiceIssue, Unit] = {
+  override def bagDelete(bagId: BagId): IO[ServiceIssue, Unit] = {
     for {
-      maybeDaoEvent <- collections.events
-                         .fetch(eventId)
-                         .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch event : $err"))
-      _             <- ZIO.foreachDiscard(maybeDaoEvent) { _ =>
-                         for {
-                           // Refuse delete if any media still references this event
-                           firstLinkedMedia <- collections.originalIdByEventId
-                                                 .indexed(eventId)
-                                                 .runHead
-                                                 .mapError(err => ServiceDatabaseIssue(s"Couldn't check event links : $err"))
-                           _                <- ZIO
-                                                 .fail(ServiceUserIssue(s"Event ${eventId.asString} is still linked to one or more medias - unlink them first"))
-                                                 .when(firstLinkedMedia.isDefined)
-                           _                <- collections.events
-                                                 .delete(eventId)
-                                                 .mapError(err => ServiceDatabaseIssue(s"Couldn't delete event : $err"))
-                         } yield ()
-                       }
+      maybeDaoBag <- collections.bags
+                       .fetch(bagId)
+                       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch bag : $err"))
+      _           <- ZIO.foreachDiscard(maybeDaoBag) { _ =>
+                       for {
+                         // Refuse delete if any media still references this bag
+                         firstLinkedMedia <- collections.originalIdByBagId
+                                               .indexed(bagId)
+                                               .runHead
+                                               .mapError(err => ServiceDatabaseIssue(s"Couldn't check bag links : $err"))
+                         _                <- ZIO
+                                               .fail(ServiceUserIssue(s"Bag ${bagId.asString} is still linked to one or more medias - unlink them first"))
+                                               .when(firstLinkedMedia.isDefined)
+                         _                <- collections.bags
+                                               .delete(bagId)
+                                               .mapError(err => ServiceDatabaseIssue(s"Couldn't delete bag : $err"))
+                       } yield ()
+                     }
     } yield ()
   }
 
-  override def eventUpdate(
-    eventId: EventId,
-    name: EventName,
-    description: Option[EventDescription],
+  override def bagUpdate(
+    bagId: BagId,
+    name: BagName,
+    description: Option[BagDescription],
     location: Option[Location],
     timestamp: Option[ShootDateTime],
     coverOriginalId: Option[OriginalId],
     publishedOn: Option[URL],
     keywords: Set[Keyword]
-  ): IO[ServiceIssue, Option[Event]] = {
+  ): IO[ServiceIssue, Option[Bag]] = {
     for {
-      maybeDaoEvent <- collections.events
-                         .update(
-                           eventId,
-                           _.copy(
-                             name = name,
-                             description = description,
-                             location = location.transformInto[Option[DaoLocation]],
-                             timestamp = timestamp,
-                             originalId = coverOriginalId,
-                             publishedOn = publishedOn.map(_.toString),
-                             keywords = keywords
-                           )
+      maybeDaoBag <- collections.bags
+                       .update(
+                         bagId,
+                         _.copy(
+                           name = name,
+                           description = description,
+                           location = location.transformInto[Option[DaoLocation]],
+                           timestamp = timestamp,
+                           originalId = coverOriginalId,
+                           publishedOn = publishedOn.map(_.toString),
+                           keywords = keywords
                          )
-                         .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
-      event         <- ZIO.foreach(maybeDaoEvent)(daoEvent2Event)
-    } yield event
+                       )
+                       .mapError(err => ServiceDatabaseIssue(s"Couldn't update owner : $err"))
+      bag         <- ZIO.foreach(maybeDaoBag)(daoBag2Bag)
+    } yield bag
 
   }
 
@@ -1353,22 +1353,22 @@ class MediaServiceLive private (
     logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
   }
 
-  private def getEventForAttachment(attachment: EventAttachment): IO[ServiceIssue, Option[Event]] = {
+  private def getBagForAttachment(attachment: BagAttachment): IO[ServiceIssue, Option[Bag]] = {
     // TODO first basic and naive implementation - not good for complexity
-    collections.events
-      .collect(valueFilter = daoFilter => daoFilter.attachment.storeId == attachment.store.id && daoFilter.attachment.eventMediaDirectory == attachment.eventMediaDirectory)
-      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect events : $err"), _.headOption)
-      .flatMap(mayBeDaoEvent => ZIO.foreach(mayBeDaoEvent)(daoEvent2Event))
+    collections.bags
+      .collect(valueFilter = daoFilter => daoFilter.attachment.storeId == attachment.store.id && daoFilter.attachment.bagMediaDirectory == attachment.bagMediaDirectory)
+      .mapBoth(err => ServiceDatabaseIssue(s"Couldn't collect bags : $err"), _.headOption)
+      .flatMap(mayBeDaoBag => ZIO.foreach(mayBeDaoBag)(daoBag2Bag))
   }
 
-  private def createDefaultEvent(original: Original, attachment: EventAttachment): IO[ServiceIssue, Event] = {
+  private def createDefaultBag(original: Original, attachment: BagAttachment): IO[ServiceIssue, Bag] = {
     for {
-      autoKeywords <- keywordSentenceToKeywords(attachment.store.id, attachment.eventMediaDirectory.toString)
-      eventId      <- Random.nextUUID.map(EventId.apply)
-      event         = Event(
-                        id = eventId,
+      autoKeywords <- keywordSentenceToKeywords(attachment.store.id, attachment.bagMediaDirectory.toString)
+      bagId        <- Random.nextUUID.map(BagId.apply)
+      bag           = Bag(
+                        id = bagId,
                         attachment = attachment,
-                        name = EventName(attachment.eventMediaDirectory.toString),
+                        name = BagName(attachment.bagMediaDirectory.toString),
                         description = None,
                         location = original.location,
                         timestamp = original.cameraShootDateTime,
@@ -1376,16 +1376,16 @@ class MediaServiceLive private (
                         publishedOn = None,
                         keywords = autoKeywords
                       )
-      _            <- collections.events
-                        .upsert(eventId, _ => event.into[DaoEvent].transform)
-                        .mapError(err => ServiceDatabaseIssue(s"Couldn't create event : $err"))
-    } yield event
+      _            <- collections.bags
+                        .upsert(bagId, _ => bag.into[DaoBag].transform)
+                        .mapError(err => ServiceDatabaseIssue(s"Couldn't create bag : $err"))
+    } yield bag
   }
 
   private def synchronizeState(original: Original): IO[ServiceIssue, (original: Original, state: State)] = {
-    val relatedEventAttachment = MediaBuilder.buildEventAttachment(original)
-    val logic                  = for {
-      mayBeEvent   <- ZIO.foreach(relatedEventAttachment)(getEventForAttachment).map(_.flatten)
+    val relatedBagAttachment = MediaBuilder.buildBagAttachment(original)
+    val logic                = for {
+      mayBeBag     <- ZIO.foreach(relatedBagAttachment)(getBagForAttachment).map(_.flatten)
       currentState <- stateGet(original.id)
       now          <- Clock.currentDateTime
       relativePath  = original.mediaPath.path
@@ -1417,18 +1417,18 @@ class MediaServiceLive private (
   }
 
   private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    val relatedEventAttachment = MediaBuilder.buildEventAttachment(input.original)
-    val logic                  = for {
-      mayBeEvent        <- ZIO
-                             .foreach(relatedEventAttachment)(attachment =>
-                               getEventForAttachment(attachment)
-                                 .someOrElseZIO(createDefaultEvent(input.original, attachment))
+    val relatedBagAttachment = MediaBuilder.buildBagAttachment(input.original)
+    val logic                = for {
+      mayBeBag          <- ZIO
+                             .foreach(relatedBagAttachment)(attachment =>
+                               getBagForAttachment(attachment)
+                                 .someOrElseZIO(createDefaultBag(input.original, attachment))
                              )
       currentMediaTuple <- mediaGet(input.state.originalId) // already existing media is the source of truth !
                              .someOrElseZIO {
                                val daoMedia = DaoMedia(
                                  originalId = input.original.id,
-                                 eventId = mayBeEvent.map(_.id),
+                                 bagId = mayBeBag.map(_.id),
                                  description = None,
                                  starred = Starred(false),
                                  keywords = Set.empty,
@@ -1436,7 +1436,7 @@ class MediaServiceLive private (
                                  shootDateTime = None,
                                  userDefinedLocation = None,
                                  deductedLocation = None,
-                                 timestamp = Media.computeTimestamp(None, mayBeEvent, input.original),
+                                 timestamp = Media.computeTimestamp(None, mayBeBag, input.original),
                                  location = input.original.location.transformInto[Option[DaoLocation]]
                                )
                                collections.medias
@@ -1673,7 +1673,7 @@ class MediaServiceLive private (
     // location = None and the GEO index ends up massively under-populated.
     // Walk every media, derive the effective location with the same precedence
     // as Media.location — userDefined → deducted → original.location → first
-    // event with a location — and rewrite the row whenever the stored value
+    // bag with a location — and rewrite the row whenever the stored value
     // drifts.
 //    val rematerializeMediaLocations =
 //      collections.medias
@@ -1681,13 +1681,13 @@ class MediaServiceLive private (
 //        .mapZIO { case (originalId, daoMedia) =>
 //          for {
 //            maybeOriginal <- collections.originals.fetch(originalId)
-//            eventLocation <- ZIO
-//                               .foreach(daoMedia.events)(eventId => collections.events.fetch(eventId))
+//            bagLocation   <- ZIO
+//                               .foreach(daoMedia.bagId)(bagId => collections.bags.fetch(bagId))
 //                               .map(_.flatten.iterator.flatMap(_.location).nextOption())
 //            computed       = daoMedia.userDefinedLocation
 //                               .orElse(daoMedia.deductedLocation)
 //                               .orElse(maybeOriginal.flatMap(_.location))
-//                               .orElse(eventLocation)
+//                               .orElse(bagLocation)
 //                               .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d)
 //            changed       <- if (computed == daoMedia.location) ZIO.succeed(0)
 //                             else
@@ -1782,7 +1782,7 @@ class MediaServiceLive private (
     mediaList()
       .map(_.media)
       .filter(_.original.store.id == storeId)
-      .map(media => (media.keywords.toList ++ media.event.toList.flatMap(_.keywords)).groupMapReduce(_.text)(_ => 1)(_ + _))
+      .map(media => (media.keywords.toList ++ media.bag.toList.flatMap(_.keywords)).groupMapReduce(_.text)(_ => 1)(_ + _))
       .runFold(Map.empty[Keyword, Int])((acc, curr) =>
         curr.foldLeft(acc) { case (res, (keyword, count)) =>
           res + (Keyword(keyword) -> (count + res.getOrElse(Keyword(keyword), 0)))
@@ -1797,18 +1797,18 @@ class MediaServiceLive private (
       .map(_.media)
       .filter(_.original.store.id == storeId)
       .map(media => media.copy(keywords = media.keywords.filterNot(_.text == keyword.text)))
-      .flatMap(media => ZStream.fromIterable(media.event))
-      .map(event => event.copy(keywords = event.keywords.filterNot(_.text == keyword.text)))
-      .tap(event =>
-        eventUpdate(
-          event.id,
-          name = event.name,
-          description = event.description,
-          location = event.location,
-          timestamp = event.timestamp,
-          coverOriginalId = event.originalId,
-          publishedOn = event.publishedOn,
-          keywords = event.keywords
+      .flatMap(media => ZStream.fromIterable(media.bag))
+      .map(bag => bag.copy(keywords = bag.keywords.filterNot(_.text == keyword.text)))
+      .tap(bag =>
+        bagUpdate(
+          bag.id,
+          name = bag.name,
+          description = bag.description,
+          location = bag.location,
+          timestamp = bag.timestamp,
+          coverOriginalId = bag.originalId,
+          publishedOn = bag.publishedOn,
+          keywords = bag.keywords
         )
       )
       .runDrain
@@ -1852,10 +1852,13 @@ object MediaServiceLive {
   def mapCodec[A, B](base: KeyCodec[A], to: A => B, from: B => A): KeyCodec[B] = new KeyCodec[B] {
     def encode(b: B): Array[Byte]                       = base.encode(from(b))
     def decode(b: ByteBuffer): Either[KeyCodecError, B] = base.decode(b).map(to)
+    // Identical byte layout to the wrapped codec, so it keeps the same width and keyId.
+    override def width: Option[Int]                     = base.width
+    val keyId: KeyTypeId                                = base.keyId
   }
 
   given KeyCodec[OriginalId]  = mapCodec(summon[KeyCodec[UUID]], OriginalId.apply, _.asUUID)
-  given KeyCodec[EventId]     = mapCodec(summon[KeyCodec[UUID]], EventId.apply, _.asUUID)
+  given KeyCodec[BagId]       = mapCodec(summon[KeyCodec[UUID]], BagId.apply, _.asUUID)
   given KeyCodec[StoreId]     = mapCodec(summon[KeyCodec[UUID]], StoreId.apply, _.asUUID)
   given KeyCodec[PortfolioId] = mapCodec(summon[KeyCodec[UUID]], PortfolioId.apply, _.asUUID)
   given KeyCodec[PersonId]    = mapCodec(summon[KeyCodec[ULID]], PersonId.apply, _.asULID)
@@ -1865,7 +1868,7 @@ object MediaServiceLive {
   // -------------------------------------------------------------------------------------------------------------------
   private val originalsCollectionName            = "originals"
   private val statesCollectionName               = "states"
-  private val eventsCollectionName               = "events"
+  private val bagsCollectionName                 = "bags"
   private val mediasCollectionName               = "medias"
   private val ownersCollectionName               = "owners"
   private val storesCollectionName               = "stores"
@@ -1885,7 +1888,7 @@ object MediaServiceLive {
   private val allCollections = List(
     originalsCollectionName,
     statesCollectionName,
-    eventsCollectionName,
+    bagsCollectionName,
     mediasCollectionName,
     ownersCollectionName,
     storesCollectionName,
@@ -1907,7 +1910,7 @@ object MediaServiceLive {
     // INDEXES
     indexOriginalIdByTimestamp <- lmdb.indexCreate[(Instant, OriginalId), OriginalId]("originalIdByTimestamp", false)
     indexOriginalIdByPosition  <- lmdb.indexCreate[Long, OriginalId]("originalIdByPosition", false)
-    indexOriginalIdByEventId   <- lmdb.indexCreate[EventId, (Instant, OriginalId)]("originalIdByEventId", false)
+    indexOriginalIdByBagId     <- lmdb.indexCreate[BagId, (Instant, OriginalId)]("originalIdByBagId", false)
     indexFaceIdByPersonId      <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
     indexOriginalIdByStoreId   <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
     indexOriginalIdByLocation  <- lmdb.indexCreate[GEOTools.Location, OriginalId]("originalIdByLocation", false)
@@ -1919,12 +1922,12 @@ object MediaServiceLive {
                                         .map(_.withIndexFull(indexOriginalIdByStoreId)((id, original) => List(original.storeId -> id)))
     collectionStates               <- lmdb
                                         .collectionCreate[OriginalId, DaoState](statesCollectionName, false)
-    collectionEvents               <- lmdb
-                                        .collectionCreate[EventId, DaoEvent](eventsCollectionName, false)
+    collectionBags                 <- lmdb
+                                        .collectionCreate[BagId, DaoBag](bagsCollectionName, false)
     collectionMedias               <- lmdb
                                         .collectionCreate[OriginalId, DaoMedia](mediasCollectionName, false)
                                         .map(
-                                          _.withIndexFull(indexOriginalIdByEventId)((id, media) => media.eventId.map(eventId => eventId -> (media.timestamp.toInstant, media.originalId)).toList)
+                                          _.withIndexFull(indexOriginalIdByBagId)((id, media) => media.bagId.map(bagId => bagId -> (media.timestamp.toInstant, media.originalId)).toList)
                                             .withIndexFull(indexOriginalIdByTimestamp)((id, media) => List((media.timestamp.toInstant, id) -> id))
                                             .withIndexFull(indexOriginalIdByLocation)((id, media) => media.location.map(l => GEOTools.Location(l.latitude.doubleValue, l.longitude.doubleValue) -> id).toList)
                                         )
@@ -1953,13 +1956,13 @@ object MediaServiceLive {
     collections                     = MediaServiceDatabase(
                                         originalIdByTimestamp = indexOriginalIdByTimestamp,
                                         originalIdByPosition = indexOriginalIdByPosition,
-                                        originalIdByEventId = indexOriginalIdByEventId,
+                                        originalIdByBagId = indexOriginalIdByBagId,
                                         faceIdByPersonId = indexFaceIdByPersonId,
                                         originalIdByStoreId = indexOriginalIdByStoreId,
                                         originalIdByLocation = indexOriginalIdByLocation,
                                         originals = collectionOriginals,
                                         states = collectionStates,
-                                        events = collectionEvents,
+                                        bags = collectionBags,
                                         medias = collectionMedias,
                                         owners = collectionOwners,
                                         stores = collectionStores,

@@ -21,7 +21,7 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
         for {
           photoSearchFileRoot <- from(FileSystemSearch.makeStore(fakeOwner.id, None, dataset1.toString))
           searchConfig         = FileSystemSearchCoreConfig()
-          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot, searchConfig, MediaBuilder.buildDefaultMediaEvent))
+          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot, searchConfig, MediaBuilder.buildDefaultMediaBag))
           mediasStream         = ZStream.fromJavaStream(mediasJavaStream)
           results             <- mediasStream.runCollect
           medias               = results.collect { case Right(original) => original }
@@ -32,26 +32,26 @@ object FileSystemSearchSpec extends ZIOSpecDefault with TestDatasets {
           baseDirectories.head.path == photoSearchFileRoot.baseDirectory.path,
           mediaPaths.toSet == Set(dataset1Example1, dataset1Example2, dataset1Example3, dataset1Example4, dataset1Example5)
             .map(p => photoSearchFileRoot.baseDirectory.path.relativize(p.path)),
-          medias.forall(_.event.isEmpty)
+          medias.forall(_.bag.isEmpty)
         )
       },
       test("collect original photos with tree dataset") {
         for {
           photoSearchFileRoot <- from(FileSystemSearch.makeStore(fakeOwner.id, None, dataset2.toString))
           searchConfig         = FileSystemSearchCoreConfig()
-          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot, searchConfig, MediaBuilder.buildDefaultMediaEvent))
+          mediasJavaStream    <- from(FileSystemSearch.mediasStreamFromSearchRoot(photoSearchFileRoot, searchConfig, MediaBuilder.buildDefaultMediaBag))
           mediasStream         = ZStream.fromJavaStream(mediasJavaStream)
           results             <- mediasStream.runCollect
           medias               = results.collect { case Right(original) => original }
           baseDirectories      = medias.map(_.original.store.baseDirectory)
           mediaPaths           = medias.map(_.original.mediaPath)
-          mediaEvents          = medias.flatMap(_.event.map(_.name.text))
+          mediaBags            = medias.flatMap(_.bag.map(_.name.text))
         } yield assertTrue(
           medias.size == 2,
           baseDirectories.head == dataset2,
           mediaPaths.toSet == Set(dataset2tag1, dataset2landscape1)
             .map(p => photoSearchFileRoot.baseDirectory.path.relativize(p.path)),
-          mediaEvents.toSet == Set("landscapes", "tags")
+          mediaBags.toSet == Set("landscapes", "tags")
         )
       }
     )

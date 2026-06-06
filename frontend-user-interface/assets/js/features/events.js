@@ -1,13 +1,17 @@
 /**
- * Events feature.
+ * Bags feature.
  *
  * Public surface:
- *   - initEvents(ctx)            Wire the tab once. ctx = { getApi, setActiveTab, goToMosaicAtTimestamp }.
- *   - ensureEventsLoaded()       Load the events list if not already loaded.
- *   - goToEventsById(eventId)    Switch to the Events tab and scroll to that event tile.
- *   - openEventEditModal(ev)     Open the event edit dialog (called from media-edit / viewer info panel).
+ *   - initBags(ctx)            Wire the tab once. ctx = { getApi, setActiveTab, goToMosaicAtTimestamp }.
+ *   - ensureBagsLoaded()       Load the bags list if not already loaded.
+ *   - goToBagById(bagId)       Switch to the Bags tab and scroll to that bag tile.
+ *   - openBagEditModal(bag)    Open the bag edit dialog (called from media-edit / viewer info panel).
  *
  * `getApi()` is called lazily because `app.js` reassigns the ApiClient singleton during Keycloak init.
+ *
+ * NOTE: internal DOM ids and localStorage keys keep their historical `events`/`event-id`
+ * spelling on purpose — they are invisible to users and renaming them would only churn the
+ * HTML contract. Only the domain plumbing and visible wording use "bag".
  */
 
 import { $, escapeHtml, wireOnce } from '../lib/dom.js';
@@ -17,7 +21,7 @@ import { showError, showWarning } from '../lib/toast.js';
 import { toLocalInputValue, fromLocalInputValue } from '../lib/datetime.js';
 
 let ctx = null;
-let eventsLoaded = false;
+let bagsLoaded = false;
 
 const api = () => ctx.getApi();
 
@@ -25,9 +29,9 @@ const api = () => ctx.getApi();
 // Public entry points
 // ---------------------------------------------------------------------------
 
-export function initEvents(context) {
+export function initBags(context) {
   ctx = context;
-  wireOnce(document.getElementById('refresh-events'), 'click', () => loadEvents({ force: true }));
+  wireOnce(document.getElementById('refresh-events'), 'click', () => loadBags({ force: true }));
 
   // Wire scroll persistence once
   const sec = document.getElementById('tab-events');
@@ -35,12 +39,12 @@ export function initEvents(context) {
     let timer = null;
     const saveNow = () => {
       try {
-        setSavedEventsScrollTop(sec.scrollTop);
+        setSavedBagsScrollTop(sec.scrollTop);
         const rect = sec.getBoundingClientRect();
         const x = rect.left + 24; const y = rect.top + rect.height / 2;
         const el = document.elementFromPoint(x, y);
         const li = el && el.closest ? el.closest('#events-list li') : null;
-        if (li && li.dataset && li.dataset.eventId) setSavedEventsAnchorId(li.dataset.eventId);
+        if (li && li.dataset && li.dataset.eventId) setSavedBagsAnchorId(li.dataset.eventId);
       } catch {}
     };
     const onScroll = () => { if (timer) clearTimeout(timer); timer = setTimeout(saveNow, 120); };
@@ -48,42 +52,42 @@ export function initEvents(context) {
     setTimeout(saveNow, 0);
     sec.__scrollWired = true;
   }
-  // Make the Events section focusable and keep focus for keyboard scrolling
+  // Make the Bags section focusable and keep focus for keyboard scrolling
   if (sec && !sec.__focusWired) {
     try { sec.setAttribute('tabindex', '0'); } catch {}
-    try { sec.setAttribute('aria-label', 'Events'); } catch {}
-    const focusEvents = () => { try { sec.focus({ preventScroll: true }); } catch { try { sec.focus(); } catch {} } };
-    sec.addEventListener('mouseenter', focusEvents, { passive: true });
-    sec.addEventListener('mousemove', focusEvents, { passive: true });
-    sec.addEventListener('wheel', focusEvents, { passive: true });
+    try { sec.setAttribute('aria-label', 'Bags'); } catch {}
+    const focusSection = () => { try { sec.focus({ preventScroll: true }); } catch { try { sec.focus(); } catch {} } };
+    sec.addEventListener('mouseenter', focusSection, { passive: true });
+    sec.addEventListener('mousemove', focusSection, { passive: true });
+    sec.addEventListener('wheel', focusSection, { passive: true });
     const list = document.getElementById('events-list');
     if (list) {
-      list.addEventListener('mouseenter', focusEvents, { passive: true });
-      list.addEventListener('mousemove', focusEvents, { passive: true });
-      list.addEventListener('wheel', focusEvents, { passive: true });
+      list.addEventListener('mouseenter', focusSection, { passive: true });
+      list.addEventListener('mousemove', focusSection, { passive: true });
+      list.addEventListener('wheel', focusSection, { passive: true });
     }
     sec.__focusWired = true;
   }
 }
 
-export function ensureEventsLoaded() {
-  try { if (!eventsLoaded) loadEvents({ force: false }); } catch {}
+export function ensureBagsLoaded() {
+  try { if (!bagsLoaded) loadBags({ force: false }); } catch {}
 }
 
-export async function goToEventsById(eventId) {
+export async function goToBagById(bagId) {
   try {
     ctx.setActiveTab('events');
     let tries = 0;
     let li = null;
     while (tries < 120) { // up to ~6s
-      li = document.querySelector(`#events-list li[data-event-id="${eventId}"]`);
+      li = document.querySelector(`#events-list li[data-event-id="${bagId}"]`);
       if (li) break;
       await new Promise((r) => setTimeout(r, 50));
       tries++;
     }
     if (!li) {
-      try { await loadEvents({ force: false }); } catch {}
-      li = document.querySelector(`#events-list li[data-event-id="${eventId}"]`);
+      try { await loadBags({ force: false }); } catch {}
+      li = document.querySelector(`#events-list li[data-event-id="${bagId}"]`);
     }
     if (li) {
       try { li.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { li.scrollIntoView(true); }
@@ -97,21 +101,21 @@ export async function goToEventsById(eventId) {
 // Internal: scroll persistence
 // ---------------------------------------------------------------------------
 
-function getSavedEventsScrollTop() { try { return parseInt(localStorage.getItem('events.scrollTop') || '0', 10) || 0; } catch { return 0; } }
-function setSavedEventsScrollTop(v) { try { localStorage.setItem('events.scrollTop', String(Math.max(0, v | 0))); } catch {} }
-function getSavedEventsAnchorId() { try { return localStorage.getItem('events.anchorId'); } catch { return null; } }
-function setSavedEventsAnchorId(id) { try { if (id) localStorage.setItem('events.anchorId', id); } catch {} }
+function getSavedBagsScrollTop() { try { return parseInt(localStorage.getItem('events.scrollTop') || '0', 10) || 0; } catch { return 0; } }
+function setSavedBagsScrollTop(v) { try { localStorage.setItem('events.scrollTop', String(Math.max(0, v | 0))); } catch {} }
+function getSavedBagsAnchorId() { try { return localStorage.getItem('events.anchorId'); } catch { return null; } }
+function setSavedBagsAnchorId(id) { try { if (id) localStorage.setItem('events.anchorId', id); } catch {} }
 
-function restoreEventsScrollState() {
+function restoreBagsScrollState() {
   try {
     const sec = document.getElementById('tab-events');
     if (!sec) return;
-    const anchor = getSavedEventsAnchorId();
+    const anchor = getSavedBagsAnchorId();
     if (anchor) {
       const li = document.querySelector(`#events-list li[data-event-id="${anchor}"]`);
       if (li) { try { li.scrollIntoView({ behavior: 'auto', block: 'center' }); } catch { li.scrollIntoView(true); } return; }
     }
-    const st = getSavedEventsScrollTop();
+    const st = getSavedBagsScrollTop();
     if (typeof st === 'number' && st > 0) sec.scrollTop = st;
   } catch {}
 }
@@ -120,17 +124,17 @@ function restoreEventsScrollState() {
 // Internal: list rendering
 // ---------------------------------------------------------------------------
 
-async function loadEvents(options = {}) {
+async function loadBags(options = {}) {
   const { force = false } = options;
   const list = $('#events-list');
-  if (!force && eventsLoaded && list && list.children && list.children.length > 0) {
-    try { restoreEventsScrollState(); } catch {}
+  if (!force && bagsLoaded && list && list.children && list.children.length > 0) {
+    try { restoreBagsScrollState(); } catch {}
     return;
   }
   list.innerHTML = '';
   try {
-    const events = await api().listEvents();
-    events.sort((a, b) => {
+    const bags = await api().listBags();
+    bags.sort((a, b) => {
       const ta = a.timestamp ? Date.parse(a.timestamp) : 0;
       const tb = b.timestamp ? Date.parse(b.timestamp) : 0;
       return tb - ta;
@@ -142,15 +146,15 @@ async function loadEvents(options = {}) {
     const pending = [];
     const scheduled = new WeakSet();
 
-    async function resolveAndRender(li, ev) {
+    async function resolveAndRender(li, bag) {
       inFlight++;
       try {
-        if (!ev.originalId) return;
-        const key = await resolveMediaAccessKey(api(), ev.originalId);
+        if (!bag.originalId) return;
+        const key = await resolveMediaAccessKey(api(), bag.originalId);
         if (!key) return;
         const img = new Image();
         img.src = api().mediaNormalizedUrl(key);
-        img.alt = ev.name || '';
+        img.alt = bag.name || '';
         img.loading = 'lazy';
         img.decoding = 'async';
         img.style.width = '100%';
@@ -161,7 +165,7 @@ async function loadEvents(options = {}) {
         if (ph) { ph.innerHTML = ''; ph.style.background = 'transparent'; ph.appendChild(img); }
         li.style.cursor = 'pointer';
         li.onclick = async () => {
-          try { await ctx.goToMosaicAtTimestamp(ev.timestamp); } catch {}
+          try { await ctx.goToMosaicAtTimestamp(bag.timestamp); } catch {}
         };
       } finally {
         inFlight--;
@@ -172,7 +176,7 @@ async function loadEvents(options = {}) {
     function schedule() {
       while (inFlight < limit && pending.length > 0) {
         const item = pending.shift();
-        resolveAndRender(item.li, item.ev);
+        resolveAndRender(item.li, item.bag);
       }
     }
 
@@ -184,79 +188,70 @@ async function loadEvents(options = {}) {
               const li = entry.target;
               observer.unobserve(li);
               if (scheduled.has(li)) continue;
-              const ev = li.__event;
+              const bag = li.__bag;
               scheduled.add(li);
-              if (ev && ev.originalId) { pending.push({ li, ev }); schedule(); }
+              if (bag && bag.originalId) { pending.push({ li, bag }); schedule(); }
             }
           }
         }, { root: tabSection, rootMargin: '400px 0px', threshold: 0.01 })
       : null;
 
-    for (const ev of events) {
+    for (const bag of bags) {
       const li = document.createElement('li');
-      li.__event = ev;
-      if (ev.id) li.dataset.eventId = ev.id;
-      const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '';
+      li.__bag = bag;
+      if (bag.id) li.dataset.eventId = bag.id;
+      const tsStr = bag.timestamp ? new Date(bag.timestamp).toLocaleString() : '';
       const pinSvgGreen = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="#10b981" style="vertical-align:-0.15em;margin-right:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
-      const tsWithPin = (ev.location ? pinSvgGreen + ' ' : '') + tsStr;
+      const tsWithPin = (bag.location ? pinSvgGreen + ' ' : '') + tsStr;
       li.innerHTML = `
         <div class="ev-thumb list-thumb">No preview</div>
-        <h4 style="margin:0 0 4px 0;">${ev.name || '(no name)'}</h4>
+        <h4 style="margin:0 0 4px 0;">${bag.name || '(no name)'}</h4>
         <div class="ev-ts" style="font-size:12px;color:#555">${tsWithPin}</div>
         <button class="ev-edit-btn" title="Edit">✎ Edit</button>
       `;
       list.appendChild(li);
       const editBtn = li.querySelector('.ev-edit-btn');
-      if (editBtn) { editBtn.onclick = (e) => { e.stopPropagation(); openEventEditModal(ev); }; }
+      if (editBtn) { editBtn.onclick = (e) => { e.stopPropagation(); openBagEditModal(bag); }; }
 
-      if (ev.originalId) {
+      if (bag.originalId) {
         li.style.cursor = 'pointer';
         li.onclick = async () => {
-          try { await ctx.goToMosaicAtTimestamp(ev.timestamp); } catch {}
+          try { await ctx.goToMosaicAtTimestamp(bag.timestamp); } catch {}
         };
       }
 
-      if (observer && ev.originalId) {
+      if (observer && bag.originalId) {
         observer.observe(li);
-      } else if (ev.originalId) {
-        pending.push({ li, ev }); schedule();
+      } else if (bag.originalId) {
+        pending.push({ li, bag }); schedule();
       }
     }
-    eventsLoaded = true;
-    setTimeout(() => { try { restoreEventsScrollState(); } catch {} }, 0);
+    bagsLoaded = true;
+    setTimeout(() => { try { restoreBagsScrollState(); } catch {} }, 0);
   } catch (e) {
-    list.innerHTML = '<li>Failed to load events</li>';
+    list.innerHTML = '<li>Failed to load bags</li>';
   }
 }
 
-function removeEventTile(eventId) {
+function refreshBagTile(bag) {
   try {
     const list = document.getElementById('events-list');
     if (!list) return;
-    const li = list.querySelector(`li[data-event-id="${eventId}"]`);
-    if (li) li.remove();
-  } catch {}
-}
-
-function refreshEventTile(ev) {
-  try {
-    const list = document.getElementById('events-list');
-    if (!list) return;
-    const li = list.querySelector(`li[data-event-id="${ev.id}"]`);
+    const li = list.querySelector(`li[data-event-id="${bag.id}"]`);
     if (!li) return;
-    li.__event = ev;
+    li.__bag = bag;
     const titleEl = li.querySelector('h4');
-    if (titleEl) titleEl.textContent = ev.name || '(no name)';
+    if (titleEl) titleEl.textContent = bag.name || '(no name)';
     const tsEl = li.querySelector('.ev-ts');
     if (tsEl) {
-      const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleString() : '';
+      const tsStr = bag.timestamp ? new Date(bag.timestamp).toLocaleString() : '';
       const pinSvgGreen = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="#10b981" style="vertical-align:-0.15em;margin-right:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
-      const tsWithPin = (ev.location ? pinSvgGreen + ' ' : '') + tsStr;
+      const tsWithPin = (bag.location ? pinSvgGreen + ' ' : '') + tsStr;
       tsEl.innerHTML = tsWithPin;
     }
     const editBtn = li.querySelector('.ev-edit-btn');
     if (editBtn) {
-      editBtn.onclick = (e) => { e.stopPropagation(); openEventEditModal(ev); };
+      editBtn.onclick = (e) => { e.stopPropagation(); openBagEditModal(bag); };
     }
   } catch {}
 }
@@ -265,18 +260,18 @@ function refreshEventTile(ev) {
 // Internal: modals
 // ---------------------------------------------------------------------------
 
-export function openEventEditModal(ev) {
+export function openBagEditModal(bag) {
   if (document.querySelector('.modal-overlay')) { return; }
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  const nameVal = ev.name || '';
-  const descVal = ev.description || '';
-  const tsVal = toLocalInputValue(ev.timestamp);
-  const pubVal = ev.publishedOn || '';
+  const nameVal = bag.name || '';
+  const descVal = bag.description || '';
+  const tsVal = toLocalInputValue(bag.timestamp);
+  const pubVal = bag.publishedOn || '';
   overlay.innerHTML = `
     <div class="modal">
       <header>
-        <div>Edit event</div>
+        <div>Edit bag</div>
         <button class="close" title="Close" style="background:none;border:none;font-size:18px;cursor:pointer">✕</button>
       </header>
       <div class="content">
@@ -298,14 +293,13 @@ export function openEventEditModal(ev) {
             <div style="margin:4px 0 6px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center">
               <button id="ev-remember-loc" type="button" title="Remember current selected location for later reuse" class="btn btn-soft btn-sm">Remember selection</button>
               <button id="ev-use-last-loc" type="button" title="Use last selected location" class="btn btn-soft btn-sm">Use last selection</button>
-              <button id="ev-reset-loc" type="button" title="Remove event location" class="btn btn-danger-soft btn-sm">Reset location</button>
+              <button id="ev-reset-loc" type="button" title="Remove bag location" class="btn btn-danger-soft btn-sm">Reset location</button>
             </div>
             <div id="event-edit-map"></div>
           </div>
         </div>
       </div>
       <footer>
-        <button type="button" class="btn btn-danger-soft" id="ev-delete-btn" title="Delete event">🗑 Delete</button>
         <span style="flex:1"></span>
         <button type="button" class="cancel">Cancel</button>
         <button type="button" class="save">Save</button>
@@ -330,28 +324,13 @@ export function openEventEditModal(ev) {
   overlay.querySelector('button.cancel')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
-  overlay.querySelector('#ev-delete-btn')?.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const label = ev.name ? `"${ev.name}"` : 'this event';
-    if (!confirm(`Delete event ${label}? This cannot be undone.`)) return;
-    try {
-      await api().deleteEvent(ev.id);
-      close();
-      removeEventTile(ev.id);
-    } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to delete event';
-      showError(msg);
-    }
-  });
-
   // Keywords chips
   const chipsEl = overlay.querySelector('#ev-chips');
-  let keywords = Array.isArray(ev.keywords) ? [...ev.keywords] : [];
+  let keywords = Array.isArray(bag.keywords) ? [...bag.keywords] : [];
   wireKeywordsChips(chipsEl, keywords, (next) => { keywords = next; });
 
   // Map setup
-  let currentLoc = ev.location ? { ...ev.location } : null;
+  let currentLoc = bag.location ? { ...bag.location } : null;
   let clearedLoc = false;
   const evUseLastBtn = overlay.querySelector('#ev-use-last-loc');
   const evRememberBtn = overlay.querySelector('#ev-remember-loc');
@@ -442,18 +421,18 @@ export function openEventEditModal(ev) {
     if (clearedLoc) body.location = null; else if (currentLoc && typeof currentLoc.latitude === 'number' && typeof currentLoc.longitude === 'number') body.location = currentLoc;
     if (keywords && keywords.length > 0) body.keywords = keywords;
     try {
-      await api().updateEvent(ev.id, body);
-      const updatedEv = { ...ev };
-      updatedEv.name = name || ev.name;
-      updatedEv.description = description || undefined;
-      updatedEv.timestamp = timestamp || undefined;
-      if (published === '') updatedEv.publishedOn = undefined; else if (body.publishedOn) updatedEv.publishedOn = body.publishedOn;
-      if (clearedLoc) updatedEv.location = null; else if (body.location) updatedEv.location = body.location;
-      if (keywords && keywords.length >= 0) updatedEv.keywords = keywords;
+      await api().updateBag(bag.id, body);
+      const updatedBag = { ...bag };
+      updatedBag.name = name || bag.name;
+      updatedBag.description = description || undefined;
+      updatedBag.timestamp = timestamp || undefined;
+      if (published === '') updatedBag.publishedOn = undefined; else if (body.publishedOn) updatedBag.publishedOn = body.publishedOn;
+      if (clearedLoc) updatedBag.location = null; else if (body.location) updatedBag.location = body.location;
+      if (keywords && keywords.length >= 0) updatedBag.keywords = keywords;
       close();
-      refreshEventTile(updatedEv);
+      refreshBagTile(updatedBag);
     } catch {
-      showError('Failed to save event');
+      showError('Failed to save bag');
     }
   });
 }

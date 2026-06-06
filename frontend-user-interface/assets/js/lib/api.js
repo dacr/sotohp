@@ -96,12 +96,11 @@ export class ApiClient {
   // -- State ------------------------------------------------------------------
   async getState(originalId) { const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`); return res.data; }
 
-  // -- Events -----------------------------------------------------------------
-  async listEvents() { return this._fetchNdjson('/api/events'); }
-  async getEvent(eventId) { const res = await this.http.get(`/api/event/${encodeURIComponent(eventId)}`); return res.data; }
-  async updateEvent(eventId, body) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body); }
-  async deleteEvent(eventId) { await this.http.delete(`/api/event/${encodeURIComponent(eventId)}`); }
-  async setEventCover(eventId, mediaAccessKey) { await this.http.put(`/api/event/${encodeURIComponent(eventId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
+  // -- Bags -------------------------------------------------------------------
+  async listBags() { return this._fetchNdjson('/api/bags'); }
+  async getBag(bagId) { const res = await this.http.get(`/api/bag/${encodeURIComponent(bagId)}`); return res.data; }
+  async updateBag(bagId, body) { await this.http.put(`/api/bag/${encodeURIComponent(bagId)}`, body); }
+  async setBagCover(bagId, mediaAccessKey) { await this.http.put(`/api/bag/${encodeURIComponent(bagId)}/cover/${encodeURIComponent(mediaAccessKey)}`); }
 
   // -- Owners -----------------------------------------------------------------
   async listOwners() { return this._fetchNdjson('/api/owners'); }

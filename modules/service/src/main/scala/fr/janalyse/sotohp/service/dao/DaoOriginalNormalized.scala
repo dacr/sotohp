@@ -7,18 +7,19 @@ import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
 
 import java.nio.file.Path
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 case class DaoNormalized(
   dimension: DaoDimension,
   path: NormalizedPath
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 case class DaoOriginalNormalized(
   originalId: OriginalId,
   status: DaoProcessedStatus,
   normalized: Option[DaoNormalized]
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 object DaoOriginalNormalized {
   given Transformer[OriginalNormalized, DaoOriginalNormalized] =

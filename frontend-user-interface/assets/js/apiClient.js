@@ -36,11 +36,11 @@ export class ApiClient {
     mediaOriginalUrl(mediaAccessKey) {
         return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original`;
     }
-    async listEvents() {
-        return await this.fetchNdjson('/api/events');
+    async listBags() {
+        return await this.fetchNdjson('/api/bags');
     }
-    async updateEvent(eventId, body) {
-        await this.http.put(`/api/event/${encodeURIComponent(eventId)}`, body);
+    async updateBag(bagId, body) {
+        await this.http.put(`/api/bag/${encodeURIComponent(bagId)}`, body);
     }
     async getState(originalId) {
         const res = await this.http.get(`/api/state/${encodeURIComponent(originalId)}`);

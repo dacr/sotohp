@@ -5,28 +5,29 @@ import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
 import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 import java.net.URL
 import scala.util.Try
 
-case class DaoEventAttachment(
+case class DaoBagAttachment(
   storeId: StoreId,
-  eventMediaDirectory: EventMediaDirectory
-) derives LMDBCodecJson
+  bagMediaDirectory: BagMediaDirectory
+) derives LMDBCodecJson, LMDBSchema
 
-object DaoEventAttachment {
-  given Transformer[EventAttachment, DaoEventAttachment] =
+object DaoBagAttachment {
+  given Transformer[BagAttachment, DaoBagAttachment] =
     Transformer
-      .define[EventAttachment, DaoEventAttachment]
+      .define[BagAttachment, DaoBagAttachment]
       .withFieldComputed(_.storeId, _.store.id)
       .buildTransformer
 }
 
-case class DaoEvent(
-  id: EventId,
-  attachment: DaoEventAttachment,
-  name: EventName,
-  description: Option[EventDescription],
+case class DaoBag(
+  id: BagId,
+  attachment: DaoBagAttachment,
+  name: BagName,
+  description: Option[BagDescription],
   location: Option[DaoLocation],
   timestamp: Option[ShootDateTime],
   originalId: Option[OriginalId],
@@ -34,10 +35,10 @@ case class DaoEvent(
   keywords: Set[Keyword]
 ) derives LMDBCodecJson
 
-object DaoEvent {
-  given Transformer[Event, DaoEvent] =
+object DaoBag {
+  given Transformer[Bag, DaoBag] =
     Transformer
-      .define[Event, DaoEvent]
+      .define[Bag, DaoBag]
       .withFieldComputed(_.publishedOn, _.publishedOn.map(_.toString))
       .buildTransformer
 }

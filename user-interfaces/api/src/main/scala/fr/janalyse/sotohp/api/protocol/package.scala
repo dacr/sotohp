@@ -26,7 +26,7 @@ package object protocol {
   // UUID-based wrappers
   given Schema[OriginalId]  = uuidAs
   given Schema[StoreId]     = uuidAs
-  given Schema[EventId]     = uuidAs
+  given Schema[BagId]       = uuidAs
   given Schema[PortfolioId] = uuidAs
 
   // ULID- / String-based wrappers
@@ -43,7 +43,7 @@ package object protocol {
   given Schema[OriginalPath]        = strAs
   given Schema[FacePath]    = strAs
   given Schema[NormalizedPath]      = strAs
-  given Schema[EventMediaDirectory] = strAs
+  given Schema[BagMediaDirectory]   = strAs
 
   // Numbers
   given Schema[FileSize]                = longAs
@@ -67,11 +67,11 @@ package object protocol {
   // Simple string wrappers
   given Schema[CameraName]        = strAs
   given Schema[ArtistInfo]        = strAs
-  given Schema[EventName]            = strAs
+  given Schema[BagName]              = strAs
   given Schema[StoreName]            = strAs
   given Schema[FirstName]            = strAs
   given Schema[LastName]             = strAs
-  given Schema[EventDescription]     = strAs
+  given Schema[BagDescription]       = strAs
   given Schema[PortfolioName]        = strAs
   given Schema[PortfolioDescription] = strAs
   given Schema[AssetDescription]     = strAs

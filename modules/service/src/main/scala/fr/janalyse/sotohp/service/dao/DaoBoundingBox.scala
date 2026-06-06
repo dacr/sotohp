@@ -5,14 +5,15 @@ import fr.janalyse.sotohp.model.{BoxHeight, BoxWidth, XAxis, YAxis}
 import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given, *}
+import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 case class DaoBoundingBox(
   x: Double,
   y: Double,
   width: Double,
   height: Double
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 object DaoBoundingBox {
   given Transformer[BoundingBox, DaoBoundingBox] =

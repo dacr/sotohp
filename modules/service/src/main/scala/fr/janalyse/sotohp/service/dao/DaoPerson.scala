@@ -4,6 +4,7 @@ import fr.janalyse.sotohp.model.{BirthDate, FirstName, LastName}
 import fr.janalyse.sotohp.model.{FaceId, PersonDescription, PersonEmail, PersonId}
 import zio.lmdb.json.LMDBCodecJson
 import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 case class DaoPerson(
   id: PersonId,
@@ -13,4 +14,4 @@ case class DaoPerson(
   email: Option[PersonEmail],
   description: Option[PersonDescription],
   chosenFaceId: Option[FaceId]
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema

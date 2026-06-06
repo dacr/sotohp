@@ -4,7 +4,8 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 case class DaoOriginal(
   id: OriginalId,
@@ -23,7 +24,7 @@ case class DaoOriginal(
   exposureTime: Option[DaoExposureTime],
   iso: Option[ISO],
   focalLength: Option[FocalLength]
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 object DaoOriginal {
   given Transformer[Original, DaoOriginal] =

@@ -85,7 +85,7 @@ object ApiApp extends ZIOAppDefault {
   def storeEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("store" + (if (plurial) "s" else "")).tag("Store")
   def ownerEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("owner" + (if (plurial) "s" else "")).tag("Owner")
   def personEndpoint(plurial: Boolean = false) = endpoint.in("api").in("person" + (if (plurial) "s" else "")).tag("Person")
-  def eventEndpoint(plurial: Boolean = false)  = endpoint.in("api").in("event" + (if (plurial) "s" else "")).tag("Event")
+  def bagEndpoint(plurial: Boolean = false)    = endpoint.in("api").in("bag" + (if (plurial) "s" else "")).tag("Bag")
   def faceEndpoint(plurial: Boolean = false)   = endpoint.in("api").in("face" + (if (plurial) "s" else "")).tag("Face")
   def portfolioEndpoint(plurial: Boolean = false) = endpoint.in("api").in("portfolio" + (if (plurial) "s" else "")).tag("Portfolio")
 
@@ -130,7 +130,7 @@ object ApiApp extends ZIOAppDefault {
   def secureStoreEndpoint(plurial: Boolean = false)  = storeEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
   def secureOwnerEndpoint(plurial: Boolean = false)  = ownerEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
   def securePersonEndpoint(plurial: Boolean = false) = personEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
-  def secureEventEndpoint(plurial: Boolean = false)  = eventEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
+  def secureBagEndpoint(plurial: Boolean = false)    = bagEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
   def secureFaceEndpoint(plurial: Boolean = false)   = faceEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
   def securePortfolioEndpoint(plurial: Boolean = false) = portfolioEndpoint(plurial).securityIn(SecureEndpoints.bearerAuth).errorOut(securityError).zServerSecurityLogic(securityLogic)
 
@@ -162,10 +162,10 @@ object ApiApp extends ZIOAppDefault {
       .attempt(MediaAccessKey.apply(rawMediaAccessKey))
       .mapError(err => ApiInvalidOrMissingInput("Invalid media access key"))
 
-  def extractEventId(rawEventId: String) =
+  def extractBagId(rawBagId: String) =
     ZIO
-      .attempt(EventId(java.util.UUID.fromString(rawEventId)))
-      .mapError(err => ApiInvalidOrMissingInput("Invalid event identifier"))
+      .attempt(BagId(java.util.UUID.fromString(rawBagId)))
+      .mapError(err => ApiInvalidOrMissingInput("Invalid bag identifier"))
 
   def extractPortfolioId(rawPortfolioId: String) =
     ZIO
@@ -493,7 +493,7 @@ object ApiApp extends ZIOAppDefault {
       taoMedia = tuple.media.into[ApiMedia]
                    .withFieldConst(_.accessKey, tuple.key)
                    .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-                   .withFieldComputed(_.event, media => media.event.map(_.transformInto[ApiEvent]))
+                   .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
                    .transform
     } yield taoMedia
 
@@ -556,7 +556,7 @@ object ApiApp extends ZIOAppDefault {
       .serverLogic[ApiEnv](user =>
         (rawMediaAccessKey, toUpdate) =>
           extractMediaAccessKey(rawMediaAccessKey)
-            .flatMap(eventId => mediaUpdateLogic(eventId, toUpdate))
+            .flatMap(mediaAccessKey => mediaUpdateLogic(mediaAccessKey, toUpdate))
       )
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -712,7 +712,7 @@ object ApiApp extends ZIOAppDefault {
         mediaTuple.media.into[ApiMedia]
           .withFieldConst(_.accessKey, mediaTuple.key)
           .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-          .withFieldComputed(_.event, media => media.event.map(_.transformInto[ApiEvent]))
+          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
           .transform
       }
       .mapError(err => ApiInternalError("Couldn't list medias"))
@@ -745,7 +745,7 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
 
   // Slim NDJSON projection used by the map tab. Walks the GEO index so only
-  // located medias are read, and skips the Original+Events join entirely.
+  // located medias are read, and skips the Original+Bags join entirely.
   def mediaLocationListLogic: ZStream[MediaService, Throwable, ApiMediaLocation] = {
     MediaService
       .mediaLocationList()
@@ -756,7 +756,7 @@ object ApiApp extends ZIOAppDefault {
           longitude = mediaLocation.longitude,
           shootDateTime = mediaLocation.shootDateTime,
           starred = mediaLocation.starred,
-          eventId = mediaLocation.eventId
+          bagId = mediaLocation.bagId
         )
       }
       .mapError(err => ApiInternalError("Couldn't list media locations"))
@@ -1385,172 +1385,141 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def eventGetLogic(eventId: EventId): ZIO[ApiEnv, ApiIssue, ApiEvent] = {
+  def bagGetLogic(bagId: BagId): ZIO[ApiEnv, ApiIssue, ApiBag] = {
     val logic = for {
-      event   <- MediaService
-                   .eventGet(eventId)
-                   .logError("Couldn't get event")
-                   .mapError(err => ApiInternalError("Couldn't get event"))
-                   .someOrFail(ApiResourceNotFound("Couldn't find event"))
-      taoEvent = event.transformInto[ApiEvent]
-    } yield taoEvent
+      bag   <- MediaService
+                 .bagGet(bagId)
+                 .logError("Couldn't get bag")
+                 .mapError(err => ApiInternalError("Couldn't get bag"))
+                 .someOrFail(ApiResourceNotFound("Couldn't find bag"))
+      taoBag = bag.transformInto[ApiBag]
+    } yield taoBag
 
     logic
   }
 
-  val eventGetEndpoint =
-    secureEventEndpoint()
-      .name("Get event")
-      .summary("Get all event information for the given event identifier")
+  val bagGetEndpoint =
+    secureBagEndpoint()
+      .name("Get bag")
+      .summary("Get all bag information for the given bag identifier")
       .get
-      .in(path[String]("eventId"))
-      .out(jsonBody[ApiEvent])
+      .in(path[String]("bagId"))
+      .out(jsonBody[ApiBag])
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
       .errorOutVariantPrepend(statusForApiInvalidRequestError)
       .serverLogic[ApiEnv](user =>
-        rawEventId =>
-          extractEventId(rawEventId)
-            .flatMap(id => eventGetLogic(id))
+        rawBagId =>
+          extractBagId(rawBagId)
+            .flatMap(id => bagGetLogic(id))
       )
 
-  def eventUpdateLogic(eventId: EventId, toUpdate: ApiEventUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
+  def bagUpdateLogic(bagId: BagId, toUpdate: ApiBagUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
     val logic = for {
-      event <- MediaService
-                 .eventGet(eventId)
-                 .logError("Couldn't get event")
-                 .mapError(err => ApiInternalError("Couldn't get event"))
-                 .someOrFail(ApiResourceNotFound("Couldn't find event"))
-      _     <- MediaService
-                 .eventUpdate(
-                   eventId,
-                   name = toUpdate.name,
-                   description = toUpdate.description,
-                   location = toUpdate.location.transformInto[Option[Location]],
-                   timestamp = toUpdate.timestamp,
-                   coverOriginalId = event.originalId,
-                   publishedOn = toUpdate.publishedOn,
-                   keywords = toUpdate.keywords
-                 )
-                 .logError("Couldn't update event")
-                 .mapError(err => ApiInternalError("Couldn't update event"))
+      bag <- MediaService
+               .bagGet(bagId)
+               .logError("Couldn't get bag")
+               .mapError(err => ApiInternalError("Couldn't get bag"))
+               .someOrFail(ApiResourceNotFound("Couldn't find bag"))
+      _   <- MediaService
+               .bagUpdate(
+                 bagId,
+                 name = toUpdate.name,
+                 description = toUpdate.description,
+                 location = toUpdate.location.transformInto[Option[Location]],
+                 timestamp = toUpdate.timestamp,
+                 coverOriginalId = bag.originalId,
+                 publishedOn = toUpdate.publishedOn,
+                 keywords = toUpdate.keywords
+               )
+               .logError("Couldn't update bag")
+               .mapError(err => ApiInternalError("Couldn't update bag"))
     } yield ()
 
     logic
   }
 
-  val eventUpdateEndpoint =
-    secureEventEndpoint()
-      .name("Update event")
-      .summary("Update event configuration for the given event identifier")
+  val bagUpdateEndpoint =
+    secureBagEndpoint()
+      .name("Update bag")
+      .summary("Update bag configuration for the given bag identifier")
       .put
-      .in(path[String]("eventId"))
-      .in(jsonBody[ApiEventUpdate])
+      .in(path[String]("bagId"))
+      .in(jsonBody[ApiBagUpdate])
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
       .errorOutVariantPrepend(statusForApiInvalidRequestError)
       .serverLogic[ApiEnv](user =>
-        (rawEventId, toUpdate) =>
-          extractEventId(rawEventId)
-            .flatMap(eventId => eventUpdateLogic(eventId, toUpdate))
+        (rawBagId, toUpdate) =>
+          extractBagId(rawBagId)
+            .flatMap(bagId => bagUpdateLogic(bagId, toUpdate))
       )
 
-  val eventUpdateCoverEndpoint =
-    secureEventEndpoint()
-      .name("Update event image cover")
-      .summary("Update event image cover for the given event and original identifiers")
+  val bagUpdateCoverEndpoint =
+    secureBagEndpoint()
+      .name("Update bag image cover")
+      .summary("Update bag image cover for the given bag and original identifiers")
       .put
-      .in(path[String]("eventId"))
+      .in(path[String]("bagId"))
       .in("cover")
       .in(path[String]("mediaAccessKey"))
       .errorOutVariantPrepend(statusForApiInternalError)
       .errorOutVariantPrepend(statusForApiResourceNotFound)
       .errorOutVariantPrepend(statusForApiInvalidRequestError)
       .serverLogic[ApiEnv](user =>
-        (rawEventId, rawMediaAccessKey) =>
+        (rawBagId, rawMediaAccessKey) =>
           for {
-            eventId        <- extractEventId(rawEventId)
+            bagId          <- extractBagId(rawBagId)
             mediaAccessKey <- extractMediaAccessKey(rawMediaAccessKey)
-            event          <- MediaService
-                                .eventGet(eventId)
-                                .logError("Couldn't get event")
-                                .mapError(err => ApiInternalError("Couldn't get event"))
-                                .someOrFail(ApiResourceNotFound("Couldn't find event"))
+            bag            <- MediaService
+                                .bagGet(bagId)
+                                .logError("Couldn't get bag")
+                                .mapError(err => ApiInternalError("Couldn't get bag"))
+                                .someOrFail(ApiResourceNotFound("Couldn't find bag"))
             media          <- mediaGetLogic(mediaAccessKey)
             _              <- MediaService
-                                .eventUpdate(
-                                  eventId = eventId,
-                                  name = event.name,
-                                  description = event.description,
-                                  location = event.location,
-                                  timestamp = event.timestamp,
+                                .bagUpdate(
+                                  bagId = bagId,
+                                  name = bag.name,
+                                  description = bag.description,
+                                  location = bag.location,
+                                  timestamp = bag.timestamp,
                                   coverOriginalId = Some(media.original.id),
-                                  publishedOn = event.publishedOn,
-                                  keywords = event.keywords
+                                  publishedOn = bag.publishedOn,
+                                  keywords = bag.keywords
                                 )
-                                .logError("Couldn't update event")
-                                .mapError(err => ApiInternalError("Couldn't update event"))
+                                .logError("Couldn't update bag")
+                                .mapError(err => ApiInternalError("Couldn't update bag"))
 
           } yield ()
       )
 
-  val eventListLogic: ZStream[MediaService, Throwable, ApiEvent] = {
+  val bagListLogic: ZStream[MediaService, Throwable, ApiBag] = {
     MediaService
-      .eventList()
-      .map(event => event.transformInto[ApiEvent])
-      .mapError(err => ApiInternalError("Couldn't list events"))
+      .bagList()
+      .map(bag => bag.transformInto[ApiBag])
+      .mapError(err => ApiInternalError("Couldn't list bags"))
   }
 
-  def eventDeleteLogic(eventId: EventId): ZIO[ApiEnv, ApiIssue, Unit] = {
-    for {
-      _ <- MediaService
-             .eventGet(eventId)
-             .logError("Couldn't get event")
-             .mapError(_ => ApiInternalError("Couldn't get event"))
-             .someOrFail(ApiResourceNotFound("Couldn't find event"))
-      _ <- MediaService
-             .eventDelete(eventId)
-             .logError("Couldn't delete event")
-             .mapError {
-               case e: fr.janalyse.sotohp.service.ServiceUserIssue => ApiInvalidOrMissingInput(e.message)
-               case _                                              => ApiInternalError("Couldn't delete event")
-             }
-    } yield ()
-  }
+  // Bags are add-only: created/maintained by the sync process and never deleted
+  // through the API (a media always belongs to exactly one directory-backed bag).
 
-  val eventDeleteEndpoint =
-    secureEventEndpoint()
-      .name("Delete event")
-      .summary("Delete the event for the given event identifier")
-      .delete
-      .in(path[String]("eventId"))
-      .errorOutVariantPrepend(statusForApiInternalError)
-      .errorOutVariantPrepend(statusForApiResourceNotFound)
-      .errorOutVariantPrepend(statusForApiInvalidRequestError)
-      .serverLogic[ApiEnv](user =>
-        rawEventId =>
-          ZIO
-            .attempt(EventId(java.util.UUID.fromString(rawEventId)))
-            .orElseFail(ApiInvalidOrMissingInput("Invalid event identifier"))
-            .flatMap(eventId => eventDeleteLogic(eventId))
-      )
-
-  val eventListEndpoint =
-    secureEventEndpoint(true)
-      .name("List events")
-      .summary("Stream all defined events")
+  val bagListEndpoint =
+    secureBagEndpoint(true)
+      .name("List bags")
+      .summary("Stream all defined bags")
       .get
       .out(
-        streamBody(ZioStreams)(ApiEvent.apiEventSchema, NdJson, Some(StandardCharsets.UTF_8))
-          .description("NDJSON (one Event JSON object per line)")
-          // .schema(summon[Schema[List[ApiEvent]]])
-      ) // TODO how to provide information about the fact we want NDJSON output of ApiEvent ?
+        streamBody(ZioStreams)(ApiBag.apiBagSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Bag JSON object per line)")
+          // .schema(summon[Schema[List[ApiBag]]])
+      ) // TODO how to provide information about the fact we want NDJSON output of ApiBag ?
       .errorOutVariantPrepend(statusForApiInternalError)
       .serverLogic[ApiEnv](user =>
         _ =>
           for {
             ms        <- ZIO.service[MediaService]
-            byteStream = eventListLogic
+            byteStream = bagListLogic
                            .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
@@ -1875,11 +1844,10 @@ object ApiApp extends ZIOAppDefault {
     personDeleteEndpoint,
     personFaceListEndpoint,
     // -------------------------
-    eventListEndpoint,
-    eventGetEndpoint,
-    eventUpdateEndpoint,
-    eventUpdateCoverEndpoint,
-    eventDeleteEndpoint,
+    bagListEndpoint,
+    bagGetEndpoint,
+    bagUpdateEndpoint,
+    bagUpdateCoverEndpoint,
 
     portfolioListEndpoint,
     portfolioCreateEndpoint,

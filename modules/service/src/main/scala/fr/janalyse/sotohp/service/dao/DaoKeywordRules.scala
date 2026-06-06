@@ -7,12 +7,13 @@ import zio.lmdb.json.LMDBCodecJson
 import io.scalaland.chimney.Transformer
 
 import scala.util.matching.compat.Regex
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 case class DaoRewriting(
   regex: String,
   replacement: String
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 object DaoRewriting {
   given Transformer[Rewriting, DaoRewriting] =

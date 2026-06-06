@@ -119,13 +119,13 @@ object FileSystemSearch {
   def mediasStreamFromSearchRoot(
     searchRoot: Store,
     searchConfig: FileSystemSearchCoreConfig,
-    eventGetter: Original => Option[Event]
+    bagGetter: Original => Option[Bag]
   ): Either[FileSystemSearchIssue, JStream[Either[CoreIssue, Media]]] = {
     originalsStreamFromSearchRoot(searchRoot, searchConfig)
       .map { stream =>
         stream.map { originalEither =>
           originalEither.flatMap { original =>
-            MediaBuilder.mediaFromOriginal(original, eventGetter(original))
+            MediaBuilder.mediaFromOriginal(original, bagGetter(original))
           }
         }
       }

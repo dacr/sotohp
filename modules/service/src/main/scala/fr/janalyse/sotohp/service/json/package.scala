@@ -28,9 +28,9 @@ package object json {
     in => StoreId(in.readUUID(null))
   )
 
-  given eventIdCodec: JsonValueCodec[EventId] = codec(
+  given bagIdCodec: JsonValueCodec[BagId] = codec(
     (x, out) => out.writeVal(x.asUUID),
-    in => EventId(in.readUUID(null))
+    in => BagId(in.readUUID(null))
   )
 
   given portfolioIdCodec: JsonValueCodec[PortfolioId] = codec(
@@ -73,9 +73,9 @@ package object json {
     in => NormalizedPath(Path.of(in.readString(null)))
   )
 
-  given eventMediaDirectoryCodec: JsonValueCodec[EventMediaDirectory] = codec(
+  given bagMediaDirectoryCodec: JsonValueCodec[BagMediaDirectory] = codec(
     (x, out) => out.writeVal(x.path.toString),
-    in => EventMediaDirectory(Path.of(in.readString(null)))
+    in => BagMediaDirectory(Path.of(in.readString(null)))
   )
 
   given ownerIdCodec: JsonValueCodec[OwnerId] = codec(
@@ -188,9 +188,9 @@ package object json {
     in => ArtistInfo(in.readString(null))
   )
 
-  given eventNameCodec: JsonValueCodec[EventName] = codec(
+  given bagNameCodec: JsonValueCodec[BagName] = codec(
     (x, out) => out.writeVal(x.toString),
-    in => EventName(in.readString(null))
+    in => BagName(in.readString(null))
   )
 
   given storeNameCodec: JsonValueCodec[StoreName] = codec(
@@ -208,9 +208,9 @@ package object json {
     in => LastName(in.readString(null))
   )
 
-  given eventDescriptionCodec: JsonValueCodec[EventDescription] = codec(
+  given bagDescriptionCodec: JsonValueCodec[BagDescription] = codec(
     (x, out) => out.writeVal(x.toString),
-    in => EventDescription(in.readString(null))
+    in => BagDescription(in.readString(null))
   )
 
   given mediaDescriptionCodec: JsonValueCodec[MediaDescription] = codec(

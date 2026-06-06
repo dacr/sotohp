@@ -26,37 +26,37 @@ object MediaBuilder {
 //    MediaAccessKey(original.timestamp, original.id.asUUID)
 //  }
 //
-//  def buildDefaultMediaAccessKey(original: Original, event: Option[Event]): MediaAccessKey = {
+//  def buildDefaultMediaAccessKey(original: Original, bag: Option[Bag]): MediaAccessKey = {
 //    val timestamp =
 //      original.cameraShootDateTime // 1. if camera shot date time is known
-//        .orElse(event.flatMap(_.timestamp)) // 2. if the event timestamp is known (because a default event already exists and has a timestamp)
+//        .orElse(bag.flatMap(_.timestamp)) // 2. if the bag timestamp is known (because a default bag already exists and has a timestamp)
 //        .map(_.offsetDateTime)
 //        .getOrElse(original.fileLastModified.offsetDateTime) // 3. default will go to file last modified date time
 //    MediaAccessKey(timestamp, original.id.asUUID)
 //  }
 
-  def buildEventAttachment(original: Original): Option[EventAttachment] = buildEventAttachment(original.store, original.mediaPath)
+  def buildBagAttachment(original: Original): Option[BagAttachment] = buildBagAttachment(original.store, original.mediaPath)
 
-  def buildEventAttachment(store: Store, originalMediaPath: OriginalPath): Option[EventAttachment] = {
+  def buildBagAttachment(store: Store, originalMediaPath: OriginalPath): Option[BagAttachment] = {
     val relativeDirectory = Option(originalMediaPath.parent).filter(_ != null)
 
-    relativeDirectory.map(dir => EventAttachment(store, EventMediaDirectory(dir))).filter(_.eventMediaDirectory.path.toString.nonEmpty)
+    relativeDirectory.map(dir => BagAttachment(store, BagMediaDirectory(dir))).filter(_.bagMediaDirectory.path.toString.nonEmpty)
   }
 
-  def buildDefaultMediaEvent(original: Original): Option[Event] = buildDefaultMediaEvent(original.store, original.mediaPath, Some(original))
+  def buildDefaultMediaBag(original: Original): Option[Bag] = buildDefaultMediaBag(original.store, original.mediaPath, Some(original))
 
-  def buildDefaultMediaEvent(store: Store, originalMediaPath: OriginalPath, mayBeOriginal: Option[Original]): Option[Event] = {
-    val eventId         = EventId(UUID.randomUUID())
-    val eventAttachment = buildEventAttachment(store, originalMediaPath)
-    val eventName       = eventAttachment.map(_.eventMediaDirectory.toString)
+  def buildDefaultMediaBag(store: Store, originalMediaPath: OriginalPath, mayBeOriginal: Option[Original]): Option[Bag] = {
+    val bagId         = BagId(UUID.randomUUID())
+    val bagAttachment = buildBagAttachment(store, originalMediaPath)
+    val bagName       = bagAttachment.map(_.bagMediaDirectory.toString)
 
     for {
-      attachment <- eventAttachment
-      name       <- eventName.filter(_.nonEmpty)
-    } yield Event(
-      id = eventId,
+      attachment <- bagAttachment
+      name       <- bagName.filter(_.nonEmpty)
+    } yield Bag(
+      id = bagId,
       attachment = attachment,
-      name = EventName(name),
+      name = BagName(name),
       description = None,
       location = mayBeOriginal.flatMap(_.location),
       timestamp = mayBeOriginal.flatMap(_.cameraShootDateTime),
@@ -66,24 +66,24 @@ object MediaBuilder {
     )
   }
 
-  /** Generates a `Media` object from an `Original` object by computing its properties such as timestamp, media access key, event, and media kind.
+  /** Generates a `Media` object from an `Original` object by computing its properties such as timestamp, media access key, bag, and media kind.
     *
     * @param original
     *   the `Original` object containing the base information about the media
-    * @param knownEvent
-    *   event to which this media belongs to
+    * @param knownBag
+    *   bag to which this media belongs to
     * @return
     *   an `Either`, where the left side contains a `CoreIssue` if an error occurred during processing, and the right side contains a constructed `Media` object if successful
     */
 
   def mediaFromOriginal(
     original: Original,
-    knownEvent: Option[Event]
+    knownBag: Option[Bag]
   ): Either[CoreIssue, Media] = Right {
     //val mediaAccessKey = buildDefaultMediaAccessKey(original)
     Media(
       original = original,
-      event = knownEvent,
+      bag = knownBag,
       description = None,
       starred = Starred(false),
       keywords = Set.empty,

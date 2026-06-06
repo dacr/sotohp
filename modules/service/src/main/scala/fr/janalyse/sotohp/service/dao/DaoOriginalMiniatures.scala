@@ -5,18 +5,19 @@ import fr.janalyse.sotohp.processor.model.OriginalMiniatures
 import fr.janalyse.sotohp.service
 import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
-import fr.janalyse.sotohp.service.json.{given,*}
+import fr.janalyse.sotohp.service.json.{*, given}
+import zio.lmdb.schema.LMDBSchema
 
 case class DaoOriginalMiniature(
   size: Int,
   dimension: DaoDimension
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 case class DaoOriginalMiniatures(
   originalId: OriginalId,
   status: DaoProcessedStatus,
   miniatures: Map[Int, DaoOriginalMiniature]
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 object DaoOriginalMiniatures {
   given Transformer[OriginalMiniatures, DaoOriginalMiniatures] =

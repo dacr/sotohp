@@ -12,9 +12,9 @@ import {
   openAddToPortfolioModal,
 } from './features/portfolios.js';
 import {
-  initEvents,
-  ensureEventsLoaded,
-  goToEventsById,
+  initBags,
+  ensureBagsLoaded,
+  goToBagById,
 } from './features/events.js';
 import { initOwners, loadOwners } from './features/owners.js';
 import { initStores, loadStores } from './features/stores.js';
@@ -361,7 +361,7 @@ function setActiveTab(name) {
     } catch {}
   }
   if (name === 'events') {
-    ensureEventsLoaded();
+    ensureBagsLoaded();
     try {
       const sec = document.getElementById('tab-events');
       if (sec) setTimeout(() => { try { sec.focus({ preventScroll: true }); } catch { try { sec.focus(); } catch {} } }, 0);
@@ -468,8 +468,8 @@ function showMedia(media) {
   if (facesEnabled) { try { loadFacesForCurrentMedia(); } catch {} }
   const date = media.shootDateTime || media.original?.cameraShootDateTime || '-';
   const dateStr = date ? new Date(date).toLocaleString() : '-';
-  const ev0 = media.event || null;
-  const eventName = ev0 ? (ev0.name || '(no name)') : '-';
+  const bag0 = media.bag || null;
+  const bagName = bag0 ? (bag0.name || '(no name)') : '-';
   const dateEl = document.getElementById('info-date');
   if (dateEl) {
     dateEl.textContent = dateStr;
@@ -492,15 +492,15 @@ function showMedia(media) {
   }
   const evEl = $('#info-event');
   if (evEl) {
-    evEl.textContent = eventName;
+    evEl.textContent = bagName;
     // Reset any previous interactivity
     evEl.style.cursor = 'default';
     evEl.title = '';
     evEl.onclick = null;
-    if (ev0 && ev0.id) {
+    if (bag0 && bag0.id) {
       evEl.style.cursor = 'pointer';
-      evEl.title = 'Open in Events';
-      evEl.onclick = async () => { try { await goToEventsById(ev0.id); } catch {} };
+      evEl.title = 'Open in Bags';
+      evEl.onclick = async () => { try { await goToBagById(bag0.id); } catch {} };
     }
   }
   const starInfoEl = document.getElementById('info-starred'); if (starInfoEl) starInfoEl.textContent = media.starred ? '⭐ Yes' : '☆ No';
@@ -615,8 +615,8 @@ function showMedia(media) {
     } else {
       pin = pinSvg('#ef4444'); // red for unknown
     }
-    // In fullscreen, only show the event information (no timestamp)
-    ov.innerHTML = `<div class="title">${star}${eventName} ${pin}</div>`;
+    // In fullscreen, only show the bag information (no timestamp)
+    ov.innerHTML = `<div class="title">${star}${bagName} ${pin}</div>`;
   }
   // Update Star toggle button in controls
   const starBtn = document.getElementById('btn-star');
@@ -636,7 +636,7 @@ function showMedia(media) {
         // Update fullscreen overlay star if present
         const ov2 = document.getElementById('fs-overlay');
         if (ov2) {
-          const evName = currentMedia.event ? currentMedia.event.name : '-';
+          const evName = currentMedia.bag ? currentMedia.bag.name : '-';
           const pinSvg2 = (color) => `\
 <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="${color}" style="vertical-align:-0.15em;margin-left:6px"><path d="M12 2c-3.314 0-6 2.686-6 6 0 5 6 12 6 12s6-7 6-12c0-3.314-2.686-6-6-6zm0 10a4 4 0 110-8 4 4 0 010 8z"/></svg>`;
           let pin2 = '';
@@ -761,7 +761,7 @@ function openMediaEditModal(media) {
       </header>
       <div class="content">
         <div style="margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
-          <button type="button" id="md-event-cover-btn" class="btn btn-primary btn-pill">Use for event cover</button>
+          <button type="button" id="md-event-cover-btn" class="btn btn-primary btn-pill">Use for bag cover</button>
           <button type="button" id="md-owner-cover-btn" class="btn btn-primary btn-pill">Use for owner cover</button>
           <button type="button" id="md-portfolio-add-btn" class="btn btn-success btn-pill">＋ Add to portfolio…</button>
         </div>
@@ -955,17 +955,17 @@ function openMediaEditModal(media) {
 
   // Cover button handlers
   overlay.querySelector('#md-event-cover-btn')?.addEventListener('click', async () => {
-    if (!media.event) {
-      showWarning('This media is not associated with any event');
+    if (!media.bag) {
+      showWarning('This media is not associated with any bag');
       return;
     }
-    const eventId = media.event.id;
+    const bagId = media.bag.id;
     try {
-      await api.setEventCover(eventId, media.accessKey);
-      showSuccess('Successfully set as event cover');
+      await api.setBagCover(bagId, media.accessKey);
+      showSuccess('Successfully set as bag cover');
     } catch (e) {
-      console.error('Failed to set event cover:', e);
-      showError('Failed to set as event cover');
+      console.error('Failed to set bag cover:', e);
+      showError('Failed to set as bag cover');
     }
   });
 
@@ -1997,10 +1997,10 @@ function initViewerControls() {
     }
   } catch {}
 
-  // Keyboard scrolling for Events tab
+  // Keyboard scrolling for Bags tab
   document.addEventListener('keydown', (e) => {
-    const eventsActive = document.getElementById('tab-events')?.classList.contains('active');
-    if (!eventsActive) return;
+    const bagsActive = document.getElementById('tab-events')?.classList.contains('active');
+    if (!bagsActive) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     // Let Alt+PageUp/PageDown fall through to the global tab switcher.
@@ -2073,17 +2073,17 @@ function goToWorldLocation(loc, accessKey) {
   } catch {}
 }
 
-// Per-eventId name cache so a cluster with N markers from the same event
+// Per-bagId name cache so a cluster with N markers from the same bag
 // pays one HTTP fetch (or zero if the user never opens the popup).
-const mapEventNameCache = new Map();
-async function getEventNameCached(eventId) {
-  if (!eventId) return '';
-  if (mapEventNameCache.has(eventId)) return mapEventNameCache.get(eventId);
+const mapBagNameCache = new Map();
+async function getBagNameCached(bagId) {
+  if (!bagId) return '';
+  if (mapBagNameCache.has(bagId)) return mapBagNameCache.get(bagId);
   const p = (async () => {
-    try { const ev = await api.getEvent(eventId); return ev?.name || ''; }
+    try { const bag = await api.getBag(bagId); return bag?.name || ''; }
     catch { return ''; }
   })();
-  mapEventNameCache.set(eventId, p);
+  mapBagNameCache.set(bagId, p);
   return p;
 }
 
@@ -2113,14 +2113,14 @@ function loadMapData({ clear = false } = {}) {
     }
   };
   api.mediasLocations(m => {
-    // Slim payload: { accessKey, latitude, longitude, shootDateTime?, starred, eventId? }
+    // Slim payload: { accessKey, latitude, longitude, shootDateTime?, starred, bagId? }
     if (mapAddedKeys.has(m.accessKey)) return;
     mapAddedKeys.add(m.accessKey);
     const marker = L.marker([m.latitude, m.longitude]);
     const date = m.shootDateTime || '';
     const starred = m.starred ? '⭐' : '☆';
-    // The popup body is rendered with a placeholder event name. The
-    // popupopen handler resolves the event name and image src lazily —
+    // The popup body is rendered with a placeholder bag name. The
+    // popupopen handler resolves the bag name and image src lazily —
     // we don't pay for either unless the user actually opens the marker.
     marker.bindPopup(`
         <div style="min-width:200px">
@@ -2141,8 +2141,8 @@ function loadMapData({ clear = false } = {}) {
       };
       const evEl = document.getElementById(`evname-${m.accessKey}`);
       if (evEl) {
-        const name = await getEventNameCached(m.eventId);
-        evEl.textContent = name || '(no event)';
+        const name = await getBagNameCached(m.bagId);
+        evEl.textContent = name || '(no bag)';
       }
       const imgEl = document.getElementById(`thumb-${m.accessKey}`);
       if (imgEl) {
@@ -2168,8 +2168,8 @@ function loadMapData({ clear = false } = {}) {
   });
 }
 
-// Events
-// Helpers for Event edit modal
+// Bags
+// Helpers for Bag edit modal
 
 async function goToMosaicAtTimestamp(ts) {
   try {
@@ -2293,7 +2293,7 @@ function timestampToScrollPosition(timestamp, oldestTime, newestTime) {
 }
 
 // Effective timestamp used by the backend to order media:
-//   shootDateTime (user override) → original.cameraShootDateTime → first event timestamp.
+//   shootDateTime (user override) → original.cameraShootDateTime → first bag timestamp.
 // Backend has a further fileLastModified fallback we don't expose to the API.
 // Used for display/timeline only — display order trusts the backend's own
 // "next"/"previous" traversal, never a frontend resort.
@@ -2302,7 +2302,7 @@ function mediaTimestamp(media) {
     if (!media) return null;
     if (media.shootDateTime) return media.shootDateTime;
     if (media.original && media.original.cameraShootDateTime) return media.original.cameraShootDateTime;
-    if (media.event && media.event.timestamp) return media.event.timestamp;
+    if (media.bag && media.bag.timestamp) return media.bag.timestamp;
     return null;
   } catch { return null; }
 }
@@ -2400,7 +2400,7 @@ function createMosaicTile(media) {
   function buildTooltipHtml() {
     const ts = tsStr ? new Date(tsStr) : null;
     const tsHuman = ts && !isNaN(ts.getTime()) ? ts.toLocaleString() : '';
-    const evName = media.event ? media.event.name : '(no event)';
+    const evName = media.bag ? media.bag.name : '(no bag)';
     return `<div class="title">${evName}</div>${tsHuman ? `<div class="subtitle">${tsHuman}</div>` : ''}`;
   }
   const onMouseMove = (e) => {
@@ -4145,7 +4145,7 @@ function init() {
     });
     cont.appendChild(pfBtn);
   }
-  initEvents({
+  initBags({
     getApi: () => api,
     setActiveTab,
     goToMosaicAtTimestamp,

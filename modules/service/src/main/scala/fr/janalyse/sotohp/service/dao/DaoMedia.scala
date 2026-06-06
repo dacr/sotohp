@@ -6,12 +6,13 @@ import io.scalaland.chimney.Transformer
 import zio.lmdb.json.LMDBCodecJson
 import fr.janalyse.sotohp.service.json.{*, given}
 import io.scalaland.chimney.dsl.*
+import zio.lmdb.schema.LMDBSchema
 
 import java.time.OffsetDateTime
 
 case class DaoMedia(
   originalId: OriginalId,
-  eventId: Option[EventId],
+  bagId: Option[BagId],
   description: Option[MediaDescription],
   starred: Starred,
   keywords: Set[Keyword],
@@ -21,13 +22,13 @@ case class DaoMedia(
   deductedLocation: Option[DaoLocation],    // from nearby photos
   timestamp: OffsetDateTime,                // keep the retained timestamp as it is used for indexing purposes
   location: Option[DaoLocation]             // Keep the retained location as it is used for indexing purposes
-) derives LMDBCodecJson
+) derives LMDBCodecJson, LMDBSchema
 
 object DaoMedia {
   given transformer: Transformer[Media, DaoMedia] =
     Transformer
       .define[Media, DaoMedia]
-      .withFieldComputed(_.eventId, _.event.map(_.id))
+      .withFieldComputed(_.bagId, _.bag.map(_.id))
       .withFieldComputed(_.originalId, _.original.id)
       .withFieldComputed(_.timestamp, _.timestamp)
       .withFieldComputed(_.location, _.location.transformInto[Option[DaoLocation]])

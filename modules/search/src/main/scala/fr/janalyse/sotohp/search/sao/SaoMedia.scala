@@ -23,7 +23,7 @@ case class SaoMedia(
   filePath: String,
   fileHash: Option[String],
   // ----------------- USER DATA -----------------
-  event: Option[String],     // the default attached event
+  bag: Option[String],       // the default attached bag
   keywords: List[String],
   description: Option[String],
   // ----------------- CAMERA DATA -----------------
@@ -50,8 +50,8 @@ object SaoMedia {
 
   def fromMedia(bag: MediaBag): SaoMedia = {
     import bag.media
-    val event              = media.event.map(_.name.text)
-    val keywords           = media.keywords ++ media.event.toList.flatMap(_.keywords)
+    val mediaBagName       = media.bag.map(_.name.text)
+    val keywords           = media.keywords ++ media.bag.toList.flatMap(_.keywords)
     val location           = media.location
     val hasProcessingIssue = (
       bag.processedObjects.exists(_.status.successful == false) ||
@@ -69,7 +69,7 @@ object SaoMedia {
       filePath = media.original.relativeMediaPath.toString,
       fileHash = bag.state.originalHash.map(_.code),
       // ----------------- USER DATA -----------------
-      event = event,
+      bag = mediaBagName,
       keywords = keywords.map(_.text).toList,
       description = media.description.map(_.text),
       // ----------------- CAMERA DATA -----------------

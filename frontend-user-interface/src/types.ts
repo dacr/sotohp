@@ -35,7 +35,7 @@ export interface Original {
   focalLength?: number;
 }
 
-export interface Event {
+export interface Bag {
   id: string;
   name: string;
   description?: string;
@@ -45,12 +45,12 @@ export interface Event {
   publishedOn?: string;
 }
 
-export interface EventUpdate {
+export interface BagUpdate {
   name: string;
   description?: string;
   location?: Location;
   timestamp?: string; // ISO date-time
-  publishedOn?: string; // URL where this event album has been published
+  publishedOn?: string; // URL where this bag album has been published
   keywords?: string[];
 }
 
@@ -72,7 +72,7 @@ export interface Store {
 export interface Media {
   accessKey: string;
   original: Original;
-  event?: Event;
+  bag?: Bag;
   description?: string;
   starred: boolean;
   keywords?: string[];
@@ -92,5 +92,5 @@ export interface MediaLocation {
   longitude: number;
   shootDateTime?: string;
   starred: boolean;
-  eventId?: string;
+  bagId?: string;
 }
