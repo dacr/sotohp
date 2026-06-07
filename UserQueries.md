@@ -34,7 +34,50 @@ count(*)
 281
 (1 row in 14ms)
 
-lmdb(sotohp-v2)>
+lmdb(sotohp-v2)> \dt
+name                 | kind
+---------------------+--------
+bags                 | Regular
+classifications      | Regular
+detectedFaceFeatures | Regular
+detectedFaces        | Regular
+faceFeatures         | Regular
+faces                | Regular
+keywordRules         | Regular
+medias               | Regular
+miniatures           | Regular
+normalized           | Regular
+objects              | Regular
+originals            | Regular
+owners               | Regular
+persons              | Regular
+portfolioAssets      | Multi
+portfolios           | Regular
+states               | Regular
+stores               | Regular
+(18 rows in 32ms)
+
+lmdb(sotohp-v2)> describe originals
+column              | type
+--------------------+----------
+_key                | lmdb:uuid
+id                  | string
+storeId             | string
+mediaPath           | string
+fileSize            | integer
+fileLastModified    | string
+kind                | integer
+cameraShootDateTime | string
+cameraName          | string
+artistInfo          | string
+dimension           | object
+orientation         | integer
+location            | object
+aperture            | number
+exposureTime        | object
+iso                 | number
+focalLength         | number
+(17 rows in 13ms)
 ```
 
 
