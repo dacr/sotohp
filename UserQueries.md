@@ -135,6 +135,6 @@ ORDER by dist
 ```
 SELECT b.name, geo_distance(m.location, 48.8566, 2.3522) / 1000 AS distKM
 FROM medias m JOIN bags b ON m.bagId = b.id
-WHERE distKM <= 10
+WHERE distKM <= 1
 ORDER by distKM
 ```
