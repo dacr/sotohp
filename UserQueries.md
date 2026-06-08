@@ -1,4 +1,7 @@
 # QUERYING SOTOHP ZIO-LMDB DATABASE
+
+## console session example
+
 zio-lmdb-sql can be directly started on sotohp database files (example using the fat jar).
 ```
 $ java --add-opens java.base/java.nio=ALL-UNNAMED \
@@ -80,12 +83,21 @@ focalLength         | number
 (17 rows in 13ms)
 ```
 
+## SQL query examples
 
 ```
 SELECT p.firstName, p.lastName, count(f.faceId) AS n
 FROM persons p join detectedFaces f on f.identifiedPersonId = p._key
 GROUP BY p.firstName, p.lastName
 HAVING count(f.faceId) > 100
+ORDER BY n;
+```
+
+```
+SELECT p.firstName, p.lastName, count(f.faceId) AS n
+FROM persons p JOIN detectedFaces f ON f.identifiedPersonId = p._key
+GROUP BY p.firstName, p.lastName
+HAVING n > 100
 ORDER BY n;
 ```
 
@@ -98,18 +110,31 @@ HAVING count(*) > 500
 ORDER BY count DESC;
 ```
 
-
 ```
-select count(*)
-from detectedFaces;
-```
-
-```
-select count(*)
-from persons;
+SELECT o.location.altitude AS alt
+FROM originals o
+WHERE alt IS NOT NULL
+ORDER BY alt DESC
+LIMIT 10;
 ```
 
 ```
-select count(*)
-from originals;
+SELECT _key, geo_distance(o.location.latitude, o.location.longitude, 48.8566, 2.3522) AS dist
+FROM medias o
+WHERE dist <= 50000
+ORDER by dist
+```
+
+```
+SELECT b.name, geo_distance(m.location, 48.8566, 2.3522) AS dist
+FROM medias m JOIN bags b ON m.bagId = b.id 
+WHERE dist <= 50000
+ORDER by dist
+```
+
+```
+SELECT b.name, geo_distance(m.location, 48.8566, 2.3522) / 1000 AS distKM
+FROM medias m JOIN bags b ON m.bagId = b.id
+WHERE distKM <= 10
+ORDER by distKM
 ```
