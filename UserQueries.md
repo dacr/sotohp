@@ -85,21 +85,7 @@ focalLength         | number
 
 ## SQL query examples
 
-```
-SELECT p.firstName, p.lastName, count(f.faceId) AS n
-FROM persons p join detectedFaces f on f.identifiedPersonId = p._key
-GROUP BY p.firstName, p.lastName
-HAVING count(f.faceId) > 100
-ORDER BY n;
-```
-
-```
-SELECT p.firstName, p.lastName, count(f.faceId) AS n
-FROM persons p JOIN detectedFaces f ON f.identifiedPersonId = p._key
-GROUP BY p.firstName, p.lastName
-HAVING n > 100
-ORDER BY n;
-```
+### used camera information
 
 ```
 SELECT cameraName, count(*) AS count
@@ -109,6 +95,24 @@ GROUP BY cameraName
 HAVING count(*) > 500
 ORDER BY count DESC;
 ```
+
+### photos statistics related to time
+
+```
+SELECT year(timestamp) AS year, count(*)
+FROM medias m
+GROUP BY year
+```
+
+```
+SELECT year(m.timestamp) AS dy, month(m.timestamp) AS dm, count(*)
+FROM medias m
+GROUP BY dy, dm
+ORDER BY dy, dm
+```
+
+
+### playing with GPS data
 
 ```
 SELECT o.location.altitude AS alt
@@ -136,5 +140,82 @@ ORDER by dist
 SELECT b.name, geo_distance(m.location, 48.8566, 2.3522) / 1000 AS distKM
 FROM medias m JOIN bags b ON m.bagId = b.id
 WHERE distKM <= 1
-ORDER by distKM
+ORDER by distKM;
+```
+
+how many photos with unknown location
+```
+SELECT count(*)
+FROM medias m
+WHERE m.location IS NULL;
+```
+
+### people
+
+```
+SELECT p.lastName AS ln, p.firstName AS fn
+FROM persons p
+ORDER BY ln;
+```
+
+### people faces
+
+```
+SELECT p.firstName, p.lastName, count(f.faceId) AS n
+FROM persons p join detectedFaces f on f.identifiedPersonId = p._key
+GROUP BY p.firstName, p.lastName
+HAVING count(f.faceId) > 100
+ORDER BY n;
+```
+
+```
+SELECT p.firstName, p.lastName, count(f.faceId) AS n
+FROM persons p JOIN detectedFaces f ON f.identifiedPersonId = p._key
+GROUP BY p.firstName, p.lastName
+HAVING n > 100
+ORDER BY n;
+```
+
+### faces dataset
+
+Identifed and confirmed faces:
+```
+SELECT count(*)
+FROM detectedFaces f
+WHERE f.identifiedPersonId IS NOT NULL;
+```
+
+Identifed and confirmed faces grouped by person:
+```
+SELECT p.lastName, p.firstName, count(*) AS count
+FROM persons p JOIN detectedFaces f ON f.identifiedPersonId = p._key
+WHERE f.identifiedPersonId IS NOT NULL
+GROUP BY p.lastName, p.firstName
+HAVING count > 0
+ORDER BY count DESC;
+```
+
+how many people with more than 100 confirmed identified faces:
+```
+SELECT p.lastName AS ln, p.firstName AS fn, count(*) AS count
+FROM persons p JOIN detectedFaces f ON f.identifiedPersonId = p._key
+WHERE f.identifiedPersonId IS NOT NULL
+GROUP BY ln, fn
+HAVING count > 500
+ORDER BY count DESC;
+```
+
+Unidentified faces
+```
+SELECT count(*)
+FROM detectedFaces f
+WHERE f.identifiedPersonId IS NULL;
+```
+
+Inferred but not confirmed faces:
+```
+SELECT count(*)
+FROM detectedFaces f
+WHERE f.identifiedPersonId IS NULL
+AND f.inferredIdentifiedPersonId IS NOT NULL;
 ```

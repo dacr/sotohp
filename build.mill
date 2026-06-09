@@ -95,7 +95,7 @@ object modules extends Module {
   object service extends SotohpModule with Publishable {
     def artifactName             = "sotohp-service"
     def moduleDeps               = Seq(core, search, processor)
-    lazy private val lmdbRelease = "3.0.0-SNAPSHOT"
+    lazy private val lmdbRelease = "3.0.0-RC1"
     def mvnDeps                  = Seq(
       mvn"fr.janalyse::zio-lmdb:$lmdbRelease",
       mvn"fr.janalyse::query-dsl:$lmdbRelease",
