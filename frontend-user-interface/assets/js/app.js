@@ -2883,7 +2883,7 @@ function comparePersons(a, b) {
 function matchesPersonFilter(p, q) {
   if (!q) return true;
   const s = q.toLowerCase();
-  const fields = [p.firstName||'', p.lastName||'', p.description||''];
+  const fields = [p.firstName||'', p.lastName||'', p.birthName||'', p.description||''];
   for (const f of fields) { if (String(f).toLowerCase().includes(s)) return true; }
   return false;
 }
@@ -3882,6 +3882,8 @@ function openPersonCreateModal() {
           <input type="text" id="pc-first" value="">
           <label class="form-label">Last name</label>
           <input type="text" id="pc-last" value="">
+          <label class="form-label">Birth name</label>
+          <input type="text" id="pc-birthname" value="">
           <label class="form-label">Birthdate</label>
           <input type="date" id="pc-birth" value="">
           <label class="form-label">Email</label>
@@ -3893,11 +3895,13 @@ function openPersonCreateModal() {
     onSave: async ({ modal }) => {
       const firstName = modal.querySelector('#pc-first').value.trim();
       const lastName  = modal.querySelector('#pc-last').value.trim();
+      const birthName = modal.querySelector('#pc-birthname').value.trim();
       const birth     = modal.querySelector('#pc-birth').value;
       const email     = modal.querySelector('#pc-email').value.trim();
       const desc      = modal.querySelector('#pc-desc').value.trim();
       if (!firstName || !lastName) { showWarning('First name and Last name are required'); return false; }
       const body = { firstName, lastName };
+      if (birthName) body.birthName = birthName;
       body.birthDate = birth ? `${birth}T00:00:00Z` : null;
       if (email) body.email = email;
       if (desc) body.description = desc;
@@ -3952,6 +3956,8 @@ function openPersonEditModal(person) {
           <input type="text" id="pe-first" value="${escapeHtml(person.firstName)}">
           <label class="form-label">Last name</label>
           <input type="text" id="pe-last" value="${escapeHtml(person.lastName)}">
+          <label class="form-label">Birth name</label>
+          <input type="text" id="pe-birthname" value="${escapeHtml(person.birthName)}">
           <label class="form-label">Birthdate</label>
           <input type="date" id="pe-birth" value="${toDateInput(birthVal)}">
           <label class="form-label">Email</label>
@@ -3967,12 +3973,14 @@ function openPersonEditModal(person) {
     onSave: async ({ modal }) => {
       const firstName = modal.querySelector('#pe-first').value.trim();
       const lastName  = modal.querySelector('#pe-last').value.trim();
+      const birthName = modal.querySelector('#pe-birthname').value.trim();
       const birth     = modal.querySelector('#pe-birth').value;
       const email     = modal.querySelector('#pe-email').value.trim();
       const desc      = modal.querySelector('#pe-desc').value.trim();
       const chosen    = modal.querySelector('#pe-chosen').value.trim();
       if (!firstName || !lastName) { showWarning('First name and Last name are required'); return false; }
       const body = { firstName, lastName };
+      body.birthName = birthName || null;
       body.birthDate = birth ? `${birth}T00:00:00Z` : null;
       body.email = email || null;
       body.description = desc || null;

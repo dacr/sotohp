@@ -71,6 +71,7 @@ package object protocol {
   given Schema[StoreName]            = strAs
   given Schema[FirstName]            = strAs
   given Schema[LastName]             = strAs
+  given Schema[BirthName]            = strAs
   given Schema[BagDescription]       = strAs
   given Schema[PortfolioName]        = strAs
   given Schema[PortfolioDescription] = strAs

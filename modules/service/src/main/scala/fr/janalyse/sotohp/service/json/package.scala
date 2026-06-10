@@ -208,6 +208,11 @@ package object json {
     in => LastName(in.readString(null))
   )
 
+  given birthNameCodec: JsonValueCodec[BirthName] = codec(
+    (x, out) => out.writeVal(x.toString),
+    in => BirthName(in.readString(null))
+  )
+
   given bagDescriptionCodec: JsonValueCodec[BagDescription] = codec(
     (x, out) => out.writeVal(x.toString),
     in => BagDescription(in.readString(null))

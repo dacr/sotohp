@@ -327,6 +327,13 @@ package object model {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+  opaque type BirthName = String
+
+  object BirthName {
+    def apply(name: String): BirthName = name
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
   opaque type BirthDate = OffsetDateTime
 
   object BirthDate {

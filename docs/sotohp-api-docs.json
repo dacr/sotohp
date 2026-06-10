@@ -4999,6 +4999,9 @@
           "lastName" : {
             "type" : "string"
           },
+          "birthName" : {
+            "type" : "string"
+          },
           "birthDate" : {
             "type" : "string",
             "format" : "date-time"
@@ -5028,6 +5031,9 @@
           "lastName" : {
             "type" : "string"
           },
+          "birthName" : {
+            "type" : "string"
+          },
           "birthDate" : {
             "type" : "string",
             "format" : "date-time"
@@ -5052,6 +5058,9 @@
             "type" : "string"
           },
           "lastName" : {
+            "type" : "string"
+          },
+          "birthName" : {
             "type" : "string"
           },
           "birthDate" : {

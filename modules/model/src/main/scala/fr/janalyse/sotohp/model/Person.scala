@@ -4,6 +4,7 @@ case class Person(
   id: PersonId,
   firstName: FirstName,
   lastName: LastName,
+  birthName: Option[BirthName],
   birthDate: Option[BirthDate],
   email: Option[PersonEmail],
   description: Option[PersonDescription],

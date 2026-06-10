@@ -102,6 +102,7 @@ trait MediaService {
     id: Option[PersonId],
     firstName: FirstName,
     lastName: LastName,
+    birthName: Option[BirthName],
     birthDate: Option[BirthDate],
     email: Option[PersonEmail],
     description: Option[PersonDescription]
@@ -110,6 +111,7 @@ trait MediaService {
     personId: PersonId,
     firstName: FirstName,
     lastName: LastName,
+    birthName: Option[BirthName],
     birthDate: Option[BirthDate],
     email: Option[PersonEmail],
     description: Option[PersonDescription],
@@ -303,19 +305,21 @@ object MediaService {
     id: Option[PersonId],
     firstName: FirstName,
     lastName: LastName,
+    birthName: Option[BirthName],
     birthDate: Option[BirthDate],
     email: Option[PersonEmail],
     description: Option[PersonDescription]
-  ): ZIO[MediaService, ServiceIssue, Person]                                              = ZIO.serviceWithZIO(_.personCreate(id, firstName, lastName, birthDate, email, description))
+  ): ZIO[MediaService, ServiceIssue, Person]                                              = ZIO.serviceWithZIO(_.personCreate(id, firstName, lastName, birthName, birthDate, email, description))
   def personUpdate(
     personId: PersonId,
     firstName: FirstName,
     lastName: LastName,
+    birthName: Option[BirthName],
     birthDate: Option[BirthDate],
     email: Option[PersonEmail],
     description: Option[PersonDescription],
     chosenFaceId: Option[FaceId]
-  ): ZIO[MediaService, ServiceIssue, Option[Person]]                                      = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthDate, email, description, chosenFaceId))
+  ): ZIO[MediaService, ServiceIssue, Option[Person]]                                      = ZIO.serviceWithZIO(_.personUpdate(personId, firstName, lastName, birthName, birthDate, email, description, chosenFaceId))
   def personFaceList(personId: PersonId): ZStream[MediaService, ServiceStreamIssue, Face] = ZStream.serviceWithStream(_.personFaceList(personId))
 
   // -------------------------------------------------------------------------------------------------------------------
