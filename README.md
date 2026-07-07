@@ -86,7 +86,7 @@ The web user interface is quite fast, user-friendly and feature-rich, with behin
 ### The REST API
 ![](docs/screenshots/80-openapi.png)
 
-### The dashboard when opensearhc is enabled
+### The dashboard when opensearch is enabled
 ![](docs/screenshots/99-dashboard.png)
 
 ## Configuration
