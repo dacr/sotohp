@@ -17,6 +17,8 @@ case class Statistics(
   count: Int = 0,
   geoLocalizedCount: Int = 0,
   deductedGeoLocalizedCount: Int = 0,
+  userFixedLocationCount: Int = 0,
+  userFixedLocationCountByCamera: Map[Option[CameraName], Int] = Map.empty, // TODO potentially high memory usage
   normalizedFailureCount: Int = 0,
   facesCount: Int = 0,
   duplicated: Map[Option[String], Int] = Map.empty,     // TODO potentially high memory usage
@@ -26,9 +28,11 @@ case class Statistics(
   missingShootingDate: Int = 0,
   invalidShootingDateCount: Int = 0,
   bagsCount: Map[Option[BagName], Int] = Map.empty, // TODO potentially high memory usage
+  countByCamera: Map[CameraName, Int] = Map.empty,  // camera name undefined photos are ignored
   oldestDigitalShootingDate: Option[OffsetDateTime] = None,
   newestDigitalShootingDate: Option[OffsetDateTime] = None,
-  missing: List[Original] = Nil
+  missing: List[Original] = Nil,
+  notLoadable: List[Original] = Nil
 )
 
 object Statistics extends CommonsCLI {
@@ -44,6 +48,7 @@ object Statistics extends CommonsCLI {
 
   val shootingDateMinimumValidYear = 1826 // https://en.wikipedia.org/wiki/History_of_photography
   // val digitalShootingDateMinimumValidYear = 1989 // https://en.wikipedia.org/wiki/Digital_camera
+  val focalRangeStep = 5
 
   def updateStats(stats: Statistics, mediaTuple: MediaTuple) = {
     val media = mediaTuple.media
@@ -67,6 +72,16 @@ object Statistics extends CommonsCLI {
       val updatedCount                     = stats.count + 1
       val updatedGeolocalizedCount         = stats.geoLocalizedCount + (if (place.isDefined) 1 else 0)
       val updatedDeductedGeoLocalizedCount = stats.deductedGeoLocalizedCount + (if (media.deductedLocation.isDefined) 1 else 0)
+
+      // a location is considered "fixed" when the original carried its own GPS and the user overrode it
+      val isUserFixedLocation                    = media.original.location.isDefined && media.userDefinedLocation.isDefined
+      val updatedUserFixedLocationCount          = stats.userFixedLocationCount + (if (isUserFixedLocation) 1 else 0)
+      val updatedUserFixedLocationCountByCamera  =
+        if (!isUserFixedLocation) stats.userFixedLocationCountByCamera
+        else {
+          val camera = media.original.cameraName
+          stats.userFixedLocationCountByCamera + (camera -> (stats.userFixedLocationCountByCamera.getOrElse(camera, 0) + 1))
+        }
       val updatedNormalizedFailureCount    = stats.normalizedFailureCount + (if (hasNormalized) 0 else 1)
       val updatedFacesCount                = stats.facesCount + faces.map(_.faces.size).getOrElse(0)
       val updatedMissingCount              = stats.missingCount + (if (originalFound) 0 else 1)
@@ -78,15 +93,19 @@ object Statistics extends CommonsCLI {
         case None        => fileHash -> 1
         case Some(count) => fileHash -> (count + 1)
       })
-
       val updatedCountByFocal = media.original.focalLength.filter(f => f.selected > 0d && f.selected < 999d) match {
         case None              => stats.countByFocal
         case Some(focalLength) =>
-          val f = (focalLength.selected / 10).toInt * 10
+          val f = (focalLength.selected / focalRangeStep).toInt * focalRangeStep
           stats.countByFocal + (stats.countByFocal.get(f) match {
             case None        => f -> 1
             case Some(count) => f -> (count + 1)
           })
+      }
+
+      val updatedCountByCamera = media.original.cameraName match {
+        case None         => stats.countByCamera
+        case Some(camera) => stats.countByCamera + (camera -> (stats.countByCamera.getOrElse(camera, 0) + 1))
       }
 
       val updatedBagsCount = stats.bagsCount ++ (bags match {
@@ -119,6 +138,8 @@ object Statistics extends CommonsCLI {
         count = updatedCount,
         geoLocalizedCount = updatedGeolocalizedCount,
         deductedGeoLocalizedCount = updatedDeductedGeoLocalizedCount,
+        userFixedLocationCount = updatedUserFixedLocationCount,
+        userFixedLocationCountByCamera = updatedUserFixedLocationCountByCamera,
         normalizedFailureCount = updatedNormalizedFailureCount,
         duplicated = updatedDuplicated,
         countByFocal = updatedCountByFocal,
@@ -128,9 +149,11 @@ object Statistics extends CommonsCLI {
         missingShootingDate = updatedMissingShootingDateCount,
         invalidShootingDateCount = updatedInvalidShootingDateCount,
         bagsCount = updatedBagsCount,
+        countByCamera = updatedCountByCamera,
         oldestDigitalShootingDate = updatedOldestValidTimestamp,
         newestDigitalShootingDate = updatedNewestValidTimestamp,
-        missing = if (originalFound) stats.missing else media.original :: stats.missing
+        missing = if (originalFound) stats.missing else media.original :: stats.missing,
+        notLoadable = if (hasNormalized) stats.notLoadable else media.original :: stats.notLoadable
       )
     }
   }
@@ -144,6 +167,11 @@ object Statistics extends CommonsCLI {
       case (Some(oldest), Some(newest)) => (MONTHS.between(oldest, newest), YEARS.between(oldest, newest))
       case _                            => (0, 0)
     }
+    val focals =
+      stats.countByFocal
+        .toList
+        .filter(_._2 >= 1000)
+        .sortBy(- _._2)
     for {
       _ <- Console.printLine("-----------------------------------------------------------------------------------------")
       _ <- ZIO.foreachDiscard(stats.missing)(original => Console.printLine(s"${RED}Missing original : ${original.mediaPath.path}$RESET"))
@@ -156,6 +184,12 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine(s"${GREEN}- $facesCount people faces$RESET")
       _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount - deductedGeoLocalizedCount} without GPS infos)$RESET")
       _ <- Console.printLine(s"${YELLOW}  - ${deductedGeoLocalizedCount} deducted GPS info from time/space nearby photos$RESET")
+      _ <- Console.printLine(s"${YELLOW}- $userFixedLocationCount user-fixed GPS locations (original GPS overridden by the user)$RESET").when(userFixedLocationCount > 0)
+      _ <- ZIO
+             .foreachDiscard(userFixedLocationCountByCamera.toList.sortBy((_, cnt) => -cnt)) { (camera, cnt) =>
+               Console.printLine(s"${YELLOW}  - ${camera.map(_.text).getOrElse("unknown camera")} : $cnt$RESET")
+             }
+             .when(userFixedLocationCount > 0)
       _ <- Console.printLine(s"${YELLOW}- $duplicatedCount duplicated photos$RESET").when(duplicatedCount > 0)
       _ <- Console.printLine(s"${YELLOW}- $missingShootingDate photos without shooting date (coming from camera or user given)$RESET").when(missingShootingDate > 0)
       _ <- Console.printLine(s"${YELLOW}- $modifiedCount modified originals$RESET").when(modifiedCount > 0)
@@ -163,9 +197,13 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine(s"${RED}- $missingCount missing originals !!$RESET").when(missingCount > 0)
       _ <- Console.printLine(s"${RED}- $invalidShootingDateCount invalid shooting date year (< $shootingDateMinimumValidYear)$RESET").when(invalidShootingDateCount > 0)
       _ <- Console.printLine(s"${RED}- $normalizedFailureCount not loadable photos (probably not supported format or corrupted)$RESET").when(normalizedFailureCount > 0)
+      _ <- ZIO.foreachDiscard(stats.notLoadable)(original => Console.printLine(s"${RED}  - ${original.absoluteMediaPath}$RESET"))
+      _ <- Console.printLine("-----------------------------------------------------------------------------------------")
+      _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo count by camera :$RESET")
+      _ <- Console.printLine(s"${GREEN}${stats.countByCamera.toList.sortBy((_, c) => -c).map { case (camera, c) => s"${camera.text} : $c" }.mkString("\n")}$RESET")
       _ <- Console.printLine("-----------------------------------------------------------------------------------------")
       _ <- Console.printLine(s"${UNDERLINED}${BLUE}Photo count by focal length :$RESET")
-      _ <- Console.printLine(s"${GREEN}${stats.countByFocal.toList.sortBy(_._1).map { case (f, c) => s"${f}mm : $c" }.mkString("\n")}$RESET")
+      _ <- Console.printLine(s"${GREEN}${focals.map { case (f, c) => s"${f}->${f+focalRangeStep-1}mm : $c" }.mkString("\n")}$RESET")
     } yield stats
   }
 
