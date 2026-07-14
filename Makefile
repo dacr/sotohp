@@ -17,8 +17,23 @@ run-face-fix:
 run-stats:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
+run-gps-fix:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GpsLocationFix
+
 run-reindex:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Reindex
+
+run-google-photos-sync:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GooglePhotosSync
+
+run-google-photos-sync-test:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GooglePhotosSync --portfolio="Photos de rue" --execute
+
+run-portfolio-video:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.PortfolioVideoGenerator
+
+run-portfolio-video-test:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.PortfolioVideoGenerator --portfolio="Photos de rue" --output=/tmp/sotohp-videos
 
 check-updates:
 	mill mill.javalib.Dependency/showUpdates
