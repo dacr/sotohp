@@ -54,6 +54,9 @@ export function initPortfolios(context) {
     showPortfoliosListView();
     loadPortfolios({ force: true });
   });
+  wireOnce(document.getElementById('portfolio-refresh'), 'click', () => {
+    if (currentPortfolio) openPortfolioDetail(currentPortfolio.id);
+  });
   wireOnce(document.getElementById('portfolio-view'), 'click', () => {
     if (!currentPortfolio || !(currentPortfolio.assets || []).length) {
       showWarning('No asset in this portfolio');

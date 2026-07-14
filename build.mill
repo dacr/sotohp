@@ -143,7 +143,11 @@ object `user-interfaces` extends Module {
       // mvn"dev.zio::zio-logging-slf4j2-bridge:2.5.1",
       // mvn"ch.qos.logback:logback-classic:1.5.21",
       // mvn"com.github.haifengl:smile-core:5.0.0"
-      mvn"com.github.haifengl:smile-core:6.1.0"
+      mvn"com.github.haifengl:smile-core:6.1.0",
+      mvn"com.softwaremill.sttp.client4::zio:4.0.24",
+      mvn"com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-core:2.38.14",
+      mvn"com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-macros:2.38.14",
+      mvn"org.apache.commons:commons-imaging:1.0.0-alpha6"
     )
   }
 

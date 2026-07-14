@@ -1102,6 +1102,20 @@ class MediaServiceLive private (
       .withFieldConst(_.assets, assets)
       .transform
 
+  // Assets ordered by the shoot date of their media, oldest first;
+  // assets whose media is unknown are pushed to the end.
+  private def sortAssetsByShootDate(daoAssets: List[DaoAsset]) =
+    ZIO
+      .foreach(daoAssets) { daoAsset =>
+        collections.medias
+          .fetch(daoAsset.originalId)
+          .map(maybeDaoMedia => maybeDaoMedia.map(_.timestamp) -> daoAsset)
+      }
+      .map(
+        _.sortBy((timestamp, _) => timestamp.map(_.toInstant.toEpochMilli).getOrElse(Long.MaxValue))
+          .map((_, daoAsset) => daoAsset.transformInto[Asset])
+      )
+
   override def portfolioList(): Stream[ServiceStreamIssue, Portfolio] = {
     collections.portfolios
       .stream()
@@ -1109,9 +1123,10 @@ class MediaServiceLive private (
       .mapZIO { daoPortfolio =>
         collections.portfolioAssets
           .fetch(daoPortfolio.id)
+          .flatMap(sortAssetsByShootDate)
           .mapBoth(
             err => ServiceStreamInternalIssue(s"Couldn't fetch portfolio assets : $err"),
-            daoAssets => daoPortfolio2Portfolio(daoPortfolio, daoAssets.map(_.transformInto[Asset]))
+            assets => daoPortfolio2Portfolio(daoPortfolio, assets)
           )
       }
   }
@@ -1124,9 +1139,10 @@ class MediaServiceLive private (
       result   <- ZIO.foreach(maybeDao) { dao =>
                     collections.portfolioAssets
                       .fetch(portfolioId)
+                      .flatMap(sortAssetsByShootDate)
                       .mapBoth(
                         err => ServiceDatabaseIssue(s"Couldn't fetch portfolio assets : $err"),
-                        daoAssets => daoPortfolio2Portfolio(dao, daoAssets.map(_.transformInto[Asset]))
+                        assets => daoPortfolio2Portfolio(dao, assets)
                       )
                   }
     } yield result
