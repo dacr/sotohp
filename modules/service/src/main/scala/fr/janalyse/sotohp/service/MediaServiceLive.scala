@@ -23,7 +23,7 @@ import fr.janalyse.sotohp.service.model.*
 import fr.janalyse.sotohp.service.model.SynchronizeAction.{Stop, WaitForCompletion}
 import wvlet.airframe.ulid.ULID
 import zio.*
-import zio.lmdb.{GetErrors, IndexErrors, LMDB, LMDBCodec, LMDBCollection, StorageSystemError, StorageUserError}
+import zio.lmdb.{GetErrors, IdxKey, IndexErrors, LMDB, LMDBCodec, LMDBCollection, StorageSystemError, StorageUserError}
 import zio.lmdb.keycodecs.{KeyCodec, KeyCodecError, KeyTypeId}
 import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
@@ -1936,19 +1936,38 @@ object MediaServiceLive {
 
     // ----------------------------------------------------------------------------------------
     // COLLECTIONS
+    // Indexes are attached with `withDeclaredIndex`: the write path is the same as `withIndexFull`,
+    // and the declared field paths are persisted in the index metadata so the zio-lmdb SQL engine
+    // can serve WHERE/ORDER BY from the indexes. The declared paths must mirror the accessors.
     collectionOriginals            <- lmdb
                                         .collectionCreate[OriginalId, DaoOriginal](originalsCollectionName, false)
-                                        .map(_.withIndexFull(indexOriginalIdByStoreId)((id, original) => List(original.storeId -> id)))
+                                        .flatMap(
+                                          _.withDeclaredIndex(indexOriginalIdByStoreId)(
+                                            from = IdxKey.of(IdxKey.field("storeId")((_, original: DaoOriginal) => original.storeId)),
+                                            to = IdxKey.of(IdxKey.primaryKey)
+                                          )
+                                        )
     collectionStates               <- lmdb
                                         .collectionCreate[OriginalId, DaoState](statesCollectionName, false)
     collectionBags                 <- lmdb
                                         .collectionCreate[BagId, DaoBag](bagsCollectionName, false)
     collectionMedias               <- lmdb
                                         .collectionCreate[OriginalId, DaoMedia](mediasCollectionName, false)
+                                        .flatMap(
+                                          _.withDeclaredIndex(indexOriginalIdByBagId)(
+                                            from = IdxKey.of(IdxKey.fieldOpt("bagId")((_, media: DaoMedia) => media.bagId)),
+                                            to = IdxKey.tuple(IdxKey.field("timestamp")((_, media: DaoMedia) => media.timestamp.toInstant), IdxKey.primaryKey)
+                                          )
+                                        )
+                                        .flatMap(
+                                          _.withDeclaredIndex(indexOriginalIdByTimestamp)(
+                                            from = IdxKey.tuple(IdxKey.field("timestamp")((_, media: DaoMedia) => media.timestamp.toInstant), IdxKey.primaryKey),
+                                            to = IdxKey.of(IdxKey.primaryKey)
+                                          )
+                                        )
                                         .map(
-                                          _.withIndexFull(indexOriginalIdByBagId)((id, media) => media.bagId.map(bagId => bagId -> (media.timestamp.toInstant, media.originalId)).toList)
-                                            .withIndexFull(indexOriginalIdByTimestamp)((id, media) => List((media.timestamp.toInstant, id) -> id))
-                                            .withIndexFull(indexOriginalIdByLocation)((id, media) => media.location.map(l => GEOTools.Location(l.latitude.doubleValue, l.longitude.doubleValue) -> id).toList)
+                                          // geo keys have no declarative planner support yet — kept as an opaque extractor
+                                          _.withIndexFull(indexOriginalIdByLocation)((id, media) => media.location.map(l => GEOTools.Location(l.latitude.doubleValue, l.longitude.doubleValue) -> id).toList)
                                         )
     collectionOwners               <- lmdb.collectionCreate[OwnerId, DaoOwner](ownersCollectionName, false)
     collectionStores               <- lmdb.collectionCreate[StoreId, DaoStore](storesCollectionName, false)
@@ -1956,11 +1975,14 @@ object MediaServiceLive {
     collectionClassifications      <- lmdb.collectionCreate[OriginalId, DaoOriginalClassifications](classificationsCollectionName, false)
     collectionDetectedFaces        <- lmdb
                                         .collectionCreate[FaceId, DaoDetectedFace](detectedFacesCollectionName, false)
-                                        .map(
-                                          _.withIndexFull(indexFaceIdByPersonId)((faceId, face) =>
-                                            face.identifiedPersonId
-                                              .orElse(face.inferredIdentifiedPersonId)
-                                              .map(personId => personId -> (face.timestamp.toInstant, faceId))
+                                        .flatMap(
+                                          _.withDeclaredIndex(indexFaceIdByPersonId)(
+                                            from = IdxKey.of(
+                                              IdxKey.coalesce("identifiedPersonId", "inferredIdentifiedPersonId")((_, face: DaoDetectedFace) =>
+                                                face.identifiedPersonId.orElse(face.inferredIdentifiedPersonId)
+                                              )
+                                            ),
+                                            to = IdxKey.tuple(IdxKey.field("timestamp")((_, face: DaoDetectedFace) => face.timestamp.toInstant), IdxKey.primaryKey)
                                           )
                                         )
     collectionOriginalFoundFaces   <- lmdb.collectionCreate[OriginalId, DaoOriginalFaces](facesCollectionName, false)

@@ -370,3 +370,114 @@ WHERE year(timestamp) BETWEEN 2018 AND 2020
 GROUP BY y
 ORDER BY y;
 ```
+
+## Index-served queries (zio-lmdb ≥ 3.0.0-RC3)
+
+Since the indexes are attached with `withDeclaredIndex`, their mappings are persisted and the SQL
+engine plans `WHERE`/`ORDER BY` against them instead of scanning the collection. `SHOW INDEXES`
+shows which fields each index serves:
+
+```
+lmdb(sotohp-v2)> SHOW INDEXES;
+name                  | source        | on
+----------------------+---------------+---------------------------------------------------------
+faceIdByPersonId      | detectedFaces | coalesce(identifiedPersonId, inferredIdentifiedPersonId)
+originalIdByBagId     | medias        | bagId
+originalIdByLocation  |               |
+originalIdByPosition  |               |
+originalIdByStoreId   | originals     | storeId
+originalIdByTimestamp | medias        | timestamp, _key
+```
+
+`EXPLAIN <select>` shows the access path the planner picks. Only `column <op> literal` conjuncts
+combined with `AND` are pushable — an `OR` or a function call falls back to a full scan.
+
+### photos of a time range, in chronological order
+
+`timestamp BETWEEN … AND …` plus `ORDER BY timestamp` rides `originalIdByTimestamp`: the scan is a
+byte range over the index and already sorted, so `LIMIT n` touches ~n index entries instead of the
+whole 140k-media collection (~0.1s instead of ~2s):
+
+```
+lmdb(sotohp-v2)> EXPLAIN SELECT _key, timestamp FROM medias
+> WHERE timestamp BETWEEN '2024-06-01' AND '2024-07-01'
+> ORDER BY timestamp LIMIT 5;
+step   | detail
+-------+-----------------------------------------------------------------------------
+access | index range scan on originalIdByTimestamp [range(timestamp between) ordered]
+lookup | fetch matching records from medias by primary key
+order  | scan order matches ORDER BY (no sort)
+filter | none
+
+lmdb(sotohp-v2)> SELECT _key, timestamp FROM medias
+> WHERE timestamp BETWEEN '2024-06-01' AND '2024-07-01'
+> ORDER BY timestamp LIMIT 5;
+_key                                 | timestamp
+-------------------------------------+---------------------
+730d7f9d-f269-5fe4-affe-906af212c03a | 2024-06-01T05:42:05Z
+cf366e39-0d21-511a-81b1-e0e336b0c5c1 | 2024-06-01T05:43:01Z
+54c01411-1edd-57be-bd98-472591f899fa | 2024-06-01T05:56:05Z
+d417f9bf-b2f6-5185-b6fe-c5bcba75fb1f | 2024-06-01T05:58:40Z
+e38e16b2-cdc7-5eaa-a3ae-17b8cbcbb146 | 2024-06-01T05:59:26Z
+```
+
+### all faces of a person
+
+`faceIdByPersonId` is declared on `coalesce(identifiedPersonId, inferredIdentifiedPersonId)`, so an
+equality on `identifiedPersonId` (the first coalesced field) is served by the index; the predicate
+is re-checked per row because the coalesce scan is a superset (it also indexes inferred-only faces):
+
+```
+lmdb(sotohp-v2)> EXPLAIN SELECT count(*) AS faces FROM detectedFaces
+> WHERE identifiedPersonId = '01K9HE6YV4F2M0ZBYQHCCV9BVR';
+step   | detail
+-------+--------------------------------------------------------------
+access | index range scan on faceIdByPersonId [eq(identifiedPersonId)]
+lookup | fetch matching records from detectedFaces by primary key
+filter | identifiedPersonId = '01K9HE6YV4F2M0ZBYQHCCV9BVR'
+
+lmdb(sotohp-v2)> SELECT count(*) AS faces FROM detectedFaces
+> WHERE identifiedPersonId = '01K9HE6YV4F2M0ZBYQHCCV9BVR';
+faces
+-----
+3821
+```
+
+The index entries are `(timestamp, faceId)` pairs, so the same index also answers "a person's faces
+in chronological order" without sorting:
+
+```
+SELECT _key, timestamp FROM detectedFaces
+WHERE identifiedPersonId = '01K9HE6YV4F2M0ZBYQHCCV9BVR'
+ORDER BY timestamp LIMIT 20;
+```
+
+### originals of a store
+
+```
+lmdb(sotohp-v2)> SELECT count(*) AS n FROM originals
+> WHERE storeId = '3c98c69c-0db6-4dcf-8d25-fddabe726689';
+n
+-----
+15873
+```
+
+(`EXPLAIN` shows `index range scan on originalIdByStoreId [eq(storeId)]`.)
+
+### content of a bag, in chronological order
+
+`originalIdByBagId` maps a bag to its medias as `(timestamp, originalId)` pairs, so listing a bag
+chronologically is a single index-key scan with no sort:
+
+```
+SELECT _key, timestamp FROM medias
+WHERE bagId = 'c6a9333e-457d-4fa4-a66f-3daf7f9683fc'
+ORDER BY timestamp LIMIT 5;
+```
+
+> **Warning — stale index**: index-served queries are only as correct as the index contents. As of
+> 2026-07-17 `originalIdByBagId` holds 10 219 entries while 150 295 medias carry a `bagId` (bulk bag
+> assignment bypassed the index updaters), so bag queries through the index return incomplete
+> results. Run `collectionMedias.rebuildIndexes()` once (same pattern as the positional-index
+> backfill) to resynchronize. Also remember that SQL `INSERT`/`UPDATE`/`DELETE` do not maintain
+> indexes — mutate through the application.

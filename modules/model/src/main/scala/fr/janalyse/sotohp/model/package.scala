@@ -317,6 +317,10 @@ package object model {
 
   object FirstName {
     def apply(name: String): FirstName = name
+
+    extension (firstName: FirstName) {
+      def text: String = firstName
+    }
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -324,6 +328,10 @@ package object model {
 
   object LastName {
     def apply(name: String): LastName = name
+
+    extension (lastName: LastName) {
+      def text: String = lastName
+    }
   }
 
   // -------------------------------------------------------------------------------------------------------------------
