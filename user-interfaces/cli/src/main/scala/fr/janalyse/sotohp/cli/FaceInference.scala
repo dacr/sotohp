@@ -6,9 +6,11 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.{FacesDetectionIssue, NormalizeProcessor}
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
+import fr.janalyse.sotohp.service.MediaServiceLive.given // brings `KeyCodec[FaceId]` into scope, needed by `LMDBVectorIndex.create[FaceId]`
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
+import zio.lmdb.vector.{LMDBVectorIndex, VectorMetric}
 
 import java.awt.image.BufferedImage
 import java.time.temporal.ChronoUnit
@@ -29,27 +31,6 @@ object FaceInference extends CommonsCLI {
         MediaService.live,
         Scope.default
       )
-
-  object CosineDistance {
-    def d(f1: Array[Float], f2: Array[Float]): Double = {
-      var dot        = 0.0
-      var n1         = 0.0
-      var n2         = 0.0
-      var i          = 0
-      while (i < f1.length) {
-        val v1 = f1(i)
-        val v2 = f2(i)
-        dot += v1 * v2
-        n1 += v1 * v1
-        n2 += v2 * v2
-        i += 1
-      }
-      val similarity = dot / (Math.sqrt(n1) * Math.sqrt(n2))
-      1.0 - similarity
-    }
-  }
-
-  val distance = CosineDistance
 
   def fixFaceWithMissingFeatures(): ZIO[MediaService, Exception, Unit] = {
     MediaService
@@ -93,6 +74,11 @@ object FaceInference extends CommonsCLI {
   val maxMatchDistance        = 0.16
   val maxIgnoredMatchDistance = 0.20
 
+  // How many nearest known faces we pull from the vector index before applying `maxMatchDistance`/consensus.
+  // Comfortably more than the 2 candidates consensus actually needs, so a threshold cutoff can never hide a
+  // legitimate match sitting just behind a closer-but-too-far neighbor.
+  val nearestCandidatesToConsider = 8
+
   // Faces explicitly marked as ignored by the user. Their features are used to veto inference:
   // an unidentified face too near an ignored one gets no inferred person.
   def featuresForIgnoredFaces(): ZIO[MediaService, Exception, Chunk[(Face, FaceFeatures)]] = {
@@ -107,70 +93,62 @@ object FaceInference extends CommonsCLI {
   }
 
   // A face is "too near an ignored face" when its features are within the match distance of any ignored face.
+  // Only ~900 entries in practice, so a plain scan stays cheap - not worth indexing.
   def isNearIgnoredFace(ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): Boolean = {
     ignoredFaces.exists { (ignoredFace, ignoredFeatures) =>
-      ignoredFace.faceId != face.faceId && distance.d(faceFeatures.features, ignoredFeatures.features) <= maxIgnoredMatchDistance
+      ignoredFace.faceId != face.faceId && VectorMetric.Cosine.distance(faceFeatures.features, ignoredFeatures.features) <= maxIgnoredMatchDistance
     }
   }
 
-  def identifyFace(knownFaces: Chunk[(Face, FaceFeatures)], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
-    val (knownFace, knownFaceFeature) = knownFaces.minBy((knownFace, knownFaceFeatures) => distance.d(faceFeatures.features, knownFaceFeatures.features))
-    val foundDistance                 = distance.d(faceFeatures.features, knownFaceFeature.features)
-
+  def identifyFace(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     for {
-      now                <- Clock.currentDateTime
-      inferredPersonId    = knownFace.identifiedPersonId
-                              .filter(_ => foundDistance < maxMatchDistance)
-                              .filterNot(_ => isNearIgnoredFace(ignoredFaces)(face, faceFeatures))
-      updatedFace         = face.copy(
-                              inferredIdentifiedPersonId = inferredPersonId,
-                              inferredTimestamp = inferredPersonId.map(_ => now)
-                            )
+      nearest         <- vectorIndex.searchNearest(faceFeatures.features, k = 1).orDieWith(err => new RuntimeException(err.toString))
+      now             <- Clock.currentDateTime
+      inferredPersonId = nearest.headOption
+                           .flatMap { (nearestFaceId, foundDistance) =>
+                             knownFaceById(nearestFaceId).identifiedPersonId.filter(_ => foundDistance < maxMatchDistance)
+                           }
+                           .filterNot(_ => isNearIgnoredFace(ignoredFaces)(face, faceFeatures))
+      updatedFace       = face.copy(
+                            inferredIdentifiedPersonId = inferredPersonId,
+                            inferredTimestamp = inferredPersonId.map(_ => now)
+                          )
       isFreshlyIdentified = (
                               updatedFace.inferredIdentifiedPersonId.isDefined
                                 && face.identifiedPersonId.isEmpty
                                 && face.inferredIdentifiedPersonId.isEmpty
                             )
-      _                  <- MediaService
-                              .faceUpdate(face.faceId, updatedFace)
-                              .when(
-                                //updatedFace != face
-                                updatedFace.inferredIdentifiedPersonId != face.inferredIdentifiedPersonId
-                              )
+      _                <- MediaService
+                            .faceUpdate(face.faceId, updatedFace)
+                            .when(
+                              //updatedFace != face
+                              updatedFace.inferredIdentifiedPersonId != face.inferredIdentifiedPersonId
+                            )
     } yield isFreshlyIdentified
   }
 
-  def identifyFaceWithConsensus(knownFaces: Chunk[(Face, FaceFeatures)], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
-    val shortests =
-      knownFaces
-        .map((knownFace, knownFaceFeatures) => (knownFace.identifiedPersonId.get, knownFaceFeatures, distance.d(faceFeatures.features, knownFaceFeatures.features)))
-        .filter { (_, _, distance) => distance <= maxMatchDistance }
-        .sortBy { (_, _, distance) => distance }
-        .take(2)
-
-//    val bestCandidate:Option[PersonId] = {
-//      shortests
-//        .groupBy{(personId, faceFeatures, distance) => personId}
-//        .maxByOption{(personId, faces) => (faces.size, 1d-faces.map{(_,_,dist)=>dist}.min)}
-//        .map{ (personId, faces) => personId}
-//    }
-
-    val bestCandidate: Option[(id: PersonId, dist: Double)] = {
-      // veto inference when the face is too near a face the user marked as ignored
-      if (isNearIgnoredFace(ignoredFaces)(face, faceFeatures)) None
-      else
-        shortests
-          .groupBy { (personId, _, _) => personId } match {
-          case result if result.size == 1 => // only one person identified, consensus reached
-            result.values.head
-              .minByOption((personId, _, dist) => dist) // select the best found similarity distance
-              .map((personId, _, dist) => personId -> dist)
-
-          case _ => None
-        }
-    }
-
+  def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     for {
+      nearest  <- vectorIndex.searchNearest(faceFeatures.features, k = nearestCandidatesToConsider).orDieWith(err => new RuntimeException(err.toString))
+      shortests = nearest
+                    .collect { case (faceId, dist) if dist <= maxMatchDistance => (knownFaceById(faceId).identifiedPersonId.get, dist) }
+                    .take(2)
+
+      bestCandidate: Option[(id: PersonId, dist: Double)] = {
+        // veto inference when the face is too near a face the user marked as ignored
+        if (isNearIgnoredFace(ignoredFaces)(face, faceFeatures)) None
+        else
+          shortests
+            .groupBy { (personId, _) => personId } match {
+            case result if result.size == 1 => // only one person identified, consensus reached
+              result.values.head
+                .minByOption((_, dist) => dist) // select the best found similarity distance
+                .map((personId, dist) => personId -> dist)
+
+            case _ => None
+          }
+      }
+
       now                <- Clock.currentDateTime
       inferredPersonId    = bestCandidate.map(_.id)
       inferredTimestamp   = inferredPersonId match {
@@ -198,6 +176,26 @@ object FaceInference extends CommonsCLI {
     } yield isFreshlyIdentified
   }
 
+  // A scratch vector index rebuilt from the current `knownFaces` on every run (mirrors how `knownFaces` itself is
+  // always freshly recomputed) - dropped again once the run is done, so it doesn't linger as clutter in the database.
+  private val vectorIndexCollectionName = "faceInferenceKnownFacesVectorIndexTmp"
+
+  def withKnownFacesVectorIndex[R, E >: VectorIndexAcquireFailure, A](knownFaces: Chunk[(Face, FaceFeatures)])(use: LMDBVectorIndex[FaceId] => ZIO[R, E, A]): ZIO[R & LMDB, E, A] = {
+    val dimension = knownFaces.headOption.map((_, features) => features.features.length).getOrElse(512)
+    ZIO.acquireReleaseWith(
+      LMDB.collectionDrop(vectorIndexCollectionName).ignore *>
+        LMDBVectorIndex
+          .create[FaceId](vectorIndexCollectionName, dimension, VectorMetric.Cosine, failIfExists = false)
+          .mapError(err => VectorIndexAcquireFailure(err.toString))
+          .tap(index => ZIO.foreachDiscard(knownFaces) { (face, features) => index.insert(face.faceId, features.features) }.orDieWith(err => new RuntimeException(err.toString)))
+          // `tocheck` runs many searches back-to-back against this same, now-static set of known faces, so warm() once
+          // up front instead of letting every searchNearest re-stream the backing collection from LMDB.
+          .tap(index => index.warm().orDieWith(err => new RuntimeException(err.toString)))
+    )(index => LMDB.collectionDrop(index.collection.name).orDieWith(err => new RuntimeException(err.toString)))(use)
+  }
+
+  case class VectorIndexAcquireFailure(message: String) extends Exception(message)
+
   // -------------------------------------------------------------------------------------------------------------------
   val logic = ZIO.logSpan("Infer person identification from faces features and already identified faces") {
     for {
@@ -219,13 +217,16 @@ object FaceInference extends CommonsCLI {
       _                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")
       _                  <- Console.printLine(s"${ignoredFaces.size} ignored faces (used to veto inference)")
       _                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
-      newIdentifiedCount <- zio.stream.ZStream
-                              .from(tocheck)
-                              // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
-                              // .mapZIO((face, faceFeatures) => identifyFace(knownFaces, ignoredFaces)(face, faceFeatures))
-                              .mapZIO((face, faceFeatures) => identifyFaceWithConsensus(knownFaces, ignoredFaces)(face, faceFeatures))
-                              .filter(_ == true)
-                              .runCount
+      knownFaceById       = knownFaces.map((face, _) => face.faceId -> face).toMap
+      newIdentifiedCount <- withKnownFacesVectorIndex(knownFaces) { vectorIndex =>
+                               zio.stream.ZStream
+                                 .from(tocheck)
+                                 // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
+                                 // .mapZIO((face, faceFeatures) => identifyFace(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
+                                 .mapZIO((face, faceFeatures) => identifyFaceWithConsensus(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
+                                 .filter(_ == true)
+                                 .runCount
+                             }
       _                  <- Console.printLine(s"$newIdentifiedCount new faces inferred")
       _                  <- ZIO.logInfo(s"done")
     } yield ()
