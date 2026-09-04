@@ -71,13 +71,29 @@ object FaceInference extends CommonsCLI {
   }
 
   // Maximum cosine distance below which two faces are considered close enough to be the same person.
-  val maxMatchDistance        = 0.16
+  //
+  // These values come from `FaceInferenceEvaluate`, which scores a rule against the faces a human has already
+  // confirmed. Against the previous setting (0.16, plus "the two closest faces must name the same person"), this one
+  // won on every axis it measured: 99.76% vs 98.73% precision on people who are in the library, 76% vs 68% of them
+  // identified at all, and - the measurement that matters most for a threshold this loose - 2.36% vs 5.08% of faces
+  // belonging to someone *not* in the library wrongly given a name. Raising the threshold alone would have tripled
+  // that last number; it is the runner-up margin below that pays for the extra reach.
+  val maxMatchDistance        = 0.24
   val maxIgnoredMatchDistance = 0.20
 
-  // How many nearest known faces we pull from the vector index before applying `maxMatchDistance`/consensus.
-  // Comfortably more than the 2 candidates consensus actually needs, so a threshold cutoff can never hide a
-  // legitimate match sitting just behind a closer-but-too-far neighbor.
-  val nearestCandidatesToConsider = 8
+  // The winning person must be at least this much closer than the *second* person in the candidate list. Lowering it
+  // to 0.04 trades some of the safety back for reach (82% identified, 4.76% of strangers misnamed).
+  val minRunnerUpMargin = 0.06
+
+  // A person is scored by the mean distance of their closest few faces rather than by their single closest one, so one
+  // unusually flattering photo can't win on its own.
+  val facesPerPersonConsidered = 3
+
+  // Wide enough that several *people* show up among the candidates - a person with thousands of enrolled faces would
+  // otherwise fill the whole list and leave no runner-up to compare against. `ef` matches what the evaluation used, so
+  // the numbers above are the ones this actually delivers.
+  val nearestCandidatesToConsider = 50
+  val candidateSearchEf           = 256
 
   // How many unknown faces are matched against the index concurrently.
   val searchParallelism = java.lang.Runtime.getRuntime.availableProcessors()
@@ -94,6 +110,8 @@ object FaceInference extends CommonsCLI {
                        }
     } yield featureByFace.flatten
   }
+
+  def mean(values: Iterable[Double]): Double = if (values.isEmpty) Double.MaxValue else values.sum / values.size
 
   // A face is "too near an ignored face" when its features are within the match distance of any ignored face.
   // Only ~900 entries in practice, so a plain scan stays cheap - not worth indexing.
@@ -132,23 +150,27 @@ object FaceInference extends CommonsCLI {
 
   def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     for {
-      nearest                                            <- vectorIndex.searchApproximate(faceFeatures.features, k = nearestCandidatesToConsider).orDieWith(err => new RuntimeException(err.toString))
-      shortests                                           = nearest
-                                                              .collect { case (faceId, dist) if dist <= maxMatchDistance => (knownFaceById(faceId).identifiedPersonId.get, dist) }
-                                                              .take(2)
+      nearest                                            <- vectorIndex.searchApproximate(faceFeatures.features, k = nearestCandidatesToConsider, ef = Some(candidateSearchEf)).orDieWith(err => new RuntimeException(err.toString))
+      // Score each *person* among the candidates rather than each face: whoever owns the closest faces overall, not
+      // whoever happens to own the single closest one. That keeps someone with thousands of enrolled photos from
+      // crowding everybody else out of the shortlist purely by weight of numbers.
+      rankedPersons                                       = nearest
+                                                              .flatMap((faceId, distance) => knownFaceById.get(faceId).flatMap(_.identifiedPersonId).map(personId => personId -> distance))
+                                                              .groupBy((personId, _) => personId)
+                                                              .toVector
+                                                              .map((personId, theirs) => personId -> mean(theirs.map((_, distance) => distance).sorted.take(facesPerPersonConsidered)))
+                                                              .sortBy((_, distance) => distance)
 
       bestCandidate: Option[(id: PersonId, dist: Double)] = {
         // veto inference when the face is too near a face the user marked as ignored
         if (isNearIgnoredFace(ignoredFaces)(face, faceFeatures)) None
         else
-          shortests
-            .groupBy { (personId, _) => personId } match {
-            case result if result.size == 1 => // only one person identified, consensus reached
-              result.values.head
-                .minByOption((_, dist) => dist) // select the best found similarity distance
-                .map((personId, dist) => personId -> dist)
-
-            case _ => None
+          rankedPersons.headOption.flatMap { (bestPerson, bestDistance) =>
+            // Only identify when the runner-up person is clearly further away. Without that gap the face is ambiguous,
+            // and abstaining beats guessing - this is what keeps faces of people who aren't in the library at all from
+            // being handed a name.
+            val runnerUpDistance = rankedPersons.drop(1).headOption.map((_, distance) => distance).getOrElse(Double.MaxValue)
+            Option.when(bestDistance <= maxMatchDistance && (runnerUpDistance - bestDistance) >= minRunnerUpMargin)(bestPerson -> bestDistance)
           }
       }
 
