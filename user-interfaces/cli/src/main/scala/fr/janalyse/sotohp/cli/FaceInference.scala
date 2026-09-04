@@ -10,7 +10,7 @@ import fr.janalyse.sotohp.service.MediaServiceLive.given // brings `KeyCodec[Fac
 import zio.*
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
-import zio.lmdb.vector.{LMDBVectorIndex, VectorMetric}
+import zio.lmdb.vector.{HnswParams, LMDBVectorIndex, VectorMetric}
 
 import java.awt.image.BufferedImage
 import java.time.temporal.ChronoUnit
@@ -79,6 +79,9 @@ object FaceInference extends CommonsCLI {
   // legitimate match sitting just behind a closer-but-too-far neighbor.
   val nearestCandidatesToConsider = 8
 
+  // How many unknown faces are matched against the index concurrently.
+  val searchParallelism = java.lang.Runtime.getRuntime.availableProcessors()
+
   // Faces explicitly marked as ignored by the user. Their features are used to veto inference:
   // an unidentified face too near an ignored one gets no inferred person.
   def featuresForIgnoredFaces(): ZIO[MediaService, Exception, Chunk[(Face, FaceFeatures)]] = {
@@ -102,37 +105,37 @@ object FaceInference extends CommonsCLI {
 
   def identifyFace(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     for {
-      nearest         <- vectorIndex.searchNearest(faceFeatures.features, k = 1).orDieWith(err => new RuntimeException(err.toString))
-      now             <- Clock.currentDateTime
-      inferredPersonId = nearest.headOption
-                           .flatMap { (nearestFaceId, foundDistance) =>
-                             knownFaceById(nearestFaceId).identifiedPersonId.filter(_ => foundDistance < maxMatchDistance)
-                           }
-                           .filterNot(_ => isNearIgnoredFace(ignoredFaces)(face, faceFeatures))
-      updatedFace       = face.copy(
-                            inferredIdentifiedPersonId = inferredPersonId,
-                            inferredTimestamp = inferredPersonId.map(_ => now)
-                          )
+      nearest            <- vectorIndex.searchNearest(faceFeatures.features, k = 1).orDieWith(err => new RuntimeException(err.toString))
+      now                <- Clock.currentDateTime
+      inferredPersonId    = nearest.headOption
+                              .flatMap { (nearestFaceId, foundDistance) =>
+                                knownFaceById(nearestFaceId).identifiedPersonId.filter(_ => foundDistance < maxMatchDistance)
+                              }
+                              .filterNot(_ => isNearIgnoredFace(ignoredFaces)(face, faceFeatures))
+      updatedFace         = face.copy(
+                              inferredIdentifiedPersonId = inferredPersonId,
+                              inferredTimestamp = inferredPersonId.map(_ => now)
+                            )
       isFreshlyIdentified = (
                               updatedFace.inferredIdentifiedPersonId.isDefined
                                 && face.identifiedPersonId.isEmpty
                                 && face.inferredIdentifiedPersonId.isEmpty
                             )
-      _                <- MediaService
-                            .faceUpdate(face.faceId, updatedFace)
-                            .when(
-                              //updatedFace != face
-                              updatedFace.inferredIdentifiedPersonId != face.inferredIdentifiedPersonId
-                            )
+      _                  <- MediaService
+                              .faceUpdate(face.faceId, updatedFace)
+                              .when(
+                                // updatedFace != face
+                                updatedFace.inferredIdentifiedPersonId != face.inferredIdentifiedPersonId
+                              )
     } yield isFreshlyIdentified
   }
 
   def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     for {
-      nearest  <- vectorIndex.searchNearest(faceFeatures.features, k = nearestCandidatesToConsider).orDieWith(err => new RuntimeException(err.toString))
-      shortests = nearest
-                    .collect { case (faceId, dist) if dist <= maxMatchDistance => (knownFaceById(faceId).identifiedPersonId.get, dist) }
-                    .take(2)
+      nearest                                            <- vectorIndex.searchApproximate(faceFeatures.features, k = nearestCandidatesToConsider).orDieWith(err => new RuntimeException(err.toString))
+      shortests                                           = nearest
+                                                              .collect { case (faceId, dist) if dist <= maxMatchDistance => (knownFaceById(faceId).identifiedPersonId.get, dist) }
+                                                              .take(2)
 
       bestCandidate: Option[(id: PersonId, dist: Double)] = {
         // veto inference when the face is too near a face the user marked as ignored
@@ -170,7 +173,7 @@ object FaceInference extends CommonsCLI {
       _                  <- MediaService
                               .faceUpdate(face.faceId, updatedFace)
                               .when(
-                                //updatedFace != face
+                                // updatedFace != face
                                 updatedFace.inferredIdentifiedPersonId != face.inferredIdentifiedPersonId
                               )
     } yield isFreshlyIdentified
@@ -187,10 +190,22 @@ object FaceInference extends CommonsCLI {
         LMDBVectorIndex
           .create[FaceId](vectorIndexCollectionName, dimension, VectorMetric.Cosine, failIfExists = false)
           .mapError(err => VectorIndexAcquireFailure(err.toString))
-          .tap(index => ZIO.foreachDiscard(knownFaces) { (face, features) => index.insert(face.faceId, features.features) }.orDieWith(err => new RuntimeException(err.toString)))
-          // `tocheck` runs many searches back-to-back against this same, now-static set of known faces, so warm() once
-          // up front instead of letting every searchNearest re-stream the backing collection from LMDB.
-          .tap(index => index.warm().orDieWith(err => new RuntimeException(err.toString)))
+          .tap(index =>
+            ZIO
+              .foreachDiscard(knownFaces) { (face, features) => index.insert(face.faceId, features.features) }
+              .orDieWith(err => new RuntimeException(err.toString))
+              .timed
+              .flatMap((elapsed, _) => ZIO.logInfo(s"vector index loaded with ${knownFaces.size} known faces in ${elapsed.toSeconds}s"))
+          )
+          // `tocheck` runs one search per unknown face against this same, now-static set of known faces - far more searches
+          // than there are vectors - so an approximate index pays for its build many times over.
+          .tap(index =>
+            index
+              .buildApproximateIndex(HnswParams(m = 16, efConstruction = 100, efSearch = 64))
+              .orDieWith(err => new RuntimeException(err.toString))
+              .timed
+              .flatMap((elapsed, _) => ZIO.logInfo(s"approximate (HNSW) index built in ${elapsed.toSeconds}s"))
+          )
     )(index => LMDB.collectionDrop(index.collection.name).orDieWith(err => new RuntimeException(err.toString)))(use)
   }
 
@@ -201,9 +216,12 @@ object FaceInference extends CommonsCLI {
     for {
       // _              <- fixFaceWithMissingFeatures()
       // _                  <- ZIO.attemptBlocking(Thread.sleep(120.minutes)) // TODO temporary hack top be removed
+      loadStarted    <- Clock.nanoTime
       knownFaces     <- featuresForIdentifiedFaces()
       unknownFaces   <- featuresForUnknowFaces()
       ignoredFaces   <- featuresForIgnoredFaces()
+      loadFinished   <- Clock.nanoTime
+      _              <- ZIO.logInfo(s"faces and features loaded from the database in ${(loadFinished - loadStarted) / 1000000000L}s")
       now            <- Clock.currentDateTime
       alreadyInferred = unknownFaces
                           .filter((face, _) => face.inferredIdentifiedPersonId.isDefined)
@@ -212,23 +230,28 @@ object FaceInference extends CommonsCLI {
       // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty)
       // .filter((face, _) => face.timestamp.isAfter(now.minus(20, ChronoUnit.DAYS)))
       // .filter((face, _) => face.timestamp.isAfter(now.minus(6, ChronoUnit.MONTHS)))
-      personsCount       <- MediaService.personList().runCount
-      _                  <- Console.printLine(s"$personsCount people records")
-      _                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")
-      _                  <- Console.printLine(s"${ignoredFaces.size} ignored faces (used to veto inference)")
-      _                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
-      knownFaceById       = knownFaces.map((face, _) => face.faceId -> face).toMap
-      newIdentifiedCount <- withKnownFacesVectorIndex(knownFaces) { vectorIndex =>
-                               zio.stream.ZStream
-                                 .from(tocheck)
-                                 // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
-                                 // .mapZIO((face, faceFeatures) => identifyFace(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
-                                 .mapZIO((face, faceFeatures) => identifyFaceWithConsensus(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
-                                 .filter(_ == true)
-                                 .runCount
-                             }
-      _                  <- Console.printLine(s"$newIdentifiedCount new faces inferred")
-      _                  <- ZIO.logInfo(s"done")
+      personsCount                       <- MediaService.personList().runCount
+      _                                  <- Console.printLine(s"$personsCount people records")
+      _                                  <- Console.printLine(s"${knownFaces.size} identified and confirmed faces")
+      _                                  <- Console.printLine(s"${ignoredFaces.size} ignored faces (used to veto inference)")
+      _                                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
+      knownFaceById                       = knownFaces.map((face, _) => face.faceId -> face).toMap
+      searched                           <- withKnownFacesVectorIndex(knownFaces) { vectorIndex =>
+                                              zio.stream.ZStream
+                                                .from(tocheck)
+                                                // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
+                                                // .mapZIO((face, faceFeatures) => identifyFace(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
+                                                // One graph walk is single-threaded, so the parallelism has to come from running several
+                                                // faces at once; the LMDB writes they trigger are serialized by the database itself.
+                                                .mapZIOParUnordered(searchParallelism)((face, faceFeatures) => identifyFaceWithConsensus(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
+                                                .filter(_ == true)
+                                                .runCount
+                                                .timed
+                                            }
+      (searchElapsed, newIdentifiedCount) = searched
+      _                                  <- ZIO.logInfo(s"${tocheck.size} faces matched against the index in ${searchElapsed.toSeconds}s")
+      _                                  <- Console.printLine(s"$newIdentifiedCount new faces inferred")
+      _                                  <- ZIO.logInfo(s"done")
     } yield ()
   }
 
