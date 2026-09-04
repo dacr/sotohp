@@ -16,6 +16,8 @@ case class ApiDetectedFace(
   identifiedPersonId: Option[PersonId],
   inferredIdentifiedPersonId: Option[PersonId],
   inferredIdentifiedPersonConfidence: Option[Double],
+  inferredTimestamp: Option[OffsetDateTime],
+  inferredIgnore: Option[Boolean],
   timestamp: OffsetDateTime
 )
 

@@ -544,6 +544,23 @@ section#tab-mosaic.tab.active { display: flex; }
 .face-badge.inferred { position: absolute; left: 6px; bottom: 6px; background: rgba(245,158,11,0.92); color: #111827; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .face-badge.inferred:hover, .face-badge.inferred:focus { background: rgba(245,158,11,1); }
 
+/* Ignore inferred face controls */
+.face-tile .ft-ignore { position: absolute; left: 6px; top: 6px; background: rgba(107,114,128,0.92); color: #fff; border: none; border-radius: 14px; padding: 2px 6px; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(2px); transition: opacity 150ms ease, transform 150ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.face-tile:hover .ft-ignore, .face-tile:focus-within .ft-ignore { opacity: 1; transform: translateY(0); }
+.face-tile .ft-ignore:hover { background: #374151; }
+.face-tile.face-ignored .face-img { opacity: 0.45; filter: grayscale(0.6); }
+.face-badge.restore { position: absolute; right: 6px; bottom: 6px; background: rgba(75,85,99,0.95); color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.face-badge.restore:hover, .face-badge.restore:focus { background: rgba(55,65,81,1); }
+.person-faces-view.size-small .face-tile .ft-ignore { font-size: 10px; padding: 2px 5px; left: 4px; top: 4px; }
+.person-faces-view.size-small .face-badge.restore { font-size: 10px; padding: 2px 6px; right: 4px; bottom: 4px; }
+
+/* Ignore action buttons in the inferred faces header */
+.person-faces-view .ignore-all,
+.person-faces-view .ignore-selected { border: 1px solid #4b5563; background: #6b7280; color: #fff; border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.person-faces-view .ignore-all:hover,
+.person-faces-view .ignore-selected:hover { background: #4b5563; }
+.pf-show-ignored { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #374151; margin-left: 8px; cursor: pointer; user-select: none; }
+
 /* Person Faces: size control segmented buttons */
 .pf-size { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #f9fafb; }
 .pf-size button { background: transparent; border: none; padding: 4px 8px; font-size: 12px; cursor: pointer; color: #111827; }

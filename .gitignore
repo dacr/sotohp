@@ -13,6 +13,8 @@ null
 node_modules/
 result
 lock.mdb
+*.mp3
+*.mp4
 
 # direnv
 .envrc
@@ -43,3 +45,6 @@ cluster*/
 
 # user config related
 david-keyword-rules.json
+
+# temporary code
+**/BagRenameMigrationTool.scala

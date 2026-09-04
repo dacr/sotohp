@@ -1,5 +1,5 @@
 {
-  description = "AI Coding Environment with Gemini or OpenCode";
+  description = "AI Coding Environment with ClaudeCode or OpenCode";
 
   inputs = {
     nixstable.url      = "github:NixOS/nixpkgs/nixos-26.05";
@@ -37,7 +37,6 @@
         devShells.default = stable.mkShell {
           packages = [
           unstable.opencode      # The AI Agent
-          unstable.gemini-cli    # The Auth Bridge
           unstable.claude-code
 
           stable.nodejs_22       # Required for the auth plugin
@@ -49,13 +48,11 @@
           mill             # Build Tool
           scl              # Build Tool
           stable.scalafmt  # Formatter
-            stable.protobuf  # Provides native protoc compiler
+          stable.protobuf  # Provides native protoc compiler
         ];
 
         shellHook = ''
             echo "🤖 Dev Environment Loaded"
-            echo "Run 'gemini' or 'OpenCode' to sync your Pro subscription if not already logged in."
-            echo "   (opencode auth login)"
         '';
       };
     }

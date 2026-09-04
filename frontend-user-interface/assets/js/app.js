@@ -1058,7 +1058,7 @@ function clearFacesOverlay() {
 function hasInferredPending() {
   try {
     if (!Array.isArray(currentFaces) || currentFaces.length === 0) return false;
-    return currentFaces.some(f => (!f.identifiedPersonId) && !!f.inferredIdentifiedPersonId);
+    return currentFaces.some(f => (!f.identifiedPersonId) && !f.inferredIgnore && !!f.inferredIdentifiedPersonId);
   } catch { return false; }
 }
 
@@ -1265,7 +1265,7 @@ function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 async function confirmAllInferredFaces(btnRef) {
   const cont = document.querySelector('.image-container');
   const btn = btnRef || (cont && cont.querySelector('.img-confirm-btn'));
-  const targets = (currentFaces || []).filter(f => (!f.identifiedPersonId) && f.inferredIdentifiedPersonId);
+  const targets = (currentFaces || []).filter(f => (!f.identifiedPersonId) && !f.inferredIgnore && f.inferredIdentifiedPersonId);
   if (!targets || targets.length === 0) { updateConfirmAllButtonVisibility(); return; }
   const namesCount = targets.length;
   if (!confirm(`Confirm all ${namesCount} inferred face${namesCount > 1 ? 's' : ''} on this image?`)) return;
@@ -1358,7 +1358,8 @@ function renderFaces() {
       box.dataset.faceId = face.faceId || face.id || '';
 
       const pid = face.identifiedPersonId || null;
-      const inferredPid = (!pid && (face.inferredIdentifiedPersonId || null)) ? (face.inferredIdentifiedPersonId || null) : null;
+      // ignored inferred faces must not surface their inferred name in the viewer overlay
+      const inferredPid = (!pid && !face.inferredIgnore && (face.inferredIdentifiedPersonId || null)) ? (face.inferredIdentifiedPersonId || null) : null;
       if (pid) {
         const { first, full } = personsName(pid);
         if (full) box.title = full;
@@ -3010,9 +3011,13 @@ async function openAllInferredFacesView() {
             <option value="person">Sort: Person, Date</option>
             <option value="person_confidence">Sort: Person, Confidence</option>
             <option value="confidence">Sort: Confidence</option>
+            <option value="inferred_date">Sort: Inferred date</option>
           </select>
           <button type="button" class="confirm-all" title="Confirm all shown faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm all</button>
           <button type="button" class="confirm-selected" title="Confirm selected faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm selected</button>
+          <button type="button" class="ignore-all" title="Ignore all shown faces" style="display:none;">Ignore all</button>
+          <button type="button" class="ignore-selected" title="Ignore selected faces" style="display:none;">Ignore selected</button>
+          <label class="pf-show-ignored"><input type="checkbox" class="pf-show-ignored-cb"> Show ignored</label>
         </div>
         <div class="pf-right-actions">
         </div>
@@ -3023,7 +3028,7 @@ async function openAllInferredFacesView() {
     </div>
   `;
   tab.appendChild(view);
-  
+
   const backBtn = view.querySelector('button.back');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
@@ -3094,6 +3099,35 @@ async function openAllInferredFacesView() {
          if (ca < cb) return 1;
          return 0;
       });
+    } else if (currentSort === 'inferred_date') {
+      // person sort key: lastName then firstName (case-insensitive), empty names last
+      const personKey = (pid) => {
+         const p = personsCache && personsCache.get(pid);
+         const last = (p && p.lastName ? p.lastName : '').trim().toLowerCase();
+         const first = (p && p.firstName ? p.firstName : '').trim().toLowerCase();
+         return `${last} ${first}`.trim();
+      };
+      // inferred day (YYYY-MM-DD) so faces inferred the same day group together; no inferred date goes last
+      const inferredDay = (f) => (f.inferredTimestamp ? new Date(f.inferredTimestamp).toISOString().slice(0, 10) : '');
+      facesList.sort((a,b) => {
+         // most recently inferred day first
+         const da = inferredDay(a);
+         const db = inferredDay(b);
+         if (da !== db) {
+            if (!da) return 1;
+            if (!db) return -1;
+            return da < db ? 1 : -1;
+         }
+         // then by person name (lastName, firstName)
+         const pa = personKey(a.inferredIdentifiedPersonId);
+         const pb = personKey(b.inferredIdentifiedPersonId);
+         if (pa < pb) return -1;
+         if (pa > pb) return 1;
+         // finally the exact inferred instant, most recent first
+         const ta = a.inferredTimestamp ? new Date(a.inferredTimestamp).getTime() : -Infinity;
+         const tb = b.inferredTimestamp ? new Date(b.inferredTimestamp).getTime() : -Infinity;
+         return tb - ta;
+      });
     } else {
       facesList.sort((a,b) => {
          const pa = personsName(a.inferredIdentifiedPersonId).full.toLowerCase();
@@ -3123,6 +3157,7 @@ async function openAllInferredFacesView() {
     view.__allFaces = faces;
     view.__mode = 'validate';
     view.__selected = new Set();
+    view.__showIgnored = false;
   } catch (e) {
     const grid = view.querySelector('#person-faces-grid');
     if (grid) grid.innerHTML = `<div class="status error">Failed to load faces: ${e.message}</div>`;
@@ -3131,31 +3166,35 @@ async function openAllInferredFacesView() {
 
   const confirmAllBtn = view.querySelector('.confirm-all');
   const confirmSelBtn = view.querySelector('.confirm-selected');
+  const ignoreAllBtn = view.querySelector('.ignore-all');
+  const ignoreSelBtn = view.querySelector('.ignore-selected');
+  const showIgnoredCb = view.querySelector('.pf-show-ignored-cb');
   const filterInput = view.querySelector('.pf-filter-input');
-  
+
   function updateActionsVisibility() {
-      const displayedFaces = view.__displayedFaces || view.__allFaces || [];
+      const displayedFaces = view.__displayedFaces || [];
       const pendingCount = displayedFaces.length;
       const selCount = (view.__selected && view.__selected.size) || 0;
-      if (confirmAllBtn) {
-          confirmAllBtn.style.display = '';
-          confirmAllBtn.textContent = `Confirm all (${pendingCount})`;
-          confirmAllBtn.disabled = pendingCount === 0;
-          confirmAllBtn.style.opacity = confirmAllBtn.disabled ? '0.6' : '1';
-          confirmAllBtn.style.cursor = confirmAllBtn.disabled ? 'not-allowed' : 'pointer';
-      }
-      if (confirmSelBtn) {
-          confirmSelBtn.style.display = '';
-          confirmSelBtn.textContent = `Confirm selected (${selCount})`;
-          confirmSelBtn.disabled = selCount === 0;
-          confirmSelBtn.style.opacity = confirmSelBtn.disabled ? '0.6' : '1';
-          confirmSelBtn.style.cursor = confirmSelBtn.disabled ? 'not-allowed' : 'pointer';
-      }
+      const styleBtn = (btn, count, verb) => {
+          if (!btn) return;
+          btn.style.display = '';
+          btn.textContent = `${verb} (${count})`;
+          btn.disabled = count === 0;
+          btn.style.opacity = btn.disabled ? '0.6' : '1';
+          btn.style.cursor = btn.disabled ? 'not-allowed' : 'pointer';
+      };
+      styleBtn(confirmAllBtn, pendingCount, 'Confirm all');
+      styleBtn(confirmSelBtn, selCount, 'Confirm selected');
+      styleBtn(ignoreAllBtn, pendingCount, 'Ignore all');
+      styleBtn(ignoreSelBtn, selCount, 'Ignore selected');
   }
   view.__updateActions = updateActionsVisibility;
 
   function refreshGrid() {
       let displayedFaces = view.__allFaces || [];
+      if (!view.__showIgnored) {
+          displayedFaces = displayedFaces.filter(f => !f.inferredIgnore);
+      }
       const filterValue = filterInput ? filterInput.value.trim().toLowerCase() : '';
       if (filterValue) {
           displayedFaces = displayedFaces.filter(f => {
@@ -3174,6 +3213,13 @@ async function openAllInferredFacesView() {
 
   if (filterInput) {
       filterInput.addEventListener('input', () => {
+          refreshGrid();
+      });
+  }
+  if (showIgnoredCb) {
+      showIgnoredCb.addEventListener('change', () => {
+          view.__showIgnored = !!showIgnoredCb.checked;
+          try { view.__selected = new Set(); } catch {}
           refreshGrid();
       });
   }
@@ -3218,6 +3264,45 @@ async function openAllInferredFacesView() {
       });
   }
 
+  async function ignoreFaces(faceIds) {
+      if (!faceIds || faceIds.length === 0) return;
+      let ok = 0;
+      try {
+          for (const fid of faceIds) {
+              const face = (view.__allFaces||[]).find(f => (f.faceId||f.id) === fid);
+              if (!face) continue;
+              await api.ignoreFace(fid);
+              face.inferredIgnore = true;
+              ok++;
+              if (view.__selected) view.__selected.delete(fid);
+          }
+          if (ok > 0) showSuccess(`Ignored ${ok} face(s)`);
+      } catch (e) {
+          showError('Failed to ignore faces');
+      } finally {
+          refreshGrid();
+      }
+  }
+
+  if (ignoreAllBtn) {
+      ignoreAllBtn.addEventListener('click', () => {
+         const faces = view.__displayedFaces || [];
+         const count = faces.length;
+         if (count === 0) return;
+         if (!confirm(`Ignore all ${count} inferred faces?`)) return;
+         const ids = faces.map(f => f.faceId || f.id);
+         ignoreFaces(ids);
+      });
+  }
+  if (ignoreSelBtn) {
+      ignoreSelBtn.addEventListener('click', () => {
+         const ids = Array.from(view.__selected||[]);
+         if (ids.length === 0) return;
+         if (!confirm(`Ignore ${ids.length} selected faces?`)) return;
+         ignoreFaces(ids);
+      });
+  }
+
   refreshGrid();
 }
 
@@ -3246,6 +3331,9 @@ async function openPersonFacesView(person) {
           </div>
           <button type="button" class="confirm-all" title="Confirm all shown faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm all</button>
           <button type="button" class="confirm-selected" title="Confirm selected faces" style="display:none;border:1px solid #059669;background:#10b981;color:#fff;border-radius:6px;padding:6px 10px;">Confirm selected</button>
+          <button type="button" class="ignore-all" title="Ignore all shown faces" style="display:none;">Ignore all</button>
+          <button type="button" class="ignore-selected" title="Ignore selected faces" style="display:none;">Ignore selected</button>
+          <label class="pf-show-ignored" style="display:none;"><input type="checkbox" class="pf-show-ignored-cb"> Show ignored</label>
         </div>
         <div class="pf-right-actions">
           <button type="button" class="toggle-validate" title="Switch validation mode" style="border:1px solid #1d4ed8;background:#2563eb;color:#fff;border-radius:6px;padding:6px 10px;">to validate</button>
@@ -3296,11 +3384,16 @@ async function openPersonFacesView(person) {
   view.__allFaces = faces;
   view.__mode = 'identified'; // default mode
   view.__selected = new Set(); // selected face ids for validation
+  view.__showIgnored = false; // whether ignored inferred faces are shown
 
   // Wire actions
   const toggleBtn = view.querySelector('.toggle-validate');
   const confirmAllBtn = view.querySelector('.confirm-all');
   const confirmSelBtn = view.querySelector('.confirm-selected');
+  const ignoreAllBtn = view.querySelector('.ignore-all');
+  const ignoreSelBtn = view.querySelector('.ignore-selected');
+  const showIgnoredLabel = view.querySelector('.pf-show-ignored');
+  const showIgnoredCb = view.querySelector('.pf-show-ignored-cb');
   const sizeCtl = view.querySelector('.pf-size');
   const sizeBtns = sizeCtl ? Array.from(sizeCtl.querySelectorAll('button')) : [];
 
@@ -3382,11 +3475,18 @@ async function openPersonFacesView(person) {
     return as === bs;
   }
 
+  // Inferred faces for this person currently eligible for validation (respects the show-ignored toggle)
+  function currentInferredFaces() {
+    const all = view.__allFaces || [];
+    let list = all.filter(f => !f.identifiedPersonId && idEq(f.inferredIdentifiedPersonId, person.id));
+    if (!view.__showIgnored) list = list.filter(f => !f.inferredIgnore);
+    return list;
+  }
+
   function updateActionsVisibility() {
     const isValidate = view.__mode === 'validate';
-    // Compute pending inferred faces for this person
-    const all = view.__allFaces || [];
-    const pendingCount = all.filter(f => !f.identifiedPersonId && idEq(f.inferredIdentifiedPersonId, person.id)).length;
+    // Compute pending inferred faces for this person (respecting the show-ignored toggle)
+    const pendingCount = currentInferredFaces().length;
     if (toggleBtn) {
       // Show pending count only when NOT in validation mode, and hide it when exiting
       if (isValidate) {
@@ -3427,6 +3527,25 @@ async function openPersonFacesView(person) {
       confirmSelBtn.style.cursor = confirmSelBtn.disabled ? 'not-allowed' : 'pointer';
       confirmSelBtn.title = confirmSelBtn.disabled ? 'Select one or more faces to enable' : 'Confirm the selected faces';
     }
+    if (ignoreAllBtn) {
+      ignoreAllBtn.style.display = isValidate ? '' : 'none';
+      ignoreAllBtn.textContent = `Ignore all (${pendingCount})`;
+      ignoreAllBtn.disabled = !(isValidate && pendingCount > 0);
+      ignoreAllBtn.style.opacity = ignoreAllBtn.disabled ? '0.6' : '1';
+      ignoreAllBtn.style.cursor = ignoreAllBtn.disabled ? 'not-allowed' : 'pointer';
+      ignoreAllBtn.title = ignoreAllBtn.disabled ? 'No inferred faces to ignore' : 'Ignore all shown inferred faces';
+    }
+    if (ignoreSelBtn) {
+      ignoreSelBtn.style.display = isValidate ? '' : 'none';
+      ignoreSelBtn.textContent = `Ignore selected (${selCount})`;
+      ignoreSelBtn.disabled = !(isValidate && selCount > 0);
+      ignoreSelBtn.style.opacity = ignoreSelBtn.disabled ? '0.6' : '1';
+      ignoreSelBtn.style.cursor = ignoreSelBtn.disabled ? 'not-allowed' : 'pointer';
+      ignoreSelBtn.title = ignoreSelBtn.disabled ? 'Select one or more faces to enable' : 'Ignore the selected faces';
+    }
+    if (showIgnoredLabel) {
+      showIgnoredLabel.style.display = isValidate ? 'inline-flex' : 'none';
+    }
   }
 
   // Expose header updater on the view so child renderers/handlers can invoke it safely
@@ -3435,7 +3554,7 @@ async function openPersonFacesView(person) {
   function refreshGrid() {
     const all = view.__allFaces || [];
     if (view.__mode === 'validate') {
-      const inferredOnly = all.filter(f => !f.identifiedPersonId && idEq(f.inferredIdentifiedPersonId, person.id));
+      const inferredOnly = currentInferredFaces();
       renderPersonFacesGrid(view, person, inferredOnly, { mode: 'validate' });
     } else {
       // Only show faces identified to THIS person
@@ -3480,9 +3599,7 @@ async function openPersonFacesView(person) {
   }
 
   wireOnce(confirmAllBtn, 'click', () => {
-    const gridFaces = (view.__mode === 'validate')
-      ? (view.__allFaces||[]).filter(f => !f.identifiedPersonId && idEq(f.inferredIdentifiedPersonId, person.id))
-      : [];
+    const gridFaces = (view.__mode === 'validate') ? currentInferredFaces() : [];
     const ids = gridFaces.map(f => f.faceId || f.id);
     if (ids.length === 0) return;
     const pname = `${person.firstName || ''} ${person.lastName || ''}`.trim() || 'this person';
@@ -3498,6 +3615,47 @@ async function openPersonFacesView(person) {
     const msg = `Confirm ${ids.length} selected face(s) for ${pname}?`;
     if (!confirm(msg)) return;
     confirmFaces(ids);
+  });
+
+  async function ignoreFaces(faceIds) {
+    if (!faceIds || faceIds.length === 0) return;
+    let ok = 0;
+    try {
+      for (const fid of faceIds) {
+        const inCache = (view.__allFaces || []).find(f => (f.faceId || f.id) === fid);
+        if (!inCache) continue;
+        await api.ignoreFace(fid);
+        inCache.inferredIgnore = true;
+        ok++;
+        removeFromSelection(fid);
+      }
+      if (ok > 0) showSuccess(`Ignored ${ok} face(s)`);
+    } catch (e) {
+      showError('Failed to ignore faces');
+    } finally {
+      localRefresh({ keepMode: true });
+    }
+  }
+
+  wireOnce(ignoreAllBtn, 'click', () => {
+    const gridFaces = (view.__mode === 'validate') ? currentInferredFaces() : [];
+    const ids = gridFaces.map(f => f.faceId || f.id);
+    if (ids.length === 0) return;
+    if (!confirm(`Ignore all ${ids.length} inferred face(s)?`)) return;
+    ignoreFaces(ids);
+  });
+
+  wireOnce(ignoreSelBtn, 'click', () => {
+    const ids = Array.from(view.__selected || []);
+    if (ids.length === 0) return;
+    if (!confirm(`Ignore ${ids.length} selected face(s)?`)) return;
+    ignoreFaces(ids);
+  });
+
+  wireOnce(showIgnoredCb, 'change', () => {
+    view.__showIgnored = !!(showIgnoredCb && showIgnoredCb.checked);
+    view.__selected = new Set();
+    refreshGrid();
   });
 
   // First render (default identified-only)
@@ -3807,6 +3965,61 @@ function renderPersonFacesGrid(view, person, faces, opts) {
         }
       });
       tile.appendChild(badge);
+    }
+
+    // Ignore / restore controls (validation mode only)
+    if (mode === 'validate') {
+      const fid = face.faceId || face.id;
+      if (face.inferredIgnore) {
+        tile.classList.add('face-ignored');
+        const restore = document.createElement('button');
+        restore.type = 'button';
+        restore.className = 'face-badge restore';
+        restore.textContent = '↩ restore';
+        restore.title = 'Restore this ignored face';
+        restore.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
+        restore.addEventListener('click', async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try {
+            await api.restoreFace(fid);
+            const inCache = (view && Array.isArray(view.__allFaces))
+              ? (view.__allFaces.find(f => (f.faceId || f.id) === fid) || null) : null;
+            if (inCache) inCache.inferredIgnore = false;
+            face.inferredIgnore = false;
+            try { if (view.__selected) view.__selected.delete(fid); } catch {}
+            showSuccess('Face restored');
+            if (view && typeof view.__refreshGrid === 'function') view.__refreshGrid();
+            if (view && typeof view.__updateActions === 'function') view.__updateActions();
+          } catch (err) {
+            showError('Failed to restore face');
+          }
+        });
+        tile.appendChild(restore);
+      } else {
+        const ignoreBtn = document.createElement('button');
+        ignoreBtn.type = 'button';
+        ignoreBtn.className = 'ft-ignore';
+        ignoreBtn.textContent = '🚫';
+        ignoreBtn.title = 'Ignore this face';
+        ignoreBtn.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
+        ignoreBtn.addEventListener('click', async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try {
+            await api.ignoreFace(fid);
+            const inCache = (view && Array.isArray(view.__allFaces))
+              ? (view.__allFaces.find(f => (f.faceId || f.id) === fid) || null) : null;
+            if (inCache) inCache.inferredIgnore = true;
+            face.inferredIgnore = true;
+            try { if (view.__selected) view.__selected.delete(fid); } catch {}
+            showSuccess('Face ignored');
+            if (view && typeof view.__refreshGrid === 'function') view.__refreshGrid();
+            if (view && typeof view.__updateActions === 'function') view.__updateActions();
+          } catch (err) {
+            showError('Failed to ignore face');
+          }
+        });
+        tile.appendChild(ignoreBtn);
+      }
     }
 
     const editBtn = tile.querySelector('.ft-edit');

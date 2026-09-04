@@ -93,7 +93,9 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
       timestamp = original.timestamp,
       identifiedPersonId = None,
       inferredIdentifiedPersonId = None,
-      inferredIdentifiedPersonConfidence = None
+      inferredIdentifiedPersonConfidence = None,
+      inferredTimestamp = None,
+      inferredIgnore = None
     )
   }
 

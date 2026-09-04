@@ -125,6 +125,8 @@ export class ApiClient {
   async deleteFace(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}`); }
   async setFacePerson(faceId, personId) { await this.http.put(`/api/face/${encodeURIComponent(faceId)}/person/${encodeURIComponent(personId)}`, null); }
   async removeFacePerson(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}/person`); }
+  async ignoreFace(faceId) { await this.http.put(`/api/face/${encodeURIComponent(faceId)}/ignore`, null); }
+  async restoreFace(faceId) { await this.http.delete(`/api/face/${encodeURIComponent(faceId)}/ignore`); }
 
   // -- Stores -----------------------------------------------------------------
   async listStores() { return this._fetchNdjson('/api/stores'); }

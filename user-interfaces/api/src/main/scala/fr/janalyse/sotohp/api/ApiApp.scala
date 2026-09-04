@@ -1145,6 +1145,64 @@ object ApiApp extends ZIOAppDefault {
           } yield ()
       )
 
+  val faceIgnoreSetEndpoint =
+    secureFaceEndpoint()
+      .name("Ignore inferred face")
+      .summary("Mark an inferred face as ignored so it is hidden from the inferred views")
+      .put
+      .in(path[String]("faceId"))
+      .in("ignore")
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawFaceId =>
+          for {
+            faceId <- extractFaceId(rawFaceId)
+            face   <- MediaService
+                        .faceGet(faceId)
+                        .logError("Couldn't get face")
+                        .mapError(err => ApiInternalError("Couldn't get face"))
+                        .someOrFail(ApiResourceNotFound("Couldn't find face"))
+            _      <- MediaService
+                        .faceUpdate(
+                          faceId = faceId,
+                          face = face.copy(inferredIgnore = Some(true))
+                        )
+                        .logError("Couldn't ignore inferred face")
+                        .mapError(err => ApiInternalError("Couldn't ignore inferred face"))
+          } yield ()
+      )
+
+  val faceIgnoreDeleteEndpoint =
+    secureFaceEndpoint()
+      .name("Restore ignored inferred face")
+      .summary("Clear the ignored flag of an inferred face so it shows up again in the inferred views")
+      .delete
+      .in(path[String]("faceId"))
+      .in("ignore")
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        rawFaceId =>
+          for {
+            faceId <- extractFaceId(rawFaceId)
+            face   <- MediaService
+                        .faceGet(faceId)
+                        .logError("Couldn't get face")
+                        .mapError(err => ApiInternalError("Couldn't get face"))
+                        .someOrFail(ApiResourceNotFound("Couldn't find face"))
+            _      <- MediaService
+                        .faceUpdate(
+                          faceId = faceId,
+                          face = face.copy(inferredIgnore = None)
+                        )
+                        .logError("Couldn't restore ignored inferred face")
+                        .mapError(err => ApiInternalError("Couldn't restore ignored inferred face"))
+          } yield ()
+      )
+
   // -------------------------------------------------------------------------------------------------------------------
 
   val adminSynchronizeEndpoint =
@@ -1837,6 +1895,8 @@ object ApiApp extends ZIOAppDefault {
     faceContentGetEndpoint,
     faceUpdatePersonEndpoint,
     faceDeletePersonEndpoint,
+    faceIgnoreSetEndpoint,
+    faceIgnoreDeleteEndpoint,
     // -------------------------
     personListEndpoint,
     personCreateEndpoint,

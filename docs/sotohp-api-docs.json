@@ -1622,6 +1622,170 @@
         ]
       }
     },
+    "/api/face/{faceId}/ignore" : {
+      "put" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Mark an inferred face as ignored so it is hidden from the inferred views",
+        "operationId" : "Ignore inferred face",
+        "parameters" : [
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      },
+      "delete" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Clear the ignored flag of an inferred face so it shows up again in the inferred views",
+        "operationId" : "Restore ignored inferred face",
+        "parameters" : [
+          {
+            "name" : "faceId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/persons" : {
       "get" : {
         "tags" : [
@@ -4512,6 +4676,13 @@
           "inferredIdentifiedPersonConfidence" : {
             "type" : "number",
             "format" : "double"
+          },
+          "inferredTimestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "inferredIgnore" : {
+            "type" : "boolean"
           },
           "timestamp" : {
             "type" : "string",
