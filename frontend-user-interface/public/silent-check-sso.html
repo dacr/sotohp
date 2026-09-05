@@ -1,0 +1,11 @@
+<!doctype html>
+<html>
+<body>
+<script>
+  // Standard keycloak-js silent-check-sso helper: reports this iframe's URL
+  // (which carries the auth result) back to the parent page without a full
+  // redirect. Referenced by keycloak.init({ silentCheckSsoRedirectUri: ... }).
+  parent.postMessage(location.href, location.origin);
+</script>
+</body>
+</html>

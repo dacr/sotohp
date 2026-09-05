@@ -29,6 +29,9 @@ lock.mdb
 .idea*/
 target/
 out/
+.next/
+frontend-user-interface/lib/api-types.ts
+frontend-user-interface/next-env.d.ts
 project/target/
 project/project/
 project/metals.sbt
