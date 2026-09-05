@@ -11,6 +11,9 @@ openapi-spec:
 run-face-inference:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference
 
+run-face-inference-evaluate:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInferenceEvaluate
+
 run-face-fix:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FacesFix
 

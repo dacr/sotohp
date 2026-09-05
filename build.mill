@@ -98,6 +98,7 @@ object modules extends Module {
     lazy private val lmdbRelease = "3.0.0-RC3-SNAPSHOT"
     def mvnDeps                  = Seq(
       mvn"fr.janalyse::zio-lmdb:$lmdbRelease",
+      mvn"fr.janalyse::zio-lmdb-vector:$lmdbRelease",
       mvn"fr.janalyse::query-dsl:$lmdbRelease",
       mvn"fr.janalyse::keycodecs:$lmdbRelease",
       mvn"fr.janalyse::keycodecs-ulid:$lmdbRelease",
