@@ -25,7 +25,7 @@ import fr.janalyse.sotohp.service.model.SynchronizeAction.Start
 import sttp.capabilities.zio.ZioStreams
 import sttp.model.headers.CacheDirective
 import sttp.tapir.{Codec, CodecFormat, EndpointInput, EndpointOutput, Schema}
-import sttp.tapir.files.staticFilesGetServerEndpoint
+import sttp.tapir.files.{staticFilesServerEndpoints, FilesOptions}
 import zio.config.typesafe.TypesafeConfigProvider
 import zio.http.Server
 import zio.lmdb.LMDB
@@ -44,13 +44,18 @@ import java.util.UUID
 
 object ApiApp extends ZIOAppDefault {
 
-  type ApiEnv = MediaService & SecurityService
+  type ApiEnv = MediaService & SecurityService & EventBusService
 
   // -------------------------------------------------------------------------------------------------------------------
 
   case object NdJson extends CodecFormat {
     override val mediaType: MediaType = MediaType.parse("application/x-ndjson").toOption.get
     override def toString: String     = "ndjson"
+  }
+
+  case object EventStream extends CodecFormat {
+    override val mediaType: MediaType = MediaType.parse("text/event-stream").toOption.get
+    override def toString: String     = "event-stream"
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -224,6 +229,7 @@ object ApiApp extends ZIOAppDefault {
                    .ownerCreate(None, toCreate.firstName, toCreate.lastName, toCreate.birthDate)
                    .mapError(err => ApiInternalError("Couldn't create owner"))
       taoOwner = owner.transformInto[ApiOwner]
+      _       <- EventBusService.publish(ApiEvent("owner", Some(owner.id.toString), ApiEventAction.created))
     } yield taoOwner
   }
 
@@ -281,6 +287,7 @@ object ApiApp extends ZIOAppDefault {
                  )
                  .logError("Couldn't update owner")
                  .mapError(err => ApiInternalError("Couldn't update owner"))
+      _     <- EventBusService.publish(ApiEvent("owner", Some(ownerId.toString), ApiEventAction.updated))
     } yield ()
 
     logic
@@ -330,6 +337,7 @@ object ApiApp extends ZIOAppDefault {
                                 )
                                 .logError("Couldn't update owner")
                                 .mapError(err => ApiInternalError("Couldn't update owner"))
+            _              <- EventBusService.publish(ApiEvent("owner", Some(ownerId.toString), ApiEventAction.updated))
 
           } yield ()
       )
@@ -378,6 +386,7 @@ object ApiApp extends ZIOAppDefault {
                    )
                    .mapError(err => ApiInternalError("Couldn't create store"))
       taoStore = store.transformInto[ApiStore]
+      _       <- EventBusService.publish(ApiEvent("store", Some(store.id.toString), ApiEventAction.created))
     } yield taoStore
   }
 
@@ -431,6 +440,7 @@ object ApiApp extends ZIOAppDefault {
                  .storeUpdate(storeId, name = toUpdate.name, baseDirectory = toUpdate.baseDirectory, includeMask = toUpdate.includeMask, ignoreMask = toUpdate.ignoreMask)
                  .logError("Couldn't update store")
                  .mapError(err => ApiInternalError("Couldn't update store"))
+      _     <- EventBusService.publish(ApiEvent("store", Some(storeId.toString), ApiEventAction.updated))
     } yield ()
 
     logic
@@ -538,6 +548,7 @@ object ApiApp extends ZIOAppDefault {
                       )
                       .logError("Couldn't update media")
                       .mapError(err => ApiInternalError("Couldn't update media"))
+      _          <- EventBusService.publish(ApiEvent("media", Some(accessKey.toString), ApiEventAction.updated))
     } yield ()
 
     logic
@@ -571,12 +582,13 @@ object ApiApp extends ZIOAppDefault {
                       .mediaUpdate(accessKey, mediaTuple.media.copy(starred = Starred(state)))
                       .logError("Couldn't update media")
                       .mapError(err => ApiInternalError("Couldn't update media"))
+      _          <- EventBusService.publish(ApiEvent("media", Some(accessKey.toString), ApiEventAction.updated))
     } yield ()
   }
 
   val mediaUpdateStarredEndpoint =
     secureMediaEndpoint()
-      .name("Update media")
+      .name("Update media starred state")
       .summary("Update media starred state for the given media identifier")
       .put
       .in(path[String]("mediaAccessKey"))
@@ -994,6 +1006,7 @@ object ApiApp extends ZIOAppDefault {
                   .faceCreate(None, toCreate.originalId, toCreate.box.transformInto[BoundingBox])
                   .mapError(err => ApiInternalError("Couldn't create face"))
       apiFace = face.transformInto[ApiFace]
+      _      <- EventBusService.publish(ApiEvent("face", Some(face.faceId.toString), ApiEventAction.created))
     } yield apiFace
   }
 
@@ -1051,6 +1064,7 @@ object ApiApp extends ZIOAppDefault {
           _      <- MediaService
                       .faceDelete(faceId)
                       .mapError(err => ApiInternalError("Couldn't delete face"))
+          _      <- EventBusService.publish(ApiEvent("face", Some(faceId.toString), ApiEventAction.deleted))
         } yield ()
       }
 
@@ -1112,6 +1126,7 @@ object ApiApp extends ZIOAppDefault {
                           )
                           .logError("Couldn't update face identified person")
                           .mapError(err => ApiInternalError("Couldn't update face identified person"))
+            _        <- EventBusService.publish(ApiEvent("face", Some(faceId.toString), ApiEventAction.updated))
 
           } yield ()
       )
@@ -1142,6 +1157,7 @@ object ApiApp extends ZIOAppDefault {
                         )
                         .logError("Couldn't remove face identified person")
                         .mapError(err => ApiInternalError("Couldn't remove delete identified person"))
+            _      <- EventBusService.publish(ApiEvent("face", Some(faceId.toString), ApiEventAction.updated))
           } yield ()
       )
 
@@ -1171,6 +1187,7 @@ object ApiApp extends ZIOAppDefault {
                         )
                         .logError("Couldn't ignore inferred face")
                         .mapError(err => ApiInternalError("Couldn't ignore inferred face"))
+            _      <- EventBusService.publish(ApiEvent("face", Some(faceId.toString), ApiEventAction.updated))
           } yield ()
       )
 
@@ -1200,6 +1217,7 @@ object ApiApp extends ZIOAppDefault {
                         )
                         .logError("Couldn't restore ignored inferred face")
                         .mapError(err => ApiInternalError("Couldn't restore ignored inferred face"))
+            _      <- EventBusService.publish(ApiEvent("face", Some(faceId.toString), ApiEventAction.updated))
           } yield ()
       )
 
@@ -1217,6 +1235,7 @@ object ApiApp extends ZIOAppDefault {
         MediaService
           .synchronizeStart(addedThoseLastDays)
           .mapError(err => ApiInternalError("Couldn't synchronize"))
+          <* EventBusService.publish(ApiEvent("sync", None, ApiEventAction.updated))
       }
 
   val adminSynchronizeStatusEndpoint =
@@ -1270,6 +1289,7 @@ object ApiApp extends ZIOAppDefault {
                     .personCreate(None, toCreate.firstName, toCreate.lastName, toCreate.birthName, toCreate.birthDate, toCreate.email, toCreate.description)
                     .mapError(err => ApiInternalError("Couldn't create person"))
       apiPerson = person.transformInto[ApiPerson]
+      _        <- EventBusService.publish(ApiEvent("person", Some(person.id.toString), ApiEventAction.created))
     } yield apiPerson
   }
 
@@ -1325,6 +1345,7 @@ object ApiApp extends ZIOAppDefault {
              )
              .logError("Couldn't update person")
              .mapError(err => ApiInternalError("Couldn't update person"))
+      _ <- EventBusService.publish(ApiEvent("person", Some(personId.toString), ApiEventAction.updated))
     } yield ()
   }
 
@@ -1383,6 +1404,7 @@ object ApiApp extends ZIOAppDefault {
                           )
                           .logError("Couldn't update person")
                           .mapError(err => ApiInternalError("Couldn't update person"))
+            _        <- EventBusService.publish(ApiEvent("person", Some(personId.toString), ApiEventAction.updated))
           } yield ()
       )
 
@@ -1391,6 +1413,7 @@ object ApiApp extends ZIOAppDefault {
       .personDelete(personId)
       .logError("Couldn't delete person")
       .mapError(err => ApiInternalError("Couldn't delete person"))
+      <* EventBusService.publish(ApiEvent("person", Some(personId.toString), ApiEventAction.deleted))
   }
 
   val personDeleteEndpoint =
@@ -1494,6 +1517,7 @@ object ApiApp extends ZIOAppDefault {
                )
                .logError("Couldn't update bag")
                .mapError(err => ApiInternalError("Couldn't update bag"))
+      _   <- EventBusService.publish(ApiEvent("bag", Some(bagId.toString), ApiEventAction.updated))
     } yield ()
 
     logic
@@ -1550,6 +1574,7 @@ object ApiApp extends ZIOAppDefault {
                                 )
                                 .logError("Couldn't update bag")
                                 .mapError(err => ApiInternalError("Couldn't update bag"))
+            _              <- EventBusService.publish(ApiEvent("bag", Some(bagId.toString), ApiEventAction.updated))
 
           } yield ()
       )
@@ -1659,6 +1684,7 @@ object ApiApp extends ZIOAppDefault {
                    .portfolioCreate(toCreate.name, toCreate.description)
                    .logError("Couldn't create portfolio")
                    .orElseFail(ApiInternalError("Couldn't create portfolio"))
+      _       <- EventBusService.publish(ApiEvent("portfolio", Some(created.id.toString), ApiEventAction.created))
     } yield portfolio2Api(created)
   }
 
@@ -1679,6 +1705,7 @@ object ApiApp extends ZIOAppDefault {
              .logError("Couldn't update portfolio")
              .mapError(err => ApiInternalError("Couldn't update portfolio"))
              .someOrFail(ApiResourceNotFound("Couldn't find portfolio"))
+      _ <- EventBusService.publish(ApiEvent("portfolio", Some(portfolioId.toString), ApiEventAction.updated))
     } yield ()
   }
 
@@ -1703,6 +1730,7 @@ object ApiApp extends ZIOAppDefault {
       .portfolioDelete(portfolioId)
       .logError("Couldn't delete portfolio")
       .orElseFail(ApiInternalError("Couldn't delete portfolio"))
+      <* EventBusService.publish(ApiEvent("portfolio", Some(portfolioId.toString), ApiEventAction.deleted))
   }
 
   val portfolioDeleteEndpoint =
@@ -1729,6 +1757,7 @@ object ApiApp extends ZIOAppDefault {
                    case _: fr.janalyse.sotohp.service.ServiceUserIssue => ApiResourceNotFound("Couldn't find portfolio")
                    case _                                              => ApiInternalError("Couldn't add portfolio asset")
                  }
+      _     <- EventBusService.publish(ApiEvent("portfolio", Some(portfolioId.toString), ApiEventAction.updated))
     } yield added.transformInto[ApiAsset]
   }
 
@@ -1759,6 +1788,7 @@ object ApiApp extends ZIOAppDefault {
                     .logError("Couldn't update portfolio asset")
                     .mapError(err => ApiInternalError("Couldn't update portfolio asset"))
                     .someOrFail(ApiResourceNotFound("Asset not found in portfolio"))
+      _        <- EventBusService.publish(ApiEvent("portfolio", Some(portfolioId.toString), ApiEventAction.updated))
     } yield updated.transformInto[ApiAsset]
   }
 
@@ -1788,6 +1818,7 @@ object ApiApp extends ZIOAppDefault {
                    .logError("Couldn't remove portfolio asset")
                    .orElseFail(ApiInternalError("Couldn't remove portfolio asset"))
       _       <- ZIO.fail(ApiResourceNotFound("Asset not found in portfolio")).when(!removed)
+      _       <- EventBusService.publish(ApiEvent("portfolio", Some(portfolioId.toString), ApiEventAction.updated))
     } yield ()
   }
 
@@ -1873,7 +1904,38 @@ object ApiApp extends ZIOAppDefault {
       }
 
   // -------------------------------------------------------------------------------------------------------------------
+  // Server-Sent Events stream of entity change notifications (create/update/delete), so every
+  // connected client can invalidate/refetch what it's showing instead of polling or requiring a
+  // manual reload. Mirrors the NDJSON streaming wiring used elsewhere (e.g. ownerListEndpoint)
+  // but with one line per SSE frame instead of one JSON object per line, plus a periodic
+  // heartbeat comment so idle proxies/load balancers don't time the connection out.
+  val eventsHeartbeatInterval = 20.seconds
+
+  val eventsEndpoint =
+    secureSystemEndpoint
+      .name("Live update events")
+      .summary("SSE stream of entity change notifications so connected clients can stay live without polling/reloading")
+      .get
+      .in("events")
+      .out(header[String]("Content-Type"))
+      .out(header[String]("Cache-Control"))
+      .out(streamBinaryBody(ZioStreams)(EventStream))
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            eb          <- ZIO.service[EventBusService]
+            heartbeat    = ZStream.tick(eventsHeartbeatInterval).as(": ping\n\n")
+            frameStream  = eb.events.map(event => s"data: ${writeToString(event)}\n\n")
+            byteStream   = frameStream
+                             .merge(heartbeat)
+                             .via(ZPipeline.utf8Encode)
+          } yield (EventStream.mediaType.toString, "no-cache", byteStream)
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
   val apiRoutes = List(
+    // -------------------------
+    eventsEndpoint,
     // -------------------------
     mediaLocationListEndpoint,
     mediaListEndpoint,
@@ -1954,30 +2016,19 @@ object ApiApp extends ZIOAppDefault {
     )
   )
 
+  // The UI is a Next.js static export (`next build` with output: 'export'): a whole directory
+  // tree (per-route index.html, hashed _next/ assets, public/ files including
+  // service-worker.js) rather than a handful of fixed names. One generic recursive static-file
+  // endpoint rooted at uiBaseDir, using Files' own `defaultFile` SPA fallback (serves root
+  // index.html — with a normal 200 — for any path that isn't a real exported file) replaces the
+  // old per-path list plus its hand-rolled fallback endpoint. service-worker.js lands at the
+  // export root (it's under public/), so it's served at `/` scope — required for the SW to
+  // intercept `/api/.../content/...` image fetches and inject the Authorization header — with no
+  // special-casing needed. Both HEAD and GET are exposed: Next's <Link> prefetching HEADs a
+  // route before fetching it, which a GET-only endpoint answers with 405.
   def htmlStaticAssets(uiBaseDir: String): List[ZServerEndpoint[ApiEnv, Any]] = {
-    List(
-      staticFilesGetServerEndpoint("assets")(s"$uiBaseDir/assets").widen[ApiEnv],
-      staticFilesGetServerEndpoint("favicon.svg")(s"$uiBaseDir/favicon.svg").widen[ApiEnv],
-      staticFilesGetServerEndpoint("index.html")(s"$uiBaseDir/index.html").widen[ApiEnv],
-      // Served at the root path so its default scope is `/` — required for the
-      // SW to intercept `/api/.../content/...` image fetches and inject the
-      // Authorization header. Without root scope, the SW can't see /api/*.
-      staticFilesGetServerEndpoint("service-worker.js")(s"$uiBaseDir/assets/js/service-worker.js").widen[ApiEnv]
-    )
-  }
-
-  def htmlRouteFallback(uiBaseDir: String): ZServerEndpoint[ApiEnv, Any] = {
-    endpoint.get
-      .in(paths)
-      .out(htmlBodyUtf8)
-      .serverLogicSuccess { _ =>
-        for { // TODO add caching
-          filePath <- ZIO.attempt(Path.of(uiBaseDir, "index.html"))
-          bytes    <- ZIO.attemptBlocking(Files.readAllBytes(filePath))
-          content  <- ZIO.attempt(new String(bytes, "UTF-8"))
-        } yield content
-      }
-      .widen[ApiEnv]
+    val options = FilesOptions.default[Task].defaultFile(List("index.html"))
+    staticFilesServerEndpoints[Task](emptyInput)(uiBaseDir, options).map(_.widen[ApiEnv])
   }
 
   def buildFrontRoutes: IO[Throwable, List[ZServerEndpoint[ApiEnv, Any]]] = for {
@@ -1993,7 +2044,7 @@ object ApiApp extends ZIOAppDefault {
                    .logError("Issue with the user interface resources path")
     _         <- ZIO.logInfo(s"User interface resources path: $uiBaseDir")
   } yield {
-    htmlStaticAssets(uiBaseDir) :+ htmlRouteFallback(uiBaseDir)
+    htmlStaticAssets(uiBaseDir)
   }
 
   def server = for {
@@ -2003,8 +2054,27 @@ object ApiApp extends ZIOAppDefault {
     allRoutes    = apiRoutes ++ apiDocRoutes ++ frontRoutes
     httpApp      = ZioHttpInterpreter().toHttp(allRoutes)
     _           <- ZIO.logInfo("All routes are ready")
+    _           <- syncStatusBroadcaster.forkDaemon
     zservice    <- Server.serve(httpApp)
   } yield zservice
+
+  // The synchronize loop updates an in-memory counter on every file it looks at — far too often
+  // to publish an SSE event per update (it would flood the bus for no benefit; checkedCount alone
+  // can tick thousands of times a second on fast local storage). Instead, poll that counter from
+  // here once a second while (and exactly one tick after) a run is active, and publish a single
+  // "sync" event each time — the frontend already refetches the full status on that event, so
+  // there's no payload to get right here, just the cadence. This turns the settings page from
+  // "refreshes every 3s no matter what" into "updates about once a second, only while it matters".
+  def syncStatusBroadcaster: ZIO[MediaService & EventBusService, Nothing, Unit] = {
+    def loop(wasRunning: Boolean): ZIO[MediaService & EventBusService, Nothing, Unit] =
+      for {
+        _      <- ZIO.sleep(1.second)
+        status <- MediaService.synchronizeStatus().orDie
+        _      <- EventBusService.publish(ApiEvent("sync", None, ApiEventAction.updated)).when(status.running || wasRunning)
+        _      <- loop(status.running)
+      } yield ()
+    loop(false)
+  }
 
   val serverConfigLayer = ZLayer.fromZIO {
     for {
@@ -2065,6 +2135,7 @@ object ApiApp extends ZIOAppDefault {
                           MediaService.live,
                           SearchService.live,
                           securityServiceLayer,
+                          EventBusService.live,
                           serverConfigLayer,
                           Server.live,
                           Scope.default

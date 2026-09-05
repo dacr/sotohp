@@ -6,6 +6,71 @@
     "description" : "Medias management software by @crodav"
   },
   "paths" : {
+    "/api/system/events" : {
+      "get" : {
+        "tags" : [
+          "System"
+        ],
+        "summary" : "SSE stream of entity change notifications so connected clients can stay live without polling/reloading",
+        "operationId" : "Live update events",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Content-Type" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/medias/locations" : {
       "get" : {
         "tags" : [
@@ -542,7 +607,7 @@
           "Media"
         ],
         "summary" : "Update media starred state for the given media identifier",
-        "operationId" : "Update media",
+        "operationId" : "Update media starred state",
         "parameters" : [
           {
             "name" : "mediaAccessKey",
