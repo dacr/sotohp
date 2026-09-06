@@ -491,13 +491,22 @@ class MediaServiceLive private (
       original            <- originalGet(originalId)
                                .someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
                                .logError(s"Couldn't find original : $originalId")
+      mediaTuple          <- mediaGet(originalId)
+                               .mapError(err => ServiceInternalIssue(s"Couldn't get media for original : $err"))
+      // The box was measured by the caller against the *displayed* image, which is rotated to the
+      // effective (possibly user-customized) orientation - not just the original's EXIF orientation.
+      rotation             = mediaTuple
+                               .flatMap(_.media.orientation)
+                               .orElse(original.orientation)
+                               .map(_.rotationDegrees)
+                               .getOrElse(0)
       facesProcessor      <- processors.faces
                                .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces processor : $err"))
       builtFace           <- facesProcessor
                                .buildDetectedFace(original, box)
                                .mapError(err => ServiceInternalIssue(s"Couldn't build face : $err"))
       bufferedImage       <- facesProcessor
-                               .getOriginalBufferedImage(original)
+                               .getOriginalBufferedImage(original, rotation)
                                .mapError(err => ServiceInternalIssue(s"Couldn't get original image : $err"))
       _                   <- facesProcessor
                                .extractThenCacheFaceImageFromOriginal(builtFace, bufferedImage)
@@ -808,54 +817,73 @@ class MediaServiceLive private (
     } yield faceFeatures.orElse(result)
   }
 
-  override def originalFacesFeaturesRecompute(media: Media): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
-    val original = media.original
-    val rotation = media.orientation.orElse(original.orientation).map(_.rotationDegrees).getOrElse(0)
-    val logic    = for {
-      facesProcessor    <- processors.faces
-                             .mapError(err => ServiceInternalIssue(s"Unable to get faces processor : $err"))
-      featuresProcessor <- processors.faceFeatures
-                             .mapError(err => ServiceInternalIssue(s"Unable to get face features processor : $err"))
-      rawImage          <- ZIO
-                             .attemptBlocking(fr.janalyse.sotohp.media.imaging.BasicImaging.load(original.absoluteMediaPath))
-                             .mapError(th => ServiceInternalIssue(s"Couldn't load original image : $th"))
-      rotatedImage      <- ZIO
-                             .attemptBlocking(fr.janalyse.sotohp.media.imaging.BasicImaging.rotate(rawImage, rotation))
-                             .mapError(th => ServiceInternalIssue(s"Couldn't rotate original image : $th"))
-      // Drop all existing faces (and their dependent data) before re-detecting on the rotated image.
-      existingFaceIds   <- originalFaces(original.id).map(_.map(_.faces.map(_.faceId)).getOrElse(Nil))
-      _                 <- ZIO.foreachDiscard(existingFaceIds)(faceDelete)
-      // Re-detect faces with new bounding boxes from the rotated image.
-      detected          <- facesProcessor
-                             .extractFaces(original, rotatedImage)
-                             .mapError(err => ServiceInternalIssue(s"Unable to re-detect faces : $err"))
-      _                 <- collections.originalFaces
-                             .upsertOverwrite(original.id, detected.into[DaoOriginalFaces].transform)
-                             .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
-      _                 <- ZIO.foreachDiscard(detected.faces) { face =>
-                             collections.detectedFaces
-                               .upsertOverwrite(face.faceId, face.into[DaoDetectedFace].transform)
-                               .mapError(err => ServiceDatabaseIssue(s"Unable to store computed detected face : $err"))
-                           }
-      // Compute features on the freshly-detected faces using the same rotated image.
-      computed          <- featuresProcessor
-                             .extractFaceFeatures(detected, rotatedImage)
-                             .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces features : $err"))
-      _                 <- ZIO.foreachDiscard(computed.features) { face =>
-                             collections.faceFeatures
-                               .upsertOverwrite(face.faceId, face.into[DaoFaceFeatures].transform)
-                               .mapError(err => ServiceDatabaseIssue(s"Unable to store computed detected face : $err"))
-                           }
-      _                 <- collections.originalFaceFeatures
-                             .upsertOverwrite(
-                               original.id,
-                               computed
-                                 .into[DaoOriginalFaceFeatures]
-                                 .withFieldComputed(_.originalId, _.original.id)
-                                 .transform
-                             )
-                             .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
-    } yield Some(computed)
+  override def facesDetectPreview(originalId: OriginalId, rotationDegrees: Int): IO[ServiceIssue, List[BoundingBox]] = {
+    for {
+      original       <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      facesProcessor <- processors.faces
+                          .mapError(err => ServiceInternalIssue(s"Unable to get faces processor : $err"))
+      rotatedImage   <- facesProcessor
+                          .getOriginalBufferedImage(original, rotationDegrees)
+                          .mapError(err => ServiceInternalIssue(s"Couldn't rotate original image : $err"))
+      detected       <- facesProcessor
+                          .detectBoundingBoxes(original, rotatedImage)
+                          .mapError(err => ServiceInternalIssue(s"Unable to detect faces : $err"))
+    } yield detected
+  }
+
+  override def facesRemapForRotation(originalId: OriginalId, fromRotationDegrees: Int, toRotationDegrees: Int): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
+    val delta = ((toRotationDegrees - fromRotationDegrees) / 90) % 4
+    val logic = for {
+      original          <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      existingFaces     <- originalFaces(originalId).map(_.map(_.faces).getOrElse(Nil))
+      result            <- if (existingFaces.isEmpty || delta == 0) ZIO.none
+                            else {
+                              for {
+                                now               <- Clock.currentDateTime
+                                facesProcessor    <- processors.faces
+                                                       .mapError(err => ServiceInternalIssue(s"Unable to get faces processor : $err"))
+                                featuresProcessor <- processors.faceFeatures
+                                                       .mapError(err => ServiceInternalIssue(s"Unable to get face features processor : $err"))
+                                rotatedImage      <- facesProcessor
+                                                       .getOriginalBufferedImage(original, toRotationDegrees)
+                                                       .mapError(err => ServiceInternalIssue(s"Couldn't rotate original image : $err"))
+                                // Exact geometric remap - keeps faceId, identifiedPersonId, inferred*, everything but the box.
+                                remapped           = existingFaces.map(face => face.copy(box = face.box.rotatedClockwise90(delta)))
+                                // Re-crop each cached face thumbnail from the newly-rotated image at its new box.
+                                _                 <- ZIO
+                                                       .foreachDiscard(remapped)(face => facesProcessor.extractThenCacheFaceImageFromOriginal(face, rotatedImage))
+                                                       .mapError(err => ServiceInternalIssue(s"Unable to re-crop remapped face image : $err"))
+                                _                 <- ZIO.foreachDiscard(remapped) { face =>
+                                                       collections.detectedFaces
+                                                         .upsertOverwrite(face.faceId, face.into[DaoDetectedFace].transform)
+                                                         .mapError(err => ServiceDatabaseIssue(s"Unable to store remapped face : $err"))
+                                                     }
+                                remappedOriginal   = OriginalFaces(original, ProcessedStatus(successful = true, timestamp = now), remapped)
+                                _                 <- collections.originalFaces
+                                                       .upsertOverwrite(originalId, remappedOriginal.into[DaoOriginalFaces].transform)
+                                                       .mapError(err => ServiceDatabaseIssue(s"Unable to store remapped faces : $err"))
+                                // The face thumbnails changed pixels (they're now upright), so features must be recomputed -
+                                // this does not touch identifiedPersonId, which lives on the Face record above, untouched.
+                                computed          <- featuresProcessor
+                                                       .extractFaceFeatures(remappedOriginal, rotatedImage)
+                                                       .mapError(err => ServiceInternalIssue(s"Unable to extract remapped faces features : $err"))
+                                _                 <- ZIO.foreachDiscard(computed.features) { face =>
+                                                       collections.faceFeatures
+                                                         .upsertOverwrite(face.faceId, face.into[DaoFaceFeatures].transform)
+                                                         .mapError(err => ServiceDatabaseIssue(s"Unable to store computed face features : $err"))
+                                                     }
+                                _                 <- collections.originalFaceFeatures
+                                                       .upsertOverwrite(
+                                                         originalId,
+                                                         computed
+                                                           .into[DaoOriginalFaceFeatures]
+                                                           .withFieldComputed(_.originalId, _.original.id)
+                                                           .transform
+                                                       )
+                                                       .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
+                              } yield Some(computed)
+                            }
+    } yield result
     logic.uninterruptible
   }
 

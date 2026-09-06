@@ -23,6 +23,10 @@ run-stats:
 run-gps-fix:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GpsLocationFix
 
+# Report-only by default; pass ARGS="--fix" to actually remap faces stuck on their pre-rotation frame.
+run-face-orientation-audit:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceOrientationAudit $(ARGS)
+
 run-reindex:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Reindex
 

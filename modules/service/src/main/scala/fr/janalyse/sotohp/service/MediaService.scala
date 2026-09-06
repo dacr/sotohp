@@ -65,10 +65,19 @@ trait MediaService {
   def originalFaces(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaces]]
   def originalFacesFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]]
 
-  /** Force-recompute face features for the given media using its (possibly user-customized) orientation.
-    * Refreshes cached face crops on disk so the visual representation stays consistent with the new features.
+  /** Detects face bounding boxes on the given original at the given rotation - no Face records,
+    * no faceId allocation, no file or database writes. Used to check which rotation the currently
+    * stored faces for an original actually match.
     */
-  def originalFacesFeaturesRecompute(media: Media): IO[ServiceIssue, Option[OriginalFaceFeatures]]
+  def facesDetectPreview(originalId: OriginalId, rotationDegrees: Int): IO[ServiceIssue, List[BoundingBox]]
+
+  /** Remaps every currently stored face of the given original from one effective rotation to another :
+    * bounding boxes are transformed with an exact (lossless) 90°-multiple rotation, cached face crops are
+    * re-extracted from the newly-rotated image, and face features are recomputed - all in place, preserving
+    * faceId, identifiedPersonId and every other identity field. Used whenever a media's effective orientation
+    * changes (nothing is deleted or re-detected, so manually-added faces and person identifications survive).
+    */
+  def facesRemapForRotation(originalId: OriginalId, fromRotationDegrees: Int, toRotationDegrees: Int): IO[ServiceIssue, Option[OriginalFaceFeatures]]
   def originalObjects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]]
   def originalNormalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
   def originalMiniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
@@ -267,7 +276,9 @@ object MediaService {
   def originalClassifications(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalClassifications]] = ZIO.serviceWithZIO(_.originalClassifications(originalId))
   def originalFaces(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaces]]                     = ZIO.serviceWithZIO(_.originalFaces(originalId))
   def originalFacesFeatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]]      = ZIO.serviceWithZIO(_.originalFacesFeatures(originalId))
-  def originalFacesFeaturesRecompute(media: Media): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]]      = ZIO.serviceWithZIO(_.originalFacesFeaturesRecompute(media))
+  def facesDetectPreview(originalId: OriginalId, rotationDegrees: Int): ZIO[MediaService, ServiceIssue, List[BoundingBox]] = ZIO.serviceWithZIO(_.facesDetectPreview(originalId, rotationDegrees))
+  def facesRemapForRotation(originalId: OriginalId, fromRotationDegrees: Int, toRotationDegrees: Int): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]] =
+    ZIO.serviceWithZIO(_.facesRemapForRotation(originalId, fromRotationDegrees, toRotationDegrees))
   def originalObjects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.originalObjects(originalId))
   def originalNormalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.originalNormalized(originalId))
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))

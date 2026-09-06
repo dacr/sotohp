@@ -529,26 +529,40 @@ object ApiApp extends ZIOAppDefault {
   // -------------------------------------------------------------------------------------------------------------------
   def mediaUpdateLogic(accessKey: MediaAccessKey, toUpdate: ApiMediaUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
     val logic = for {
-      mediaTuple <- MediaService
-                      .mediaGet(accessKey)
-                      .logError("Couldn't get media")
-                      .mapError(err => ApiInternalError("Couldn't get media"))
-                      .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      _          <- MediaService
-                      .mediaUpdate(
-                        accessKey,
-                        mediaTuple.media.copy(
-                          description = toUpdate.description,
-                          starred = toUpdate.starred,
-                          keywords = toUpdate.keywords,
-                          orientation = toUpdate.orientation,
-                          shootDateTime = toUpdate.shootDateTime,
-                          userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]]
-                        )
-                      )
-                      .logError("Couldn't update media")
-                      .mapError(err => ApiInternalError("Couldn't update media"))
-      _          <- EventBusService.publish(ApiEvent("media", Some(accessKey.toString), ApiEventAction.updated))
+      mediaTuple      <- MediaService
+                           .mediaGet(accessKey)
+                           .logError("Couldn't get media")
+                           .mapError(err => ApiInternalError("Couldn't get media"))
+                           .someOrFail(ApiResourceNotFound("Couldn't find media"))
+      original         = mediaTuple.media.original
+      previousRotation = mediaTuple.media.orientation.orElse(original.orientation).map(_.rotationDegrees).getOrElse(0)
+      newRotation      = toUpdate.orientation.orElse(original.orientation).map(_.rotationDegrees).getOrElse(0)
+      _               <- MediaService
+                           .mediaUpdate(
+                             accessKey,
+                             mediaTuple.media.copy(
+                               description = toUpdate.description,
+                               starred = toUpdate.starred,
+                               keywords = toUpdate.keywords,
+                               orientation = toUpdate.orientation,
+                               shootDateTime = toUpdate.shootDateTime,
+                               userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]]
+                             )
+                           )
+                           .logError("Couldn't update media")
+                           .mapError(err => ApiInternalError("Couldn't update media"))
+      // The orientation just changed : existing face boxes/thumbnails were computed against the
+      // previous rotation and are now misaligned - remap them (in place, no data loss) rather than
+      // leaving stale faces behind.
+      _               <- MediaService
+                           .facesRemapForRotation(original.id, previousRotation, newRotation)
+                           .logError("Couldn't remap faces for the new orientation")
+                           .mapError(err => ApiInternalError("Couldn't remap faces for the new orientation"))
+                           .when(previousRotation != newRotation)
+      _               <- EventBusService.publish(ApiEvent("media", Some(accessKey.toString), ApiEventAction.updated))
+      _               <- EventBusService
+                           .publish(ApiEvent("face", Some(original.id.asString), ApiEventAction.updated))
+                           .when(previousRotation != newRotation)
     } yield ()
 
     logic
