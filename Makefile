@@ -17,6 +17,10 @@ run-face-inference-evaluate:
 run-face-fix:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FacesFix
 
+# Clear the inference leftovers (inferred person/confidence/timestamp/ignore) of faces identified by a human.
+run-face-inferred-fields-fix:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInferredFieldsFix
+
 run-stats:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 

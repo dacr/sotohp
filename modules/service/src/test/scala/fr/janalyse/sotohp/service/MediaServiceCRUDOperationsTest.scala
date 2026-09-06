@@ -111,8 +111,55 @@ object MediaServiceCRUDOperationsTest extends BaseSpecDefault {
     )
   )
 
+  def suiteFaces = {
+    val referenceDateTime = java.time.OffsetDateTime.parse("2024-01-01T10:00:00Z")
+
+    def fakeFace(identifiedPersonId: Option[PersonId], inferredIdentifiedPersonId: Option[PersonId]) = Face(
+      faceId = FaceId(ULID.newULID),
+      originalId = OriginalId(java.util.UUID.randomUUID()),
+      box = BoundingBox(XAxis(0.1d), YAxis(0.1d), BoxWidth(0.2d), BoxHeight(0.2d)),
+      identifiedPersonId = identifiedPersonId,
+      inferredIdentifiedPersonId = inferredIdentifiedPersonId,
+      inferredIdentifiedPersonConfidence = Some(0.9d),
+      inferredTimestamp = Some(referenceDateTime),
+      inferredIgnore = Some(true),
+      timestamp = referenceDateTime,
+      path = FacePath(Path.of("faces", s"${ULID.newULID}.jpg"))
+    )
+
+    suite("Faces")(
+      test("identifying a face drops all its inferred fields")(
+        for {
+          personId  <- ZIO.attempt(PersonId(ULID.newULID))
+          inferred   = fakeFace(identifiedPersonId = None, inferredIdentifiedPersonId = Some(personId))
+          _         <- MediaService.faceUpdate(inferred.faceId, inferred)
+          stored    <- MediaService.faceGet(inferred.faceId).some
+          _         <- MediaService.faceUpdate(inferred.faceId, inferred.copy(identifiedPersonId = Some(personId)))
+          confirmed <- MediaService.faceGet(inferred.faceId).some
+        } yield assertTrue(
+          stored.inferredIdentifiedPersonId.contains(personId),
+          stored.inferredIgnore.contains(true),
+          confirmed.identifiedPersonId.contains(personId),
+          !confirmed.hasInferredIdentification
+        )
+      ),
+      test("an unidentified face keeps its inferred fields")(
+        for {
+          personId <- ZIO.attempt(PersonId(ULID.newULID))
+          inferred  = fakeFace(identifiedPersonId = None, inferredIdentifiedPersonId = Some(personId))
+          _        <- MediaService.faceUpdate(inferred.faceId, inferred)
+          stored   <- MediaService.faceGet(inferred.faceId).some
+        } yield assertTrue(
+          stored.inferredIdentifiedPersonId.contains(personId),
+          stored.inferredIdentifiedPersonConfidence.contains(0.9d),
+          stored.inferredTimestamp.contains(referenceDateTime)
+        )
+      )
+    )
+  }
+
   override def spec: Spec[TestEnvironment & Scope, Any] =
-    (suiteStores + suiteOwners + suiteKeywords)
+    (suiteStores + suiteOwners + suiteKeywords + suiteFaces)
       .provideShared(
         LMDB.liveWithDatabaseName(s"sotohp-db-for-unit-tests-${getClass.getCanonicalName}-${ULID.newULID}") >>> MediaService.live,
         configProvider >>> SearchService.live,

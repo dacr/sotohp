@@ -564,18 +564,21 @@ class MediaServiceLive private (
     faceId: FaceId, // current face id
     face: Face      // may contain and updated id
   ): IO[ServiceIssue, Face] = {
-    if (face.faceId == faceId) {
+    // Invariant enforced here rather than at each call site (confirm/identify API endpoints, CLI tools, ...) :
+    // a face identified by a human keeps no inference bookkeeping.
+    val updated = if (face.identifiedPersonId.isDefined) face.withoutInferredIdentification else face
+    if (updated.faceId == faceId) {
       collections.detectedFaces
-        .upsert(faceId, _ => face.transformInto[DaoDetectedFace])
+        .upsert(faceId, _ => updated.transformInto[DaoDetectedFace])
         .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
-        .as(face)
+        .as(updated)
     } else {
       // TODO require transactions
       // id has been modified require delete record & then insert with the new access key
       // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
-      (collections.detectedFaces.delete(faceId).unit *> collections.detectedFaces.upsert(face.faceId, _ => face.transformInto[DaoDetectedFace])).uninterruptible
+      (collections.detectedFaces.delete(faceId).unit *> collections.detectedFaces.upsert(updated.faceId, _ => updated.transformInto[DaoDetectedFace])).uninterruptible
         .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
-        .as(face)
+        .as(updated)
     }
   }
 
