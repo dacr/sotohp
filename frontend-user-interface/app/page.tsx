@@ -265,6 +265,26 @@ function ViewerPageInner() {
     return () => window.removeEventListener("resize", onResize);
   }, [recompute]);
 
+  // Rotating doesn't change the <img> src (same accessKey, same normalized image bytes), so
+  // <img onLoad> - recompute()'s only other trigger besides resize/zoom - never refires. Without
+  // this, imgBox/imageRect keep the pre-rotation swap/size until something unrelated (a real
+  // resize, a zoom) happens to recompute() them again.
+  useEffect(() => {
+    recompute();
+  }, [rotateDeg, recompute]);
+
+  // The window can stay the same size while the container itself still changes (sidebar content
+  // reflowing after navigation, fonts settling, scrollbar appearing/disappearing) - `resize` alone
+  // misses that, leaving imageRect/imgBox computed against a stale container size until something
+  // else (zoom, a real window resize) happens to trigger a fresh recompute().
+  useEffect(() => {
+    const cont = containerRef.current;
+    if (!cont || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => recompute());
+    observer.observe(cont);
+    return () => observer.disconnect();
+  }, [recompute]);
+
   useEffect(() => {
     function onFsChange() {
       const cont = containerRef.current;
@@ -563,7 +583,12 @@ function ViewerPageInner() {
     const newDeg = (((currentDeg + deltaDeg) % 360) + 360) % 360;
     const newOrientation = degreesToOrientation(newDeg);
     const previous = media.orientation;
+    // The image rotates instantly (optimistic), but the backend needs a few seconds to remap
+    // face boxes/crops/features to the new rotation as part of the PUT below - so the *old* boxes
+    // would otherwise render, briefly but visibly wrong, on top of the *new* image orientation.
+    // Clear them now and only repopulate once loadFaces has the freshly remapped ones.
     setMedia({ ...media, orientation: newOrientation });
+    if (facesEnabled) setCurrentFaces([]);
     try {
       await api.updateMedia(media.accessKey, {
         starred: !!media.starred,
@@ -573,8 +598,12 @@ function ViewerPageInner() {
         shootDateTime: media.shootDateTime,
         userDefinedLocation: media.userDefinedLocation,
       });
+      // loadFaces only re-runs on accessKey change, not on orientation, so without this explicit
+      // call the overlay would stay empty until the page is fully reloaded.
+      if (facesEnabled) loadFaces(media.accessKey);
     } catch {
       setMedia({ ...media, orientation: previous });
+      if (facesEnabled) loadFaces(media.accessKey);
       showError("Failed to rotate media");
     }
   }
