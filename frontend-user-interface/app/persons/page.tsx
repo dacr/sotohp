@@ -8,6 +8,7 @@ import { LazyThumb } from "../../components/LazyThumb";
 import { Modal } from "../../components/Modal";
 import { useAllFaces, useIgnoreFace, useRestoreFace, useSetFacePerson } from "../../hooks/useFaces";
 import { useMediaAccessKey } from "../../hooks/useMediaAccessKey";
+import { usePersistedSet } from "../../hooks/usePersistedSet";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { useCreatePerson, useDeletePerson, usePersons, usePersonsMap, useUpdatePerson } from "../../hooks/usePersons";
 import { usePersonFaces } from "../../hooks/useFaces";
@@ -261,16 +262,30 @@ async function goToViewerForFace(api: ReturnType<typeof useAuth>["api"], router:
 
 function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => void }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { api } = useAuth();
-  const { data: allFaces = [], refetch } = usePersonFaces(person.id);
+  const { data: allFaces = [], isLoading: facesLoading, refetch } = usePersonFaces(person.id);
   const deletePerson = useDeletePerson();
   const setFacePerson = useSetFacePerson();
   const ignoreFace = useIgnoreFace();
   const restoreFace = useRestoreFace();
   const personsMap = usePersonsMap();
-  const [mode, setMode] = useState<"identified" | "validate">("identified");
+  // Lives in the URL (like every other "which view" bit on this page) rather than a plain
+  // useState, so NavHeader's per-tab URL memory carries it too - otherwise coming back to Persons
+  // after leaving mid-review always lands on "identified" first, and the mode-toggle button below
+  // resets the selection when clicked to get back to "validate", undoing the point of persisting
+  // `selected` at all.
+  const mode: "identified" | "validate" = searchParams.get("mode") === "validate" ? "validate" : "identified";
+  function setMode(next: "identified" | "validate") {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "validate") params.set("mode", "validate");
+    else params.delete("mode");
+    router.replace(`/persons/?${params.toString()}`);
+  }
   const [showIgnored, setShowIgnored] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = usePersistedSet(`person:${person.id}`);
+  const [justConfirmed, setJustConfirmed] = useState<Set<string>>(new Set());
+  const [justIgnored, setJustIgnored] = useState<Set<string>>(new Set());
   const [size, setSize] = useSizeClass("personFaces.size");
   const [editingFace, setEditingFace] = useState<DetectedFace | null>(null);
   const [editingPerson, setEditingPerson] = useState(false);
@@ -308,30 +323,18 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
   }
 
   const inferredForPerson = useMemo(() => {
-    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId === person.id);
-    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore);
+    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId === person.id && !justConfirmed.has(f.faceId));
+    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore && !justIgnored.has(f.faceId));
     return list;
-  }, [allFaces, showIgnored, person.id]);
+  }, [allFaces, showIgnored, person.id, justConfirmed, justIgnored]);
   const identifiedForPerson = useMemo(() => allFaces.filter((f) => f.identifiedPersonId === person.id), [allFaces, person.id]);
   const displayed = mode === "validate" ? inferredForPerson : identifiedForPerson;
 
-  function toggleSelect(faceId: string, index: number, shiftKey: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (shiftKey && selected.size > 0) {
-        // Range-select from the last toggled item isn't tracked precisely with a Set; keep it simple
-        // and just toggle this one — the common case (click, shift-click a range) still works because
-        // the browser's native shift-click-to-select-range convention isn't relied on elsewhere here.
-        next.has(faceId) ? next.delete(faceId) : next.add(faceId);
-      } else {
-        next.has(faceId) ? next.delete(faceId) : next.add(faceId);
-      }
-      return next;
-    });
-  }
-
   async function confirmFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
+    // Confirmed faces leave the "to validate" queue for good (identifiedPersonId gets set) - drop
+    // them from view immediately rather than waiting on the mutation + refetch round trip.
+    setJustConfirmed((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     try {
       for (const f of faces) await setFacePerson.mutateAsync({ faceId: f.faceId, personId: person.id });
       pushRecentPersonId(person.id);
@@ -339,20 +342,29 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
     } catch {
       showError("Failed to confirm faces");
     } finally {
-      setSelected(new Set());
+      setSelected((prev) => {
+        const next = new Set(prev);
+        faces.forEach((f) => next.delete(f.faceId));
+        return next;
+      });
       refetch();
     }
   }
 
   async function ignoreFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
+    setJustIgnored((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     try {
       for (const f of faces) await ignoreFace.mutateAsync(f.faceId);
       showSuccess(`Ignored ${faces.length} face(s)`);
     } catch {
       showError("Failed to ignore faces");
     } finally {
-      setSelected(new Set());
+      setSelected((prev) => {
+        const next = new Set(prev);
+        faces.forEach((f) => next.delete(f.faceId));
+        return next;
+      });
       refetch();
     }
   }
@@ -397,10 +409,7 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
               <button
                 className="btn btn-primary btn-sm"
                 disabled={mode === "identified" && inferredForPerson.length === 0}
-                onClick={() => {
-                  setMode((m) => (m === "validate" ? "identified" : "validate"));
-                  setSelected(new Set());
-                }}
+                onClick={() => setMode(mode === "validate" ? "identified" : "validate")}
               >
                 {mode === "validate" ? "Exit validation" : `to validate (${inferredForPerson.length})`}
               </button>
@@ -430,11 +439,17 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
           mode={mode}
           scopePersonId={person.id}
           personsMap={personsMap}
+          isLoading={facesLoading}
           selected={selected}
-          onToggleSelect={toggleSelect}
+          onSelectedChange={setSelected}
           onConfirmInferred={(f) => confirmFaces([f])}
           onIgnore={(f) => ignoreFaces([f])}
           onRestore={async (f) => {
+            setJustIgnored((prev) => {
+              const next = new Set(prev);
+              next.delete(f.faceId);
+              return next;
+            });
             try {
               await restoreFace.mutateAsync(f.faceId);
               showSuccess("Face restored");
@@ -487,7 +502,7 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
 function InferredFacesView({ onBack }: { onBack: () => void }) {
   const router = useRouter();
   const { api } = useAuth();
-  const { data: allFaces = [], refetch } = useAllFaces();
+  const { data: allFaces = [], isLoading: facesLoading, refetch } = useAllFaces();
   const personsMap = usePersonsMap();
   const setFacePerson = useSetFacePerson();
   const ignoreFace = useIgnoreFace();
@@ -496,7 +511,9 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
   const [sort, setSort] = useState<SortKey>("person");
   const [filter, setFilter] = useState("");
   const [showIgnored, setShowIgnored] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = usePersistedSet("inferred-all");
+  const [justConfirmed, setJustConfirmed] = useState<Set<string>>(new Set());
+  const [justIgnored, setJustIgnored] = useState<Set<string>>(new Set());
   const [editingFace, setEditingFace] = useState<DetectedFace | null>(null);
 
   useEffect(() => {
@@ -522,8 +539,8 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
   }
 
   const pending = useMemo(() => {
-    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId);
-    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore);
+    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId && !justConfirmed.has(f.faceId));
+    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore && !justIgnored.has(f.faceId));
     const q = filter.trim().toLowerCase();
     if (q) {
       list = list.filter((f) => {
@@ -557,18 +574,11 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
     }
     return sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allFaces, showIgnored, filter, sort, personsMap]);
-
-  function toggleSelect(faceId: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(faceId) ? next.delete(faceId) : next.add(faceId);
-      return next;
-    });
-  }
+  }, [allFaces, showIgnored, filter, sort, personsMap, justConfirmed, justIgnored]);
 
   async function confirmFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
+    setJustConfirmed((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     let ok = 0;
     try {
       for (const f of faces) {
@@ -580,13 +590,18 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
     } catch {
       showError("Failed to confirm faces");
     } finally {
-      setSelected(new Set());
+      setSelected((prev) => {
+        const next = new Set(prev);
+        faces.forEach((f) => next.delete(f.faceId));
+        return next;
+      });
       refetch();
     }
   }
 
   async function ignoreFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
+    setJustIgnored((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     let ok = 0;
     try {
       for (const f of faces) {
@@ -597,7 +612,11 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
     } catch {
       showError("Failed to ignore faces");
     } finally {
-      setSelected(new Set());
+      setSelected((prev) => {
+        const next = new Set(prev);
+        faces.forEach((f) => next.delete(f.faceId));
+        return next;
+      });
       refetch();
     }
   }
@@ -646,11 +665,17 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
           mode="validate"
           scopePersonId={null}
           personsMap={personsMap}
+          isLoading={facesLoading}
           selected={selected}
-          onToggleSelect={toggleSelect}
+          onSelectedChange={setSelected}
           onConfirmInferred={(f) => confirmFaces([f])}
           onIgnore={(f) => ignoreFaces([f])}
           onRestore={async (f) => {
+            setJustIgnored((prev) => {
+              const next = new Set(prev);
+              next.delete(f.faceId);
+              return next;
+            });
             try {
               await restoreFace.mutateAsync(f.faceId);
               showSuccess("Face restored");
