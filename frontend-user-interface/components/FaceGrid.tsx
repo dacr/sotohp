@@ -5,7 +5,7 @@
 // replaces the original's continuous drag-select — functionally equivalent for the common case,
 // far less event-wiring to get right.
 import { useAuth } from "../lib/keycloak-auth";
-import type { DetectedFace, Person } from "../lib/api-client";
+import { faceBoxVersion, type DetectedFace, type Person } from "../lib/api-client";
 
 export function FaceGrid({
   faces,
@@ -63,7 +63,7 @@ export function FaceGrid({
             }}
             title={mode === "validate" ? "Click to select · Shift-click for a range" : "Click to open in Viewer"}
           >
-            <img className="face-img" src={api.faceImageUrl(face.faceId)} alt="face" loading="lazy" decoding="async" draggable={false} />
+            <img className="face-img" src={api.faceImageUrl(face.faceId, faceBoxVersion(face))} alt="face" loading="lazy" decoding="async" draggable={false} />
             {mode === "validate" && (
               <button type="button" className="ft-view" title="Open media in viewer" aria-label="View" onClick={() => onOpenViewer(face)}>
                 🔍

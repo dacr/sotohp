@@ -19,6 +19,13 @@ export type Person = components["schemas"]["Person"];
 export type PersonCreate = components["schemas"]["PersonCreate"];
 export type PersonUpdate = components["schemas"]["PersonUpdate"];
 export type DetectedFace = components["schemas"]["DetectedFace"];
+
+// A cheap cache-busting token for faceImageUrl(): changes whenever the crop's box does, which is
+// exactly when the underlying cached image file gets regenerated (see faceImageUrl's comment).
+export function faceBoxVersion(face: Pick<DetectedFace, "box">): string {
+  const b = face.box;
+  return `${b.x},${b.y},${b.width},${b.height}`;
+}
 export type FaceCreate = components["schemas"]["FaceCreate"];
 export type OriginalFaces = components["schemas"]["OriginalFaces"];
 export type Portfolio = components["schemas"]["Portfolio"];
@@ -118,8 +125,17 @@ export class ApiClient {
   mediaOriginalUrl(mediaAccessKey: string): string {
     return `/api/media/${encodeURIComponent(mediaAccessKey)}/content/original${this.imageUrlAuth()}`;
   }
-  faceImageUrl(faceId: string): string {
-    return `/api/face/${encodeURIComponent(faceId)}/content${this.imageUrlAuth()}`;
+  // `version`, when given, is appended as a cache-busting query param. A face's cached crop file
+  // can be regenerated in place (e.g. re-cropped after a rotation) while its faceId - and so this
+  // URL - stays identical; the response is cached (`Cache-Control: max-age`, see ApiApp.addCacheHeader)
+  // keyed on that unchanged URL, so without a version bump the browser can keep serving crop bytes
+  // from before the regeneration. Pass something that changes whenever the crop does, e.g. the
+  // face's box coordinates.
+  faceImageUrl(faceId: string, version?: string): string {
+    const auth = this.imageUrlAuth();
+    const versionParam = version ? `v=${encodeURIComponent(version)}` : "";
+    const query = [auth.startsWith("?") ? auth.slice(1) : "", versionParam].filter(Boolean).join("&");
+    return `/api/face/${encodeURIComponent(faceId)}/content${query ? `?${query}` : ""}`;
   }
 
   // -- Media --------------------------------------------------------------------
