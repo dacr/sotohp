@@ -31,6 +31,7 @@ export function useMosaicFeed(containerRef: RefObject<HTMLDivElement | null>, gr
   const loadingRef = useRef(false);
   const mediaRef = useRef<Media[]>([]);
   mediaRef.current = media;
+  const scrollTsPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function claimKey(key: string): boolean {
     if (seenKeys.current.has(key)) return false;
@@ -226,12 +227,28 @@ export function useMosaicFeed(containerRef: RefObject<HTMLDivElement | null>, gr
     [api, appendOlder, containerRef, gridRef, streamBatch, updateCursor]
   );
 
+  // TIMESTAMP_STORAGE_KEY was previously only ever written by refreshAtTimestamp (initial mount,
+  // or an explicit timeline click) - organic scrolling updated the visual cursor but never saved
+  // anything, so leaving the tab and coming back (without an explicit ?ts= to restore, e.g. via
+  // the plain "Mosaic" nav link) always landed back at that last explicit jump, not wherever the
+  // user had actually scrolled to. Persist on scroll too, debounced since this fires every frame.
   function updateCursorFromScroll(scrollTop: number, scrollHeight: number, clientHeight: number) {
     if (mediaRef.current.length === 0) return;
     const pct = Math.max(0, Math.min(1, scrollTop / (scrollHeight - clientHeight || 1)));
     const idx = Math.floor(pct * (mediaRef.current.length - 1));
     const item = mediaRef.current[idx];
-    if (item) updateCursor(item.shootDateTime || item.original?.cameraShootDateTime || item.bag?.timestamp || null);
+    const ts = item ? item.shootDateTime || item.original?.cameraShootDateTime || item.bag?.timestamp || null : null;
+    if (ts) {
+      updateCursor(ts);
+      if (scrollTsPersistTimerRef.current) clearTimeout(scrollTsPersistTimerRef.current);
+      scrollTsPersistTimerRef.current = setTimeout(() => {
+        try {
+          localStorage.setItem(TIMESTAMP_STORAGE_KEY, ts);
+        } catch {
+          /* ignore */
+        }
+      }, 400);
+    }
   }
 
   // Initial range + first content load.
