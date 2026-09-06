@@ -6,6 +6,8 @@ import type { components } from "./api-types";
 export type Media = components["schemas"]["Media"];
 export type MediaLocation = components["schemas"]["MediaLocation"];
 export type MediaSelector = components["schemas"]["MediaSelector"];
+export type MediaTimeline = components["schemas"]["MediaTimeline"];
+export type MediaTimelineAnchor = components["schemas"]["MediaTimelineAnchor"];
 export type Original = components["schemas"]["Original"];
 export type Bag = components["schemas"]["Bag"];
 export type BagUpdate = components["schemas"]["BagUpdate"];
@@ -161,15 +163,23 @@ export class ApiClient {
     return this.fetchNdjsonStream("/api/medias/locations", onItem, signal);
   }
   // Stream up to `limit` medias starting just after `fromKey`, walking the timestamp index
-  // forward (newer) by default, or backward (older) when `backward` is true.
+  // forward (newer) by default, or backward (older) when `backward` is true. With `inclusive`,
+  // `fromKey`'s own media is emitted first, so a key can mark the exact start of a page.
   mediasStreamFromKey(
     fromKey: string,
-    opts: { backward?: boolean; limit?: number; signal?: AbortSignal; onItem: (item: Media) => void }
+    opts: { backward?: boolean; limit?: number; inclusive?: boolean; signal?: AbortSignal; onItem: (item: Media) => void }
   ): Promise<void> {
     const params = new URLSearchParams({ fromKey });
     if (opts.backward) params.set("backward", "true");
     if (opts.limit && opts.limit > 0) params.set("limit", String(opts.limit));
+    if (opts.inclusive) params.set("inclusive", "true");
     return this.fetchNdjsonStream(`/api/medias/stream?${params.toString()}`, opts.onItem, opts.signal);
+  }
+  // Exact media count + a newest-first seek table (one anchor key every `step` medias). The
+  // mosaic needs both: the count to size a virtualized grid, the anchors to fetch any page
+  // directly instead of walking to it.
+  mediasTimeline(step: number, signal?: AbortSignal): Promise<MediaTimeline> {
+    return this.request(`/api/medias/timeline?step=${step}`, { signal });
   }
 
   // -- State ----------------------------------------------------------------------

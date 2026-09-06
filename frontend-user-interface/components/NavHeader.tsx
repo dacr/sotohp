@@ -34,6 +34,15 @@ const TABS = [
 // person/portfolio/etc. you last had open there.
 const TAB_MEMORY_KEY = "sotohp:last-tab-url";
 
+// Not all search params describe where a tab *is*; some tell it where to go, once. The Mosaic's
+// `?ts=`/`?media=` (pushed by the Viewer's date button and by a Bag's date) are a jump instruction
+// — remembering them would make every later click on "Mosaic" replay that jump and discard
+// wherever the user had since scrolled to. Strip them when recording, keep them in the URL itself
+// so the link stays reloadable and shareable.
+const ONE_SHOT_PARAMS: Record<string, string[]> = {
+  "/mosaic": ["ts", "media"],
+};
+
 function loadTabMemory(): Record<string, string> {
   if (typeof window === "undefined") return {};
   try {
@@ -60,7 +69,9 @@ export function NavHeader() {
   useEffect(() => {
     const tab = TABS.find((t) => t.href === normalizePath(pathname));
     if (!tab) return;
-    const query = searchParams.toString();
+    const remembered = new URLSearchParams(searchParams.toString());
+    for (const param of ONE_SHOT_PARAMS[tab.href] ?? []) remembered.delete(param);
+    const query = remembered.toString();
     const full = query ? `${pathname}?${query}` : pathname;
     setTabMemory((prev) => {
       if (prev[tab.href] === full) return prev;

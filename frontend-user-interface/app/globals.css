@@ -69,19 +69,32 @@ main { flex: 1; position: relative; }
 
 /* Mosaic page */
 .mosaic-page { height: calc(100vh - 70px); overflow: hidden; display: flex; flex-direction: column; }
-.mosaic-header { display: flex; align-items: center; justify-content: flex-end; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; background: #fff; min-height: 50px; gap: 8px; }
+.mosaic-header { display: flex; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; background: #fff; min-height: 50px; gap: 8px; }
+.mosaic-count { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #6b7280; }
+.mosaic-busy { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #d1d5db; border-top-color: #2563eb; animation: mosaic-spin 700ms linear infinite; }
+@keyframes mosaic-spin { to { transform: rotate(360deg); } }
 .mosaic-body { display: flex; flex: 1; overflow: hidden; flex-direction: row; width: 100%; }
-.mosaic-container { padding: 0.75rem; flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; touch-action: pan-y; overscroll-behavior: contain; display: block; position: relative; overflow-anchor: none; }
-.mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
+/* Virtualized scroll port: `mosaic-sizer` is the full height of the whole collection (so the
+   native scrollbar is proportional to it), and `mosaic-window` holds only the rows on screen,
+   translated into place. Grid tracks and gap are set inline from lib/mosaic-geometry.ts — the
+   same numbers that decide which offsets are visible, so CSS and virtualization cannot drift. */
+/* No focus ring: the grid takes focus on mount purely so the browser's own Home/End/PageUp/
+   PageDown/arrow scrolling works without a click first, and ringing the entire viewport on every
+   visit would read as an error state rather than as guidance. */
+.mosaic-viewport { padding: 0.75rem; flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; touch-action: pan-y; overscroll-behavior: contain; position: relative; overflow-anchor: none; outline: none; }
+.mosaic-sizer { position: relative; width: 100%; }
+.mosaic-window { position: absolute; top: 0; left: 0; display: grid; will-change: transform; }
+.mosaic-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 14px; }
 .mosaic-tile { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 8px; cursor: pointer; background: #f3f4f6; }
+.mosaic-tile.placeholder { cursor: default; background: #f3f4f6; }
+/* Marks the photo a `?ts=` seek was aiming at, so arriving from the Viewer's date shows you which
+   tile it meant rather than just the right neighbourhood. */
+.mosaic-tile.highlighted { box-shadow: 0 0 0 3px #2563eb, 0 0 0 7px rgba(37,99,235,0.28); z-index: 3; animation: mosaic-highlight 2.6s ease-out; }
+@keyframes mosaic-highlight { 0%, 60% { box-shadow: 0 0 0 3px #2563eb, 0 0 0 7px rgba(37,99,235,0.28); } 100% { box-shadow: 0 0 0 3px rgba(37,99,235,0), 0 0 0 7px rgba(37,99,235,0); } }
 .mosaic-tile img.layer-mini, .mosaic-tile img.layer-hi { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; transform: rotate(var(--img-rotate, 0deg)); }
 .mosaic-tile img.layer-hi { opacity: 0; transition: opacity 160ms ease-in-out, transform 180ms ease-out; will-change: transform; }
 .mosaic-tile img.layer-hi.loaded { opacity: 1; }
 .mosaic-tile:hover img.layer-hi { transform: rotate(var(--img-rotate, 0deg)) scale(1.18); transition: transform 1400ms ease-out; }
-.mosaic-tile-filler { aspect-ratio: 1; pointer-events: none; }
-.mosaic-container.size-small .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 0.35rem; }
-.mosaic-container.size-medium .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.45rem; }
-.mosaic-container.size-max .mosaic-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; }
 
 .mosaic-download-btn { position: absolute; right: 4px; bottom: 4px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 12px; padding: 4px 6px; font-size: 11px; line-height: 1; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); z-index: 5; }
 .mosaic-tile:hover .mosaic-download-btn, .mosaic-tile:focus-within .mosaic-download-btn { opacity: 1; transform: translateY(0); }
@@ -94,11 +107,16 @@ main { flex: 1; position: relative; }
 
 .mosaic-scroll-indicator { position: fixed; right: 30px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 12px 16px; border-radius: 8px; font-size: 16px; font-weight: 600; pointer-events: none; z-index: 100; opacity: 0; transition: opacity 250ms ease; box-shadow: 0 4px 12px rgba(0,0,0,0.3); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); min-width: 140px; text-align: center; letter-spacing: 0.02em; }
 .mosaic-scroll-indicator.show { opacity: 1; }
+.mosaic-scroll-indicator .position { margin-top: 4px; font-size: 11px; font-weight: 500; color: #d1d5db; letter-spacing: 0; }
 
-.mosaic-timeline { touch-action: none; overscroll-behavior: contain; width: 64px; flex: 0 0 64px; min-width: 64px; max-width: 64px; position: relative; z-index: 2; border-right: 1px solid #e5e7eb; background: linear-gradient(to bottom, #fafafa, #f5f5f5); user-select: none; cursor: crosshair; overflow: visible; contain: layout; }
-.mosaic-timeline .year-line { position: absolute; left: 0; right: 0; height: 1px; background: #d1d5db; }
-.mosaic-timeline .year-label { position: absolute; left: 6px; font-size: 10px; color: #6b7280; transform: translateY(-50%); background: rgba(255,255,255,0.7); padding: 0 3px; border-radius: 3px; }
-.mosaic-timeline .cursor { position: absolute; left: 0; right: 0; height: 2px; background: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+.mosaic-timeline { touch-action: none; overscroll-behavior: contain; width: 64px; flex: 0 0 64px; min-width: 64px; max-width: 64px; position: relative; z-index: 2; border-right: 1px solid #e5e7eb; background: linear-gradient(to bottom, #fafafa, #f5f5f5); user-select: none; cursor: ns-resize; overflow: visible; contain: layout; }
+.mosaic-timeline .year-mark { position: absolute; left: 0; right: 0; }
+.mosaic-timeline .year-line { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: #e5e7eb; }
+.mosaic-timeline .year-mark.labelled .year-line { background: #d1d5db; }
+.mosaic-timeline .year-label { position: absolute; top: 0; left: 6px; font-size: 10px; color: #6b7280; transform: translateY(-50%); background: rgba(255,255,255,0.7); padding: 0 3px; border-radius: 3px; }
+.mosaic-timeline .year-mark.at-start .year-label { transform: translateY(0); }
+.mosaic-timeline .year-mark.at-end .year-label { transform: translateY(-100%); }
+.mosaic-timeline .cursor { position: absolute; left: 0; right: 0; height: 2px; background: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); pointer-events: none; }
 .mosaic-timeline .tooltip { position: absolute; left: calc(100% + 8px); transform: translateY(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 4px 6px; border-radius: 4px; font-size: 10px; line-height: 1.2; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.2); pointer-events: none; display: none; z-index: 10; }
 .mosaic-timeline .tooltip.show { display: block; }
 

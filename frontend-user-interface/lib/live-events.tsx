@@ -3,7 +3,7 @@
 // Subscribes once to the SSE bus (lib/sse.ts) and invalidates the React Query cache entries a
 // given event could affect, so every open tab picks up create/update/delete without polling or a
 // manual reload. Deliberately narrow: this drives simple entity lists/details only. The mosaic
-// and map views manage their own bespoke streamed/clustered state (hooks/useMosaicFeed.ts,
+// and map views manage their own bespoke streamed/clustered state (hooks/useMosaicPages.ts,
 // hooks/useMapMarkers.ts) and are not force-reflowed here — invalidating mid-scroll would yank
 // content out from under the viewer, which is worse than a slightly stale tile.
 import { useQueryClient, type QueryKey } from "@tanstack/react-query";

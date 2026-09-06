@@ -246,6 +246,15 @@
               "type" : "integer",
               "format" : "int32"
             }
+          },
+          {
+            "name" : "inclusive",
+            "in" : "query",
+            "description" : "if true, `fromKey`'s own media is emitted first (so the key marks the exact start of a page)",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
           }
         ],
         "responses" : {
@@ -260,7 +269,89 @@
             }
           },
           "400" : {
-            "description" : "Invalid value for: query parameter fromKey, Invalid value for: query parameter backward, Invalid value for: query parameter limit",
+            "description" : "Invalid value for: query parameter fromKey, Invalid value for: query parameter backward, Invalid value for: query parameter limit, Invalid value for: query parameter inclusive",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/medias/timeline" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Total media count plus a newest-first seek table with one anchor key every `step` medias",
+        "operationId" : "Media timeline",
+        "parameters" : [
+          {
+            "name" : "step",
+            "in" : "query",
+            "description" : "medias between two anchors (default 100, clamped to [20, 200])",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MediaTimeline"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter step",
             "content" : {
               "text/plain" : {
                 "schema" : {
@@ -5053,6 +5144,52 @@
           "previous",
           "random"
         ]
+      },
+      "MediaTimeline" : {
+        "title" : "MediaTimeline",
+        "type" : "object",
+        "required" : [
+          "total",
+          "step"
+        ],
+        "properties" : {
+          "total" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "step" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "anchors" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MediaTimelineAnchor"
+            }
+          }
+        }
+      },
+      "MediaTimelineAnchor" : {
+        "title" : "MediaTimelineAnchor",
+        "type" : "object",
+        "required" : [
+          "offset",
+          "accessKey",
+          "timestamp"
+        ],
+        "properties" : {
+          "offset" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "accessKey" : {
+            "type" : "string"
+          },
+          "timestamp" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
       },
       "Original" : {
         "title" : "Original",

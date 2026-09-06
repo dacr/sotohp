@@ -10,7 +10,7 @@ import fr.janalyse.sotohp.service.model.{KeywordRules, SynchronizeAction, Synchr
 import zio.lmdb.LMDB
 
 import java.net.URL
-import java.time.OffsetDateTime
+import java.time.{Instant, OffsetDateTime}
 import java.util.regex.Pattern
 
 type MediaTuple = (key: MediaAccessKey, media: Media)
@@ -26,6 +26,22 @@ case class MediaLocation(
   bagId: Option[BagId]
 )
 
+// One entry of the mosaic seek table: the media sitting at absolute offset `offset` when medias
+// are enumerated newest-first. `accessKey` is a valid `mediaStream` start key (inclusive), so a
+// client can turn "I need the items at offset N" into a single streaming call.
+case class MediaTimelineAnchor(
+  offset: Long,
+  accessKey: MediaAccessKey,
+  timestamp: Instant
+)
+
+// Exact media count plus one anchor every `step` medias, newest-first.
+case class MediaTimeline(
+  total: Long,
+  step: Int,
+  anchors: List[MediaTimelineAnchor]
+)
+
 trait MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -38,7 +54,8 @@ trait MediaService {
   def mediaPrevious(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
   def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
   def mediaLast(): IO[ServiceIssue, Option[MediaTuple]]
-  def mediaStream(fromKey: MediaAccessKey, backward: Boolean, limit: Int): Stream[ServiceStreamIssue, MediaTuple]
+  def mediaStream(fromKey: MediaAccessKey, backward: Boolean, limit: Int, inclusive: Boolean): Stream[ServiceStreamIssue, MediaTuple]
+  def mediaTimeline(step: Int): IO[ServiceIssue, MediaTimeline]
   def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]]
   def mediaGet(id: OriginalId): IO[ServiceIssue, Option[MediaTuple]]
   def mediaGetAt(index: Long): IO[ServiceIssue, Option[MediaTuple]]
@@ -249,8 +266,10 @@ object MediaService {
 
   def mediaLast(): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaLast())
 
-  def mediaStream(fromKey: MediaAccessKey, backward: Boolean, limit: Int): ZStream[MediaService, ServiceStreamIssue, MediaTuple] =
-    ZStream.serviceWithStream(_.mediaStream(fromKey, backward, limit))
+  def mediaStream(fromKey: MediaAccessKey, backward: Boolean, limit: Int, inclusive: Boolean = false): ZStream[MediaService, ServiceStreamIssue, MediaTuple] =
+    ZStream.serviceWithStream(_.mediaStream(fromKey, backward, limit, inclusive))
+
+  def mediaTimeline(step: Int): ZIO[MediaService, ServiceIssue, MediaTimeline] = ZIO.serviceWithZIO(_.mediaTimeline(step))
 
   def mediaGet(key: MediaAccessKey): ZIO[MediaService, ServiceIssue, Option[MediaTuple]] = ZIO.serviceWithZIO(_.mediaGet(key))
 

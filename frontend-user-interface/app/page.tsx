@@ -894,7 +894,9 @@ function ViewerPageInner() {
               <span
                 style={dateTs ? { cursor: "pointer" } : undefined}
                 title={dateTs ? "Open in Mosaic at this date" : ""}
-                onClick={dateTs ? () => router.push(`/mosaic/?ts=${encodeURIComponent(dateTs)}`) : undefined}
+                // The date alone only locates the Mosaic's page; sending the key too lets it land
+                // on this exact photo (see app/mosaic/page.tsx's two-phase seek).
+                onClick={dateTs ? () => router.push(`/mosaic/?ts=${encodeURIComponent(dateTs)}${media ? `&media=${encodeURIComponent(media.accessKey)}` : ""}`) : undefined}
               >
                 {dateTs ? new Date(dateTs).toLocaleString() : "-"}
               </span>

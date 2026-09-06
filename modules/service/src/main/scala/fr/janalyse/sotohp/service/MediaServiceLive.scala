@@ -218,7 +218,7 @@ class MediaServiceLive private (
   // entries inside a single LMDB read transaction means the per-step cursor
   // open/close stays in the microsecond range — vs. the client doing N HTTP
   // round-trips, each paying request/response/serialization latency.
-  override def mediaStream(fromKey: MediaAccessKey, backward: Boolean, limit: Int): Stream[ServiceStreamIssue, MediaTuple] = {
+  override def mediaStream(fromKey: MediaAccessKey, backward: Boolean, limit: Int, inclusive: Boolean): Stream[ServiceStreamIssue, MediaTuple] = {
     val safeLimit = math.max(0, limit)
     val collectKeys: IO[ServiceStreamIssue, List[(Instant, OriginalId)]] =
       collections.originalIdByTimestamp
@@ -233,7 +233,19 @@ class MediaServiceLive private (
               }
             }
           }
-          loop(fromKey.toNative, safeLimit, Nil)
+          val startKey = fromKey.toNative
+          // `inclusive` makes `fromKey` itself the first emitted item, which is what lets a caller
+          // treat a known key as the exact start of a page (see mediaTimeline's anchors) instead of
+          // "one before the page". Guarded by an index lookup so a stale/unknown key still behaves
+          // like the exclusive walk rather than emitting a phantom entry.
+          val seed: IO[zio.lmdb.FetchErrors, (Int, List[(Instant, OriginalId)])] =
+            if (!inclusive || safeLimit == 0) ZIO.succeed(safeLimit -> Nil)
+            else
+              ops.fetch(startKey).map {
+                case Some(_) => (safeLimit - 1) -> List(startKey)
+                case None    => safeLimit       -> Nil
+              }
+          seed.flatMap((remaining, acc) => loop(startKey, remaining, acc))
         }
         .mapError(err => ServiceStreamInternalIssue(s"Couldn't walk media timestamp index: $err"))
 
@@ -251,6 +263,33 @@ class MediaServiceLive private (
                 .map(media => MediaAccessKey(timestamp, originalId) -> media)
           }
       }
+  }
+
+  // Walks the whole (timestamp, originalId) index newest-first, touching only index keys — no
+  // `medias` fetch, no join — and reports the exact total plus every `step`-th key. That gives a
+  // client two things it cannot get from a cursor-only API: the real number of medias (so a
+  // virtualized grid can size its scrollbar correctly up front) and a seek table turning any
+  // absolute offset into a key it can stream from, in one round trip instead of walking there.
+  // Cost is one read transaction of N cursor steps (microseconds each) and a result of N/step
+  // entries, so `step` trades payload size against how many extra items a client must skip.
+  override def mediaTimeline(step: Int): IO[ServiceIssue, MediaTimeline] = {
+    val safeStep = math.max(1, step)
+    collections.originalIdByTimestamp
+      .readOnly { ops =>
+        def loop(currentKey: Option[(Instant, OriginalId)], count: Long, acc: List[MediaTimelineAnchor]): IO[zio.lmdb.FetchErrors, MediaTimeline] = {
+          currentKey match {
+            case None                          => ZIO.succeed(MediaTimeline(total = count, step = safeStep, anchors = acc.reverse))
+            case Some(key @ (timestamp, oid))  =>
+              val nextAcc =
+                if (count % safeStep == 0) MediaTimelineAnchor(offset = count, accessKey = MediaAccessKey(timestamp, oid), timestamp = timestamp) :: acc
+                else acc
+              ops.previous(key).flatMap(found => loop(found.map((k, _) => k), count + 1L, nextAcc))
+          }
+        }
+        ops.last().flatMap(found => loop(found.map((k, _) => k), 0L, Nil))
+      }
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't walk media timestamp index: $err"))
+      .logError("Couldn't build the media timeline")
   }
 
   override def mediaGet(key: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {

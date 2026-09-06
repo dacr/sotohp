@@ -819,11 +819,11 @@ object ApiApp extends ZIOAppDefault {
   // Hard caps the limit so a misbehaving client can't ask for the world.
   val mediaStreamMaxLimit = 200
 
-  def mediaStreamLogic(fromKey: String, backward: Boolean, limit: Option[Int]): ZStream[MediaService, Throwable, ApiMedia] = {
+  def mediaStreamLogic(fromKey: String, backward: Boolean, limit: Option[Int], inclusive: Boolean): ZStream[MediaService, Throwable, ApiMedia] = {
     val effectiveLimit = limit.getOrElse(50).max(0).min(mediaStreamMaxLimit)
     val key            = MediaAccessKey(fromKey)
     MediaService
-      .mediaStream(key, backward, effectiveLimit)
+      .mediaStream(key, backward, effectiveLimit, inclusive)
       .map { mediaTuple =>
         mediaTuple.media.into[ApiMedia]
           .withFieldConst(_.accessKey, mediaTuple.key)
@@ -841,6 +841,7 @@ object ApiApp extends ZIOAppDefault {
       .in(query[String]("fromKey").description("media access key to start streaming from (exclusive)"))
       .in(query[Option[Boolean]]("backward").description("if true, walk toward older medias instead of newer"))
       .in(query[Option[Int]]("limit").description(s"maximum number of medias to return (default 50, max $mediaStreamMaxLimit)"))
+      .in(query[Option[Boolean]]("inclusive").description("if true, `fromKey`'s own media is emitted first (so the key marks the exact start of a page)"))
       .get
       .out(
         streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
@@ -848,16 +849,51 @@ object ApiApp extends ZIOAppDefault {
       )
       .errorOutVariantPrepend(statusForApiInternalError)
       .serverLogic[ApiEnv](user =>
-        (fromKey, backward, limit) =>
+        (fromKey, backward, limit, inclusive) =>
           for {
             ms        <- ZIO.service[MediaService]
-            byteStream = mediaStreamLogic(fromKey, backward.getOrElse(false), limit)
+            byteStream = mediaStreamLogic(fromKey, backward.getOrElse(false), limit, inclusive.getOrElse(false))
                            .map(writeToString(_))
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
           } yield byteStream
       )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  // The mosaic renders a virtualized grid: to size its scrollbar it needs the exact number of
+  // medias up front, and to render an arbitrary scroll offset it needs to turn that offset into a
+  // key it can stream from. Both come from a single index-only walk here (no media records are
+  // read), returning the total plus one anchor key every `step` medias, newest-first.
+  val mediaTimelineDefaultStep = 100
+  val mediaTimelineMinStep     = 20
+
+  def mediaTimelineLogic(step: Option[Int]): ZIO[MediaService, ApiInternalError, ApiMediaTimeline] = {
+    val effectiveStep = step.getOrElse(mediaTimelineDefaultStep).max(mediaTimelineMinStep).min(mediaStreamMaxLimit)
+    MediaService
+      .mediaTimeline(effectiveStep)
+      .mapBoth(
+        err => ApiInternalError("Couldn't build the media timeline"),
+        timeline =>
+          ApiMediaTimeline(
+            total = timeline.total,
+            step = timeline.step,
+            anchors = timeline.anchors.map(anchor => ApiMediaTimelineAnchor(offset = anchor.offset, accessKey = anchor.accessKey, timestamp = anchor.timestamp))
+          )
+      )
+  }
+
+  val mediaTimelineEndpoint =
+    secureMediaEndpoint(true)
+      .name("Media timeline")
+      .summary("Total media count plus a newest-first seek table with one anchor key every `step` medias")
+      .in("timeline")
+      .in(query[Option[Int]]("step").description(s"medias between two anchors (default $mediaTimelineDefaultStep, clamped to [$mediaTimelineMinStep, $mediaStreamMaxLimit])"))
+      .get
+      .out(jsonBody[ApiMediaTimeline])
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user => step => mediaTimelineLogic(step))
 
   // -------------------------------------------------------------------------------------------------------------------
   enum MediaSelector {
@@ -1954,6 +1990,7 @@ object ApiApp extends ZIOAppDefault {
     mediaLocationListEndpoint,
     mediaListEndpoint,
     mediaStreamEndpoint,
+    mediaTimelineEndpoint,
     mediaSelectEndpoint,
     mediaGetEndpoint,
     mediaUpdateEndpoint,

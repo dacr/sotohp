@@ -1,17 +1,42 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/keycloak-auth";
 import { mediaTimestamp } from "../lib/media-timestamp";
 import { orientationToDegrees } from "../lib/orientation";
 import type { Media } from "../lib/api-client";
 
-export function MosaicTile({ media }: { media: Media }) {
+// How long a hovered tile keeps its full-size layer after the pointer leaves. The normalized
+// image is far heavier than the miniature, and sweeping the pointer across a grid touches dozens
+// of tiles in a second; dropping the layer again means a sweep costs one decoded image at a time
+// instead of one per tile passed over. Long enough that moving out and back doesn't re-flash.
+const HI_RES_LINGER_MS = 1500;
+
+export function MosaicTile({ media, offset, highlighted = false }: { media: Media; offset: number; highlighted?: boolean }) {
   const { api } = useAuth();
   const router = useRouter();
   const [hiLoaded, setHiLoaded] = useState(false);
   const [wantHi, setWantHi] = useState(false);
+  const dropTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (dropTimer.current) clearTimeout(dropTimer.current); }, []);
+
+  function holdHiRes() {
+    if (dropTimer.current) {
+      clearTimeout(dropTimer.current);
+      dropTimer.current = null;
+    }
+    setWantHi(true);
+  }
+
+  function releaseHiRes() {
+    if (dropTimer.current) clearTimeout(dropTimer.current);
+    dropTimer.current = setTimeout(() => {
+      setWantHi(false);
+      setHiLoaded(false);
+    }, HI_RES_LINGER_MS);
+  }
 
   const deg = orientationToDegrees(media.orientation);
   const ts = mediaTimestamp(media);
@@ -19,13 +44,15 @@ export function MosaicTile({ media }: { media: Media }) {
 
   return (
     <div
-      className="mosaic-tile"
+      className={`mosaic-tile${highlighted ? " highlighted" : ""}`}
       data-media-key={media.accessKey}
+      data-offset={offset}
       style={deg ? ({ "--img-rotate": `${deg}deg` } as React.CSSProperties) : undefined}
       title={tooltip}
       onClick={() => router.push(`/?media=${encodeURIComponent(media.accessKey)}`)}
-      onMouseEnter={() => setWantHi(true)}
-      onTouchStart={() => setWantHi(true)}
+      onMouseEnter={holdHiRes}
+      onMouseLeave={releaseHiRes}
+      onTouchStart={holdHiRes}
     >
       <img className="layer-mini" src={api.mediaMiniatureUrl(media.accessKey)} loading="lazy" decoding="async" alt="" />
       {wantHi && (
