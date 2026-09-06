@@ -21,7 +21,6 @@ package object protocol {
   private inline def doubleAs[T]: Schema[T]         = Schema.schemaForDouble.as[T]
   private inline def boolAs[T]: Schema[T]           = Schema.schemaForBoolean.as[T]
   private inline def offsetDateTimeAs[T]: Schema[T] = Schema.schemaForOffsetDateTime.as[T]
-  private inline def enumerationAs[T]: Schema[T]    = Schema.derivedEnumeration[T].defaultStringBased
 
   // UUID-based wrappers
   given Schema[OriginalId]  = uuidAs
@@ -89,7 +88,9 @@ package object protocol {
   given Schema[IncludeMask] = strAs
   given Schema[IgnoreMask]  = strAs
 
-  // Enums
-  given Schema[Orientation] = enumerationAs
-  given Schema[MediaKind]   = enumerationAs
+  // Enums - encoded on the wire as their ordinal (see service.json.package's jsoniter codecs,
+  // `x.ordinal` / `fromOrdinal`), not by name, so the documented schema (and anything generated
+  // from it, e.g. the frontend's api-types.ts) must be int-based to match reality.
+  given Schema[Orientation] = intAs
+  given Schema[MediaKind]   = intAs
 }

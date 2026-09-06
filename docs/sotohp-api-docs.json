@@ -4958,7 +4958,8 @@
             }
           },
           "orientation" : {
-            "$ref" : "#/components/schemas/Orientation"
+            "type" : "integer",
+            "format" : "int32"
           },
           "shootDateTime" : {
             "type" : "string",
@@ -4996,7 +4997,8 @@
             }
           },
           "orientation" : {
-            "$ref" : "#/components/schemas/Orientation"
+            "type" : "integer",
+            "format" : "int32"
           },
           "shootDateTime" : {
             "type" : "string",
@@ -5006,14 +5008,6 @@
             "$ref" : "#/components/schemas/Location"
           }
         }
-      },
-      "MediaKind" : {
-        "title" : "MediaKind",
-        "type" : "string",
-        "enum" : [
-          "Photo",
-          "Video"
-        ]
       },
       "MediaLocation" : {
         "title" : "MediaLocation",
@@ -5060,20 +5054,6 @@
           "random"
         ]
       },
-      "Orientation" : {
-        "title" : "Orientation",
-        "type" : "string",
-        "enum" : [
-          "Horizontal",
-          "MirrorHorizontal",
-          "MirrorHorizontalAndRotate270ClockWise",
-          "MirrorHorizontalAndRotate90ClockWise",
-          "MirrorVertical",
-          "Rotate180",
-          "Rotate270ClockWise",
-          "Rotate90ClockWise"
-        ]
-      },
       "Original" : {
         "title" : "Original",
         "type" : "object",
@@ -5092,7 +5072,8 @@
             "format" : "uuid"
           },
           "kind" : {
-            "$ref" : "#/components/schemas/MediaKind"
+            "type" : "integer",
+            "format" : "int32"
           },
           "cameraShootDateTime" : {
             "type" : "string",
@@ -5108,7 +5089,8 @@
             "$ref" : "#/components/schemas/Dimension"
           },
           "orientation" : {
-            "$ref" : "#/components/schemas/Orientation"
+            "type" : "integer",
+            "format" : "int32"
           },
           "location" : {
             "$ref" : "#/components/schemas/Location"
