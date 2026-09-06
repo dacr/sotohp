@@ -8,6 +8,7 @@ import { LazyThumb } from "../../components/LazyThumb";
 import { Modal } from "../../components/Modal";
 import { useAllFaces, useIgnoreFace, useRestoreFace, useSetFacePerson } from "../../hooks/useFaces";
 import { useMediaAccessKey } from "../../hooks/useMediaAccessKey";
+import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { useCreatePerson, useDeletePerson, usePersons, usePersonsMap, useUpdatePerson } from "../../hooks/usePersons";
 import { usePersonFaces } from "../../hooks/useFaces";
 import { useAuth } from "../../lib/keycloak-auth";
@@ -358,9 +359,10 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
 
   const selectedFaces = displayed.filter((f) => selected.has(f.faceId));
   const pname = personLabel(person);
+  const scrollRef = useScrollRestoration<HTMLElement>(`persons:${person.id}:${mode}`);
 
   return (
-    <section className="page">
+    <section className="page" ref={scrollRef}>
       <div className={`person-faces-view size-${size}`}>
         <div className="person-faces-header">
           <button type="button" className="back" onClick={onBack}>
