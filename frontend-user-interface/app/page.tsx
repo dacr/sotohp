@@ -790,10 +790,11 @@ function ViewerPageInner() {
           </div>
 
           {facesEnabled && (
-            <div style={overlayStyle ? { position: "absolute", inset: 0 } : undefined}>
-              <div className="faces-overlay-wrap" style={overlayStyle}>
-                <FacesOverlay rect={imageRect} faces={currentFaces} personsMap={personsMap} onConfirmInferred={confirmInferredFace} onEdit={setEditingFace} />
-              </div>
+            // .faces-overlay-wrap is absolutely positioned over the whole container, so it is the
+            // same box - and the same transform origin - as the image whether or not a zoom/pan
+            // transform is applied to it.
+            <div className="faces-overlay-wrap" style={overlayStyle}>
+              <FacesOverlay rect={imageRect} faces={currentFaces} personsMap={personsMap} onConfirmInferred={confirmInferredFace} onEdit={setEditingFace} />
             </div>
           )}
 
