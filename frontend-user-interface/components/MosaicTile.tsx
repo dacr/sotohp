@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/keycloak-auth";
 import { mediaTimestamp } from "../lib/media-timestamp";
-import { orientationToDegrees } from "../lib/orientation";
+import { displayRotationDegrees } from "../lib/orientation";
 import type { Media } from "../lib/api-client";
 
 // How long a hovered tile keeps its full-size layer after the pointer leaves. The normalized
@@ -38,7 +38,7 @@ export function MosaicTile({ media, offset, highlighted = false }: { media: Medi
     }, HI_RES_LINGER_MS);
   }
 
-  const deg = orientationToDegrees(media.orientation);
+  const deg = displayRotationDegrees(media);
   const ts = mediaTimestamp(media);
   const tooltip = [media.bag ? media.bag.name : "(no bag)", ts ? new Date(ts).toLocaleString() : null].filter(Boolean).join(" · ");
 

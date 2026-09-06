@@ -10,7 +10,7 @@ import { MediaEditModal } from "../components/MediaEditModal";
 import { useCurrentMedia } from "../hooks/useCurrentMedia";
 import { usePersonsMap } from "../hooks/usePersons";
 import { useAuth } from "../lib/keycloak-auth";
-import { degreesToOrientation, orientationToDegrees } from "../lib/orientation";
+import { degreesToOrientation, displayRotationDegrees, effectiveRotationDegrees } from "../lib/orientation";
 import { pushRecentPersonId } from "../lib/recent-persons";
 import { showError, showSuccess, showWarning } from "../lib/toast";
 import type { DetectedFace, Media } from "../lib/api-client";
@@ -99,7 +99,10 @@ function ViewerPageInner() {
   const slideshowModeRef = useRef(slideshowMode);
   slideshowModeRef.current = slideshowMode;
 
-  const rotateDeg = orientationToDegrees(media?.orientation);
+  // Only the leftover rotation: the served bytes already carry the original's EXIF one. This is
+  // also, by construction, the rotation that brings the image into the frame the face boxes are
+  // stored in - so FacesOverlay can go on placing them against imageRect with no angle of its own.
+  const rotateDeg = displayRotationDegrees(media);
   const wantsOriginal = isFullscreen || zoom > 1;
   const imgSrc = media ? (wantsOriginal ? api.mediaOriginalUrl(media.accessKey) : api.mediaNormalizedUrl(media.accessKey)) : undefined;
 
@@ -214,7 +217,7 @@ function ViewerPageInner() {
   const recompute = useCallback(() => {
     const cont = containerRef.current;
     const img = imgRef.current;
-    const deg = orientationToDegrees(mediaRef.current?.orientation);
+    const deg = displayRotationDegrees(mediaRef.current);
     if (deg === 90 || deg === 270) {
       const cw = cont?.clientWidth || 0;
       const ch = cont?.clientHeight || 0;
@@ -579,7 +582,10 @@ function ViewerPageInner() {
       showWarning("No media loaded");
       return;
     }
-    const currentDeg = orientationToDegrees(media.orientation);
+    // Turning from where the photo currently *stands*, which is the original's EXIF rotation until
+    // the user has overridden it - starting from 0 instead would make the first click on an
+    // EXIF-rotated photo jump to an unrelated angle.
+    const currentDeg = effectiveRotationDegrees(media);
     const newDeg = (((currentDeg + deltaDeg) % 360) + 360) % 360;
     const newOrientation = degreesToOrientation(newDeg);
     const previous = media.orientation;

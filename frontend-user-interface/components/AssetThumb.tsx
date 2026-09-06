@@ -9,7 +9,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useAuth } from "../lib/keycloak-auth";
 import { useInViewport } from "../hooks/useInViewport";
 import { useMediaAccessKey } from "../hooks/useMediaAccessKey";
-import { orientationToDegrees } from "../lib/orientation";
+import { displayRotationDegrees } from "../lib/orientation";
 import type { Asset } from "../lib/api-client";
 
 export function AssetThumb({ asset, resolveRotation = false }: { asset: Asset; resolveRotation?: boolean }) {
@@ -24,7 +24,7 @@ export function AssetThumb({ asset, resolveRotation = false }: { asset: Asset; r
     api
       .getMediaByKey(accessKey)
       .then((m) => {
-        if (!cancelled) setRotateDeg(orientationToDegrees(m.orientation));
+        if (!cancelled) setRotateDeg(displayRotationDegrees(m));
       })
       .catch(() => {
         /* best-effort rotation hint */

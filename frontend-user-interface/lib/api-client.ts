@@ -237,13 +237,16 @@ export class ApiClient {
   updatePersonFace(personId: string, faceId: string): Promise<void> {
     return this.request(`/api/person/${encodeURIComponent(personId)}/face/${encodeURIComponent(faceId)}`, { method: "PUT" });
   }
-  listPersonFaces(personId: string): Promise<DetectedFace[]> {
-    return this.fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`);
+  listPersonFaces(personId: string, signal?: AbortSignal): Promise<DetectedFace[]> {
+    return this.fetchNdjson(`/api/person/${encodeURIComponent(personId)}/faces`, signal);
   }
 
   // -- Faces -------------------------------------------------------------------------
-  listFaces(): Promise<DetectedFace[]> {
-    return this.fetchNdjson("/api/faces");
+  // The whole face collection, which is big (hundreds of thousands of entries, seconds to stream).
+  // The signal matters here: React Query supersedes an in-flight fetch on every invalidation, and
+  // without it the abandoned downloads would keep running and pile up.
+  listFaces(signal?: AbortSignal): Promise<DetectedFace[]> {
+    return this.fetchNdjson("/api/faces", signal);
   }
   getFace(faceId: string): Promise<DetectedFace> {
     return this.request(`/api/face/${encodeURIComponent(faceId)}`);
@@ -324,9 +327,9 @@ export class ApiClient {
   }
 
   // -- NDJSON helpers -------------------------------------------------------------------------
-  private async fetchNdjson<T>(url: string): Promise<T[]> {
+  private async fetchNdjson<T>(url: string, signal?: AbortSignal): Promise<T[]> {
     const results: T[] = [];
-    await this.fetchNdjsonStream<T>(url, (item) => results.push(item));
+    await this.fetchNdjsonStream<T>(url, (item) => results.push(item), signal);
     return results;
   }
 

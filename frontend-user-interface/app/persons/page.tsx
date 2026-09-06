@@ -264,7 +264,7 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
   const router = useRouter();
   const searchParams = useSearchParams();
   const { api } = useAuth();
-  const { data: allFaces = [], isLoading: facesLoading, refetch } = usePersonFaces(person.id);
+  const { data: allFaces = [], isLoading: facesLoading } = usePersonFaces(person.id);
   const deletePerson = useDeletePerson();
   const setFacePerson = useSetFacePerson();
   const ignoreFace = useIgnoreFace();
@@ -284,8 +284,6 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
   }
   const [showIgnored, setShowIgnored] = useState(false);
   const [selected, setSelected] = usePersistedSet(`person:${person.id}`);
-  const [justConfirmed, setJustConfirmed] = useState<Set<string>>(new Set());
-  const [justIgnored, setJustIgnored] = useState<Set<string>>(new Set());
   const [size, setSize] = useSizeClass("personFaces.size");
   const [editingFace, setEditingFace] = useState<DetectedFace | null>(null);
   const [editingPerson, setEditingPerson] = useState(false);
@@ -323,18 +321,18 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
   }
 
   const inferredForPerson = useMemo(() => {
-    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId === person.id && !justConfirmed.has(f.faceId));
-    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore && !justIgnored.has(f.faceId));
+    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId === person.id);
+    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore);
     return list;
-  }, [allFaces, showIgnored, person.id, justConfirmed, justIgnored]);
+  }, [allFaces, showIgnored, person.id]);
   const identifiedForPerson = useMemo(() => allFaces.filter((f) => f.identifiedPersonId === person.id), [allFaces, person.id]);
   const displayed = mode === "validate" ? inferredForPerson : identifiedForPerson;
 
+  // Each mutation splices its own outcome into the cached face lists (hooks/useFaces.ts), so a
+  // confirmed face leaves the "to validate" queue as its call returns and stays gone across tab
+  // navigation - no local "already handled" bookkeeping, and no full-list refetch, needed here.
   async function confirmFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    // Confirmed faces leave the "to validate" queue for good (identifiedPersonId gets set) - drop
-    // them from view immediately rather than waiting on the mutation + refetch round trip.
-    setJustConfirmed((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     try {
       for (const f of faces) await setFacePerson.mutateAsync({ faceId: f.faceId, personId: person.id });
       pushRecentPersonId(person.id);
@@ -347,13 +345,11 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
         faces.forEach((f) => next.delete(f.faceId));
         return next;
       });
-      refetch();
     }
   }
 
   async function ignoreFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    setJustIgnored((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     try {
       for (const f of faces) await ignoreFace.mutateAsync(f.faceId);
       showSuccess(`Ignored ${faces.length} face(s)`);
@@ -365,7 +361,6 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
         faces.forEach((f) => next.delete(f.faceId));
         return next;
       });
-      refetch();
     }
   }
 
@@ -445,18 +440,11 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
           onConfirmInferred={(f) => confirmFaces([f])}
           onIgnore={(f) => ignoreFaces([f])}
           onRestore={async (f) => {
-            setJustIgnored((prev) => {
-              const next = new Set(prev);
-              next.delete(f.faceId);
-              return next;
-            });
             try {
               await restoreFace.mutateAsync(f.faceId);
               showSuccess("Face restored");
             } catch {
               showError("Failed to restore face");
-            } finally {
-              refetch();
             }
           }}
           onEdit={setEditingFace}
@@ -464,14 +452,7 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
         />
       </div>
 
-      {editingFace && (
-        <FaceEditModal
-          face={editingFace}
-          onClose={() => setEditingFace(null)}
-          onChanged={() => refetch()}
-          onDeleted={() => refetch()}
-        />
-      )}
+      {editingFace && <FaceEditModal face={editingFace} onClose={() => setEditingFace(null)} />}
 
       {editingPerson && (
         <Modal title="Edit person" onClose={() => setEditingPerson(false)} onSave={handleEditPersonSave}>
@@ -502,7 +483,7 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
 function InferredFacesView({ onBack }: { onBack: () => void }) {
   const router = useRouter();
   const { api } = useAuth();
-  const { data: allFaces = [], isLoading: facesLoading, refetch } = useAllFaces();
+  const { data: allFaces = [], isLoading: facesLoading } = useAllFaces();
   const personsMap = usePersonsMap();
   const setFacePerson = useSetFacePerson();
   const ignoreFace = useIgnoreFace();
@@ -512,8 +493,6 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
   const [filter, setFilter] = useState("");
   const [showIgnored, setShowIgnored] = useState(false);
   const [selected, setSelected] = usePersistedSet("inferred-all");
-  const [justConfirmed, setJustConfirmed] = useState<Set<string>>(new Set());
-  const [justIgnored, setJustIgnored] = useState<Set<string>>(new Set());
   const [editingFace, setEditingFace] = useState<DetectedFace | null>(null);
 
   useEffect(() => {
@@ -539,8 +518,8 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
   }
 
   const pending = useMemo(() => {
-    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId && !justConfirmed.has(f.faceId));
-    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore && !justIgnored.has(f.faceId));
+    let list = allFaces.filter((f) => !f.identifiedPersonId && f.inferredIdentifiedPersonId);
+    if (!showIgnored) list = list.filter((f) => !f.inferredIgnore);
     const q = filter.trim().toLowerCase();
     if (q) {
       list = list.filter((f) => {
@@ -574,11 +553,12 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
     }
     return sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allFaces, showIgnored, filter, sort, personsMap, justConfirmed, justIgnored]);
+  }, [allFaces, showIgnored, filter, sort, personsMap]);
 
+  // See the note on PersonFacesDetail.confirmFaces: the cached face list is what drops a handled
+  // face, so it stays dropped after leaving the tab and coming back.
   async function confirmFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    setJustConfirmed((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     let ok = 0;
     try {
       for (const f of faces) {
@@ -595,13 +575,11 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
         faces.forEach((f) => next.delete(f.faceId));
         return next;
       });
-      refetch();
     }
   }
 
   async function ignoreFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    setJustIgnored((prev) => new Set([...prev, ...faces.map((f) => f.faceId)]));
     let ok = 0;
     try {
       for (const f of faces) {
@@ -617,7 +595,6 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
         faces.forEach((f) => next.delete(f.faceId));
         return next;
       });
-      refetch();
     }
   }
 
@@ -671,18 +648,11 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
           onConfirmInferred={(f) => confirmFaces([f])}
           onIgnore={(f) => ignoreFaces([f])}
           onRestore={async (f) => {
-            setJustIgnored((prev) => {
-              const next = new Set(prev);
-              next.delete(f.faceId);
-              return next;
-            });
             try {
               await restoreFace.mutateAsync(f.faceId);
               showSuccess("Face restored");
             } catch {
               showError("Failed to restore face");
-            } finally {
-              refetch();
             }
           }}
           onEdit={setEditingFace}
@@ -690,7 +660,7 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
         />
       </div>
 
-      {editingFace && <FaceEditModal face={editingFace} onClose={() => setEditingFace(null)} onChanged={() => refetch()} onDeleted={() => refetch()} />}
+      {editingFace && <FaceEditModal face={editingFace} onClose={() => setEditingFace(null)} />}
     </section>
   );
 }

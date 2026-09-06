@@ -8,6 +8,7 @@
 // content out from under the viewer, which is worse than a slightly stale tile.
 import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { syncFaceFromServer } from "../hooks/useFaces";
 import { useAuth } from "./keycloak-auth";
 import { clearMapCache } from "./map-cache";
 import { connectEvents, type ApiEvent } from "./sse";
@@ -34,7 +35,9 @@ function queryKeysForEvent({ entity, id }: ApiEvent): QueryKey[] {
     case "media":
       return id ? [["media", id]] : [];
     case "face":
-      return id ? [["faces"], ["face", id], ["personFaces"]] : [["faces"], ["personFaces"]];
+      // An identified `id` is handled face-by-face below; only a bus frame that names no face at
+      // all is broad enough to justify reloading the (very large) whole-collection list.
+      return id ? [] : [["faces"], ["personFaces"]];
     case "sync":
       return [["syncStatus"]];
     default:
@@ -43,18 +46,21 @@ function queryKeysForEvent({ entity, id }: ApiEvent): QueryKey[] {
 }
 
 export function LiveEventsProvider({ children }: { children: React.ReactNode }) {
-  const { ready, getToken } = useAuth();
+  const { ready, getToken, api } = useAuth();
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!ready) return;
     return connectEvents(getToken, (event) => {
+      // Faces are the one entity whose list is far too big to reload per event — reconcile the
+      // single face the frame names instead (hooks/useFaces.ts).
+      if (event.entity === "face" && event.id) void syncFaceFromServer(queryClient, api, event.id, event.action);
       for (const queryKey of queryKeysForEvent(event)) {
         queryClient.invalidateQueries({ queryKey });
       }
       if (invalidatesMapCache(event.entity)) clearMapCache();
     });
-  }, [ready, getToken, queryClient]);
+  }, [ready, getToken, api, queryClient]);
 
   return <>{children}</>;
 }

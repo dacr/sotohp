@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/keycloak-auth";
 import { useMediaAccessKey } from "../hooks/useMediaAccessKey";
-import { orientationToDegrees } from "../lib/orientation";
+import { displayRotationDegrees, orientationToDegrees } from "../lib/orientation";
 import type { Asset } from "../lib/api-client";
 
 function ViewerStage({ asset, containerSize }: { asset: Asset; containerSize: { w: number; h: number } }) {
@@ -19,7 +19,14 @@ function ViewerStage({ asset, containerSize }: { asset: Asset; containerSize: { 
       .getMediaByKey(accessKey)
       .then((m) => {
         if (cancelled) return;
-        setMeta({ rotateDeg: orientationToDegrees(m.orientation), natW: m.original.dimension?.width || 1, natH: m.original.dimension?.height || 1 });
+        // This one shows the *original* file, which the browser already auto-rotates by its EXIF
+        // orientation, so both numbers below have to be taken after that rotation : the leftover
+        // angle (displayRotationDegrees), and the dimensions with width/height swapped when the
+        // EXIF rotation is a quarter turn. `original.dimension` is the raw, pre-EXIF size.
+        const exifSwap = orientationToDegrees(m.original.orientation) % 180 !== 0;
+        const rawW = m.original.dimension?.width || 1;
+        const rawH = m.original.dimension?.height || 1;
+        setMeta({ rotateDeg: displayRotationDegrees(m), natW: exifSwap ? rawH : rawW, natH: exifSwap ? rawW : rawH });
       })
       .catch(() => {
         /* handled by the accessKey-missing branch below on failure */
