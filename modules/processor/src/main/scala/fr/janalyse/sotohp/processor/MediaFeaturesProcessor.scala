@@ -5,6 +5,7 @@ import ai.djl.inference.Predictor
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.repository.zoo.{Criteria, ZooModel}
 import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.model.*
 import zio.*
@@ -26,16 +27,28 @@ class MediaFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends 
     predictor.close()
   }
 
+  /** Extract the embedding vector for a single photo, from the normalized rendition as it is. */
+  def extractMediaFeatures(original: Original): IO[CoreIssue, OriginalMediaFeatures] =
+    extractMediaFeatures(original, extraRotationDegrees = 0)
+
   /** Extract the embedding vector for a single photo.
+    *
+    * The convolutional model is not rotation invariant - a quarter turn gives a materially
+    * different vector - so the photo has to be embedded the way it is meant to be seen. The
+    * normalized rendition this reads is baked by `NormalizeProcessor` with the *original's* EXIF
+    * orientation only, so a media the user rotated by hand needs the remaining turn applied here
+    * (`extraRotationDegrees`, the effective rotation minus the original's); pass 0 and the image is
+    * used untouched, which is the case for every photo whose orientation was never overridden.
     *
     * On any failure the returned `OriginalMediaFeatures` has `status.successful = false`
     * and `features = None` (mirrors how `FaceFeaturesProcessor` swallows failures so a
     * batch sync is never stopped by one bad photo).
     */
-  def extractMediaFeatures(original: Original): IO[CoreIssue, OriginalMediaFeatures] = {
+  def extractMediaFeatures(original: Original, extraRotationDegrees: Int): IO[CoreIssue, OriginalMediaFeatures] = {
     val logic = for {
       now         <- Clock.currentDateTime
       mayBeVector <- loadOriginalBestInputFileForProcessors(original)
+                       .flatMap(image => ZIO.attemptBlocking(BasicImaging.rotate(image, extraRotationDegrees)))
                        .flatMap(image =>
                          ZIO.attemptBlocking(ImageFactory.getInstance().fromImage(image))
                        )

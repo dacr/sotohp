@@ -113,6 +113,13 @@ trait MediaService {
   /** Computes (once, then cached) the whole-image feature vector for a photo. */
   def originalMediaFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMediaFeatures]]
 
+  /** Recomputes the whole-image embedding and overwrites the stored one, where
+    * `originalMediaFeatures` only ever computes a missing one. Needed whenever the input the vector
+    * was derived from has changed - in practice when the media's effective rotation changed, since
+    * the model is not rotation invariant.
+    */
+  def mediaFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures]
+
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): IO[ServiceIssue, Unit]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -347,6 +354,7 @@ object MediaService {
   def originalNormalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.originalNormalized(originalId))
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))
   def originalMediaFeatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMediaFeatures]]     = ZIO.serviceWithZIO(_.originalMediaFeatures(originalId))
+  def mediaFeaturesRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalMediaFeatures]            = ZIO.serviceWithZIO(_.mediaFeaturesRecompute(originalId))
 
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.originalFacesUpdate(originalId, facesIds))
 

@@ -691,6 +691,14 @@ object ApiApp extends ZIOAppDefault {
                            .logError("Couldn't remap faces for the new orientation")
                            .mapError(err => ApiInternalError("Couldn't remap faces for the new orientation"))
                            .when(previousRotation != newRotation)
+      // The whole-image embedding describes the photo as it is meant to be seen, and the model is
+      // not rotation invariant - so it is as stale as the face crops were, and is redone here.
+      // Visual-similarity clusters are built offline and are not refreshed by this.
+      _               <- MediaService
+                           .mediaFeaturesRecompute(original.id)
+                           .logError("Couldn't recompute media features for the new orientation")
+                           .mapError(err => ApiInternalError("Couldn't recompute media features for the new orientation"))
+                           .when(previousRotation != newRotation)
       _               <- EventBusService.publish(ApiEvent("media", Some(accessKey.toString), ApiEventAction.updated))
       // One event per remapped face, and their *face* ids : the id of a "face" event is what
       // listeners re-read the face by, so an originalId here would send them looking for a face

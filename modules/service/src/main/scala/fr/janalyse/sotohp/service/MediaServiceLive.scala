@@ -537,11 +537,7 @@ class MediaServiceLive private (
                                .mapError(err => ServiceInternalIssue(s"Couldn't get media for original : $err"))
       // The box was measured by the caller against the *displayed* image, which is rotated to the
       // effective (possibly user-customized) orientation - not just the original's EXIF orientation.
-      rotation             = mediaTuple
-                               .flatMap(_.media.orientation)
-                               .orElse(original.orientation)
-                               .map(_.rotationDegrees)
-                               .getOrElse(0)
+      rotation             = effectiveRotationDegrees(mediaTuple, original)
       facesProcessor      <- processors.faces
                                .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces processor : $err"))
       builtFace           <- facesProcessor
@@ -633,14 +629,37 @@ class MediaServiceLive private (
     } yield result
   }
 
+  /** The frame this media is meant to be seen in, and the one every stored geometry and every
+    * derived vector must therefore use : the user's override wins over the camera's EXIF value.
+    */
+  private def effectiveRotationDegrees(mediaTuple: Option[MediaTuple], original: Original): Int =
+    mediaTuple
+      .flatMap(_.media.orientation)
+      .orElse(original.orientation)
+      .map(_.rotationDegrees)
+      .getOrElse(0)
+
+  /** What is left to rotate on top of a rendition baked by `NormalizeProcessor`, which applies the
+    * original's EXIF orientation only. 0 unless the user overrode the orientation.
+    */
+  private def normalizedExtraRotationDegrees(mediaTuple: Option[MediaTuple], original: Original): Int = {
+    val baked = original.orientation.map(_.rotationDegrees).getOrElse(0)
+    ((effectiveRotationDegrees(mediaTuple, original) - baked) % 360 + 360) % 360
+  }
+
   def computeMediaFeatures(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures] = {
     // TODO transaction required
     val logic = for {
-      original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      original   <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      mediaTuple <- mediaGet(originalId).mapError(err => ServiceInternalIssue(s"Couldn't get media for original : $err"))
+      // The embedding has to describe the photo the way it is meant to be seen - the model is not
+      // rotation invariant, so a media the user turned by hand would otherwise be matched and
+      // clustered on its sideways framing.
+      extraRotation = normalizedExtraRotationDegrees(mediaTuple, original)
       processor <- processors.mediaFeatures
                      .mapError(err => ServiceInternalIssue(s"Unable to get media features processor : $err"))
       computed  <- processor
-                     .extractMediaFeatures(original)
+                     .extractMediaFeatures(original, extraRotation)
                      .mapError(err => ServiceInternalIssue(s"Unable to extract media features : $err"))
       _         <- ZIO.foreachDiscard(computed.features)(mediaFeatures =>
                      collections.mediaFeatures
@@ -663,6 +682,9 @@ class MediaServiceLive private (
       result <- computeMediaFeatures(originalId).when(stored.isEmpty)
     } yield stored.orElse(result)
   }
+
+  override def mediaFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures] =
+    computeMediaFeatures(originalId)
 
   def mediaFeaturesList(): Stream[ServiceStreamIssue, MediaFeatures] = {
     collections.mediaFeatures
@@ -1067,12 +1089,7 @@ class MediaServiceLive private (
     for {
       original   <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
       mediaTuple <- mediaGet(originalId).mapError(err => ServiceInternalIssue(s"Couldn't get media for original : $err"))
-      // The frame every stored face box lives in : the user's override wins over the camera's EXIF value.
-      rotation    = mediaTuple
-                      .flatMap(_.media.orientation)
-                      .orElse(original.orientation)
-                      .map(_.rotationDegrees)
-                      .getOrElse(0)
+      rotation    = effectiveRotationDegrees(mediaTuple, original)
       result     <- facesRewrite(originalId, quarterTurnsClockWise = 0, toRotationDegrees = rotation)
     } yield result
   }
