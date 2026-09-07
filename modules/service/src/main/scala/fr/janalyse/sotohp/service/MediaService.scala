@@ -99,6 +99,9 @@ trait MediaService {
   def originalNormalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
   def originalMiniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
 
+  /** Computes (once, then cached) the whole-image feature vector for a photo. */
+  def originalMediaFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMediaFeatures]]
+
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): IO[ServiceIssue, Unit]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -117,6 +120,35 @@ trait MediaService {
   // -------------------------------------------------------------------------------------------------------------------
   def faceFeaturesList(): Stream[ServiceStreamIssue, FaceFeatures]
   def faceFeaturesGet(faceId: FaceId): IO[ServiceIssue, Option[FaceFeatures]]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  /** Streams every stored whole-image feature vector (one per photo). */
+  def mediaFeaturesList(): Stream[ServiceStreamIssue, MediaFeatures]
+
+  /** The stored whole-image feature vector for a photo, if computed. */
+  def mediaFeaturesGet(originalId: OriginalId): IO[ServiceIssue, Option[MediaFeatures]]
+
+  /** The `count` photos most visually similar to the given one, best first, as
+    * `(originalId, cosineSimilarity)` pairs (self excluded).
+    */
+  def mediaSimilar(originalId: OriginalId, count: Int): IO[ServiceIssue, List[(OriginalId, Double)]]
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Visual-similarity clusters (computed offline by the `MediaFeaturesClustering` CLI).
+
+  /** Replaces every cluster assignment: clears the cluster collection then writes the
+    * given `(originalId, clusterId)` pairs. `clusterId < 0` marks an unclustered photo.
+    */
+  def mediaClustersReplace(assignments: Iterable[(OriginalId, Int)]): IO[ServiceIssue, Unit]
+
+  /** The cluster a photo belongs to, if any. */
+  def mediaClusterOf(originalId: OriginalId): IO[ServiceIssue, Option[Int]]
+
+  /** Every real cluster as `(clusterId, size)`, largest first (unclustered photos excluded). */
+  def mediaClusterList(): IO[ServiceIssue, List[(Int, Long)]]
+
+  /** The medias in one cluster. */
+  def mediaClusterMembers(clusterId: Int): Stream[ServiceStreamIssue, MediaTuple]
 
   // -------------------------------------------------------------------------------------------------------------------
   def personList(): Stream[ServiceStreamIssue, Person]
@@ -301,6 +333,7 @@ object MediaService {
   def originalObjects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.originalObjects(originalId))
   def originalNormalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.originalNormalized(originalId))
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))
+  def originalMediaFeatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMediaFeatures]]     = ZIO.serviceWithZIO(_.originalMediaFeatures(originalId))
 
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.originalFacesUpdate(originalId, facesIds))
 
@@ -324,6 +357,16 @@ object MediaService {
   // -------------------------------------------------------------------------------------------------------------------
   def faceFeaturesList(): ZStream[MediaService, ServiceStreamIssue, FaceFeatures]            = ZStream.serviceWithStream(_.faceFeaturesList())
   def faceFeaturesGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[FaceFeatures]] = ZIO.serviceWithZIO(_.faceFeaturesGet(faceId))
+
+  // -------------------------------------------------------------------------------------------------------------------
+  def mediaFeaturesList(): ZStream[MediaService, ServiceStreamIssue, MediaFeatures]                       = ZStream.serviceWithStream(_.mediaFeaturesList())
+  def mediaFeaturesGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[MediaFeatures]]    = ZIO.serviceWithZIO(_.mediaFeaturesGet(originalId))
+  def mediaSimilar(originalId: OriginalId, count: Int): ZIO[MediaService, ServiceIssue, List[(OriginalId, Double)]] = ZIO.serviceWithZIO(_.mediaSimilar(originalId, count))
+
+  def mediaClustersReplace(assignments: Iterable[(OriginalId, Int)]): ZIO[MediaService, ServiceIssue, Unit]  = ZIO.serviceWithZIO(_.mediaClustersReplace(assignments))
+  def mediaClusterOf(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Int]]                   = ZIO.serviceWithZIO(_.mediaClusterOf(originalId))
+  def mediaClusterList(): ZIO[MediaService, ServiceIssue, List[(Int, Long)]]                                 = ZIO.serviceWithZIO(_.mediaClusterList())
+  def mediaClusterMembers(clusterId: Int): ZStream[MediaService, ServiceStreamIssue, MediaTuple]             = ZStream.serviceWithStream(_.mediaClusterMembers(clusterId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                     = ZStream.serviceWithStream(_.personList())

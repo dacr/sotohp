@@ -16,6 +16,7 @@ function normalizePath(path: string): string {
 const TABS = [
   { href: "/", label: "Viewer" },
   { href: "/mosaic", label: "Mosaic" },
+  { href: "/clusters", label: "Clusters" },
   { href: "/events", label: "Bags" },
   { href: "/portfolios", label: "Portfolios" },
   { href: "/map", label: "Map" },

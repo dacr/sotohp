@@ -8,6 +8,7 @@ export type MediaLocation = components["schemas"]["MediaLocation"];
 export type MediaSelector = components["schemas"]["MediaSelector"];
 export type MediaTimeline = components["schemas"]["MediaTimeline"];
 export type MediaTimelineAnchor = components["schemas"]["MediaTimelineAnchor"];
+export type MediaCluster = components["schemas"]["MediaCluster"];
 export type Original = components["schemas"]["Original"];
 export type Bag = components["schemas"]["Bag"];
 export type BagUpdate = components["schemas"]["BagUpdate"];
@@ -180,6 +181,36 @@ export class ApiClient {
   // directly instead of walking to it.
   mediasTimeline(step: number, signal?: AbortSignal): Promise<MediaTimeline> {
     return this.request(`/api/medias/timeline?step=${step}`, { signal });
+  }
+
+  // Stream every cluster of visually similar photos (largest first). Populated offline by
+  // the MediaFeaturesClustering CLI; empty until that has run.
+  mediasClusters(onItem: (item: MediaCluster) => void, signal?: AbortSignal): Promise<void> {
+    return this.fetchNdjsonStream("/api/medias/clusters", onItem, signal);
+  }
+  // Stream the medias belonging to one visual-similarity cluster.
+  mediaCluster(
+    clusterId: number,
+    opts: { signal?: AbortSignal; onItem: (item: Media) => void }
+  ): Promise<void> {
+    return this.fetchNdjsonStream(`/api/medias/clusters/${clusterId}`, opts.onItem, opts.signal);
+  }
+
+  // Stream the medias most visually similar to `fromKey`, best match first, the reference
+  // photo itself excluded. Backed by a brute-force cosine scan over the stored whole-image
+  // feature vectors (photos with no computed embedding never appear).
+  mediaSimilar(
+    fromKey: string,
+    opts: { count?: number; signal?: AbortSignal; onItem: (item: Media) => void }
+  ): Promise<void> {
+    const params = new URLSearchParams();
+    if (opts.count && opts.count > 0) params.set("count", String(opts.count));
+    const qs = params.toString();
+    return this.fetchNdjsonStream(
+      `/api/media/${encodeURIComponent(fromKey)}/similar${qs ? `?${qs}` : ""}`,
+      opts.onItem,
+      opts.signal
+    );
   }
 
   // -- State ----------------------------------------------------------------------

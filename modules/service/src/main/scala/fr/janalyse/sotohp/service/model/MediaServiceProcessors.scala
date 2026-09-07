@@ -7,5 +7,6 @@ case class MediaServiceProcessors(
   classifications: IO[ClassificationIssue, ClassificationProcessor],
   faces: IO[FacesDetectionIssue, FacesProcessor],
   faceFeatures: IO[FaceFeaturesIssue, FaceFeaturesProcessor],
+  mediaFeatures: IO[MediaFeaturesIssue, MediaFeaturesProcessor],
   objects: IO[ObjectsDetectionIssue, ObjectsDetectionProcessor]
 )

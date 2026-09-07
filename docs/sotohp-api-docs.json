@@ -402,6 +402,147 @@
         ]
       }
     },
+    "/api/medias/clusters" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Stream every cluster of visually similar photos, largest first",
+        "operationId" : "List media clusters",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one MediaCluster JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MediaCluster"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/medias/clusters/{clusterId}" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Stream the medias belonging to one visual-similarity cluster",
+        "operationId" : "List medias in a cluster",
+        "parameters" : [
+          {
+            "name" : "clusterId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Media JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Media"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter clusterId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/media" : {
       "get" : {
         "tags" : [
@@ -629,6 +770,106 @@
         "responses" : {
           "200" : {
             "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid identifier provided",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/InvalidOrMissingInput"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Couldn't find the request resource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResourceNotFound"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/media/{mediaAccessKey}/similar" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Stream the medias most visually similar to the given one, best match first",
+        "operationId" : "List similar medias",
+        "parameters" : [
+          {
+            "name" : "mediaAccessKey",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "count",
+            "in" : "query",
+            "description" : "maximum number of similar medias to return (default 30, max 100)",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Media JSON object per line, ranked most similar first)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Media"
+                }
+              }
+            }
           },
           "400" : {
             "description" : "Invalid identifier provided",
@@ -5097,6 +5338,27 @@
           },
           "userDefinedLocation" : {
             "$ref" : "#/components/schemas/Location"
+          }
+        }
+      },
+      "MediaCluster" : {
+        "title" : "MediaCluster",
+        "type" : "object",
+        "required" : [
+          "clusterId",
+          "size"
+        ],
+        "properties" : {
+          "clusterId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "coverAccessKey" : {
+            "type" : "string"
           }
         }
       },

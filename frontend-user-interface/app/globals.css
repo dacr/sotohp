@@ -120,6 +120,25 @@ main { flex: 1; position: relative; }
 .mosaic-timeline .tooltip { position: absolute; left: calc(100% + 8px); transform: translateY(-50%); background: rgba(0,0,0,0.85); color: #fff; padding: 4px 6px; border-radius: 4px; font-size: 10px; line-height: 1.2; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.2); pointer-events: none; display: none; z-index: 10; }
 .mosaic-timeline .tooltip.show { display: block; }
 
+/* Similar-photos view — flat responsive grid of MosaicTiles, best match first. */
+.similar-page { height: calc(100vh - 70px); display: flex; flex-direction: column; overflow: hidden; }
+.similar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0.5rem 1rem; border-bottom: 1px solid #e5e7eb; background: #fff; min-height: 50px; flex-wrap: wrap; }
+.similar-title { display: flex; align-items: center; gap: 12px; }
+.similar-kicker { font-size: 13px; font-weight: 600; color: #374151; }
+.similar-reference { display: inline-flex; align-items: center; gap: 6px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 3px 8px 3px 3px; font-size: 12px; color: #6b7280; cursor: pointer; }
+.similar-reference:hover { background: #e5e7eb; }
+.similar-reference img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; display: block; }
+.similar-status { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; color: #6b7280; }
+.similar-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 2rem; color: #9ca3af; font-size: 14px; }
+.similar-empty code { background: #f3f4f6; border-radius: 4px; padding: 0 4px; }
+/* Fixed square cells: an aspect-ratio grid item in an `auto` row track does not feed its
+   height back into the track, so `1fr` columns + auto rows collapse every row onto the
+   previous one. Explicit column AND row sizing avoids that entirely. */
+.similar-grid { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.75rem 1rem; display: grid; grid-template-columns: repeat(auto-fill, 168px); grid-auto-rows: 168px; gap: 8px; justify-content: center; align-content: start; }
+.similar-grid > * { width: 168px; height: 168px; }
+.cluster-cover { background: #f3f4f6; }
+.cluster-badge { position: absolute; right: 4px; top: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 10px; z-index: 2; }
+
 /* Hover edit/delete buttons on list tiles (events, etc.) */
 .ev-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 4px 8px; font-size: 12px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
 .list li:hover .ev-edit-btn, .list li:focus-within .ev-edit-btn { opacity: 1; transform: translateY(0); }

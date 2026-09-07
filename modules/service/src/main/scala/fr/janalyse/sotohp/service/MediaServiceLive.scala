@@ -9,6 +9,8 @@ import fr.janalyse.sotohp.processor.{
   FaceFeaturesProcessor,
   FacesDetectionIssue,
   FacesProcessor,
+  MediaFeaturesIssue,
+  MediaFeaturesProcessor,
   MiniaturizeProcessor,
   NormalizeProcessor,
   ObjectsDetectionIssue,
@@ -25,6 +27,7 @@ import wvlet.airframe.ulid.ULID
 import zio.*
 import zio.lmdb.{GetErrors, IdxKey, IndexErrors, LMDB, LMDBCodec, LMDBCollection, StorageSystemError, StorageUserError}
 import zio.lmdb.keycodecs.{KeyCodec, KeyCodecError, KeyTypeId}
+import zio.lmdb.vector.VectorMetric
 import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
 import zio.ZIOAspect.annotated
@@ -613,6 +616,118 @@ class MediaServiceLive private (
       .fetch(faceId)
       .map(_.map(_.transformInto[FaceFeatures]))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch face features : $err"))
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Whole-image feature vectors (embeddings) - visual similarity search + clustering.
+
+  def daoMediaFeaturesToMediaFeatures(input: DaoOriginalMediaFeatures): IO[ServiceIssue, OriginalMediaFeatures] = {
+    for {
+      original     <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      storedVector <- mediaFeaturesGet(input.originalId)
+      result        = input
+                        .into[OriginalMediaFeatures]
+                        .withFieldConst(_.original, original)
+                        .withFieldConst(_.features, storedVector)
+                        .transform
+    } yield result
+  }
+
+  def computeMediaFeatures(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures] = {
+    // TODO transaction required
+    val logic = for {
+      original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      processor <- processors.mediaFeatures
+                     .mapError(err => ServiceInternalIssue(s"Unable to get media features processor : $err"))
+      computed  <- processor
+                     .extractMediaFeatures(original)
+                     .mapError(err => ServiceInternalIssue(s"Unable to extract media features : $err"))
+      _         <- ZIO.foreachDiscard(computed.features)(mediaFeatures =>
+                     collections.mediaFeatures
+                       .upsertOverwrite(originalId, mediaFeatures.into[DaoMediaFeatures].transform)
+                       .mapError(err => ServiceDatabaseIssue(s"Unable to store computed media features : $err"))
+                   )
+      _         <- collections.originalMediaFeatures
+                     .upsertOverwrite(originalId, computed.into[DaoOriginalMediaFeatures].transform)
+                     .mapError(err => ServiceDatabaseIssue(s"Unable to store computed media features status : $err"))
+    } yield computed
+    logic.uninterruptible
+  }
+
+  override def originalMediaFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMediaFeatures]] = {
+    for {
+      stored <- collections.originalMediaFeatures
+                  .fetch(originalId)
+                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoMediaFeaturesToMediaFeatures))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch media features from database: $err"))
+      result <- computeMediaFeatures(originalId).when(stored.isEmpty)
+    } yield stored.orElse(result)
+  }
+
+  def mediaFeaturesList(): Stream[ServiceStreamIssue, MediaFeatures] = {
+    collections.mediaFeatures
+      .stream()
+      .map(_.transformInto[MediaFeatures])
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect media features : $err"))
+  }
+
+  def mediaFeaturesGet(originalId: OriginalId): IO[ServiceIssue, Option[MediaFeatures]] = {
+    collections.mediaFeatures
+      .fetch(originalId)
+      .map(_.map(_.transformInto[MediaFeatures]))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media features : $err"))
+  }
+
+  override def mediaSimilar(originalId: OriginalId, count: Int): IO[ServiceIssue, List[(OriginalId, Double)]] = {
+    for {
+      queryFeatures <- mediaFeaturesGet(originalId)
+                         .someOrFail(ServiceUserIssue(s"No media features computed for original : $originalId"))
+      query          = queryFeatures.features
+      ranked        <- mediaFeaturesList()
+                         .filterNot(_.originalId == originalId)
+                         .map(candidate => candidate.originalId -> (1d - VectorMetric.Cosine.distance(query, candidate.features)))
+                         .runCollect
+                         .mapError(err => ServiceDatabaseIssue(s"Couldn't scan media features : $err"))
+      best           = ranked.toList.sortBy(-_._2).take(count.max(0))
+    } yield best
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Visual-similarity clusters - rebuilt wholesale by the `MediaFeaturesClustering` CLI.
+
+  override def mediaClustersReplace(assignments: Iterable[(OriginalId, Int)]): IO[ServiceIssue, Unit] = {
+    val logic = for {
+      _ <- collections.mediaClusters.clear()
+      _ <- ZIO.foreachDiscard(assignments) { (originalId, clusterId) =>
+             collections.mediaClusters.upsertOverwrite(originalId, DaoMediaCluster(originalId, clusterId))
+           }
+    } yield ()
+    logic
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't replace media clusters : $err"))
+      .uninterruptible
+  }
+
+  override def mediaClusterOf(originalId: OriginalId): IO[ServiceIssue, Option[Int]] = {
+    collections.mediaClusters
+      .fetch(originalId)
+      .map(_.map(_.clusterId))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch media cluster : $err"))
+  }
+
+  override def mediaClusterList(): IO[ServiceIssue, List[(Int, Long)]] = {
+    collections.mediaClusters
+      .stream()
+      .runFold(Map.empty[Int, Long])((acc, cluster) => acc.updated(cluster.clusterId, acc.getOrElse(cluster.clusterId, 0L) + 1L))
+      .map(_.toList.filter((clusterId, _) => clusterId >= 0).sortBy((_, size) => -size))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't list media clusters : $err"))
+  }
+
+  override def mediaClusterMembers(clusterId: Int): Stream[ServiceStreamIssue, MediaTuple] = {
+    collections.originalIdByClusterId
+      .indexed(clusterId)
+      .mapZIO((_, originalId) => mediaGet(originalId))
+      .collect { case Some(tuple) => tuple }
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect cluster $clusterId members : $err"))
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1544,6 +1659,7 @@ class MediaServiceLive private (
       fiberMiniaturesFiber      <- originalMiniatures(input.media.original.id)                   // .fork
       fiberFacesFiber           <- originalFaces(input.media.original.id).ignoreLogged           // .fork
       fiberFeaturesFiber        <- originalFacesFeatures(input.media.original.id).ignoreLogged   // .fork
+      fiberMediaFeaturesFiber   <- originalMediaFeatures(input.media.original.id).ignoreLogged   // .fork
       fiberClassificationsFiber <- originalClassifications(input.media.original.id).ignoreLogged // .fork
       fiberObjectsFiber         <- originalObjects(input.media.original.id).ignoreLogged         // .fork
       // TODO investigate why this is not working
@@ -1967,6 +2083,9 @@ object MediaServiceLive {
   private val facesCollectionName                = "faces"
   private val detectedFaceFeaturesCollectionName = "detectedFaceFeatures"
   private val faceFeaturesCollectionName         = "faceFeatures"
+  private val mediaFeaturesCollectionName        = "mediaFeatures"
+  private val originalMediaFeaturesCollectionName = "originalMediaFeatures"
+  private val mediaClustersCollectionName        = "mediaClusters"
   private val objectsCollectionName              = "objects"
   private val miniaturesCollectionName           = "miniatures"
   private val normalizedCollectionName           = "normalized"
@@ -1987,6 +2106,9 @@ object MediaServiceLive {
     facesCollectionName,
     detectedFaceFeaturesCollectionName,
     faceFeaturesCollectionName,
+    mediaFeaturesCollectionName,
+    originalMediaFeaturesCollectionName,
+    mediaClustersCollectionName,
     objectsCollectionName,
     miniaturesCollectionName,
     normalizedCollectionName,
@@ -2003,6 +2125,7 @@ object MediaServiceLive {
     indexFaceIdByPersonId      <- lmdb.indexCreate[PersonId, (Instant, FaceId)]("faceIdByPersonId", false)
     indexOriginalIdByStoreId   <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
     indexOriginalIdByLocation  <- lmdb.indexCreate[GEOTools.Location, OriginalId]("originalIdByLocation", false)
+    indexOriginalIdByClusterId <- lmdb.indexCreate[Int, OriginalId]("originalIdByClusterId", false)
 
     // ----------------------------------------------------------------------------------------
     // COLLECTIONS
@@ -2058,6 +2181,16 @@ object MediaServiceLive {
     collectionOriginalFoundFaces   <- lmdb.collectionCreate[OriginalId, DaoOriginalFaces](facesCollectionName, false)
     collectionFaceFeatures         <- lmdb.collectionCreate[FaceId, DaoFaceFeatures](detectedFaceFeaturesCollectionName, false)
     collectionOriginalFaceFeatures <- lmdb.collectionCreate[OriginalId, DaoOriginalFaceFeatures](faceFeaturesCollectionName, false)
+    collectionMediaFeatures        <- lmdb.collectionCreate[OriginalId, DaoMediaFeatures](mediaFeaturesCollectionName, false)
+    collectionOriginalMediaFeatures <- lmdb.collectionCreate[OriginalId, DaoOriginalMediaFeatures](originalMediaFeaturesCollectionName, false)
+    collectionMediaClusters        <- lmdb
+                                        .collectionCreate[OriginalId, DaoMediaCluster](mediaClustersCollectionName, false)
+                                        .flatMap(
+                                          _.withDeclaredIndex(indexOriginalIdByClusterId)(
+                                            from = IdxKey.of(IdxKey.field("clusterId")((_, cluster: DaoMediaCluster) => cluster.clusterId)),
+                                            to = IdxKey.of(IdxKey.primaryKey)
+                                          )
+                                        )
     collectionObjects              <- lmdb.collectionCreate[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName, false)
     collectionMiniatures           <- lmdb.collectionCreate[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName, false)
     collectionNormalized           <- lmdb.collectionCreate[OriginalId, DaoOriginalNormalized](normalizedCollectionName, false)
@@ -2071,6 +2204,7 @@ object MediaServiceLive {
                                         faceIdByPersonId = indexFaceIdByPersonId,
                                         originalIdByStoreId = indexOriginalIdByStoreId,
                                         originalIdByLocation = indexOriginalIdByLocation,
+                                        originalIdByClusterId = indexOriginalIdByClusterId,
                                         originals = collectionOriginals,
                                         states = collectionStates,
                                         bags = collectionBags,
@@ -2083,6 +2217,9 @@ object MediaServiceLive {
                                         originalFaces = collectionOriginalFoundFaces,
                                         faceFeatures = collectionFaceFeatures,
                                         originalFaceFeatures = collectionOriginalFaceFeatures,
+                                        mediaFeatures = collectionMediaFeatures,
+                                        originalMediaFeatures = collectionOriginalMediaFeatures,
+                                        mediaClusters = collectionMediaClusters,
                                         objects = collectionObjects,
                                         miniatures = collectionMiniatures,
                                         normalized = collectionNormalized,
@@ -2096,11 +2233,13 @@ object MediaServiceLive {
     classificationProcessor <- ClassificationProcessor.allocate().memoize
     facesProcessor          <- FacesProcessor.allocate().memoize
     featuresProcessor       <- FaceFeaturesProcessor.allocate().memoize
+    mediaFeaturesProcessor  <- MediaFeaturesProcessor.allocate().memoize
     objectsProcessor        <- ObjectsDetectionProcessor.allocate().memoize
     processors               = MediaServiceProcessors(
                                  classifications = classificationProcessor,
                                  faces = facesProcessor,
                                  faceFeatures = featuresProcessor,
+                                 mediaFeatures = mediaFeaturesProcessor,
                                  objects = objectsProcessor
                                )
 

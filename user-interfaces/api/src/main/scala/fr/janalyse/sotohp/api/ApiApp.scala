@@ -527,6 +527,138 @@ object ApiApp extends ZIOAppDefault {
       )
 
   // -------------------------------------------------------------------------------------------------------------------
+
+  // Visually similar photos: brute-force cosine over the stored whole-image feature
+  // vectors, best match first, the reference photo itself excluded.
+  val mediaSimilarDefaultCount = 30
+  val mediaSimilarMaxCount     = 100
+
+  def mediaSimilarLogic(accessKey: MediaAccessKey, count: Option[Int]): ZStream[MediaService, Throwable, ApiMedia] = {
+    val effectiveCount = count.getOrElse(mediaSimilarDefaultCount).max(0).min(mediaSimilarMaxCount)
+    val rankedEffect   = for {
+      mayBeTuple <- MediaService.mediaGet(accessKey)
+      ranked     <- ZIO.foreach(mayBeTuple)(tuple => MediaService.mediaSimilar(tuple.media.original.id, effectiveCount))
+    } yield ranked.getOrElse(Nil)
+
+    ZStream
+      .fromIterableZIO(rankedEffect)
+      .mapZIO((originalId, _) => MediaService.mediaGet(originalId))
+      .collectSome
+      .map { mediaTuple =>
+        mediaTuple.media.into[ApiMedia]
+          .withFieldConst(_.accessKey, mediaTuple.key)
+          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
+          .transform
+      }
+      .mapError(err => ApiInternalError("Couldn't stream similar medias"))
+  }
+
+  val mediaSimilarEndpoint =
+    secureMediaEndpoint()
+      .name("List similar medias")
+      .summary("Stream the medias most visually similar to the given one, best match first")
+      .get
+      .in(path[String]("mediaAccessKey"))
+      .in("similar")
+      .in(query[Option[Int]]("count").description(s"maximum number of similar medias to return (default $mediaSimilarDefaultCount, max $mediaSimilarMaxCount)"))
+      .out(
+        streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Media JSON object per line, ranked most similar first)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .errorOutVariantPrepend(statusForApiResourceNotFound)
+      .errorOutVariantPrepend(statusForApiInvalidRequestError)
+      .serverLogic[ApiEnv](user =>
+        (rawMediaAccessKey, count) =>
+          for {
+            accessKey <- extractMediaAccessKey(rawMediaAccessKey)
+            ms        <- ZIO.service[MediaService]
+            byteStream = mediaSimilarLogic(accessKey, count)
+                           .map(writeToString(_))
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  // Visual-similarity clusters, computed offline by the `MediaFeaturesClustering` CLI.
+
+  def mediaClustersListLogic: ZStream[MediaService, Throwable, ApiMediaCluster] = {
+    ZStream
+      .fromIterableZIO(MediaService.mediaClusterList())
+      .mapZIO { (clusterId, size) =>
+        MediaService
+          .mediaClusterMembers(clusterId)
+          .runHead
+          .map(cover => ApiMediaCluster(clusterId = clusterId, size = size, coverAccessKey = cover.map(_.key)))
+      }
+      .mapError(err => ApiInternalError("Couldn't list media clusters"))
+  }
+
+  val mediaClustersListEndpoint =
+    secureMediaEndpoint(true)
+      .name("List media clusters")
+      .summary("Stream every cluster of visually similar photos, largest first")
+      .in("clusters")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiMediaCluster.apiMediaClusterSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one MediaCluster JSON object per line)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = mediaClustersListLogic
+                           .map(writeToString(_))
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  def mediaClusterMembersLogic(clusterId: Int): ZStream[MediaService, Throwable, ApiMedia] = {
+    MediaService
+      .mediaClusterMembers(clusterId)
+      .map { mediaTuple =>
+        mediaTuple.media.into[ApiMedia]
+          .withFieldConst(_.accessKey, mediaTuple.key)
+          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
+          .transform
+      }
+      .mapError(err => ApiInternalError("Couldn't stream cluster medias"))
+  }
+
+  val mediaClusterGetEndpoint =
+    secureMediaEndpoint(true)
+      .name("List medias in a cluster")
+      .summary("Stream the medias belonging to one visual-similarity cluster")
+      .in("clusters")
+      .in(path[Int]("clusterId"))
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Media JSON object per line)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        clusterId =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = mediaClusterMembersLogic(clusterId)
+                           .map(writeToString(_))
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
   def mediaUpdateLogic(accessKey: MediaAccessKey, toUpdate: ApiMediaUpdate): ZIO[ApiEnv, ApiIssue, Unit] = {
     val logic = for {
       mediaTuple      <- MediaService
@@ -1991,8 +2123,11 @@ object ApiApp extends ZIOAppDefault {
     mediaListEndpoint,
     mediaStreamEndpoint,
     mediaTimelineEndpoint,
+    mediaClustersListEndpoint,
+    mediaClusterGetEndpoint,
     mediaSelectEndpoint,
     mediaGetEndpoint,
+    mediaSimilarEndpoint,
     mediaUpdateEndpoint,
     mediaUpdateStarredEndpoint,
     mediaContentGetOriginalEndpoint,

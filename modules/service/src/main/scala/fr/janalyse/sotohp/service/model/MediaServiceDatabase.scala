@@ -14,6 +14,7 @@ case class MediaServiceDatabase(
   faceIdByPersonId: LMDBIndex[PersonId, (Instant, FaceId)],
   originalIdByStoreId: LMDBIndex[StoreId, OriginalId],
   originalIdByLocation: LMDBIndex[GEOTools.Location, OriginalId],
+  originalIdByClusterId: LMDBIndex[Int, OriginalId],
 
   originals: LMDBCollection[OriginalId, DaoOriginal],
   states: LMDBCollection[OriginalId, DaoState],
@@ -27,6 +28,9 @@ case class MediaServiceDatabase(
   originalFaces: LMDBCollection[OriginalId, DaoOriginalFaces],
   faceFeatures: LMDBCollection[FaceId, DaoFaceFeatures],
   originalFaceFeatures: LMDBCollection[OriginalId, DaoOriginalFaceFeatures],
+  mediaFeatures: LMDBCollection[OriginalId, DaoMediaFeatures],
+  originalMediaFeatures: LMDBCollection[OriginalId, DaoOriginalMediaFeatures],
+  mediaClusters: LMDBCollection[OriginalId, DaoMediaCluster],
   objects: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
   miniatures: LMDBCollection[OriginalId, DaoOriginalMiniatures],
   normalized: LMDBCollection[OriginalId, DaoOriginalNormalized],

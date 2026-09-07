@@ -24,6 +24,14 @@ run-face-inferred-fields-fix:
 run-stats:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Statistics
 
+# One-shot backfill of the whole-image feature vectors (embeddings) used for similar-photo search.
+run-compute-media-features:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.ComputeMediaFeatures
+
+# (Re)build the clusters of visually similar photos. Pass e.g. ARGS="--radius=0.16 --minPts=3".
+run-media-features-clustering:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.MediaFeaturesClustering $(ARGS)
+
 run-gps-fix:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GpsLocationFix
 

@@ -822,6 +822,13 @@ function ViewerPageInner() {
             <button className="img-action-btn img-action-btn--success" title="Add to portfolio" onClick={() => setAddingToPortfolio(true)}>
               ＋ Portfolio
             </button>
+            <button
+              className="img-action-btn"
+              title="Find visually similar photos"
+              onClick={() => media && router.push(`/similar/?media=${encodeURIComponent(media.accessKey)}`)}
+            >
+              ≈ Similar
+            </button>
             <button className="img-action-btn" title="Download original image" onClick={downloadOriginal}>
               ⬇
             </button>

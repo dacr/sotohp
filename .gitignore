@@ -43,6 +43,7 @@ docs/internals
 
 # sotohp related data
 cluster*/
+!frontend-user-interface/app/clusters/
 .sotohp/
 .lmdb/
 
