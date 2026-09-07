@@ -41,14 +41,8 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     face: Face,
     originalImage: BufferedImage
   ): IO[FacesDetectionIssue, Unit] = {
-    val x           = (face.box.x.value * originalImage.getWidth).toInt
-    val y           = (face.box.y.value * originalImage.getHeight).toInt
-    val width       = (face.box.width.value * originalImage.getWidth).toInt
-    val height      = (face.box.height.value * originalImage.getHeight).toInt
-    val fixedX      = if (x < 0) 0 else x
-    val fixedY      = if (y < 0) 0 else y
-    val fixedWidth  = if (fixedX + width < originalImage.getWidth()) width else originalImage.getWidth - fixedX
-    val fixedHeight = if (fixedY + height < originalImage.getHeight()) height else originalImage.getHeight - fixedY
+    val (fixedX, fixedY, fixedWidth, fixedHeight) =
+      FacesProcessor.croppedRectangle(face.box, originalImage.getWidth, originalImage.getHeight)
 
     ZIO
       .attempt(originalImage.getSubimage(fixedX, fixedY, fixedWidth, fixedHeight))
@@ -220,6 +214,33 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
 }
 
 object FacesProcessor {
+
+  /** The exact pixel rectangle `extractThenCacheFaceImageFromOriginal` cuts for `box` out of a
+    * `width` x `height` image : truncating (not rounding) conversion from the normalized box, then
+    * clamped to stay inside the image.
+    *
+    * Kept pure and shared so that a checker can predict the size of an already-written face crop
+    * without re-cutting it - which is how a crop that was cut against the wrong rotation is spotted
+    * (see the CLI's FaceOrientationAudit) : the two frames of a 90°-multiple rotation have swapped
+    * dimensions, so the crop file's own size says which one it came from. Any drift between this
+    * and the extraction above would silently turn that check into nonsense, hence the single
+    * definition.
+    *
+    * @return
+    *   (x, y, width, height) in pixels
+    */
+  def croppedRectangle(box: BoundingBox, width: Int, height: Int): (Int, Int, Int, Int) = {
+    val x           = (box.x.value * width).toInt
+    val y           = (box.y.value * height).toInt
+    val boxWidth    = (box.width.value * width).toInt
+    val boxHeight   = (box.height.value * height).toInt
+    val fixedX      = if (x < 0) 0 else x
+    val fixedY      = if (y < 0) 0 else y
+    val fixedWidth  = if (fixedX + boxWidth < width) boxWidth else width - fixedX
+    val fixedHeight = if (fixedY + boxHeight < height) boxHeight else height - fixedY
+    (fixedX, fixedY, fixedWidth, fixedHeight)
+  }
+
   val confThresh      = 0.85f
   val nmsThresh       = 0.45f
   val variance        = Array(0.1d, 0.2d)

@@ -692,9 +692,17 @@ object ApiApp extends ZIOAppDefault {
                            .mapError(err => ApiInternalError("Couldn't remap faces for the new orientation"))
                            .when(previousRotation != newRotation)
       _               <- EventBusService.publish(ApiEvent("media", Some(accessKey.toString), ApiEventAction.updated))
-      _               <- EventBusService
-                           .publish(ApiEvent("face", Some(original.id.asString), ApiEventAction.updated))
+      // One event per remapped face, and their *face* ids : the id of a "face" event is what
+      // listeners re-read the face by, so an originalId here would send them looking for a face
+      // that does not exist - and silently drop the update instead of refreshing anything.
+      remappedFaceIds <- MediaService
+                           .originalFaces(original.id)
+                           .map(_.map(_.faces.map(_.faceId)).getOrElse(Nil))
+                           .logError("Couldn't list the remapped faces")
+                           .mapError(err => ApiInternalError("Couldn't list the remapped faces"))
                            .when(previousRotation != newRotation)
+                           .map(_.getOrElse(Nil))
+      _               <- ZIO.foreachDiscard(remappedFaceIds)(faceId => EventBusService.publish(ApiEvent("face", Some(faceId.toString), ApiEventAction.updated)))
     } yield ()
 
     logic
@@ -807,6 +815,25 @@ object ApiApp extends ZIOAppDefault {
       tuple                <- logic
       (contentType, stream) = tuple
       cacheControl          = s"private, max-age=${config.cacheMaxAgeSeconds}"
+    } yield (contentType, cacheControl, stream)
+  }
+
+  // Media originals, normalized renditions and miniatures are immutable : their bytes are derived
+  // once from a file that never changes, so they can be cached for as long as the config says.
+  // A *face* crop is not - it is re-cut whenever the media is rotated or repaired, at a URL that
+  // stays the same. Cached for the config duration it would keep showing the old crop long after
+  // the fix, which is exactly the trap of "I rotated it and nothing changed". Kept short enough
+  // that a repair shows up on its own, long enough that scrolling a grid of hundreds of face tiles
+  // still hits the cache.
+  val faceContentMaxAgeSeconds = 60
+
+  def addFaceCacheHeader[R, E, Err](logic: ZIO[R, E, (String, ZStream[Any, Err, Byte])]): ZIO[R, E, (String, String, ZStream[Any, Err, Byte])] = {
+    for {
+      config               <- ApiConfig.config.orDie
+      tuple                <- logic
+      (contentType, stream) = tuple
+      maxAge                = math.min(config.cacheMaxAgeSeconds, faceContentMaxAgeSeconds)
+      cacheControl          = s"private, max-age=$maxAge"
     } yield (contentType, cacheControl, stream)
   }
 
@@ -1276,7 +1303,7 @@ object ApiApp extends ZIOAppDefault {
       .serverLogic[ApiEnv](user =>
         rawFaceId =>
           extractFaceId(rawFaceId)
-            .flatMap(id => addCacheHeader(faceGetImageBytesLogic(id)))
+            .flatMap(id => addFaceCacheHeader(faceGetImageBytesLogic(id)))
       )
 
   val faceUpdatePersonEndpoint =

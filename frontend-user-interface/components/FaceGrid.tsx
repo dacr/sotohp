@@ -3,8 +3,10 @@
 // Shared face-tile grid for both the per-person faces view (identified / to-validate modes) and
 // the cross-person "all inferred faces" review queue.
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useFaceImageVersion } from "../hooks/useFaces";
 import { useAuth } from "../lib/keycloak-auth";
-import type { DetectedFace, Person } from "../lib/api-client";
+import { displayRotationDegrees, rotatedImageBox } from "../lib/orientation";
+import type { DetectedFace, Media, Person } from "../lib/api-client";
 
 export interface ImageRect {
   left: number;
@@ -13,7 +15,21 @@ export interface ImageRect {
   height: number;
 }
 
-type Tooltip = { face: DetectedFace; x: number; y: number; miniatureUrl?: string };
+// `rotateDeg` / `natWidth` / `natHeight` land together with the miniature once it has loaded : the
+// served rendition is only baked to the *original's* EXIF orientation, so a photo the user rotated
+// by hand still needs the difference applied here, and rotating it needs its natural size (see
+// rotatedImageBox).
+type Tooltip = {
+  face: DetectedFace;
+  x: number;
+  y: number;
+  miniatureUrl?: string;
+  rotateDeg?: number;
+  natWidth?: number;
+  natHeight?: number;
+};
+
+const TOOLTIP_IMAGE_MAX_SIDE = 250;
 
 function personLabel(p: Person | undefined): { first: string; full: string } {
   if (!p) return { first: "", full: "" };
@@ -66,6 +82,7 @@ export function FaceGrid({
   onOpenViewer: (face: DetectedFace) => void;
 }) {
   const { api } = useAuth();
+  const faceImageVersion = useFaceImageVersion();
 
   // Drag-to-select: mousedown on a tile starts a paint gesture (add or remove, decided by that
   // first tile's new state, or by a shift-click range) that mouseenter on subsequent tiles
@@ -80,7 +97,7 @@ export function FaceGrid({
   // originalId since a grid this size often has many faces from the same handful of photos.
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const accessKeyCacheRef = useRef<Map<string, string>>(new Map());
+  const mediaCacheRef = useRef<Map<string, Media | null>>(new Map());
 
   useEffect(
     () => () => {
@@ -89,23 +106,36 @@ export function FaceGrid({
     []
   );
 
+  // The media, not just its access key : the tooltip needs the orientation too, and a grid this
+  // size keeps coming back to the same handful of photos, so both are cached per originalId (null
+  // caches the failures, so a photo without a media is not looked up on every hover).
+  async function resolveMedia(originalId: string): Promise<Media | null> {
+    const cached = mediaCacheRef.current.get(originalId);
+    if (cached !== undefined) return cached;
+    let media: Media | null = null;
+    try {
+      const state = await api.getState(originalId);
+      if (state.mediaAccessKey) media = await api.getMediaByKey(state.mediaAccessKey);
+    } catch {
+      media = null;
+    }
+    mediaCacheRef.current.set(originalId, media);
+    return media;
+  }
+
   async function showTooltip(face: DetectedFace, x: number, y: number) {
     setTooltip({ face, x, y });
-    let accessKey = accessKeyCacheRef.current.get(face.originalId);
-    if (!accessKey) {
-      try {
-        const state = await api.getState(face.originalId);
-        if (!state.mediaAccessKey) return;
-        accessKey = state.mediaAccessKey;
-        accessKeyCacheRef.current.set(face.originalId, accessKey);
-      } catch {
-        return;
-      }
-    }
-    const url = api.mediaMiniatureUrl(accessKey);
+    const media = await resolveMedia(face.originalId);
+    if (!media) return;
+    const url = api.mediaMiniatureUrl(media.accessKey);
+    const rotateDeg = displayRotationDegrees(media);
     const preload = new Image();
     preload.onload = () => {
-      setTooltip((t) => (t && t.face.faceId === face.faceId ? { ...t, miniatureUrl: url } : t));
+      setTooltip((t) =>
+        t && t.face.faceId === face.faceId
+          ? { ...t, miniatureUrl: url, rotateDeg, natWidth: preload.naturalWidth, natHeight: preload.naturalHeight }
+          : t
+      );
     };
     preload.src = url;
   }
@@ -211,7 +241,7 @@ export function FaceGrid({
           >
             <img
               className="face-img"
-              src={api.faceImageUrl(face.faceId)}
+              src={api.faceImageUrl(face.faceId, faceImageVersion(face))}
               alt="face"
               loading="lazy"
               decoding="async"
@@ -259,11 +289,31 @@ export function FaceGrid({
             <div className="mosaic-photo-tooltip show" style={{ left: pos.left, top: pos.top }}>
               <div className="title">{new Date(tooltip.face.timestamp).toLocaleString()}</div>
               {tooltipInferredName && <div style={{ color: "#fbbf24", fontWeight: 600 }}>Inferred: {tooltipInferredName}</div>}
-              {tooltip.miniatureUrl && (
-                <div style={{ margin: "6px 0" }}>
-                  <img src={tooltip.miniatureUrl} alt="" style={{ maxWidth: 250, maxHeight: 250, borderRadius: 4, display: "block", objectFit: "contain", background: "#000" }} />
-                </div>
-              )}
+              {tooltip.miniatureUrl &&
+                (() => {
+                  const deg = tooltip.rotateDeg ?? 0;
+                  const { boxWidth, boxHeight, imageWidth, imageHeight } = rotatedImageBox(tooltip.natWidth ?? 0, tooltip.natHeight ?? 0, deg, {
+                    maxWidth: TOOLTIP_IMAGE_MAX_SIDE,
+                    maxHeight: TOOLTIP_IMAGE_MAX_SIDE,
+                  });
+                  return (
+                    <div style={{ margin: "6px 0", position: "relative", width: boxWidth, height: boxHeight, borderRadius: 4, overflow: "hidden", background: "#000" }}>
+                      <img
+                        src={tooltip.miniatureUrl}
+                        alt=""
+                        style={{
+                          position: "absolute",
+                          left: "50%",
+                          top: "50%",
+                          width: imageWidth,
+                          height: imageHeight,
+                          display: "block",
+                          transform: `translate(-50%, -50%) rotate(${deg}deg)`,
+                        }}
+                      />
+                    </div>
+                  );
+                })()}
               <div className="subtitle">{tooltipHint}</div>
             </div>
           );

@@ -15,10 +15,11 @@
 // in full on mount once stale, which is the periodic sanity check.
 import { useMutation, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { useAuth } from "../lib/keycloak-auth";
-import type { ApiClient, DetectedFace } from "../lib/api-client";
+import { faceBoxVersion, type ApiClient, type DetectedFace } from "../lib/api-client";
 
 const ALL_FACES_KEY = ["faces"];
 const PERSON_FACES_KEY = ["personFaces"];
+const FACE_CONTENT_REVISION_KEY = ["faceContentRevision"];
 
 export function useAllFaces() {
   const { api } = useAuth();
@@ -39,6 +40,47 @@ export function usePersonFaces(personId: string | undefined | null) {
 
 function sortByTimestampDesc(faces: DetectedFace[]): DetectedFace[] {
   return [...faces].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+// A face's cached crop file gets rewritten in place - re-cut when the media is rotated, or repaired
+// by the CLI's FaceOrientationAudit - under a faceId, and so a URL, that never changes. Usually the
+// box moves with it, and faceBoxVersion() alone is enough to bust the browser cache (it is derived
+// from the data, so it survives a reload). A *re-crop* is the exception : it fixes a crop that was
+// cut against the wrong rotation and deliberately leaves the box exactly as it is, so the URL would
+// stay identical across a repair that changed every pixel. This counter, bumped whenever the server
+// tells us a face changed, covers that case.
+function bumpFaceContentRevision(qc: QueryClient, faceId: string) {
+  qc.setQueryData<Record<string, number>>(FACE_CONTENT_REVISION_KEY, (old) => ({ ...(old ?? {}), [faceId]: (old?.[faceId] ?? 0) + 1 }));
+}
+
+/** Builds the cache-busting token to hand to `api.faceImageUrl` for a given face. */
+export function useFaceImageVersion(): (face: Pick<DetectedFace, "faceId" | "box">) => string {
+  const { data } = useQuery<Record<string, number>>({
+    queryKey: FACE_CONTENT_REVISION_KEY,
+    queryFn: () => ({}),
+    initialData: {},
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return (face) => {
+    const revision = data[face.faceId];
+    return revision ? `${faceBoxVersion(face)}~${revision}` : faceBoxVersion(face);
+  };
+}
+
+/** Same, for a face we only know by id (a person's cover face) - no box to fold in. */
+export function useFaceIdImageVersion(): (faceId: string) => string | undefined {
+  const { data } = useQuery<Record<string, number>>({
+    queryKey: FACE_CONTENT_REVISION_KEY,
+    queryFn: () => ({}),
+    initialData: {},
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return (faceId) => {
+    const revision = data[faceId];
+    return revision ? `~${revision}` : undefined;
+  };
 }
 
 // Which person a face is listed under server-side — MediaServiceLive's faceIdByPersonId index keys
@@ -149,6 +191,9 @@ export async function syncFaceFromServer(qc: QueryClient, api: ApiClient, faceId
     return;
   }
   qc.setQueryData<DetectedFace>(["face", faceId], face);
+  // The crop file may have been rewritten under the same URL (a rotation re-crops every face of the
+  // media), so make the next <img> request a different one.
+  bumpFaceContentRevision(qc, faceId);
   const known = qc.getQueryData<DetectedFace[]>(ALL_FACES_KEY)?.some((f) => f.faceId === faceId);
   // Replaced outright rather than merged: the server omits the fields it cleared, so merging would
   // keep a confirmed face's stale inferred bookkeeping alive.

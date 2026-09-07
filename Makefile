@@ -35,7 +35,13 @@ run-media-features-clustering:
 run-gps-fix:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GpsLocationFix
 
-# Report-only by default; pass ARGS="--fix" to actually remap faces stuck on their pre-rotation frame.
+# Checks user-rotated photos for face data computed against the wrong rotation: boxes stuck on the
+# pre-rotation frame (needs the detector, slow) and crops cut at a different rotation than the box
+# they belong to (pure arithmetic on the JPEG header, instant).
+# Report-only by default. ARGS="--fix" applies the repairs, ARGS="--crops-only" skips the slow box
+# stage, and they combine: ARGS="--crops-only --fix".
+# Stop the API server before running with --fix: both processes open the same LMDB environment, and
+# writing from here while it serves is asking for trouble.
 run-face-orientation-audit:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceOrientationAudit $(ARGS)
 

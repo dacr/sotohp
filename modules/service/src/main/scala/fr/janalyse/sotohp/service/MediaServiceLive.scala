@@ -988,12 +988,24 @@ class MediaServiceLive private (
     } yield detected
   }
 
-  override def facesRemapForRotation(originalId: OriginalId, fromRotationDegrees: Int, toRotationDegrees: Int): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
-    val delta = ((toRotationDegrees - fromRotationDegrees) / 90) % 4
+  /** Rewrites every face of an original against `toRotationDegrees` : boxes turned by
+    * `quarterTurnsClockWise`, cached crops re-cut from the image at that rotation, features
+    * recomputed on the new crops. Nothing is deleted or re-detected, so faceId,
+    * identifiedPersonId, inferred* and manually-added faces all survive untouched.
+    *
+    * `quarterTurnsClockWise = 0` is a meaningful call and not a no-op : it leaves the boxes exactly
+    * as they are and only re-cuts the crops (and their features) at the given rotation - the repair
+    * for crops that were written against a different rotation than the box they belong to.
+    */
+  private def facesRewrite(
+    originalId: OriginalId,
+    quarterTurnsClockWise: Int,
+    toRotationDegrees: Int
+  ): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
     val logic = for {
       original          <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
       existingFaces     <- originalFaces(originalId).map(_.map(_.faces).getOrElse(Nil))
-      result            <- if (existingFaces.isEmpty || delta == 0) ZIO.none
+      result            <- if (existingFaces.isEmpty) ZIO.none
                             else {
                               for {
                                 now               <- Clock.currentDateTime
@@ -1005,7 +1017,7 @@ class MediaServiceLive private (
                                                        .getOriginalBufferedImage(original, toRotationDegrees)
                                                        .mapError(err => ServiceInternalIssue(s"Couldn't rotate original image : $err"))
                                 // Exact geometric remap - keeps faceId, identifiedPersonId, inferred*, everything but the box.
-                                remapped           = existingFaces.map(face => face.copy(box = face.box.rotatedClockwise90(delta)))
+                                remapped           = existingFaces.map(face => face.copy(box = face.box.rotatedClockwise90(quarterTurnsClockWise)))
                                 // Re-crop each cached face thumbnail from the newly-rotated image at its new box.
                                 _                 <- ZIO
                                                        .foreachDiscard(remapped)(face => facesProcessor.extractThenCacheFaceImageFromOriginal(face, rotatedImage))
@@ -1042,6 +1054,27 @@ class MediaServiceLive private (
                             }
     } yield result
     logic.uninterruptible
+  }
+
+  override def facesRemapForRotation(originalId: OriginalId, fromRotationDegrees: Int, toRotationDegrees: Int): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
+    val delta = ((toRotationDegrees - fromRotationDegrees) / 90) % 4
+    // Nothing turned : boxes and crops are already expressed against `toRotationDegrees`.
+    if (delta == 0) ZIO.none
+    else facesRewrite(originalId, delta, toRotationDegrees)
+  }
+
+  override def facesRecropForEffectiveRotation(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
+    for {
+      original   <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      mediaTuple <- mediaGet(originalId).mapError(err => ServiceInternalIssue(s"Couldn't get media for original : $err"))
+      // The frame every stored face box lives in : the user's override wins over the camera's EXIF value.
+      rotation    = mediaTuple
+                      .flatMap(_.media.orientation)
+                      .orElse(original.orientation)
+                      .map(_.rotationDegrees)
+                      .getOrElse(0)
+      result     <- facesRewrite(originalId, quarterTurnsClockWise = 0, toRotationDegrees = rotation)
+    } yield result
   }
 
   // -------------------------------------------------------------------------------------------------------------------

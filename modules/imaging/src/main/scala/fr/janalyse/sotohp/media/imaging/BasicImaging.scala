@@ -20,6 +20,23 @@ case object BasicImaging {
   def fileTypeFromName(path: Path): Option[String] =
     fileTypeFromName(path.getFileName.toString)
 
+  /** Reads just the pixel dimensions of an image file, from its header - the pixels are never
+    * decoded, so this stays cheap enough to run over a whole cache directory. None when the file is
+    * missing, empty or not a readable image.
+    */
+  def sizeOf(input: Path): Option[(Int, Int)] = {
+    Using(ImageIO.createImageInputStream(input.toFile)) { stream =>
+      Option(stream).flatMap { stream =>
+        ImageIO.getImageReaders(stream).asScala.nextOption().map { reader =>
+          try {
+            reader.setInput(stream)
+            (reader.getWidth(reader.getMinIndex), reader.getHeight(reader.getMinIndex))
+          } finally reader.dispose()
+        }
+      }
+    }.toOption.flatten
+  }
+
   def resize(
     originalImage: BufferedImage,
     targetWidth: Int,

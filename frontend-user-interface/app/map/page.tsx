@@ -7,13 +7,15 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
-import type { MediaLocation } from "../../lib/api-client";
+import type { Media, MediaLocation } from "../../lib/api-client";
 import { useAuth } from "../../lib/keycloak-auth";
 import { fixLeafletDefaultIcon } from "../../lib/leaflet-fix-icons";
 import { getCachedMapLocations, setCachedMapLocations } from "../../lib/map-cache";
+import { displayRotationDegrees, rotatedImageBox } from "../../lib/orientation";
 
 const MARKER_BATCH_SIZE = 200;
 const MARKER_BATCH_INTERVAL_MS = 250;
+const POPUP_IMAGE_WIDTH = 200;
 
 export default function MapPage() {
   const { api } = useAuth();
@@ -24,6 +26,7 @@ export default function MapPage() {
   const markersByKeyRef = useRef<Map<string, Leaflet.Marker>>(new Map());
   const addedKeysRef = useRef<Set<string>>(new Set());
   const bagNameCacheRef = useRef<Map<string, Promise<string>>>(new Map());
+  const mediaCacheRef = useRef<Map<string, Promise<Media | null>>>(new Map());
   const loadingRef = useRef(false);
   const [status, setStatus] = useState("");
 
@@ -41,6 +44,19 @@ export default function MapPage() {
     return p;
   }
 
+  // MediaLocation is a lightweight projection and carries no orientation, so the popup has to fetch
+  // the media to know how to hang the photo. Only ever on popupopen, and cached, so it costs one
+  // request the first time a given marker is opened.
+  function getMediaCached(accessKey: string): Promise<Media | null> {
+    const cache = mediaCacheRef.current;
+    let p = cache.get(accessKey);
+    if (!p) {
+      p = api.getMediaByKey(accessKey).catch(() => null);
+      cache.set(accessKey, p);
+    }
+    return p;
+  }
+
   function addMarker(L: typeof Leaflet, m: MediaLocation): Leaflet.Marker | null {
     if (addedKeysRef.current.has(m.accessKey)) return null;
     addedKeysRef.current.add(m.accessKey);
@@ -51,7 +67,9 @@ export default function MapPage() {
       <div style="min-width:200px">
         <div style="font-weight:600"><span id="evname-${m.accessKey}">…</span> ${starred}</div>
         <div style="font-size:12px;color:#555">${date ? new Date(date).toLocaleString() : ""}</div>
-        <img id="thumb-${m.accessKey}" alt="media" style="width:100%;height:auto;border-radius:6px;margin-top:6px"/>
+        <div id="thumbbox-${m.accessKey}" style="position:relative;overflow:hidden;border-radius:6px;margin-top:6px;background:#000;width:${POPUP_IMAGE_WIDTH}px">
+          <img id="thumb-${m.accessKey}" alt="media" style="position:absolute;left:50%;top:50%;display:block;transform:translate(-50%,-50%)"/>
+        </div>
         <button id="goto-${m.accessKey}" style="margin-top:6px">Open</button>
       </div>
     `);
@@ -61,7 +79,25 @@ export default function MapPage() {
       const evEl = document.getElementById(`evname-${m.accessKey}`);
       if (evEl) evEl.textContent = (await getBagNameCached(m.bagId)) || "(no bag)";
       const imgEl = document.getElementById(`thumb-${m.accessKey}`) as HTMLImageElement | null;
-      if (imgEl) imgEl.src = api.mediaNormalizedUrl(m.accessKey);
+      const boxEl = document.getElementById(`thumbbox-${m.accessKey}`);
+      if (!imgEl || !boxEl) return;
+      // The normalized rendition is baked to the original's EXIF orientation only, so a photo the
+      // user rotated by hand still needs the remaining turn applied here - otherwise the popup
+      // shows it lying on its side.
+      const media = await getMediaCached(m.accessKey);
+      const deg = displayRotationDegrees(media);
+      imgEl.onload = () => {
+        const { boxHeight, imageWidth, imageHeight } = rotatedImageBox(imgEl.naturalWidth, imgEl.naturalHeight, deg, {
+          maxWidth: POPUP_IMAGE_WIDTH,
+          maxHeight: Infinity,
+          allowUpscale: true,
+        });
+        boxEl.style.height = `${boxHeight}px`;
+        imgEl.style.width = `${imageWidth}px`;
+        imgEl.style.height = `${imageHeight}px`;
+        imgEl.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
+      };
+      imgEl.src = api.mediaNormalizedUrl(m.accessKey);
     });
     markersByKeyRef.current.set(m.accessKey, marker);
     return marker;

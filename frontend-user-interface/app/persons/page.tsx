@@ -6,7 +6,7 @@ import { FaceEditModal } from "../../components/FaceEditModal";
 import { FaceGrid } from "../../components/FaceGrid";
 import { LazyThumb } from "../../components/LazyThumb";
 import { Modal } from "../../components/Modal";
-import { useAllFaces, useIgnoreFace, useRestoreFace, useSetFacePerson } from "../../hooks/useFaces";
+import { useAllFaces, useFaceIdImageVersion, useIgnoreFace, useRestoreFace, useSetFacePerson } from "../../hooks/useFaces";
 import { useMediaAccessKey } from "../../hooks/useMediaAccessKey";
 import { usePersistedSet } from "../../hooks/usePersistedSet";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
@@ -201,10 +201,11 @@ function PersonsList({ onOpenPerson, onOpenInferred }: { onOpenPerson: (id: stri
 
 function PersonThumb({ person }: { person: Person }) {
   const { api } = useAuth();
+  const faceIdImageVersion = useFaceIdImageVersion();
   if (!person.chosenFaceId) return <div className="list-thumb list-thumb-sm">No image</div>;
   return (
     <div className="list-thumb list-thumb-sm">
-      <img src={api.faceImageUrl(person.chosenFaceId)} alt={personLabel(person)} loading="lazy" decoding="async" />
+      <img src={api.faceImageUrl(person.chosenFaceId, faceIdImageVersion(person.chosenFaceId))} alt={personLabel(person)} loading="lazy" decoding="async" />
     </div>
   );
 }

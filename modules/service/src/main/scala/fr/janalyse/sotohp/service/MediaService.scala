@@ -95,6 +95,17 @@ trait MediaService {
     * changes (nothing is deleted or re-detected, so manually-added faces and person identifications survive).
     */
   def facesRemapForRotation(originalId: OriginalId, fromRotationDegrees: Int, toRotationDegrees: Int): IO[ServiceIssue, Option[OriginalFaceFeatures]]
+
+  /** Re-cuts every cached face crop of the given original from the image at the media's *effective*
+    * rotation, at the boxes exactly as they are stored, and recomputes the features from those new
+    * crops. Boxes are left untouched, and so are faceId, identifiedPersonId and every other field.
+    *
+    * The repair for a crop that was written against a different rotation than its box - which used
+    * to happen when a face was added by hand on a photo the user had rotated, before faceCreate
+    * learnt to honour the media's orientation. The stored box is taken as authoritative, since the
+    * effective frame is the frame every stored geometry is defined in.
+    */
+  def facesRecropForEffectiveRotation(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]]
   def originalObjects(originalId: OriginalId): IO[ServiceIssue, Option[OriginalDetectedObjects]]
   def originalNormalized(originalId: OriginalId): IO[ServiceIssue, Option[OriginalNormalized]]
   def originalMiniatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalMiniatures]]
@@ -330,6 +341,8 @@ object MediaService {
   def facesDetectPreview(originalId: OriginalId, rotationDegrees: Int): ZIO[MediaService, ServiceIssue, List[BoundingBox]] = ZIO.serviceWithZIO(_.facesDetectPreview(originalId, rotationDegrees))
   def facesRemapForRotation(originalId: OriginalId, fromRotationDegrees: Int, toRotationDegrees: Int): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]] =
     ZIO.serviceWithZIO(_.facesRemapForRotation(originalId, fromRotationDegrees, toRotationDegrees))
+  def facesRecropForEffectiveRotation(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalFaceFeatures]]                                          =
+    ZIO.serviceWithZIO(_.facesRecropForEffectiveRotation(originalId))
   def originalObjects(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalDetectedObjects]]         = ZIO.serviceWithZIO(_.originalObjects(originalId))
   def originalNormalized(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalNormalized]]           = ZIO.serviceWithZIO(_.originalNormalized(originalId))
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))

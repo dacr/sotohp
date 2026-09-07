@@ -53,6 +53,36 @@ export function effectiveRotationDegrees(media: Oriented | undefined | null): 0 
   return orientationToDegrees(media.orientation ?? media.original?.orientation);
 }
 
+// Sizes an image that still has `rotateDeg` left to apply in the browser.
+//
+// A CSS rotation does not change the space an element reserves in layout, so a 90°-turned photo
+// left to itself overflows its container on one axis and leaves a gap on the other. The caller
+// therefore needs two different sizes : the box the *rotated* image ends up occupying, and the size
+// to give the (still unrotated) <img> inside it. Put the <img> at 50%/50% of a `position:relative`
+// box of boxWidth x boxHeight with `transform: translate(-50%, -50%) rotate(<deg>deg)`.
+//
+// `maxWidth`/`maxHeight` bound the *rotated* box (pass Infinity for an unbounded axis); upscaling a
+// rendition past its natural size only blurs it, so it is opt-in.
+export function rotatedImageBox(
+  naturalWidth: number,
+  naturalHeight: number,
+  rotateDeg: number,
+  fit: { maxWidth: number; maxHeight: number; allowUpscale?: boolean }
+): { boxWidth: number; boxHeight: number; imageWidth: number; imageHeight: number } {
+  if (!(naturalWidth > 0) || !(naturalHeight > 0)) return { boxWidth: 0, boxHeight: 0, imageWidth: 0, imageHeight: 0 };
+  const swapped = rotateDeg === 90 || rotateDeg === 270;
+  const rotatedWidth = swapped ? naturalHeight : naturalWidth;
+  const rotatedHeight = swapped ? naturalWidth : naturalHeight;
+  let scale = Math.min(fit.maxWidth / rotatedWidth, fit.maxHeight / rotatedHeight);
+  if (!fit.allowUpscale) scale = Math.min(scale, 1);
+  return {
+    boxWidth: rotatedWidth * scale,
+    boxHeight: rotatedHeight * scale,
+    imageWidth: naturalWidth * scale,
+    imageHeight: naturalHeight * scale,
+  };
+}
+
 // What is left to rotate on screen, on top of the rotation the served image already carries.
 // Without the subtraction a media whose user-set orientation differs from its EXIF one renders at
 // the wrong angle, and - worse, because it is silent - its face boxes, which are expressed in the
