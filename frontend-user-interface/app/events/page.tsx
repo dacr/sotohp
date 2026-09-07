@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { KeywordChips } from "../../components/KeywordChips";
 import { LazyThumb } from "../../components/LazyThumb";
 import { LocationPicker } from "../../components/LocationPicker";
@@ -13,13 +13,37 @@ import { showError, showWarning } from "../../lib/toast";
 import type { Bag, Location } from "../../lib/api-client";
 
 const SCROLL_KEY = "events.scrollTop";
+const FILTER_KEY = "events.filter";
 
 export default function EventsPage() {
   const { data: bags = [], isLoading, refetch } = useBags();
   const updateBag = useUpdateBag();
   const [editing, setEditing] = useState<Bag | null>(null);
+  const [filter, setFilter] = useState("");
   const router = useRouter();
   const sectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    try {
+      setFilter(sessionStorage.getItem(FILTER_KEY) || "");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  function persistFilter(v: string) {
+    setFilter(v);
+    try {
+      sessionStorage.setItem(FILTER_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return bags;
+    return bags.filter((bag) => [bag.name, bag.description].some((f) => (f || "").toLowerCase().includes(q)));
+  }, [bags, filter]);
 
   // Persist/restore scroll position across navigation — each route unmounts now (no more
   // show/hide tab divs staying alive in the DOM), so this matters more than it used to.
@@ -56,11 +80,17 @@ export default function EventsPage() {
     <section className="page" ref={sectionRef} tabIndex={0} aria-label="Bags">
       <div className="list-actions">
         <button onClick={() => refetch()}>↻ Refresh</button>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 8 }}>
+          <input type="text" placeholder="Quick filter…" aria-label="Quick filter" style={{ minWidth: 200 }} value={filter} onChange={(e) => persistFilter(e.target.value)} />
+          <button title="Clear filter" aria-label="Clear filter" className="btn btn-soft btn-sm" onClick={() => persistFilter("")}>
+            ×
+          </button>
+        </span>
       </div>
       <ul className="list">
         {isLoading && <li>Loading…</li>}
-        {!isLoading && bags.length === 0 && <li>No bags</li>}
-        {bags.map((bag) => (
+        {!isLoading && filtered.length === 0 && <li>{bags.length === 0 ? "No bags" : "No matching bags"}</li>}
+        {filtered.map((bag) => (
           <li
             key={bag.id}
             style={bag.originalId ? { cursor: "pointer" } : undefined}
