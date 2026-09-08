@@ -633,6 +633,9 @@ function ViewerPageInner() {
   // ---- Slideshow ----
   function stopSlideshow() {
     setSlideshowPlaying(false);
+    // Mirror the ref eagerly: scheduleNextTick()'s guard reads it synchronously, before React
+    // has re-rendered and refreshed it from state.
+    slideshowPlayingRef.current = false;
     if (slideshowTimerRef.current) {
       clearTimeout(slideshowTimerRef.current);
       slideshowTimerRef.current = null;
@@ -658,6 +661,10 @@ function ViewerPageInner() {
       return;
     }
     setSlideshowPlaying(true);
+    // Without this, scheduleNextTick() below bails on its `!slideshowPlayingRef.current` guard -
+    // the ref still holds the pre-click `false` until the next render - and the slideshow sits
+    // forever on the current photo.
+    slideshowPlayingRef.current = true;
     const cont = containerRef.current;
     if (cont) cont.style.setProperty("--viewer-zoom-duration", `${slideshowSecs}s`);
     restartKenBurns();
