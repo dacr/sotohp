@@ -131,6 +131,25 @@ case class ElasticOperations(config: SearchServiceConfig) {
 
   // ------------------------------------------------------
 
+  /** Deletes every `${indexPrefix}-*` index. A full re-publish otherwise leaves stale documents
+    * behind: a media whose timestamp changed lands in a different monthly index and orphans its
+    * former copy. No-op when none match; unrelated indices are never touched.
+    */
+  def deleteIndexes(indexPrefix: String): Task[Int] = {
+    for {
+      listing <- client.execute(catIndices())
+      names    = listing.result.map(_.index).filter(_.startsWith(s"$indexPrefix-")).toList
+      _       <- ZIO
+                   .foreachDiscard(names.grouped(100).toList) { batch =>
+                     client.execute(deleteIndex(batch)).flatMap(response => ZIO.cond(response.isSuccess, (), response.error.asException))
+                   }
+                   .when(names.nonEmpty)
+      _       <- ZIO.log(s"Deleted ${names.size} search indexes matching $indexPrefix-*")
+    } yield names.size
+  }
+
+  // ------------------------------------------------------
+
   def fetchAll[T](indexName: String)(implicit decoder: JsonDecoder[T]) = {
     // TODO something is going wrong here, sometimes not all results are returned without error being returned
     // TODO deep pagination issue see https://www.elastic.co/guide/en/elasticsearch/reference/current/scroll-api.html

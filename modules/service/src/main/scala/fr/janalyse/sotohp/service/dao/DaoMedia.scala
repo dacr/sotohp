@@ -20,6 +20,8 @@ case class DaoMedia(
   shootDateTime: Option[ShootDateTime],     // override original's cameraShotDateTime
   userDefinedLocation: Option[DaoLocation], // replace the original's location (user-defined or deducted location)
   deductedLocation: Option[DaoLocation],    // from nearby photos
+  userDefinedPlace: Option[DaoPlace],       // user-defined or corrected textual place
+  deductedPlace: Option[DaoPlace],          // textual place deduced from the effective location
   timestamp: OffsetDateTime,                // keep the retained timestamp as it is used for indexing purposes
   location: Option[DaoLocation]             // Keep the retained location as it is used for indexing purposes
 ) derives LMDBCodecJson, LMDBSchema

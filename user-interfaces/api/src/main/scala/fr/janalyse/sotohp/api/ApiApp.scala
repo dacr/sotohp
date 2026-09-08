@@ -503,6 +503,7 @@ object ApiApp extends ZIOAppDefault {
       taoMedia = tuple.media.into[ApiMedia]
                    .withFieldConst(_.accessKey, tuple.key)
                    .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+                   .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
                    .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
                    .transform
     } yield taoMedia
@@ -548,6 +549,7 @@ object ApiApp extends ZIOAppDefault {
         mediaTuple.media.into[ApiMedia]
           .withFieldConst(_.accessKey, mediaTuple.key)
           .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
           .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
           .transform
       }
@@ -628,6 +630,7 @@ object ApiApp extends ZIOAppDefault {
         mediaTuple.media.into[ApiMedia]
           .withFieldConst(_.accessKey, mediaTuple.key)
           .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
           .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
           .transform
       }
@@ -678,7 +681,8 @@ object ApiApp extends ZIOAppDefault {
                                keywords = toUpdate.keywords,
                                orientation = toUpdate.orientation,
                                shootDateTime = toUpdate.shootDateTime,
-                               userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]]
+                               userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]],
+                               userDefinedPlace = toUpdate.userDefinedPlace.transformInto[Option[Place]]
                              )
                            )
                            .logError("Couldn't update media")
@@ -905,6 +909,7 @@ object ApiApp extends ZIOAppDefault {
         mediaTuple.media.into[ApiMedia]
           .withFieldConst(_.accessKey, mediaTuple.key)
           .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
           .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
           .transform
       }
@@ -995,6 +1000,7 @@ object ApiApp extends ZIOAppDefault {
         mediaTuple.media.into[ApiMedia]
           .withFieldConst(_.accessKey, mediaTuple.key)
           .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
           .transform
       }
       .mapError(err => ApiInternalError("Couldn't stream medias"))
@@ -1148,6 +1154,7 @@ object ApiApp extends ZIOAppDefault {
             taoMedia    = mediaTuple.media.into[ApiMedia]
                             .withFieldConst(_.accessKey, mediaTuple.key)
                             .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+                            .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
                             .transform
           } yield taoMedia
       )

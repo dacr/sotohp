@@ -120,6 +120,18 @@ trait MediaService {
     */
   def mediaFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures]
 
+  /** Deduces (once, then cached on the media as `deductedPlace`) the textual place - town / region
+    * / country - of a photo from its effective location, by offline reverse-geocoding. Yields the
+    * effective place (`userDefinedPlace` orElse `deductedPlace`), or `None` when the media has no
+    * usable location or nothing could be resolved.
+    */
+  def placeResolve(originalId: OriginalId): IO[ServiceIssue, Option[Place]]
+
+  /** Re-runs the reverse-geocoding and overwrites `deductedPlace`, where `placeResolve` only ever
+    * fills a missing one. Needed after a location change or a GeoNames dump refresh.
+    */
+  def placeRecompute(originalId: OriginalId): IO[ServiceIssue, Option[Place]]
+
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): IO[ServiceIssue, Unit]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -271,7 +283,17 @@ trait MediaService {
   def synchronizeWait(): IO[ServiceIssue, Unit]
   def synchronizeStop(): IO[ServiceIssue, Unit]
   def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus]
+
+  /** Rebuilds the LMDB indexes (medias, originals, detectedFaces, positional). Does NOT touch the
+    * search engine - use [[searchReindexAll]] for that.
+    */
   def reindexAll(): IO[ServiceIssue, Unit]
+
+  /** Re-publishes every stored media to the search engine, in batches. Needed after a `SaoMedia`
+    * schema change or a bulk enrichment backfill (e.g. `placeResolve`), since the normal
+    * synchronization only ever publishes never-synced medias. Returns the number published.
+    */
+  def searchReindexAll(): IO[ServiceIssue, Long]
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]]
@@ -355,6 +377,8 @@ object MediaService {
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))
   def originalMediaFeatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMediaFeatures]]     = ZIO.serviceWithZIO(_.originalMediaFeatures(originalId))
   def mediaFeaturesRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalMediaFeatures]            = ZIO.serviceWithZIO(_.mediaFeaturesRecompute(originalId))
+  def placeResolve(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                             = ZIO.serviceWithZIO(_.placeResolve(originalId))
+  def placeRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                           = ZIO.serviceWithZIO(_.placeRecompute(originalId))
 
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.originalFacesUpdate(originalId, facesIds))
 
@@ -499,6 +523,7 @@ object MediaService {
   def synchronizeStop(): ZIO[MediaService, ServiceIssue, Unit]                                 = ZIO.serviceWithZIO(_.synchronizeStop())
   def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus]                  = ZIO.serviceWithZIO(_.synchronizeStatus())
   def reindexAll(): ZIO[MediaService, ServiceIssue, Unit]                                      = ZIO.serviceWithZIO(_.reindexAll())
+  def searchReindexAll(): ZIO[MediaService, ServiceIssue, Long]                                = ZIO.serviceWithZIO(_.searchReindexAll())
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): ZIO[MediaService, ServiceIssue, Set[Keyword]] = ZIO.serviceWithZIO(_.keywordSentenceToKeywords(storeId, sentence))

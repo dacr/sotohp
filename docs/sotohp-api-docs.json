@@ -5305,6 +5305,15 @@
           },
           "location" : {
             "$ref" : "#/components/schemas/Location"
+          },
+          "userDefinedPlace" : {
+            "$ref" : "#/components/schemas/Place"
+          },
+          "deductedPlace" : {
+            "$ref" : "#/components/schemas/Place"
+          },
+          "place" : {
+            "$ref" : "#/components/schemas/Place"
           }
         }
       },
@@ -5338,6 +5347,9 @@
           },
           "userDefinedLocation" : {
             "$ref" : "#/components/schemas/Location"
+          },
+          "userDefinedPlace" : {
+            "$ref" : "#/components/schemas/Place"
           }
         }
       },
@@ -5691,6 +5703,27 @@
             "type" : "string"
           },
           "chosenFaceId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Place" : {
+        "title" : "Place",
+        "type" : "object",
+        "properties" : {
+          "street" : {
+            "type" : "string"
+          },
+          "town" : {
+            "type" : "string"
+          },
+          "region" : {
+            "type" : "string"
+          },
+          "country" : {
+            "type" : "string"
+          },
+          "countryCode" : {
             "type" : "string"
           }
         }

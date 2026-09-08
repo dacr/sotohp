@@ -38,6 +38,12 @@ case class SaoMedia(
   place: Option[SaoGeoPoint],
   placeAltitude: Option[Double],
   placeDeducted: Option[Boolean],
+  // ----------------- PLACE (reverse-geocoded from GPS) -----------------
+  placeStreet: Option[String],
+  placeTown: Option[String],
+  placeRegion: Option[String],
+  placeCountry: Option[String],
+  placeCountryCode: Option[String],
   // ----------------- AI -----------------
   classifications: List[String],
   detectedObjects: List[String],
@@ -53,6 +59,7 @@ object SaoMedia {
     val mediaBagName       = media.bag.map(_.name.text)
     val keywords           = media.keywords ++ media.bag.toList.flatMap(_.keywords)
     val location           = media.location
+    val place              = media.place
     val hasProcessingIssue = (
       bag.processedObjects.exists(_.status.successful == false) ||
         bag.processedFaces.exists(_.status.successful == false) ||
@@ -81,9 +88,14 @@ object SaoMedia {
       iso = media.original.iso.map(_.selected),
       focalLength = media.original.focalLength.map(_.sexy),
       // ----------------- GPS -----------------
-      place = location.map(place => SaoGeoPoint(lat = place.latitude.doubleValue, lon = place.longitude.doubleValue)),
+      place = location.map(loc => SaoGeoPoint(lat = loc.latitude.doubleValue, lon = loc.longitude.doubleValue)),
       placeAltitude = location.flatMap(_.altitude.map(_.value)),
       placeDeducted = if (media.userDefinedLocation.isEmpty && media.deductedLocation.isDefined) Some(true) else None,
+      placeStreet = place.flatMap(_.street),
+      placeTown = place.flatMap(_.town),
+      placeRegion = place.flatMap(_.region),
+      placeCountry = place.flatMap(_.country),
+      placeCountryCode = place.flatMap(_.countryCode),
       // ----------------- AI -----------------
       classifications = bag.processedClassifications.map(_.classifications.map(_.name)).getOrElse(Nil),
       detectedObjects = bag.processedObjects.map(_.objects.map(_.name)).getOrElse(Nil),

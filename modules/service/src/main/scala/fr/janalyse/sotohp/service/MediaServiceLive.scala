@@ -9,6 +9,8 @@ import fr.janalyse.sotohp.processor.{
   FaceFeaturesProcessor,
   FacesDetectionIssue,
   FacesProcessor,
+  GeoPlaceResolver,
+  GeocodingIssue,
   MediaFeaturesIssue,
   MediaFeaturesProcessor,
   MiniaturizeProcessor,
@@ -685,6 +687,40 @@ class MediaServiceLive private (
 
   override def mediaFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures] =
     computeMediaFeatures(originalId)
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Textual place (town / region / country) deduced from the effective location - offline reverse-geocoding.
+
+  /** Reverse-geocodes the media's effective location and stores the result as `deductedPlace`
+    * (overwriting whatever was there). Yields `None` when the media has no usable location.
+    */
+  private def computePlace(originalId: OriginalId): IO[ServiceIssue, Option[Place]] = {
+    val logic = for {
+      mediaTuple <- mediaGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find media : $originalId"))
+      media       = mediaTuple.media
+      resolved   <- media.location match {
+                      case None      => ZIO.none
+                      case Some(loc) =>
+                        processors.geoPlace
+                          .flatMap(_.resolve(loc.latitude.doubleValue, loc.longitude.doubleValue))
+                          .mapError(err => ServiceInternalIssue(s"Unable to reverse-geocode : $err"))
+                    }
+      _          <- mediaUpdate(originalId, media.copy(deductedPlace = resolved)).when(resolved != media.deductedPlace)
+    } yield resolved
+    logic.uninterruptible
+  }
+
+  override def placeResolve(originalId: OriginalId): IO[ServiceIssue, Option[Place]] = {
+    for {
+      mediaTuple <- mediaGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find media : $originalId"))
+      media       = mediaTuple.media
+      result     <- if (media.userDefinedPlace.isDefined || media.deductedPlace.isDefined) ZIO.succeed(media.place)
+                    else computePlace(originalId)
+    } yield result
+  }
+
+  override def placeRecompute(originalId: OriginalId): IO[ServiceIssue, Option[Place]] =
+    computePlace(originalId)
 
   def mediaFeaturesList(): Stream[ServiceStreamIssue, MediaFeatures] = {
     collections.mediaFeatures
@@ -1690,6 +1726,8 @@ class MediaServiceLive private (
                                  shootDateTime = None,
                                  userDefinedLocation = None,
                                  deductedLocation = None,
+                                 userDefinedPlace = None,
+                                 deductedPlace = None,
                                  timestamp = Media.computeTimestamp(None, mayBeBag, input.original),
                                  location = input.original.location.transformInto[Option[DaoLocation]]
                                )
@@ -1775,32 +1813,73 @@ class MediaServiceLive private (
     }
   }
 
+  /** Fills `deductedPlace` from the media's effective location (offline reverse-geocoding), once,
+    * right after `locationInduction` so an induced location is taken into account. Never overwrites
+    * a user-defined or already-deducted place; a resolver that loaded nothing simply yields no
+    * place.
+    */
+  private def placeResolution(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
+    if (input.media.userDefinedPlace.isDefined || input.media.deductedPlace.isDefined) ZIO.succeed(input)
+    else
+      input.media.location match {
+        case None      => ZIO.succeed(input)
+        case Some(loc) =>
+          for {
+            resolved    <- processors.geoPlace
+                             .flatMap(_.resolve(loc.latitude.doubleValue, loc.longitude.doubleValue))
+                             .mapError(err => ServiceInternalIssue(s"Unable to reverse-geocode : $err"))
+            updatedMedia = input.media.copy(deductedPlace = resolved)
+            _           <- mediaUpdate(input.media.original.id, updatedMedia).when(resolved.isDefined)
+          } yield (updatedMedia, input.state)
+      }
+  }
+
+  /** Assembles the search-engine payload for one media by joining in every processor result the
+    * `SaoMedia` document needs.
+    */
+  private def buildMediaBag(media: Media, state: State): IO[ServiceIssue, MediaBag] =
+    for {
+      classifications <- originalClassifications(media.original.id)
+      objects         <- originalObjects(media.original.id)
+      miniatures      <- originalMiniatures(media.original.id)
+      faces           <- originalFaces(media.original.id)
+      normalized      <- originalNormalized(media.original.id)
+    } yield MediaBag(
+      media = media,
+      state = state,
+      processedClassifications = classifications,
+      processedObjects = objects,
+      processedFaces = faces,
+      processedMiniatures = miniatures,
+      processedNormalized = normalized
+    )
+
   private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[MediaBag]] = {
     val logic = for {
       now       <- Clock.currentDateTime.map(LastSynchronized.apply)
-      bag       <- ZIO.foreach(inputs) { input =>
-                     for {
-                       classifications <- originalClassifications(input.media.original.id)
-                       objects         <- originalObjects(input.media.original.id)
-                       miniatures      <- originalMiniatures(input.media.original.id)
-                       faces           <- originalFaces(input.media.original.id)
-                       normalized      <- originalNormalized(input.media.original.id)
-                     } yield MediaBag(
-                       media = input.media,
-                       state = input.state,
-                       processedClassifications = classifications,
-                       processedObjects = objects,
-                       processedFaces = faces,
-                       processedMiniatures = miniatures,
-                       processedNormalized = normalized
-                     )
-                   }
+      bag       <- ZIO.foreach(inputs)(input => buildMediaBag(input.media, input.state))
       published <- search
                      .publish(bag)
                      .mapError(err => ServiceInternalIssue(s"Unable to publish media to search engine : $err"))
       _         <- ZIO.foreach(inputs)(input => stateUpsert(input.media.original.id, input.state.copy(mediaLastSynchronized = Some(now))))
     } yield bag // TODO no transaction take care
     logic
+  }
+
+  override def searchReindexAll(): IO[ServiceIssue, Long] = {
+    val batchSize = 50
+    val publishAll =
+      mediaList()
+        .mapZIO(tuple =>
+          stateGet(tuple.media.original.id)
+            .someOrFail(ServiceDatabaseIssue(s"No state for original : ${tuple.media.original.id}"))
+            .flatMap(state => buildMediaBag(tuple.media, state))
+        )
+        .grouped(batchSize)
+        .mapZIO(bags => search.publish(bags).as(bags.size.toLong))
+        .runSum
+    (search.clear() *> publishAll)
+      .mapError(err => ServiceInternalIssue(s"Search reindex failed : $err"))
   }
 
   override def synchronizeStart(addedThoseLastDays: Option[Int]): IO[ServiceIssue, Unit] = {
@@ -1845,6 +1924,7 @@ class MediaServiceLive private (
                             .tap(input => ZIO.logInfo(s"Synchronizing ${input.media.original.mediaPath}"))
                             .mapZIO(input => ZIO.blocking(synchronizeProcessors(input).uninterruptible))
                             .mapZIO(input => ZIO.blocking(locationInduction(input).uninterruptible))
+                            .mapZIO(input => ZIO.blocking(placeResolution(input).uninterruptible))
                             .grouped(50)
                             .mapZIO(input => ZIO.blocking(synchronizeSearchEngine(input).uninterruptible))
                             .mapZIO(input => ZIO.blocking(updateSynchronizeProcessedStatus(input).uninterruptible))
@@ -2285,12 +2365,14 @@ object MediaServiceLive {
     featuresProcessor       <- FaceFeaturesProcessor.allocate().memoize
     mediaFeaturesProcessor  <- MediaFeaturesProcessor.allocate().memoize
     objectsProcessor        <- ObjectsDetectionProcessor.allocate().memoize
+    geoPlaceResolver        <- GeoPlaceResolver.allocate().memoize
     processors               = MediaServiceProcessors(
                                  classifications = classificationProcessor,
                                  faces = facesProcessor,
                                  faceFeatures = featuresProcessor,
                                  mediaFeatures = mediaFeaturesProcessor,
-                                 objects = objectsProcessor
+                                 objects = objectsProcessor,
+                                 geoPlace = geoPlaceResolver
                                )
 
   } yield processors

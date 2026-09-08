@@ -36,6 +36,20 @@ run-compute-media-features:
 run-media-features-clustering:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.MediaFeaturesClustering $(ARGS)
 
+# Download the GeoNames dump used by the offline reverse-geocoder into .sotohp/geonames/
+# (cities500: ~200k populated places; admin1 names; country names). GeoNames data is CC BY 4.0.
+download-geonames:
+	mkdir -p .sotohp/geonames
+	cd .sotohp/geonames && curl -fsSL -O https://download.geonames.org/export/dump/cities500.zip && unzip -o cities500.zip && rm cities500.zip
+	cd .sotohp/geonames && curl -fsSL -O https://download.geonames.org/export/dump/admin1CodesASCII.txt
+	cd .sotohp/geonames && curl -fsSL -O https://download.geonames.org/export/dump/countryInfo.txt
+
+# One-shot backfill of the textual place (town/region/country) deduced from each photo's GPS point
+# by offline reverse-geocoding. Needs the GeoNames dump (make download-geonames). ARGS="--force"
+# recomputes stored deductions too. Run 'make run-reindex' afterwards to make places searchable.
+run-compute-places:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.ComputePlaces $(ARGS)
+
 run-gps-fix:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GpsLocationFix
 
@@ -51,6 +65,11 @@ run-face-orientation-audit:
 
 run-reindex:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.Reindex
+
+# Re-publish every media to Elasticsearch. Needed after a SaoMedia schema change or a bulk
+# enrichment backfill (e.g. after run-compute-places). 'run-reindex' rebuilds LMDB indexes only.
+run-search-reindex:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.SearchReindex
 
 run-google-photos-sync:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.GooglePhotosSync

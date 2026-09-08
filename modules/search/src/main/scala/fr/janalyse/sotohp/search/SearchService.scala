@@ -12,11 +12,17 @@ case class SearchServiceIssue(message: String, throwables: Seq[Throwable])
 trait SearchService {
   def publish(medias: Chunk[MediaBag]): IO[SearchServiceIssue, Chunk[MediaBag]]
   def unpublish(media: Media): IO[SearchServiceIssue, Unit]
+
+  /** Drops every index of the configured prefix, so a subsequent full re-publish starts from a
+    * clean slate with no orphaned documents. No-op when search is disabled.
+    */
+  def clear(): IO[SearchServiceIssue, Unit]
 }
 
 object SearchService {
   def publish(medias: Chunk[MediaBag]): ZIO[SearchService, SearchServiceIssue, Chunk[MediaBag]] = ZIO.serviceWithZIO(_.publish(medias))
   def unpublish(media: Media): ZIO[SearchService, SearchServiceIssue, Unit]                     = ZIO.serviceWithZIO(_.unpublish(media))
+  def clear(): ZIO[SearchService, SearchServiceIssue, Unit]                                     = ZIO.serviceWithZIO(_.clear())
 
   val live = ZLayer.fromZIO(
     for {
@@ -45,6 +51,19 @@ class SearchServiceLive(mayBeElasticOperations: Option[ElasticOperations], confi
           .logError("couldn't upsert some or all photos from the given chunk of photos")
           .mapError(errs => SearchServiceIssue(s"Couldn't upsert", errs))
           .as(bags)
+    }
+  }
+
+  override def clear(): IO[SearchServiceIssue, Unit] = {
+    mayBeElasticOperations match {
+      case None                    => ZIO.unit
+      case Some(elasticOperations) =>
+        elasticOperations
+          .deleteIndexes(config.indexPrefix)
+          .when(config.enabled)
+          .unit
+          .logError("Couldn't clear search indexes")
+          .mapError(err => SearchServiceIssue("Couldn't clear search indexes", err :: Nil))
     }
   }
 

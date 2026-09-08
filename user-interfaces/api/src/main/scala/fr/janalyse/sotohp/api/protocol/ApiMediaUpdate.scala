@@ -14,7 +14,8 @@ case class ApiMediaUpdate(
   keywords: Set[Keyword],
   orientation: Option[Orientation],         // override original's orientation
   shootDateTime: Option[ShootDateTime], // override original's cameraShotDateTime
-  userDefinedLocation: Option[ApiLocation] // replace the original's location (user-defined or deducted location)
+  userDefinedLocation: Option[ApiLocation], // replace the original's location (user-defined or deducted location)
+  userDefinedPlace: Option[ApiPlace] // replace the deducted place (user-defined or corrected textual place)
 )
 
 object ApiMediaUpdate {

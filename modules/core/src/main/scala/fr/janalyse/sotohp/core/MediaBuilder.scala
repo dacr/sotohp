@@ -90,7 +90,9 @@ object MediaBuilder {
       orientation = None,
       shootDateTime = None,
       userDefinedLocation = None,
-      deductedLocation = None
+      deductedLocation = None,
+      userDefinedPlace = None,
+      deductedPlace = None
     )
   }
 

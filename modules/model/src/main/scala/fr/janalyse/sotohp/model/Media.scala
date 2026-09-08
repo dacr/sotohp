@@ -11,9 +11,13 @@ case class Media(
   orientation: Option[Orientation],      // override original's orientation
   shootDateTime: Option[ShootDateTime],  // override original's cameraShotDateTime
   userDefinedLocation: Option[Location], // replace the original's location (user-defined or deducted location)
-  deductedLocation: Option[Location]     // location deducted from near-by (time, space) localized photos
+  deductedLocation: Option[Location],    // location deducted from near-by (time, space) localized photos
+  userDefinedPlace: Option[Place],       // replace the deducted place (user-defined or corrected textual place)
+  deductedPlace: Option[Place]           // textual place (town/region/country) deduced from the effective location
 ) {
   def timestamp: OffsetDateTime = Media.computeTimestamp(shootDateTime, bag, original)
+
+  def place: Option[Place] = userDefinedPlace.orElse(deductedPlace)
 
   def location: Option[Location] =
     userDefinedLocation

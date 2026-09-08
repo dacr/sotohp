@@ -19,7 +19,10 @@ case class ApiMedia(
   shootDateTime: Option[ShootDateTime],     // override original's cameraShotDateTime
   userDefinedLocation: Option[ApiLocation], // replace the original's location (user-defined or deducted location)
   deductedLocation: Option[ApiLocation],    // location deducted from near-by (time, space) localized photos
-  location: Option[ApiLocation]             // effective location (userDefinedLocation orElse original.location orElse deductedLocation)
+  location: Option[ApiLocation],            // effective location (userDefinedLocation orElse original.location orElse deductedLocation)
+  userDefinedPlace: Option[ApiPlace],       // replace the deducted place (user-defined or corrected textual place)
+  deductedPlace: Option[ApiPlace],          // textual place (town/region/country) reverse-geocoded from the effective location
+  place: Option[ApiPlace]                   // effective place (userDefinedPlace orElse deductedPlace)
 )
 
 object ApiMedia {
