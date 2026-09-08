@@ -154,6 +154,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
 
   private val searchFields = Seq(
     "description",
+    "autoDescription",
     "keywords",
     "bag",
     "classifications",

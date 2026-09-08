@@ -31,6 +31,7 @@ case class MediaServiceDatabase(
   mediaFeatures: LMDBCollection[OriginalId, DaoMediaFeatures],
   originalMediaFeatures: LMDBCollection[OriginalId, DaoOriginalMediaFeatures],
   mediaClusters: LMDBCollection[OriginalId, DaoMediaCluster],
+  captions: LMDBCollection[OriginalId, DaoOriginalCaption],
   objects: LMDBCollection[OriginalId, DaoOriginalDetectedObjects],
   miniatures: LMDBCollection[OriginalId, DaoOriginalMiniatures],
   normalized: LMDBCollection[OriginalId, DaoOriginalNormalized],

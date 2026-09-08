@@ -14,7 +14,7 @@ import sttp.tapir.ztapir.*
 import zio.logging.consoleLogger
 //import zio.logging.backend.SLF4J
 import zio.logging.LogFormat
-import fr.janalyse.sotohp.service.{MediaService, ServiceStreamIssue}
+import fr.janalyse.sotohp.service.{MediaService, MediaTuple, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.*
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.api.protocol.{ApiPersonCreate, ApiPersonUpdate}
@@ -493,6 +493,20 @@ object ApiApp extends ZIOAppDefault {
       )
   // -------------------------------------------------------------------------------------------------------------------
 
+  /** Single place the `Media` -> `ApiMedia` mapping lives. `autoDescription` (the model-generated
+    * caption) is not on `Media`, so callers pass it explicitly: the single-media endpoints fetch
+    * it (`MediaService.mediaCaptionGet`, a pure read), the bulk streams pass `None` to avoid an
+    * extra point read per item.
+    */
+  def toApiMedia(mediaTuple: MediaTuple, autoDescription: Option[MediaDescription]): ApiMedia =
+    mediaTuple.media.into[ApiMedia]
+      .withFieldConst(_.accessKey, mediaTuple.key)
+      .withFieldConst(_.autoDescription, autoDescription)
+      .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+      .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
+      .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
+      .transform
+
   def mediaGetLogic(accessKey: MediaAccessKey): ZIO[ApiEnv, ApiIssue, ApiMedia] = {
     val logic = for {
       tuple   <- MediaService
@@ -500,12 +514,10 @@ object ApiApp extends ZIOAppDefault {
                    .logError("Couldn't get media")
                    .mapError(err => ApiInternalError("Couldn't get media"))
                    .someOrFail(ApiResourceNotFound("Couldn't find media"))
-      taoMedia = tuple.media.into[ApiMedia]
-                   .withFieldConst(_.accessKey, tuple.key)
-                   .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-                   .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
-                   .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
-                   .transform
+      caption <- MediaService
+                   .mediaCaptionGet(tuple.media.original.id)
+                   .mapError(err => ApiInternalError("Couldn't get media caption"))
+      taoMedia = toApiMedia(tuple, caption.map(MediaDescription.apply))
     } yield taoMedia
 
     logic
@@ -545,14 +557,7 @@ object ApiApp extends ZIOAppDefault {
       .fromIterableZIO(rankedEffect)
       .mapZIO((originalId, _) => MediaService.mediaGet(originalId))
       .collectSome
-      .map { mediaTuple =>
-        mediaTuple.media.into[ApiMedia]
-          .withFieldConst(_.accessKey, mediaTuple.key)
-          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
-          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
-          .transform
-      }
+      .map(mediaTuple => toApiMedia(mediaTuple, None))
       .mapError(err => ApiInternalError("Couldn't stream similar medias"))
   }
 
@@ -604,14 +609,7 @@ object ApiApp extends ZIOAppDefault {
       .fromIterableZIO(originalIdsEffect)
       .mapZIO(originalId => MediaService.mediaGet(originalId))
       .collectSome
-      .map { mediaTuple =>
-        mediaTuple.media.into[ApiMedia]
-          .withFieldConst(_.accessKey, mediaTuple.key)
-          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
-          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
-          .transform
-      }
+      .map(mediaTuple => toApiMedia(mediaTuple, None))
       .mapError(err => ApiInternalError("Couldn't stream search results"))
   }
 
@@ -683,14 +681,7 @@ object ApiApp extends ZIOAppDefault {
   def mediaClusterMembersLogic(clusterId: Int): ZStream[MediaService, Throwable, ApiMedia] = {
     MediaService
       .mediaClusterMembers(clusterId)
-      .map { mediaTuple =>
-        mediaTuple.media.into[ApiMedia]
-          .withFieldConst(_.accessKey, mediaTuple.key)
-          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
-          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
-          .transform
-      }
+      .map(mediaTuple => toApiMedia(mediaTuple, None))
       .mapError(err => ApiInternalError("Couldn't stream cluster medias"))
   }
 
@@ -962,14 +953,7 @@ object ApiApp extends ZIOAppDefault {
     MediaService
       .mediaList()
       .filter(mediaTuple => filterHasLocation.isEmpty || mediaTuple.media.location.isDefined == filterHasLocation.get)
-      .map { mediaTuple =>
-        mediaTuple.media.into[ApiMedia]
-          .withFieldConst(_.accessKey, mediaTuple.key)
-          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
-          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
-          .transform
-      }
+      .map(mediaTuple => toApiMedia(mediaTuple, None))
       .mapError(err => ApiInternalError("Couldn't list medias"))
   }
 
@@ -1053,13 +1037,7 @@ object ApiApp extends ZIOAppDefault {
     val key            = MediaAccessKey(fromKey)
     MediaService
       .mediaStream(key, backward, effectiveLimit, inclusive)
-      .map { mediaTuple =>
-        mediaTuple.media.into[ApiMedia]
-          .withFieldConst(_.accessKey, mediaTuple.key)
-          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
-          .transform
-      }
+      .map(mediaTuple => toApiMedia(mediaTuple, None))
       .mapError(err => ApiInternalError("Couldn't stream medias"))
   }
 
@@ -1208,11 +1186,10 @@ object ApiApp extends ZIOAppDefault {
                             case MediaSelector.next                          => ZIO.fail(ApiInvalidOrMissingInput("Missing required referenceMediaAccessKey parameter"))
                             case MediaSelector.last                          => mediaSelectLastLogic
                           }
-            taoMedia    = mediaTuple.media.into[ApiMedia]
-                            .withFieldConst(_.accessKey, mediaTuple.key)
-                            .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
-                            .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
-                            .transform
+            caption    <- MediaService
+                            .mediaCaptionGet(mediaTuple.media.original.id)
+                            .mapError(err => ApiInternalError("Couldn't get media caption"))
+            taoMedia    = toApiMedia(mediaTuple, caption.map(MediaDescription.apply))
           } yield taoMedia
       )
 

@@ -5370,6 +5370,9 @@
           "description" : {
             "type" : "string"
           },
+          "autoDescription" : {
+            "type" : "string"
+          },
           "starred" : {
             "type" : "boolean"
           },

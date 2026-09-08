@@ -36,6 +36,12 @@ run-compute-media-features:
 run-media-features-clustering:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.MediaFeaturesClustering $(ARGS)
 
+# Backfill image-to-text captions ("auto descriptions"). Needs `ollama serve` + a vision model
+# (`ollama pull moondream`) and sotohp.processors.captioner.enabled=true. ARGS="--force" recaptions
+# everything. Run 'make run-search-reindex' afterwards to index the new text.
+run-compute-captions:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.ComputeCaptions $(ARGS)
+
 # Download the GeoNames dump used by the offline reverse-geocoder into .sotohp/geonames/
 # (cities500: ~200k populated places; admin1 names; country names). GeoNames data is CC BY 4.0.
 download-geonames:

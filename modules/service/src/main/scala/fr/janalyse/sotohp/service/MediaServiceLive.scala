@@ -3,6 +3,8 @@ package fr.janalyse.sotohp.service
 import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder, SearchFilter}
 import fr.janalyse.sotohp.model.{FaceId, PersonId, *}
 import fr.janalyse.sotohp.processor.{
+  CaptionIssue,
+  CaptionProcessor,
   ClassificationIssue,
   ClassificationProcessor,
   FaceFeaturesIssue,
@@ -707,6 +709,58 @@ class MediaServiceLive private (
 
   override def mediaFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures] =
     computeMediaFeatures(originalId)
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Auto description (image-to-text caption) - produced by a local Ollama vision model, opt-in.
+
+  private def daoCaptionToCaption(input: DaoOriginalCaption): IO[ServiceIssue, OriginalCaption] = {
+    for {
+      original <- originalGet(input.originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : ${input.originalId}"))
+      result    = input
+                    .into[OriginalCaption]
+                    .withFieldConst(_.original, original)
+                    .withFieldComputed(_.caption, _.text)
+                    .transform
+    } yield result
+  }
+
+  private def computeCaption(originalId: OriginalId): IO[ServiceIssue, OriginalCaption] = {
+    val logic = for {
+      original  <- originalGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
+      processor <- processors.caption
+                     .mapError(err => ServiceInternalIssue(s"Unable to get caption processor : $err"))
+      computed  <- processor
+                     .caption(original)
+                     .mapError(err => ServiceInternalIssue(s"Unable to caption original : $err"))
+      // When the captioner is disabled we do not persist the (empty) result, so the step keeps
+      // retrying for free once it is turned on. A real run - success or model failure - is stored.
+      _         <- collections.captions
+                     .upsertOverwrite(originalId, computed.into[DaoOriginalCaption].transform)
+                     .mapError(err => ServiceDatabaseIssue(s"Unable to store computed caption : $err"))
+                     .when(processor.enabled)
+    } yield computed
+    logic.uninterruptible
+  }
+
+  override def originalCaption(originalId: OriginalId): IO[ServiceIssue, Option[OriginalCaption]] = {
+    for {
+      stored <- collections.captions
+                  .fetch(originalId)
+                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoCaptionToCaption))
+                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch caption from database: $err"))
+      result <- computeCaption(originalId).when(stored.isEmpty || stored.exists(!_.status.successful))
+    } yield result.orElse(stored)
+  }
+
+  override def originalCaptionRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalCaption] =
+    computeCaption(originalId)
+
+  override def mediaCaptionGet(originalId: OriginalId): IO[ServiceIssue, Option[String]] = {
+    collections.captions
+      .fetch(originalId)
+      .map(_.flatMap(_.text))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch caption : $err"))
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
   // Textual place (town / region / country) deduced from the effective location - offline reverse-geocoding.
@@ -1768,6 +1822,7 @@ class MediaServiceLive private (
       fiberFacesFiber           <- originalFaces(input.media.original.id).ignoreLogged           // .fork
       fiberFeaturesFiber        <- originalFacesFeatures(input.media.original.id).ignoreLogged   // .fork
       fiberMediaFeaturesFiber   <- originalMediaFeatures(input.media.original.id).ignoreLogged   // .fork
+      fiberCaptionFiber         <- originalCaption(input.media.original.id).ignoreLogged         // .fork (no-op unless the captioner is enabled)
       fiberClassificationsFiber <- originalClassifications(input.media.original.id).ignoreLogged // .fork
       fiberObjectsFiber         <- originalObjects(input.media.original.id).ignoreLogged         // .fork
       // TODO investigate why this is not working
@@ -1882,6 +1937,7 @@ class MediaServiceLive private (
       miniatures      <- originalMiniatures(media.original.id)
       faces           <- originalFaces(media.original.id)
       normalized      <- originalNormalized(media.original.id)
+      autoDescription <- mediaCaptionGet(media.original.id) // pure read: never triggers a (slow) model call here
       personIds        = faces.toList.flatMap(_.faces).flatMap(_.identifiedPersonId).distinct
       persons         <- ZIO.foreach(personIds)(personGet).map(_.flatten)
     } yield MediaBag(
@@ -1892,6 +1948,7 @@ class MediaServiceLive private (
       processedFaces = faces,
       processedMiniatures = miniatures,
       processedNormalized = normalized,
+      autoDescription = autoDescription,
       persons = persons
     )
 
@@ -2257,6 +2314,7 @@ object MediaServiceLive {
   private val mediaFeaturesCollectionName        = "mediaFeatures"
   private val originalMediaFeaturesCollectionName = "originalMediaFeatures"
   private val mediaClustersCollectionName        = "mediaClusters"
+  private val captionsCollectionName             = "captions"
   private val objectsCollectionName              = "objects"
   private val miniaturesCollectionName           = "miniatures"
   private val normalizedCollectionName           = "normalized"
@@ -2280,6 +2338,7 @@ object MediaServiceLive {
     mediaFeaturesCollectionName,
     originalMediaFeaturesCollectionName,
     mediaClustersCollectionName,
+    captionsCollectionName,
     objectsCollectionName,
     miniaturesCollectionName,
     normalizedCollectionName,
@@ -2362,6 +2421,7 @@ object MediaServiceLive {
                                             to = IdxKey.of(IdxKey.primaryKey)
                                           )
                                         )
+    collectionCaptions             <- lmdb.collectionCreate[OriginalId, DaoOriginalCaption](captionsCollectionName, false)
     collectionObjects              <- lmdb.collectionCreate[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName, false)
     collectionMiniatures           <- lmdb.collectionCreate[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName, false)
     collectionNormalized           <- lmdb.collectionCreate[OriginalId, DaoOriginalNormalized](normalizedCollectionName, false)
@@ -2391,6 +2451,7 @@ object MediaServiceLive {
                                         mediaFeatures = collectionMediaFeatures,
                                         originalMediaFeatures = collectionOriginalMediaFeatures,
                                         mediaClusters = collectionMediaClusters,
+                                        captions = collectionCaptions,
                                         objects = collectionObjects,
                                         miniatures = collectionMiniatures,
                                         normalized = collectionNormalized,
@@ -2407,13 +2468,15 @@ object MediaServiceLive {
     mediaFeaturesProcessor  <- MediaFeaturesProcessor.allocate().memoize
     objectsProcessor        <- ObjectsDetectionProcessor.allocate().memoize
     geoPlaceResolver        <- GeoPlaceResolver.allocate().memoize
+    captionProcessor        <- CaptionProcessor.allocate().memoize
     processors               = MediaServiceProcessors(
                                  classifications = classificationProcessor,
                                  faces = facesProcessor,
                                  faceFeatures = featuresProcessor,
                                  mediaFeatures = mediaFeaturesProcessor,
                                  objects = objectsProcessor,
-                                 geoPlace = geoPlaceResolver
+                                 geoPlace = geoPlaceResolver,
+                                 caption = captionProcessor
                                )
 
   } yield processors

@@ -12,7 +12,8 @@ case class ApiMedia(
   accessKey: MediaAccessKey,
   original: ApiOriginal,
   bag: Option[ApiBag],
-  description: Option[MediaDescription],
+  description: Option[MediaDescription],       // user-authored
+  autoDescription: Option[MediaDescription],   // model-generated image-to-text caption (read-only)
   starred: Starred,
   keywords: Set[Keyword],
   orientation: Option[Orientation],         // override original's orientation

@@ -11,5 +11,6 @@ case class MediaBag(
   processedFaces: Option[OriginalFaces],
   processedMiniatures: Option[OriginalMiniatures],
   processedNormalized: Option[OriginalNormalized],
-  persons: List[Person] // the distinct people positively identified on the media's faces
+  autoDescription: Option[String], // model-generated caption text, if any
+  persons: List[Person]            // the distinct people positively identified on the media's faces
 )

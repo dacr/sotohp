@@ -9,5 +9,6 @@ case class MediaServiceProcessors(
   faceFeatures: IO[FaceFeaturesIssue, FaceFeaturesProcessor],
   mediaFeatures: IO[MediaFeaturesIssue, MediaFeaturesProcessor],
   objects: IO[ObjectsDetectionIssue, ObjectsDetectionProcessor],
-  geoPlace: IO[GeocodingIssue, GeoPlaceResolver]
+  geoPlace: IO[GeocodingIssue, GeoPlaceResolver],
+  caption: IO[CaptionIssue, CaptionProcessor]
 )

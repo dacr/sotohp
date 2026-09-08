@@ -41,6 +41,7 @@
 
           stable.nodejs_22       # Required for the auth plugin
           stable.imagemagick     # For HEIF image processing
+          unstable.ollama        # Local vision model for image-to-text captions (sotohp.processors.captioner)
 
           # Scala Development
           jdk              # Java Runtime

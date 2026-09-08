@@ -26,6 +26,7 @@ case class SaoMedia(
   bag: Option[String],       // the default attached bag
   keywords: List[String],
   description: Option[String],
+  autoDescription: Option[String], // model-generated image-to-text caption
   // ----------------- CAMERA DATA -----------------
   shootDateTime: Option[OffsetDateTime],
   camera: Option[String],
@@ -84,6 +85,7 @@ object SaoMedia {
       bag = mediaBagName,
       keywords = keywords.map(_.text).toList,
       description = media.description.map(_.text),
+      autoDescription = bag.autoDescription.map(_.trim).filter(_.nonEmpty),
       // ----------------- CAMERA DATA -----------------
       shootDateTime = media.original.cameraShootDateTime.map(_.offsetDateTime),
       camera = media.original.cameraName.map(_.text),

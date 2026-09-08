@@ -78,7 +78,9 @@ object modules extends Module {
       mvn"ai.djl.tensorflow:tensorflow-engine:0.36.0",
       mvn"ai.djl.tensorflow:tensorflow-model-zoo:0.36.0",
       mvn"ai.djl.onnxruntime:onnxruntime-engine:0.36.0",
-      mvn"net.java.dev.jna:jna:5.19.1"
+      mvn"net.java.dev.jna:jna:5.19.1",
+      mvn"com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-core:2.40.1",
+      mvn"com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-macros:2.40.1"
     )
   }
 

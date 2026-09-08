@@ -120,6 +120,20 @@ trait MediaService {
     */
   def mediaFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures]
 
+  /** Generates (once, then cached) the image-to-text caption ("auto description") for a photo,
+    * using a local Ollama vision model. A fast no-op that stores nothing when the captioner is
+    * disabled (`sotohp.processors.captioner.enabled`), so the step retries once it is turned on.
+    */
+  def originalCaption(originalId: OriginalId): IO[ServiceIssue, Option[OriginalCaption]]
+
+  /** Re-runs captioning and overwrites the stored caption, where `originalCaption` only fills a
+    * missing (or previously-failed) one.
+    */
+  def originalCaptionRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalCaption]
+
+  /** The stored caption text for a photo, if any. Pure read - never triggers a model call. */
+  def mediaCaptionGet(originalId: OriginalId): IO[ServiceIssue, Option[String]]
+
   /** Deduces (once, then cached on the media as `deductedPlace`) the textual place - town / region
     * / country - of a photo from its effective location, by offline reverse-geocoding. Yields the
     * effective place (`userDefinedPlace` orElse `deductedPlace`), or `None` when the media has no
@@ -377,6 +391,9 @@ object MediaService {
   def originalMiniatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMiniatures]]           = ZIO.serviceWithZIO(_.originalMiniatures(originalId))
   def originalMediaFeatures(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalMediaFeatures]]     = ZIO.serviceWithZIO(_.originalMediaFeatures(originalId))
   def mediaFeaturesRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalMediaFeatures]            = ZIO.serviceWithZIO(_.mediaFeaturesRecompute(originalId))
+  def originalCaption(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalCaption]]                 = ZIO.serviceWithZIO(_.originalCaption(originalId))
+  def originalCaptionRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalCaption]                = ZIO.serviceWithZIO(_.originalCaptionRecompute(originalId))
+  def mediaCaptionGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[String]]                         = ZIO.serviceWithZIO(_.mediaCaptionGet(originalId))
   def placeResolve(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                             = ZIO.serviceWithZIO(_.placeResolve(originalId))
   def placeRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                           = ZIO.serviceWithZIO(_.placeRecompute(originalId))
 
