@@ -17,12 +17,19 @@ trait SearchService {
     * clean slate with no orphaned documents. No-op when search is disabled.
     */
   def clear(): IO[SearchServiceIssue, Unit]
+
+  /** Free-text search across the indexed medias. Returns the matching `originalId`s, best match
+    * first (relevance, then most recent), capped at `count`. Empty when search is disabled or the
+    * query is blank.
+    */
+  def search(query: String, count: Int): IO[SearchServiceIssue, List[String]]
 }
 
 object SearchService {
   def publish(medias: Chunk[MediaBag]): ZIO[SearchService, SearchServiceIssue, Chunk[MediaBag]] = ZIO.serviceWithZIO(_.publish(medias))
   def unpublish(media: Media): ZIO[SearchService, SearchServiceIssue, Unit]                     = ZIO.serviceWithZIO(_.unpublish(media))
   def clear(): ZIO[SearchService, SearchServiceIssue, Unit]                                     = ZIO.serviceWithZIO(_.clear())
+  def search(query: String, count: Int): ZIO[SearchService, SearchServiceIssue, List[String]]  = ZIO.serviceWithZIO(_.search(query, count))
 
   val live = ZLayer.fromZIO(
     for {
@@ -64,6 +71,19 @@ class SearchServiceLive(mayBeElasticOperations: Option[ElasticOperations], confi
           .unit
           .logError("Couldn't clear search indexes")
           .mapError(err => SearchServiceIssue("Couldn't clear search indexes", err :: Nil))
+    }
+  }
+
+  override def search(query: String, count: Int): IO[SearchServiceIssue, List[String]] = {
+    val trimmed = query.trim
+    mayBeElasticOperations match {
+      case _ if trimmed.isEmpty     => ZIO.succeed(List.empty[String])
+      case None                     => ZIO.succeed(List.empty[String])
+      case Some(elasticOperations)  =>
+        elasticOperations
+          .searchMediaIds(config.indexPrefix, trimmed, count)
+          .logError(s"Couldn't run search query '$trimmed'")
+          .mapError(err => SearchServiceIssue(s"Couldn't run search query", err :: Nil))
     }
   }
 

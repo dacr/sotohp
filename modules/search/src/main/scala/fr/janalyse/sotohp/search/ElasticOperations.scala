@@ -19,6 +19,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
   import com.sksamuel.elastic4s.Response
   import com.sksamuel.elastic4s.requests.bulk.BulkResponse
   import com.sksamuel.elastic4s.requests.searches.SearchResponse
+  import com.sksamuel.elastic4s.requests.searches.sort.SortOrder.Desc
   import org.elasticsearch.client.RestClientBuilder.{HttpClientConfigCallback, RequestConfigCallback}
   import org.apache.http.auth.{AuthScope, UsernamePasswordCredentials}
   import org.apache.http.client.config.RequestConfig
@@ -85,6 +86,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
   )
   val upsertGrouping          = 50
   val searchPageSize          = 500
+  val searchMaxResults        = 1000
 
   // ------------------------------------------------------
 
@@ -146,6 +148,62 @@ case class ElasticOperations(config: SearchServiceConfig) {
                    .when(names.nonEmpty)
       _       <- ZIO.log(s"Deleted ${names.size} search indexes matching $indexPrefix-*")
     } yield names.size
+  }
+
+  // ------------------------------------------------------
+
+  private val searchFields = Seq(
+    "description",
+    "keywords",
+    "bag",
+    "classifications",
+    "detectedObjects",
+    "identifiedPersons",
+    "camera",
+    "placeStreet",
+    "placeTown",
+    "placeRegion",
+    "placeCountry",
+    "placeCountryCode",
+    "filePath"
+  )
+
+  /** Free-text search across the text-bearing fields of every `${indexPrefix}-*` index. Returns
+    * the matching document ids (which are the `originalId`s), ranked by relevance then most recent
+    * first, capped at `size`. Only ids are fetched back - the API re-reads each media from LMDB.
+    *
+    * Each whitespace-separated word becomes its own `must` clause, matched with `best_fields`
+    * across every searched field: so every word has to hit *somewhere*, but different words may
+    * land in different fields (e.g. "beer" in detectedObjects and "brieuc" in identifiedPersons).
+    * A plain multi_match with `operator=and` would instead require all words in the *same* field
+    * and miss that. `fuzziness("AUTO")` (1 edit for 3-5 char words, 2 for longer) + `prefixLength(1)`
+    * give typo / accent / singular-plural tolerance while keeping exact matches scored highest.
+    */
+  def searchMediaIds(indexPrefix: String, queryString: String, size: Int): Task[List[String]] = {
+    val words = queryString.trim.split("\\s+").iterator.filter(_.nonEmpty).toList
+    val query =
+      if (words.isEmpty) matchAllQuery()
+      else
+        boolQuery().must(
+          words.map(word =>
+            multiMatchQuery(word)
+              .fields(searchFields*)
+              .lenient(true)
+              .fuzziness("AUTO")
+              .prefixLength(1)
+          )
+        )
+    val request =
+      search(s"$indexPrefix-*")
+        .query(query)
+        .sortBy(scoreSort(Desc), fieldSort("timestamp").order(Desc))
+        // A single non-scrolled page; ES's default index.max_result_window (10k) is the ceiling.
+        .size(size.max(0).min(searchMaxResults))
+        .fetchSource(false)
+    for {
+      response <- client.execute(request)
+      _        <- ZIO.cond(response.isSuccess, (), response.error.asException)
+    } yield response.result.hits.hits.map(_.id).toList
   }
 
   // ------------------------------------------------------

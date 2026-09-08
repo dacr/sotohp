@@ -136,6 +136,24 @@ main { flex: 1; position: relative; }
    previous one. Explicit column AND row sizing avoids that entirely. */
 .similar-grid { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.75rem 1rem; display: grid; grid-template-columns: repeat(auto-fill, 168px); grid-auto-rows: 168px; gap: 8px; justify-content: center; align-content: start; }
 .similar-grid > * { width: 168px; height: 168px; }
+/* Search view — Google-style text box on top, compact grid of MosaicTiles below (ranked by
+   relevance then most recent). Before the first search the box sits centred; once results are
+   in it stays pinned to the top and the grid takes over the rest of the height. */
+.search-page { height: calc(100vh - 70px); display: flex; flex-direction: column; overflow: hidden; }
+/* The box stays pinned to the top at all times - same place whether or not results are shown. */
+.search-hero { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: 0 0 auto; justify-content: flex-start; padding: 1rem 1rem 0.75rem; border-bottom: 1px solid #e5e7eb; background: #fff; }
+.search-box { display: flex; align-items: center; gap: 8px; width: min(640px, 100%); background: #fff; border: 1px solid #d1d5db; border-radius: 24px; padding: 6px 16px; box-shadow: 0 1px 6px rgba(32,33,36,0.12); transition: box-shadow 0.15s, border-color 0.15s; }
+.search-box:focus-within { box-shadow: 0 1px 10px rgba(32,33,36,0.2); border-color: #a5b4fc; }
+.search-icon { font-size: 15px; opacity: 0.55; line-height: 1; }
+.search-input { flex: 1; border: none; outline: none; background: transparent; font-size: 16px; padding: 8px 0; color: #111827; }
+.search-clear { background: transparent; border: none; cursor: pointer; color: #9ca3af; font-size: 13px; padding: 4px 6px; border-radius: 50%; line-height: 1; }
+.search-clear:hover { background: #f3f4f6; color: #4b5563; }
+.search-status { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; min-height: 16px; }
+.search-error { color: #b91c1c; }
+.search-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; padding: 2rem; color: #9ca3af; font-size: 14px; max-width: 520px; margin: 0 auto; }
+.search-grid { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.75rem 1rem; display: grid; grid-template-columns: repeat(auto-fill, 140px); grid-auto-rows: 140px; gap: 6px; justify-content: center; align-content: start; }
+.search-grid > * { width: 140px; height: 140px; }
+
 .cluster-cover { background: #f3f4f6; }
 .cluster-badge { position: absolute; right: 4px; top: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 10px; z-index: 2; }
 

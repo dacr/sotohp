@@ -933,6 +933,97 @@
         ]
       }
     },
+    "/api/medias/search" : {
+      "get" : {
+        "tags" : [
+          "Media"
+        ],
+        "summary" : "Free-text search over the indexed medias, best match first then most recent",
+        "operationId" : "Search medias",
+        "parameters" : [
+          {
+            "name" : "query",
+            "in" : "query",
+            "description" : "free-text query string",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "count",
+            "in" : "query",
+            "description" : "maximum number of results (default 60, max 1000)",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one Media JSON object per line, ranked most relevant first)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Media"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter query, Invalid value for: query parameter count",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/media/{mediaAccessKey}/starred" : {
       "put" : {
         "tags" : [

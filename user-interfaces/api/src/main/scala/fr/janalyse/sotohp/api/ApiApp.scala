@@ -44,7 +44,7 @@ import java.util.UUID
 
 object ApiApp extends ZIOAppDefault {
 
-  type ApiEnv = MediaService & SecurityService & EventBusService
+  type ApiEnv = MediaService & SearchService & SecurityService & EventBusService
 
   // -------------------------------------------------------------------------------------------------------------------
 
@@ -581,6 +581,63 @@ object ApiApp extends ZIOAppDefault {
                            .intersperse("\n")
                            .via(ZPipeline.utf8Encode)
                            .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
+  // Free-text search over the OpenSearch/Elasticsearch index (kept in sync by the live publish path
+  // and rebuilt wholesale by the `SearchReindex` CLI). Matches across description, keywords, bag,
+  // AI classifications & detected objects, identified people, camera and reverse-geocoded place;
+  // results come back ranked by relevance, then most recent first. Yields nothing (not an error)
+  // when search is disabled or the query is blank.
+  val mediaSearchDefaultCount = 60
+  val mediaSearchMaxCount     = 1000
+
+  def mediaSearchLogic(queryString: String, count: Option[Int]): ZStream[MediaService & SearchService, Throwable, ApiMedia] = {
+    val effectiveCount    = count.getOrElse(mediaSearchDefaultCount).max(0).min(mediaSearchMaxCount)
+    val originalIdsEffect  = SearchService
+      .search(queryString, effectiveCount)
+      .mapError(issue => new RuntimeException(issue.message): Throwable)
+      .map(_.flatMap(idString => scala.util.Try(OriginalId(UUID.fromString(idString))).toOption))
+    ZStream
+      .fromIterableZIO(originalIdsEffect)
+      .mapZIO(originalId => MediaService.mediaGet(originalId))
+      .collectSome
+      .map { mediaTuple =>
+        mediaTuple.media.into[ApiMedia]
+          .withFieldConst(_.accessKey, mediaTuple.key)
+          .withFieldComputed(_.location, media => media.location.map(_.transformInto[ApiLocation]))
+          .withFieldComputed(_.place, media => media.place.map(_.transformInto[ApiPlace]))
+          .withFieldComputed(_.bag, media => media.bag.map(_.transformInto[ApiBag]))
+          .transform
+      }
+      .mapError(err => ApiInternalError("Couldn't stream search results"))
+  }
+
+  val mediaSearchEndpoint =
+    secureMediaEndpoint(true)
+      .name("Search medias")
+      .summary("Free-text search over the indexed medias, best match first then most recent")
+      .in("search")
+      .in(query[String]("query").description("free-text query string"))
+      .in(query[Option[Int]]("count").description(s"maximum number of results (default $mediaSearchDefaultCount, max $mediaSearchMaxCount)"))
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiMedia.apiMediaSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one Media JSON object per line, ranked most relevant first)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        (queryString, count) =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            ss        <- ZIO.service[SearchService]
+            byteStream = mediaSearchLogic(queryString, count)
+                           .map(writeToString(_))
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms) ++ ZEnvironment(ss))
           } yield byteStream
       )
 
@@ -2170,6 +2227,7 @@ object ApiApp extends ZIOAppDefault {
     mediaSelectEndpoint,
     mediaGetEndpoint,
     mediaSimilarEndpoint,
+    mediaSearchEndpoint,
     mediaUpdateEndpoint,
     mediaUpdateStarredEndpoint,
     mediaContentGetOriginalEndpoint,

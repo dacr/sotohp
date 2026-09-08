@@ -46,9 +46,14 @@ case class SaoMedia(
   placeCountryCode: Option[String],
   // ----------------- AI -----------------
   classifications: List[String],
-  detectedObjects: List[String],
+  // Distinct detected object labels, joined by "; ".
+  detectedObjects: String,
   detectedObjectsCount: Int,
   detectedFacesCount: Int,
+  // People positively identified on the media's faces, one "lastName, firstName" entry per
+  // person (blank parts dropped), entries joined by "; ". The person's free-text description is
+  // deliberately left out - it is notes, not something to match photos on.
+  identifiedPersons: String,
   hasProcessingIssue: Boolean
 ) derives JsonCodec
 
@@ -98,9 +103,17 @@ object SaoMedia {
       placeCountryCode = place.flatMap(_.countryCode),
       // ----------------- AI -----------------
       classifications = bag.processedClassifications.map(_.classifications.map(_.name)).getOrElse(Nil),
-      detectedObjects = bag.processedObjects.map(_.objects.map(_.name)).getOrElse(Nil),
+      detectedObjects = bag.processedObjects.map(_.objects.map(_.name).distinct.mkString("; ")).getOrElse(""),
       detectedObjectsCount = bag.processedObjects.map(_.objects.size).getOrElse(0),
       detectedFacesCount = bag.processedFaces.map(_.faces.size).getOrElse(0),
+      identifiedPersons = bag.persons
+        .map { person =>
+          List(person.lastName.text, person.firstName.text)
+            .map(_.trim)
+            .filter(_.nonEmpty)
+            .mkString(", ")
+        }
+        .mkString("; "),
       hasProcessingIssue = hasProcessingIssue
     )
   }

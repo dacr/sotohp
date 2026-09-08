@@ -213,6 +213,19 @@ export class ApiClient {
     );
   }
 
+  // Free-text search over the OpenSearch/Elasticsearch index, results streamed back ranked by
+  // relevance then most recent first. Matches across description, keywords, bag, AI
+  // classifications & detected objects, identified people, camera and reverse-geocoded place.
+  // Every word of the query has to match (AND).
+  mediaSearch(
+    query: string,
+    opts: { count?: number; signal?: AbortSignal; onItem: (item: Media) => void }
+  ): Promise<void> {
+    const params = new URLSearchParams({ query });
+    if (opts.count && opts.count > 0) params.set("count", String(opts.count));
+    return this.fetchNdjsonStream(`/api/medias/search?${params.toString()}`, opts.onItem, opts.signal);
+  }
+
   // -- State ----------------------------------------------------------------------
   getState(originalId: string): Promise<State> {
     return this.request(`/api/state/${encodeURIComponent(originalId)}`);

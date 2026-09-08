@@ -363,10 +363,14 @@ class MediaServiceLive private (
     updatedMedia: Media
   ): IO[ServiceIssue, Option[MediaTuple]] = {
     val originalId = key.toNative.originalId
-    collections.medias
-      .update(originalId, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)) // to solve ambiguity with auto-derived transformer
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
-      .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia => daoMedia2Media(daoMedia).map(key -> _)))
+    for {
+      before  <- mediaGet(originalId)
+      updated <- collections.medias
+                   .update(originalId, _ => updatedMedia.transformInto[DaoMedia](using DaoMedia.transformer)) // to solve ambiguity with auto-derived transformer
+                   .mapError(err => ServiceDatabaseIssue(s"Couldn't update media : $err"))
+                   .flatMap(mayBeDaoMedia => ZIO.foreach(mayBeDaoMedia)(daoMedia => daoMedia2Media(daoMedia).map(key -> _)))
+      _       <- ZIO.foreachDiscard(updated)(tuple => searchRepublish(tuple._2, before.map(_.media)))
+    } yield updated
   }
 
   def mediaUpdate(
@@ -568,19 +572,35 @@ class MediaServiceLive private (
     // Invariant enforced here rather than at each call site (confirm/identify API endpoints, CLI tools, ...) :
     // a face identified by a human keeps no inference bookkeeping.
     val updated = if (face.identifiedPersonId.isDefined) face.withoutInferredIdentification else face
-    if (updated.faceId == faceId) {
-      collections.detectedFaces
-        .upsert(faceId, _ => updated.transformInto[DaoDetectedFace])
-        .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
-        .as(updated)
-    } else {
-      // TODO require transactions
-      // id has been modified require delete record & then insert with the new access key
-      // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
-      (collections.detectedFaces.delete(faceId).unit *> collections.detectedFaces.upsert(updated.faceId, _ => updated.transformInto[DaoDetectedFace])).uninterruptible
-        .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
-        .as(updated)
-    }
+    val persist =
+      if (updated.faceId == faceId) {
+        collections.detectedFaces
+          .upsert(faceId, _ => updated.transformInto[DaoDetectedFace])
+          .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
+          .as(updated)
+      } else {
+        // TODO require transactions
+        // id has been modified require delete record & then insert with the new access key
+        // TODO dangerous operation in particular because no transaction to ensure coherency, making it uninterrruptible is not enough
+        (collections.detectedFaces.delete(faceId).unit *> collections.detectedFaces.upsert(updated.faceId, _ => updated.transformInto[DaoDetectedFace])).uninterruptible
+          .mapError(err => ServiceDatabaseIssue(s"Couldn't update face : $err"))
+          .as(updated)
+      }
+    for {
+      before <- faceGet(faceId)
+      f      <- persist
+      // `SaoMedia.identifiedPersons` is built from the *confirmed* `identifiedPersonId` only, so a
+      // change limited to the inference bookkeeping (`inferredIdentifiedPersonId`, `inferredIgnore`,
+      // ...) leaves the search document untouched. Skipping the re-publish there matters: batch
+      // face inference calls this for tens of thousands of faces. Best-effort otherwise - a lookup
+      // hiccup must not fail the edit.
+      _      <- ZIO
+                  .when(before.flatMap(_.identifiedPersonId) != f.identifiedPersonId) {
+                    mediaGet(f.originalId)
+                      .flatMap(t => ZIO.foreachDiscard(t)(tuple => searchRepublish(tuple.media, None)))
+                      .catchAll(err => ZIO.logWarning(s"Search re-publish (face ${f.faceId.asString}) skipped : $err"))
+                  }
+    } yield f
   }
 
   def faceRead(faceId: FaceId): Stream[ServiceStreamIssue, Byte] = {
@@ -1834,6 +1854,24 @@ class MediaServiceLive private (
       }
   }
 
+  /** Best-effort: re-publish one media's `SaoMedia` document after a mutation (metadata edit,
+    * face identification, ...), so search results reflect the change without a full reindex.
+    *
+    * No-op when search is disabled (`SearchService` swallows it). A shoot-date edit changes
+    * `media.timestamp`, hence the monthly index the doc belongs to, so the now-orphaned copy in
+    * `previous`'s index is deleted first. Never fails the caller: LMDB is the source of truth and
+    * a search-engine hiccup must not roll back or block the write - it is logged and swallowed.
+    */
+  private def searchRepublish(current: Media, previous: Option[Media]): UIO[Unit] = {
+    val logic =
+      for {
+        _        <- ZIO.foreachDiscard(previous.filter(_.timestamp != current.timestamp))(old => search.unpublish(old))
+        mayState <- stateGet(current.original.id)
+        _        <- ZIO.foreachDiscard(mayState)(state => buildMediaBag(current, state).flatMap(bag => search.publish(Chunk.single(bag))))
+      } yield ()
+    logic.catchAll(err => ZIO.logWarning(s"Search re-publish failed for original ${current.original.id.asString} : $err"))
+  }
+
   /** Assembles the search-engine payload for one media by joining in every processor result the
     * `SaoMedia` document needs.
     */
@@ -1844,6 +1882,8 @@ class MediaServiceLive private (
       miniatures      <- originalMiniatures(media.original.id)
       faces           <- originalFaces(media.original.id)
       normalized      <- originalNormalized(media.original.id)
+      personIds        = faces.toList.flatMap(_.faces).flatMap(_.identifiedPersonId).distinct
+      persons         <- ZIO.foreach(personIds)(personGet).map(_.flatten)
     } yield MediaBag(
       media = media,
       state = state,
@@ -1851,7 +1891,8 @@ class MediaServiceLive private (
       processedObjects = objects,
       processedFaces = faces,
       processedMiniatures = miniatures,
-      processedNormalized = normalized
+      processedNormalized = normalized,
+      persons = persons
     )
 
   private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[MediaBag]] = {
