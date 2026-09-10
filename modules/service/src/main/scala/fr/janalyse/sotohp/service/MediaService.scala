@@ -121,15 +121,30 @@ trait MediaService {
   def mediaFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalMediaFeatures]
 
   /** Generates (once, then cached) the image-to-text caption ("auto description") for a photo,
-    * using a local Ollama vision model. A fast no-op that stores nothing when the captioner is
-    * disabled (`sotohp.processors.captioner.enabled`), so the step retries once it is turned on.
+    * using a local Ollama vision model. A photo that already has a stored record - successful or
+    * not - is left alone: one trip through the model is enough, and a caption the model failed to
+    * produce is unlikely to appear on a retry. Use `originalCaptionRecompute` to try again.
+    *
+    * A fast no-op that stores nothing when the captioner is disabled
+    * (`sotohp.processors.captioner.enabled`), so those photos are still picked up once it is on.
     */
   def originalCaption(originalId: OriginalId): IO[ServiceIssue, Option[OriginalCaption]]
 
-  /** Re-runs captioning and overwrites the stored caption, where `originalCaption` only fills a
-    * missing (or previously-failed) one.
+  /** Re-runs captioning and overwrites the stored record, where `originalCaption` only fills a
+    * missing one.
     */
   def originalCaptionRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalCaption]
+
+  /** Whether the model has already been run on this photo, caption or not. The cheapest possible
+    * resume check for a batch job: a single key lookup, no record decoding, no joins.
+    */
+  def originalCaptionExists(originalId: OriginalId): IO[ServiceIssue, Boolean]
+
+  /** The stored caption record for a photo, if the model has already been run on it - including a
+    * record whose `status.successful` is false. Pure read: never triggers a model call, so a batch
+    * job can tell "already attempted" from "never attempted" before spending seconds on a photo.
+    */
+  def originalCaptionGet(originalId: OriginalId): IO[ServiceIssue, Option[OriginalCaption]]
 
   /** The stored caption text for a photo, if any. Pure read - never triggers a model call. */
   def mediaCaptionGet(originalId: OriginalId): IO[ServiceIssue, Option[String]]
@@ -309,6 +324,15 @@ trait MediaService {
     */
   def searchReindexAll(): IO[ServiceIssue, Long]
 
+  /** Re-publishes a single media's `SaoMedia` document to the search engine, rebuilt from what is
+    * currently stored. Lets a long enrichment backfill (captions, places, ...) keep the index in
+    * step as it goes, instead of leaving the whole collection stale until a `searchReindexAll`.
+    *
+    * A no-op when search is disabled. Unlike the internal best-effort re-publish that follows a
+    * user edit, this one surfaces failures so a batch job can count and report them.
+    */
+  def searchPublish(originalId: OriginalId): IO[ServiceIssue, Unit]
+
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): IO[ServiceIssue, Set[Keyword]]
 
@@ -393,6 +417,8 @@ object MediaService {
   def mediaFeaturesRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalMediaFeatures]            = ZIO.serviceWithZIO(_.mediaFeaturesRecompute(originalId))
   def originalCaption(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalCaption]]                 = ZIO.serviceWithZIO(_.originalCaption(originalId))
   def originalCaptionRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalCaption]                = ZIO.serviceWithZIO(_.originalCaptionRecompute(originalId))
+  def originalCaptionGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalCaption]]              = ZIO.serviceWithZIO(_.originalCaptionGet(originalId))
+  def originalCaptionExists(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Boolean]                          = ZIO.serviceWithZIO(_.originalCaptionExists(originalId))
   def mediaCaptionGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[String]]                         = ZIO.serviceWithZIO(_.mediaCaptionGet(originalId))
   def placeResolve(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                             = ZIO.serviceWithZIO(_.placeResolve(originalId))
   def placeRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                           = ZIO.serviceWithZIO(_.placeRecompute(originalId))
@@ -541,6 +567,7 @@ object MediaService {
   def synchronizeStatus(): ZIO[MediaService, ServiceIssue, SynchronizeStatus]                  = ZIO.serviceWithZIO(_.synchronizeStatus())
   def reindexAll(): ZIO[MediaService, ServiceIssue, Unit]                                      = ZIO.serviceWithZIO(_.reindexAll())
   def searchReindexAll(): ZIO[MediaService, ServiceIssue, Long]                                = ZIO.serviceWithZIO(_.searchReindexAll())
+  def searchPublish(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Unit]             = ZIO.serviceWithZIO(_.searchPublish(originalId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def keywordSentenceToKeywords(storeId: StoreId, sentence: String): ZIO[MediaService, ServiceIssue, Set[Keyword]] = ZIO.serviceWithZIO(_.keywordSentenceToKeywords(storeId, sentence))

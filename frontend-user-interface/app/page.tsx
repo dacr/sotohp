@@ -113,6 +113,11 @@ function ViewerPageInner() {
       try {
         if (mediaParam) {
           await loadByKey(mediaParam);
+          // Consumed: it told us where to start, nothing more. Left in the URL it goes stale the
+          // moment you press next, and NavHeader would remember it as this tab's location and
+          // replay the jump every time you came back here. The photo on screen is recorded in
+          // LAST_MEDIA_KEY below, so reloading the bare "/" restores it anyway.
+          window.history.replaceState(null, "", window.location.pathname);
           return;
         }
         const last = localStorage.getItem(LAST_MEDIA_KEY);

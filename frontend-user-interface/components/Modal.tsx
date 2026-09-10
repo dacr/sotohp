@@ -49,13 +49,30 @@ export function Modal({
     }
   }
 
+  // The keydown listener below is registered once, so calling handleSave/onClose from it directly
+  // would forever run the closures from the first render — with whatever state the modal opened
+  // with. Ctrl+Enter on FaceEditModal's combobox would then always see an empty person field and
+  // warn "Please select a person", however much you had since typed or picked. Route both through
+  // refs kept pointing at the current render instead.
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-      else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") handleSave();
+      if (e.key === "Escape") onCloseRef.current();
+      else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") handleSaveRef.current();
     }
     document.addEventListener("keydown", onKey);
-    modalRef.current?.focus({ preventScroll: true });
+    // Give the dialog itself focus only when nothing inside it already took it: React applies a
+    // child's autoFocus during the layout phase, i.e. before this passive effect runs, so focusing
+    // unconditionally here would pull focus straight back out of the field a modal asked to start
+    // in (FaceEditModal's person combobox, for one).
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !modalRef.current?.contains(active)) {
+      modalRef.current?.focus({ preventScroll: true });
+    }
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

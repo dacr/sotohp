@@ -40,9 +40,12 @@ const TAB_MEMORY_KEY = "sotohp:last-tab-url";
 // `?ts=`/`?media=` (pushed by the Viewer's date button and by a Bag's date) are a jump instruction
 // — remembering them would make every later click on "Mosaic" replay that jump and discard
 // wherever the user had since scrolled to. Strip them when recording, keep them in the URL itself
-// so the link stays reloadable and shareable.
+// so the link stays reloadable and shareable. The Viewer's own `?media=` is the same kind of
+// instruction — it strips itself from the URL once loaded, but this tab may already have been
+// recorded before that happened, so it is listed here too.
 const ONE_SHOT_PARAMS: Record<string, string[]> = {
   "/mosaic": ["ts", "media"],
+  "/": ["media"],
 };
 
 function loadTabMemory(): Record<string, string> {

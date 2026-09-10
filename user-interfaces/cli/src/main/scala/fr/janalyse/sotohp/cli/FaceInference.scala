@@ -78,7 +78,7 @@ object FaceInference extends CommonsCLI {
   // identified at all, and - the measurement that matters most for a threshold this loose - 2.36% vs 5.08% of faces
   // belonging to someone *not* in the library wrongly given a name. Raising the threshold alone would have tripled
   // that last number; it is the runner-up margin below that pays for the extra reach.
-  val maxMatchDistance        = 0.24
+  val maxMatchDistance        = 0.18
   val maxIgnoredMatchDistance = 0.20
 
   // The winning person must be at least this much closer than the *second* person in the candidate list. Lowering it

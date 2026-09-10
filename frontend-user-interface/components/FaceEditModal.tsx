@@ -42,11 +42,17 @@ export function FaceEditModal({
   const [recentIds, setRecentIds] = useState<string[]>([]);
   useEffect(() => setRecentIds(getRecentPersonIds()), []);
 
+  // What Ctrl+Enter (and Save) commits. An exact label wins outright — that is what picking a
+  // datalist suggestion, with the mouse or with the arrow keys, leaves in the input. Failing that
+  // we accept a partial name as long as it still narrows to a single person, so typing "chur" and
+  // hitting Ctrl+Enter identifies Winston Churchill instead of warning that nothing is selected.
   const selectedId = useMemo(() => {
     const n = nameInput.trim().toLowerCase();
     if (!n) return null;
     const exact = persons.find((p) => personLabel(p).toLowerCase() === n);
-    return exact ? exact.id : null;
+    if (exact) return exact.id;
+    const matches = persons.filter((p) => personLabel(p).toLowerCase().includes(n));
+    return matches.length === 1 ? matches[0].id : null;
   }, [nameInput, persons]);
 
   async function handleSave() {

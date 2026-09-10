@@ -9,11 +9,11 @@ import zio.config.magnolia.*
   * describe each photo.
   *
   * Disabled by default: it needs an Ollama server running with a vision model pulled
-  * (`ollama pull moondream`). When disabled every caption request is a fast no-op.
+  * (`ollama pull qwen2.5vl:3b`). When disabled every caption request is a fast no-op.
   *
   * @param enabled        turn the captioner on
   * @param baseUrl        Ollama server base URL (no trailing slash)
-  * @param model          vision model name, e.g. "moondream", "llava", "qwen2.5vl:3b"
+  * @param model          vision model name, e.g. "qwen2.5vl:3b" (multilingual), "llava", "gemma3:4b"
   * @param prompt         instruction sent alongside the image
   * @param timeoutSeconds per-request timeout (a cold model load can be slow)
   * @param maxImageSize   longest edge, in px, the photo is downscaled to before sending

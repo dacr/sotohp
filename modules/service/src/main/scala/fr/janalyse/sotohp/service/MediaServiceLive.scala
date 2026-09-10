@@ -742,13 +742,26 @@ class MediaServiceLive private (
     logic.uninterruptible
   }
 
+  override def originalCaptionExists(originalId: OriginalId): IO[ServiceIssue, Boolean] = {
+    collections.captions
+      .contains(originalId)
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't check caption existence : $err"))
+  }
+
+  override def originalCaptionGet(originalId: OriginalId): IO[ServiceIssue, Option[OriginalCaption]] = {
+    collections.captions
+      .fetch(originalId)
+      .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoCaptionToCaption))
+      .mapError(err => ServiceDatabaseIssue(s"Unable to fetch caption from database: $err"))
+  }
+
   override def originalCaption(originalId: OriginalId): IO[ServiceIssue, Option[OriginalCaption]] = {
     for {
-      stored <- collections.captions
-                  .fetch(originalId)
-                  .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(daoCaptionToCaption))
-                  .mapError(err => ServiceDatabaseIssue(s"Unable to fetch caption from database: $err"))
-      result <- computeCaption(originalId).when(stored.isEmpty || stored.exists(!_.status.successful))
+      // A stored record - successful or not - means this photo has already been through the model,
+      // so it is left alone; `originalCaptionRecompute` is the way to try again. Nothing is stored
+      // while the captioner is disabled, so those photos are still picked up once it is enabled.
+      stored <- originalCaptionGet(originalId)
+      result <- computeCaption(originalId).when(stored.isEmpty)
     } yield result.orElse(stored)
   }
 
@@ -1962,6 +1975,17 @@ class MediaServiceLive private (
       _         <- ZIO.foreach(inputs)(input => stateUpsert(input.media.original.id, input.state.copy(mediaLastSynchronized = Some(now))))
     } yield bag // TODO no transaction take care
     logic
+  }
+
+  override def searchPublish(originalId: OriginalId): IO[ServiceIssue, Unit] = {
+    for {
+      tuple <- mediaGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find media : $originalId"))
+      state <- stateGet(originalId).someOrFail(ServiceDatabaseIssue(s"No state for original : $originalId"))
+      bag   <- buildMediaBag(tuple.media, state)
+      _     <- search
+                 .publish(Chunk.single(bag))
+                 .mapError(err => ServiceInternalIssue(s"Unable to publish media to search engine : $err"))
+    } yield ()
   }
 
   override def searchReindexAll(): IO[ServiceIssue, Long] = {

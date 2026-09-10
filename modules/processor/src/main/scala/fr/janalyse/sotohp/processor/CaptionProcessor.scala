@@ -18,29 +18,43 @@ import java.nio.file.Files
 import java.time.Duration
 import java.util.Base64
 import javax.imageio.ImageIO
+import scala.jdk.CollectionConverters.*
 
-trait CaptionIssue(message: String, mayBeErr: Option[Throwable]) extends Exception with CoreIssue
+abstract class CaptionIssue(message: String, mayBeErr: Option[Throwable]) extends Exception(message, mayBeErr.orNull) with CoreIssue
 case class CaptionGeneralIssue(message: String)                extends CaptionIssue(message, None)
-case class CaptionRequestIssue(message: String, err: Throwable) extends CaptionIssue(message, Some(err))
+case class CaptionRequestIssue(message: String, err: Throwable) extends CaptionIssue(s"$message: ${err.getMessage}", Some(err))
 
 // Ollama /api/generate wire types (only the fields we use).
-private case class OllamaGenerateRequest(model: String, prompt: String, images: List[String], stream: Boolean, options: Map[String, Int])
-private case class OllamaGenerateResponse(response: String = "", done: Boolean = false)
+private case class OllamaOptions(temperature: Double, num_predict: Int, repeat_penalty: Double)
+private case class OllamaGenerateRequest(model: String, prompt: String, images: List[String], stream: Boolean, options: OllamaOptions)
+// One line of the streamed response, or a `{"error": "..."}` line.
+private case class OllamaStreamChunk(response: String = "", done: Boolean = false, error: String = "")
 private object OllamaGenerateRequest { given JsonValueCodec[OllamaGenerateRequest] = JsonCodecMaker.make }
-private object OllamaGenerateResponse { given JsonValueCodec[OllamaGenerateResponse] = JsonCodecMaker.make(CodecMakerConfig.withAllowRecursiveTypes(true)) }
+private object OllamaStreamChunk     { given JsonValueCodec[OllamaStreamChunk]     = JsonCodecMaker.make }
 
 /** Image-to-text: asks a local Ollama vision model to describe a photo.
   *
   * A plain HTTP client, not a DJL predictor. When `config.enabled` is false every call is a
   * fast no-op returning an unsuccessful [[OriginalCaption]] (so nothing is stored and the step
   * retries once the captioner is turned on).
+  *
+  * The request is streamed (`stream: true`) and the chunks reassembled here: Ollama's
+  * non-streaming responses drop the first output token for some models, which streaming avoids.
   */
 class CaptionProcessor(config: CaptionerConfig) extends Processor {
 
   val enabled: Boolean = config.enabled
 
+  // Hard cap on a stored caption. A well-behaved model stays well under this; anything longer is
+  // truncated to the first sentence by `tidy`.
+  private val maxCaptionChars = 400
+
   private lazy val httpClient: HttpClient =
-    HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(config.timeoutSeconds.toLong.max(1))).build()
+    HttpClient
+      .newBuilder()
+      .version(HttpClient.Version.HTTP_1_1) // Ollama is HTTP/1.1; skip the h2c upgrade dance
+      .connectTimeout(Duration.ofSeconds(config.timeoutSeconds.toLong.max(1)))
+      .build()
 
   override def close(): Unit = ()
 
@@ -67,36 +81,84 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
       model = config.model,
       prompt = config.prompt,
       images = List(imageBase64),
-      stream = false,
-      options = Map("temperature" -> 0)
+      stream = true,
+      // num_predict caps runaway generations; repeat_penalty discourages the degenerate
+      // token loops small vision models (e.g. moondream) sometimes fall into.
+      options = OllamaOptions(temperature = 0d, num_predict = 120, repeat_penalty = 1.3d)
     )
     val request = HttpRequest
       .newBuilder()
       .uri(URI.create(s"${config.baseUrl.stripSuffix("/")}/api/generate"))
       .timeout(Duration.ofSeconds(config.timeoutSeconds.toLong.max(1)))
       .header("Content-Type", "application/json")
+      .header("Accept", "application/x-ndjson")
       .POST(HttpRequest.BodyPublishers.ofByteArray(writeToArray(payload)))
       .build()
 
     ZIO
-      .attemptBlocking(httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray()))
-      .mapError(err => CaptionRequestIssue(s"Ollama request to ${config.baseUrl} failed", err))
-      .flatMap { response =>
-        if (response.statusCode() / 100 != 2)
-          ZIO.fail(CaptionGeneralIssue(s"Ollama returned HTTP ${response.statusCode()}: ${new String(response.body()).take(300)}"))
-        else
-          ZIO
-            .attempt(readFromArray[OllamaGenerateResponse](response.body()).response)
-            .mapError(err => CaptionRequestIssue("Couldn't parse Ollama response", err))
+      .attemptBlocking {
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofLines())
+        if (response.statusCode() / 100 != 2) {
+          val body = response.body().iterator().asScala.take(5).mkString(" ")
+          throw CaptionGeneralIssue(s"Ollama returned HTTP ${response.statusCode()}: ${body.take(300)}")
+        }
+        val sb = new StringBuilder()
+        response.body().iterator().asScala.foreach { line =>
+          val trimmed = line.trim
+          if (trimmed.nonEmpty) {
+            val chunk = readFromString[OllamaStreamChunk](trimmed)
+            if (chunk.error.nonEmpty) throw CaptionGeneralIssue(s"Ollama error: ${chunk.error}")
+            sb.append(chunk.response)
+          }
+        }
+        sb.toString
+      }
+      .mapError {
+        case issue: CaptionIssue => issue
+        case err                 => CaptionRequestIssue(s"Ollama request to ${config.baseUrl} failed", err)
       }
   }
 
-  /** Normalise: collapse whitespace, drop a leading "This image shows " / "The photo shows "
-    * style preamble some models add, trim. */
-  private def tidy(raw: String): Option[String] = {
-    val collapsed = raw.trim.replaceAll("\\s+", " ")
-    val stripped  = collapsed.replaceFirst("(?i)^(this (image|picture|photo)|the (image|picture|photo)) (shows|depicts|is of|features) ", "")
-    Option(stripped.trim).filter(_.nonEmpty)
+  // Strips a leading "The image shows " / "Cette photo montre " style preamble, EN or FR.
+  private val preamble =
+    ("(?i)^(" +
+      "(the |this |it )?(image |picture |photo |photograph |scene )?(shows|depicts|features|contains|portrays|is(?: of| a| an)?)" +
+      "|(cette |la |l'|une |ce |le )?(image |photo |photographie |scène |vue )?(montre|présente|représente|est|contient|dépeint|met en scène)" +
+      "|on (voit|peut voir|aperçoit)|il y a|voici" +
+      ")[:,]?\\s+").r
+
+  /** Turn a raw model answer into a stored caption, or `None` when it is unusable.
+    *
+    *   - normalises whitespace (incl. NBSP), strips a leading "The image shows " style preamble
+    *   - rejects non-Latin output, number / id / coordinate hallucinations, token-repetition
+    *     loops, and one-or-two-word fragments - all failure modes small vision models fall into
+    *   - keeps only the first sentence and caps the length
+    */
+  private[processor] def tidy(raw: String): Option[String] = {
+    val collapsed   = raw.replaceAll("[\\p{Z}\\s]+", " ").trim.replaceFirst("^[\\p{Z}\\s\\p{Punct}]+", "")
+    val depreambled = preamble.replaceFirstIn(collapsed, "")
+
+    def rejected: Boolean = {
+      val letters   = depreambled.count(_.isLetter)
+      val nonLatin  = depreambled.count(c => c.isLetter && Character.UnicodeScript.of(c) != Character.UnicodeScript.LATIN)
+      val digitsSym = depreambled.count(c => c.isDigit || "[]{}()=/_|<>~^*".contains(c))
+      val words     = depreambled.split("\\s+").count(_.exists(_.isLetter))
+      val distinct  = depreambled.iterator.filterNot(_.isWhitespace).toSet.size
+      depreambled.isEmpty ||
+      letters < 3 ||
+      words < 4 ||                                                             // "Ids/sa_14961"
+      nonLatin.toDouble / letters > 0.15 ||                                    // Thai / CJK / etc.
+      digitsSym > letters ||                                                   // "Ids = [0.39, 0.42, 1.0]"
+      (depreambled.length > 120 && distinct < math.max(6, depreambled.length / 12)) // repetition loop
+    }
+
+    if (rejected) None
+    else {
+      val firstSentence = depreambled.split("(?<=[.!?])\\s", 2).headOption.getOrElse(depreambled).trim
+      val bounded       = (if (firstSentence.nonEmpty) firstSentence else depreambled).take(maxCaptionChars).trim
+      val capitalised   = if (bounded.isEmpty) bounded else bounded.head.toUpper.toString + bounded.tail
+      Option(capitalised).filter(_.nonEmpty)
+    }
   }
 
   def caption(original: Original): IO[CoreIssue, OriginalCaption] = {
@@ -110,8 +172,8 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
                          .map(bytes => Base64.getEncoder.encodeToString(bytes))
                          .flatMap(requestCaption)
                          .map(tidy)
-                         .mapError(err => CaptionGeneralIssue(s"Unable to caption image: $err"))
-                         .logError("Caption issue")
+                         // model / server failures must not stop a batch: log the real reason and move on
+                         .tapError(err => ZIO.logWarning(s"caption failed: ${err.getMessage}"))
                          .option
                          .map(_.flatten)
           status    = ProcessedStatus(successful = mayBeText.isDefined, timestamp = now)

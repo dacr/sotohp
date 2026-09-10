@@ -32,6 +32,15 @@
       mill = unstable.mill.override {
         jre = jdk;
       };
+
+      # Local vision model server for image-to-text captions (sotohp.processors.captioner).
+      # nixpkgs builds ollama-cuda for compute capability 7.5+ only (Turing and newer), so a
+      # Pascal card is skipped at runtime ("compute capability not in compiled architectures")
+      # and inference silently falls back to the CPU. Compile for this machine's GPU instead:
+      # sm_61 = GTX 10xx. Check yours with `nvidia-smi --query-gpu=compute_cap --format=csv`.
+      ollama = unstable.ollama-cuda.override {
+        cudaArches = [ "sm_61" ];
+      };
     in
     {
         devShells.default = stable.mkShell {
@@ -39,9 +48,8 @@
           unstable.opencode      # The AI Agent
           unstable.claude-code
 
-          stable.nodejs_22       # Required for the auth plugin
           stable.imagemagick     # For HEIF image processing
-          unstable.ollama        # Local vision model for image-to-text captions (sotohp.processors.captioner)
+          ollama                 # Vision model server for image-to-text captions (see above)
 
           # Scala Development
           jdk              # Java Runtime
