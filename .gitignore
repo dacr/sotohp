@@ -30,6 +30,7 @@ lock.mdb
 target/
 out/
 .next/
+tsconfig.tsbuildinfo
 frontend-user-interface/lib/api-types.ts
 frontend-user-interface/next-env.d.ts
 project/target/
