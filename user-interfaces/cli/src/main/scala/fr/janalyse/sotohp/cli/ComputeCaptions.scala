@@ -18,11 +18,20 @@ import scala.util.Try
   * a fast no-op and nothing is stored.
   *
   * Captioning is slow - a vision model spends seconds per photo - so the whole collection is a
-  * multi-day run, and stopping and relaunching has to be cheap. A photo the model has already been
-  * run on is skipped outright, whether it produced a caption or not: it costs one LMDB read, no GPU
-  * time, and no search-engine write. Only `--force` goes over that ground again.
+  * multi-day run, and stopping and relaunching has to be cheap. By default a photo the model has
+  * already been run on is skipped outright, whether it produced a caption or not: it costs one
+  * LMDB read, no GPU time, and no search-engine write.
   *
-  *   - `--force`        recaption every selected photo, overwriting stored captions
+  * Three selection modes, from narrowest to widest:
+  *
+  *   - default          only photos the model has never seen
+  *   - `--retry`        those, plus the ones it saw and got nothing usable from - the flag to
+  *                      reach for after fixing a bad model or prompt, since it re-tries the
+  *                      failures without paying to redo the captions that already worked
+  *   - `--force`        every selected photo, overwriting captions that already succeeded
+  *
+  * `--force` wins if both are given. The rest narrow which photos are considered at all:
+  *
   *   - `--starred`      only starred photos
   *   - `--since=YYYY`   only photos taken on/after that date (`YYYY` or `YYYY-MM-DD`)
   *   - `--limit=N`      stop after N photos have actually been captioned - photos skipped because
@@ -70,8 +79,11 @@ object ComputeCaptions extends CommonsCLI {
       .orElse(Try(LocalDate.parse(trimmed).atStartOfDay().atOffset(ZoneOffset.UTC)).toOption)
   }
 
-  private def selectionDescription(force: Boolean, starredOnly: Boolean, since: Option[OffsetDateTime], limit: Option[Int]): String = {
-    val what  = if (force) "Recaptioning" else "Captioning photos the model has not seen yet"
+  private def selectionDescription(force: Boolean, retry: Boolean, starredOnly: Boolean, since: Option[OffsetDateTime], limit: Option[Int]): String = {
+    val what  =
+      if (force) "Recaptioning every selected photo"
+      else if (retry) "Captioning photos the model has not seen yet, and retrying the ones that failed"
+      else "Captioning photos the model has not seen yet"
     val where = List(
       Option.when(starredOnly)("starred only"),
       since.map(date => s"taken on/after ${date.toLocalDate}"),
@@ -102,6 +114,7 @@ object ComputeCaptions extends CommonsCLI {
     for {
       args           <- getArgs
       force           = args.contains("--force")
+      retry           = args.contains("--retry")
       starredOnly     = args.contains("--starred")
       noIndex         = args.contains("--no-index")
       since           = argValue(args, "since").flatMap(parseSince)
@@ -114,7 +127,7 @@ object ComputeCaptions extends CommonsCLI {
       indexing        = !noIndex && searchEnabled
       total          <- MediaService.originalCount()
       _              <- Console.printLine(s"$total photos in the collection")
-      _              <- Console.printLine(selectionDescription(force, starredOnly, since, limit))
+      _              <- Console.printLine(selectionDescription(force, retry, starredOnly, since, limit))
       _              <- Console.printLine(
                           if (indexing) "Search index updated as photos are captioned"
                           else if (noIndex) "Search index left untouched (--no-index)"
@@ -135,8 +148,9 @@ object ComputeCaptions extends CommonsCLI {
                             if (force) ZIO.succeed(true)
                             else
                               MediaService
-                                .originalCaptionExists(tuple.media.original.id)
-                                .map(!_)
+                                .originalCaptionSuccessful(tuple.media.original.id)
+                                // never attempted -> always; attempted but unusable -> only with --retry
+                                .map(status => status.isEmpty || (retry && status.contains(false)))
                                 .catchAll(_ => ZIO.succeed(true))
                                 .tap(keep => skippedRef.update(_ + 1).unless(keep))
                           }
@@ -144,7 +158,7 @@ object ComputeCaptions extends CommonsCLI {
                           .mapZIOParUnordered(parallelism) { tuple =>
                             val originalId = tuple.media.original.id
                             for {
-                              ok        <- (if (force) MediaService.originalCaptionRecompute(originalId).map(_.status.successful)
+                              ok        <- (if (force || retry) MediaService.originalCaptionRecompute(originalId).map(_.status.successful)
                                             else MediaService.originalCaption(originalId).map(_.exists(_.status.successful)))
                                              .catchAll(_ => ZIO.succeed(false))
                               // Only photos this run put through the model can have changed their

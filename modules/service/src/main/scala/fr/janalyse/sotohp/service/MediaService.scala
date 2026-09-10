@@ -135,10 +135,13 @@ trait MediaService {
     */
   def originalCaptionRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalCaption]
 
-  /** Whether the model has already been run on this photo, caption or not. The cheapest possible
-    * resume check for a batch job: a single key lookup, no record decoding, no joins.
+  /** Whether the model has already been run on this photo, and how it went: `None` when it has
+    * never been attempted, `Some(false)` when it was attempted and produced nothing usable,
+    * `Some(true)` when a caption was stored. The cheapest resume check for a batch job - a single
+    * record fetch, no joins - and it tells "never tried" from "tried and failed", which is what
+    * separates a plain resume from a retry pass.
     */
-  def originalCaptionExists(originalId: OriginalId): IO[ServiceIssue, Boolean]
+  def originalCaptionSuccessful(originalId: OriginalId): IO[ServiceIssue, Option[Boolean]]
 
   /** The stored caption record for a photo, if the model has already been run on it - including a
     * record whose `status.successful` is false. Pure read: never triggers a model call, so a batch
@@ -418,7 +421,7 @@ object MediaService {
   def originalCaption(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalCaption]]                 = ZIO.serviceWithZIO(_.originalCaption(originalId))
   def originalCaptionRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalCaption]                = ZIO.serviceWithZIO(_.originalCaptionRecompute(originalId))
   def originalCaptionGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[OriginalCaption]]              = ZIO.serviceWithZIO(_.originalCaptionGet(originalId))
-  def originalCaptionExists(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Boolean]                          = ZIO.serviceWithZIO(_.originalCaptionExists(originalId))
+  def originalCaptionSuccessful(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Boolean]]              = ZIO.serviceWithZIO(_.originalCaptionSuccessful(originalId))
   def mediaCaptionGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[String]]                         = ZIO.serviceWithZIO(_.mediaCaptionGet(originalId))
   def placeResolve(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                             = ZIO.serviceWithZIO(_.placeResolve(originalId))
   def placeRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                           = ZIO.serviceWithZIO(_.placeRecompute(originalId))

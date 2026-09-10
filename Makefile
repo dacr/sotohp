@@ -37,15 +37,18 @@ run-media-features-clustering:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.MediaFeaturesClustering $(ARGS)
 
 # Backfill image-to-text captions ("auto descriptions"). Needs `ollama serve` + a vision model
-# (`ollama pull qwen2.5vl:3b`) and sotohp.processors.captioner.enabled=true.
+# (`ollama pull qwen3-vl:2b-instruct`) and sotohp.processors.captioner.enabled=true.
 # A vision model costs seconds per photo, so the whole collection is a multi-day run - use the
 # selection flags for an affordable first pass. Photos are visited oldest first.
-# Stopping and relaunching is cheap: a photo the model has already been run on is skipped outright,
-# caption or not, with no GPU time and no search-engine write.
-#   ARGS="--force"        recaption everything, including photos already done
+# Stopping and relaunching is cheap: by default a photo the model has already been run on is
+# skipped outright, caption or not, with no GPU time and no search-engine write.
+#   (no flag)             only photos the model has never seen
+#   ARGS="--retry"        those, plus the ones it saw and got nothing usable from - use after
+#                         fixing a bad model or prompt; keeps the captions that already worked
+#   ARGS="--force"        every selected photo, overwriting captions that already succeeded
 #   ARGS="--starred"      starred photos only
 #   ARGS="--since=2020"   taken on/after that date (YYYY or YYYY-MM-DD)
-#   ARGS="--limit=5000"   stop after N photos actually captioned (skipped ones don't count)
+#   ARGS="--limit=5000"   stop after N photos actually captioned (skipped ones do not count)
 #   ARGS="--no-index"     leave the search engine alone (needs a later run-search-reindex)
 # Each newly captioned photo is re-published to Elasticsearch as it goes, so the index stays in step
 # with a multi-day run - no run-search-reindex needed afterwards unless --no-index was used.

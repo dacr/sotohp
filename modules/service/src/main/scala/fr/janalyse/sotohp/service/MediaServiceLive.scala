@@ -742,10 +742,11 @@ class MediaServiceLive private (
     logic.uninterruptible
   }
 
-  override def originalCaptionExists(originalId: OriginalId): IO[ServiceIssue, Boolean] = {
+  override def originalCaptionSuccessful(originalId: OriginalId): IO[ServiceIssue, Option[Boolean]] = {
     collections.captions
-      .contains(originalId)
-      .mapError(err => ServiceDatabaseIssue(s"Couldn't check caption existence : $err"))
+      .fetch(originalId)
+      .map(_.map(_.status.successful))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't check caption status : $err"))
   }
 
   override def originalCaptionGet(originalId: OriginalId): IO[ServiceIssue, Option[OriginalCaption]] = {
