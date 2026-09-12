@@ -152,21 +152,25 @@ case class ElasticOperations(config: SearchServiceConfig) {
 
   // ------------------------------------------------------
 
-  private val searchFields = Seq(
-    "description",
-    "autoDescription",
-    "keywords",
-    "bag",
-    "classifications",
-    "detectedObjects",
-    "identifiedPersons",
-    "camera",
-    "placeStreet",
-    "placeTown",
-    "placeRegion",
-    "placeCountry",
-    "placeCountryCode",
-    "filePath"
+  // The bag/album name is shared by every photo filed under it, so a match there says more about
+  // the album than about this particular photo - e.g. one trip's bag name shouldn't make every
+  // photo in it rank as high as a photo whose own caption/keywords/people actually match. Down-
+  // weighted rather than dropped: it should still help find things, just not dominate the score.
+  private val searchFields: Map[String, Double] = Map(
+    "description"       -> 1.0,
+    "autoDescription"   -> 1.0,
+    "keywords"          -> 0.7,
+    "bag"               -> 0.3,
+    "classifications"   -> 0.8,
+    "detectedObjects"   -> 0.9,
+    "identifiedPersons" -> 1.0,
+    "camera"            -> 0.2,
+    "placeStreet"       -> 1.0,
+    "placeTown"         -> 1.0,
+    "placeRegion"       -> 1.0,
+    "placeCountry"      -> 1.0,
+    "placeCountryCode"  -> 1.0,
+    "filePath"          -> 0.1
   )
 
   /** Free-text search across the text-bearing fields of every `${indexPrefix}-*` index. Returns
@@ -179,6 +183,8 @@ case class ElasticOperations(config: SearchServiceConfig) {
     * A plain multi_match with `operator=and` would instead require all words in the *same* field
     * and miss that. `fuzziness("AUTO")` (1 edit for 3-5 char words, 2 for longer) + `prefixLength(1)`
     * give typo / accent / singular-plural tolerance while keeping exact matches scored highest.
+    * Per-field boosts (see `searchFields`) skew relevance within that: `bag` is down-weighted since
+    * it describes the whole album rather than any one photo in it.
     */
   def searchMediaIds(indexPrefix: String, queryString: String, size: Int): Task[List[String]] = {
     val words = queryString.trim.split("\\s+").iterator.filter(_.nonEmpty).toList
@@ -188,7 +194,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
         boolQuery().must(
           words.map(word =>
             multiMatchQuery(word)
-              .fields(searchFields*)
+              .fields(searchFields)
               .lenient(true)
               .fuzziness("AUTO")
               .prefixLength(1)
