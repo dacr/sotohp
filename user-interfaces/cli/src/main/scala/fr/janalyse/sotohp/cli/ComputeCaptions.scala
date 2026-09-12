@@ -22,18 +22,29 @@ import scala.util.Try
   * already been run on is skipped outright, whether it produced a caption or not: it costs one
   * LMDB read, no GPU time, and no search-engine write.
   *
-  * Three selection modes, from narrowest to widest:
+  * Selection modes, from narrowest to widest, and they combine (a photo is picked up as soon as
+  * any one of them wants it):
   *
-  *   - default          only photos the model has never seen
-  *   - `--retry`        those, plus the ones it saw and got nothing usable from - the flag to
-  *                      reach for after fixing a bad model or prompt, since it re-tries the
-  *                      failures without paying to redo the captions that already worked
-  *   - `--force`        every selected photo, overwriting captions that already succeeded
+  *   - default                  only photos the model has never seen
+  *   - `--retry`                those, plus the ones it saw and got nothing usable from - the flag
+  *                              to reach for after fixing a bad model or prompt, since it re-tries
+  *                              the failures without paying to redo the captions that already worked
+  *   - `--recompute-before=TS`  those, plus every photo whose caption - successful or not - was
+  *                              computed before the given instant, regardless of how it turned out.
+  *                              The flag for "I changed the model/prompt at TS, redo everything
+  *                              captioned before that, leave what I've done since alone". `TS` is a
+  *                              full ISO-8601 offset date-time, e.g. `2026-09-12T19:04:24+02:00` -
+  *                              a `+02` offset with no minutes (as our own log lines occasionally
+  *                              render it) is also accepted, so a value copied straight from the
+  *                              log works as-is
+  *   - `--force`                every selected photo, overwriting captions that already succeeded
   *
-  * `--force` wins if both are given. The rest narrow which photos are considered at all:
+  * `--force` wins over the others when several are given. The rest narrow which photos are
+  * considered at all:
   *
   *   - `--starred`      only starred photos
-  *   - `--since=YYYY`   only photos taken on/after that date (`YYYY` or `YYYY-MM-DD`)
+  *   - `--since=YYYY`   only photos taken on/after that date (`YYYY` or `YYYY-MM-DD`) - the photo's
+  *                      own shoot date, unrelated to `--recompute-before`'s caption timestamp
   *   - `--limit=N`      stop after N photos have actually been captioned - photos skipped because
   *                      they were already done do not count against it, so the flag means the same
   *                      thing on a fresh run and on a resume
@@ -79,11 +90,32 @@ object ComputeCaptions extends CommonsCLI {
       .orElse(Try(LocalDate.parse(trimmed).atStartOfDay().atOffset(ZoneOffset.UTC)).toOption)
   }
 
-  private def selectionDescription(force: Boolean, retry: Boolean, starredOnly: Boolean, since: Option[OffsetDateTime], limit: Option[Int]): String = {
-    val what  =
+  /** Full ISO-8601 offset date-time, e.g. `2026-09-12T19:04:24.825477913+02:00`. A two-digit
+    * offset with no minutes (`+02`) is also accepted - our own log lines occasionally render it
+    * that way - so a timestamp copied straight out of a log line parses as-is.
+    */
+  private[cli] def parseInstant(raw: String): Option[OffsetDateTime] = {
+    val trimmed = raw.trim
+    def attempt(s: String) = Try(OffsetDateTime.parse(s)).toOption
+    attempt(trimmed).orElse(attempt(trimmed.replaceAll("([+-]\\d{2})$", "$1:00")))
+  }
+
+  private def selectionDescription(
+    force: Boolean,
+    retry: Boolean,
+    recomputeBefore: Option[OffsetDateTime],
+    starredOnly: Boolean,
+    since: Option[OffsetDateTime],
+    limit: Option[Int]
+  ): String = {
+    val what =
       if (force) "Recaptioning every selected photo"
-      else if (retry) "Captioning photos the model has not seen yet, and retrying the ones that failed"
-      else "Captioning photos the model has not seen yet"
+      else
+        List(
+          Some("Captioning photos the model has not seen yet"),
+          Option.when(retry)("retrying the ones that failed"),
+          recomputeBefore.map(cutoff => s"recomputing everything captioned before $cutoff")
+        ).flatten.mkString(", ")
     val where = List(
       Option.when(starredOnly)("starred only"),
       since.map(date => s"taken on/after ${date.toLocalDate}"),
@@ -112,22 +144,27 @@ object ComputeCaptions extends CommonsCLI {
 
   val logic = ZIO.logSpan("Compute image-to-text captions") {
     for {
-      args           <- getArgs
-      force           = args.contains("--force")
-      retry           = args.contains("--retry")
-      starredOnly     = args.contains("--starred")
-      noIndex         = args.contains("--no-index")
-      since           = argValue(args, "since").flatMap(parseSince)
-      badSince        = argValue(args, "since").isDefined && since.isEmpty
-      limit           = argValue(args, "limit").flatMap(_.toIntOption).filter(_ > 0)
-      _              <- ZIO
-                          .fail(new IllegalArgumentException(s"Invalid --since value, expected YYYY or YYYY-MM-DD"))
-                          .when(badSince)
-      searchEnabled  <- SearchServiceConfig.config.map(_.enabled)
-      indexing        = !noIndex && searchEnabled
-      total          <- MediaService.originalCount()
-      _              <- Console.printLine(s"$total photos in the collection")
-      _              <- Console.printLine(selectionDescription(force, retry, starredOnly, since, limit))
+      args            <- getArgs
+      force            = args.contains("--force")
+      retry            = args.contains("--retry")
+      starredOnly      = args.contains("--starred")
+      noIndex          = args.contains("--no-index")
+      since            = argValue(args, "since").flatMap(parseSince)
+      badSince         = argValue(args, "since").isDefined && since.isEmpty
+      recomputeBefore  = argValue(args, "recompute-before").flatMap(parseInstant)
+      badRecomputeBefore = argValue(args, "recompute-before").isDefined && recomputeBefore.isEmpty
+      limit            = argValue(args, "limit").flatMap(_.toIntOption).filter(_ > 0)
+      _               <- ZIO
+                           .fail(new IllegalArgumentException(s"Invalid --since value, expected YYYY or YYYY-MM-DD"))
+                           .when(badSince)
+      _               <- ZIO
+                           .fail(new IllegalArgumentException(s"Invalid --recompute-before value, expected a full ISO-8601 offset date-time"))
+                           .when(badRecomputeBefore)
+      searchEnabled   <- SearchServiceConfig.config.map(_.enabled)
+      indexing         = !noIndex && searchEnabled
+      total           <- MediaService.originalCount()
+      _               <- Console.printLine(s"$total photos in the collection")
+      _               <- Console.printLine(selectionDescription(force, retry, recomputeBefore, starredOnly, since, limit))
       _              <- Console.printLine(
                           if (indexing) "Search index updated as photos are captioned"
                           else if (noIndex) "Search index left untouched (--no-index)"
@@ -143,24 +180,42 @@ object ComputeCaptions extends CommonsCLI {
                           .mediaList()
                           .filter(tuple => selected(tuple, starredOnly, since))
                           // Drop the already-attempted photos *before* `--limit` is applied, so a
-                          // resumed run spends its budget on real work rather than on skipping.
+                          // resumed run spends its budget on real work rather than on skipping. A
+                          // photo redone by a `--recompute-before` pass is stored with today's
+                          // timestamp, so a later run with the same cutoff naturally leaves it
+                          // alone - no separate bookkeeping needed.
                           .filterZIO { tuple =>
                             if (force) ZIO.succeed(true)
                             else
                               MediaService
-                                .originalCaptionSuccessful(tuple.media.original.id)
-                                // never attempted -> always; attempted but unusable -> only with --retry
-                                .map(status => status.isEmpty || (retry && status.contains(false)))
+                                .originalCaptionStatus(tuple.media.original.id)
+                                .map {
+                                  case None         => true // never attempted -> always
+                                  case Some(status) =>
+                                    (retry && !status.successful) ||
+                                      recomputeBefore.exists(cutoff => status.timestamp.isBefore(cutoff))
+                                }
                                 .catchAll(_ => ZIO.succeed(true))
                                 .tap(keep => skippedRef.update(_ + 1).unless(keep))
                           }
                           .take(limit.getOrElse(Int.MaxValue))
                           .mapZIOParUnordered(parallelism) { tuple =>
                             val originalId = tuple.media.original.id
+                            val bagName    = tuple.media.bag.map(_.name.text).getOrElse("(no bag)")
                             for {
-                              ok        <- (if (force || retry) MediaService.originalCaptionRecompute(originalId).map(_.status.successful)
-                                            else MediaService.originalCaption(originalId).map(_.exists(_.status.successful)))
-                                             .catchAll(_ => ZIO.succeed(false))
+//                              _            <- ZIO.logInfo(s"captioning [$bagName] ${tuple.media.timestamp}")
+                              // Recompute (rather than the cheaper "fill if missing") whenever the
+                              // filter above may have selected a photo that already has a record:
+                              // --force, --retry and --recompute-before can all match one.
+                              mayBeCaption <- (if (force || retry || recomputeBefore.isDefined)
+                                                 MediaService.originalCaptionRecompute(originalId).map(_.caption)
+                                               else MediaService.originalCaption(originalId).map(_.flatMap(_.caption)))
+                                                .catchAll(_ => ZIO.succeed(None))
+                              ok            = mayBeCaption.isDefined
+                              _            <- ZIO.logInfo(
+                                                s"captioned [$bagName] ${tuple.media.timestamp} -> " +
+                                                  mayBeCaption.getOrElse("(rejected - no usable caption)")
+                                              )
                               // Only photos this run put through the model can have changed their
                               // document; a rejected recaption is published too, so an earlier
                               // description is not left stranded in the index.

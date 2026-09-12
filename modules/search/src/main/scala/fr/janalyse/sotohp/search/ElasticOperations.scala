@@ -173,6 +173,16 @@ case class ElasticOperations(config: SearchServiceConfig) {
     "filePath"          -> 0.1
   )
 
+  /** Strips diacritics (é -> e, ñ -> n, ...) via NFD decomposition + dropping the combining marks.
+    * Applied to query words only - the index keeps whatever accents the source text had. This
+    * takes accents out of the fuzzy-matching problem entirely (a folded "ménuires" either equals
+    * the indexed "menuires" outright or is a plain accent-free typo away from it) rather than
+    * relying on the edit-distance budget to bridge them, which would otherwise compete with the
+    * budget genuine typos need.
+    */
+  private def foldDiacritics(word: String): String =
+    java.text.Normalizer.normalize(word, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+
   /** Free-text search across the text-bearing fields of every `${indexPrefix}-*` index. Returns
     * the matching document ids (which are the `originalId`s), ranked by relevance then most recent
     * first, capped at `size`. Only ids are fetched back - the API re-reads each media from LMDB.
@@ -181,13 +191,26 @@ case class ElasticOperations(config: SearchServiceConfig) {
     * across every searched field: so every word has to hit *somewhere*, but different words may
     * land in different fields (e.g. "beer" in detectedObjects and "brieuc" in identifiedPersons).
     * A plain multi_match with `operator=and` would instead require all words in the *same* field
-    * and miss that. `fuzziness("AUTO")` (1 edit for 3-5 char words, 2 for longer) + `prefixLength(1)`
-    * give typo / accent / singular-plural tolerance while keeping exact matches scored highest.
-    * Per-field boosts (see `searchFields`) skew relevance within that: `bag` is down-weighted since
-    * it describes the whole album rather than any one photo in it.
+    * and miss that.
+    *
+    * Typo tolerance is deliberately conservative - a captioned photo library turns up unrelated
+    * words that are a couple of letters away from the query far more often than a hand-typed
+    * search box does (e.g. a caption's "sangles" - straps - fuzzy-matching a search for
+    * "sanglier" - wild boar - under the old `fuzziness("AUTO")`, which allowed 2 edits for 6+
+    * char words):
+    *   - `fuzziness(1)` caps every word at a single edit, replacing AUTO's 1-for-short/2-for-long
+    *     scale, so a chance two-letter-away word never surfaces.
+    *   - `prefixLength(2)` requires the first two characters to match exactly before that one edit
+    *     applies, so an elision like "l'une" (which is otherwise just one inserted character away
+    *     from "lune") is rejected at the second character instead of fuzzy-matching a real word.
+    *   - `foldDiacritics` (above) keeps this strict budget from being spent on accents, so
+    *     "ménuires" still finds the (unaccented, geocoded) "menuires" - see its own doc for why.
+    * Exact matches still score highest. Per-field boosts (see `searchFields`) skew relevance
+    * within that: `bag` is down-weighted since it describes the whole album rather than any one
+    * photo in it.
     */
   def searchMediaIds(indexPrefix: String, queryString: String, size: Int): Task[List[String]] = {
-    val words = queryString.trim.split("\\s+").iterator.filter(_.nonEmpty).toList
+    val words = queryString.trim.split("\\s+").iterator.filter(_.nonEmpty).map(foldDiacritics).toList
     val query =
       if (words.isEmpty) matchAllQuery()
       else
@@ -196,8 +219,8 @@ case class ElasticOperations(config: SearchServiceConfig) {
             multiMatchQuery(word)
               .fields(searchFields)
               .lenient(true)
-              .fuzziness("AUTO")
-              .prefixLength(1)
+              .fuzziness(1) //
+              .prefixLength(2)
           )
         )
     val request =
@@ -244,10 +267,12 @@ case class ElasticOperations(config: SearchServiceConfig) {
       response <- responseEffect
                     .mapError(err => List(err))
       failures  = response.result.failures.flatMap(_.error).map(_.toString)
-      _        <- ZIO.log(s"${if (response.isSuccess) "Upserted" else "Failed to upsert"} ${documents.size} into elasticsearch")
       _        <- ZIO.cond(response.isSuccess, (), failures.map(err => Exception(err)))
     } yield ()
-    upsertEffect.timeout(timeout).retry(retrySchedule)
+    upsertEffect
+      .timeout(timeout)
+      .retry(retrySchedule)
+      .logError(s"Couldn't upsert ${documents.size} document into elasticsearch")
   }
 
 }

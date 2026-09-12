@@ -45,6 +45,11 @@ run-media-features-clustering:
 #   (no flag)             only photos the model has never seen
 #   ARGS="--retry"        those, plus the ones it saw and got nothing usable from - use after
 #                         fixing a bad model or prompt; keeps the captions that already worked
+#   ARGS="--recompute-before=TS"  those, plus every photo captioned before TS (successful or not) -
+#                         use after switching model/prompt to redo everything from before the
+#                         change and leave what you've done since alone. TS is a full ISO-8601
+#                         offset date-time; a value copied straight from these logs works as-is
+#                         (e.g. "2026-09-12T19:04:24.825477913+02:00", or "+02" with no minutes)
 #   ARGS="--force"        every selected photo, overwriting captions that already succeeded
 #   ARGS="--starred"      starred photos only
 #   ARGS="--since=2020"   taken on/after that date (YYYY or YYYY-MM-DD)

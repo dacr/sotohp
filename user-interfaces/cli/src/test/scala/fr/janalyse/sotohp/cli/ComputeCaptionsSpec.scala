@@ -18,6 +18,18 @@ object ComputeCaptionsSpec extends ZIOSpecDefault {
         ComputeCaptions.parseSince("1500").isEmpty,      // before photography existed
         ComputeCaptions.parseSince("2020-13-01").isEmpty // invalid month
       )
+    },
+    test("parseInstant accepts a full offset date-time, incl. a two-digit offset with no minutes") {
+      val withMinutes = ComputeCaptions.parseInstant("2026-09-12T19:04:24.825477913+02:00")
+      val noMinutes    = ComputeCaptions.parseInstant("2026-09-12T19:04:24.825477913+02") // as our own logs render it
+      assertTrue(
+        withMinutes.exists(d => d.getYear == 2026 && d.getMonthValue == 9 && d.getDayOfMonth == 12 && d.getHour == 19),
+        noMinutes.exists(d => d.getOffset == ZoneOffset.ofHours(2)),
+        withMinutes == noMinutes,
+        ComputeCaptions.parseInstant("2026-09-12").isEmpty,   // no time component
+        ComputeCaptions.parseInstant("notadate").isEmpty,
+        ComputeCaptions.parseInstant("").isEmpty
+      )
     }
   )
 

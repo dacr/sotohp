@@ -742,10 +742,10 @@ class MediaServiceLive private (
     logic.uninterruptible
   }
 
-  override def originalCaptionSuccessful(originalId: OriginalId): IO[ServiceIssue, Option[Boolean]] = {
+  override def originalCaptionStatus(originalId: OriginalId): IO[ServiceIssue, Option[(successful: Boolean, timestamp: OffsetDateTime)]] = {
     collections.captions
       .fetch(originalId)
-      .map(_.map(_.status.successful))
+      .map(_.map(dao => (successful = dao.status.successful, timestamp = dao.status.timestamp)))
       .mapError(err => ServiceDatabaseIssue(s"Couldn't check caption status : $err"))
   }
 
