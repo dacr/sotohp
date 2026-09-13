@@ -1,11 +1,14 @@
 # SOTOHP [![][sotohpImg]][sotohpLnk]
 
-A software to easily and quickly manage and annotate a huge number of photos.
+A software to easily and quickly manage, annotate and search a huge number of photos.
 
-Why? Just because those past 123 years 😉 we have to deal with almost **140,000 photos** through 2,000 family events.
+Why? Just because those past 123 years 😉 we have to deal with more than :
+- **150,000 photos** 
+- **2,300 family events**
+- **240,000 faces**
+- **310 identified persons**
 
-My favorite features are, of course, the diaporama, but also **people face identification**, **location fix**, ...
-All of this achieved interactively with family members or friends from anywhere.
+My favorite features are, of course, the diaporama, but also **people face identification**, **location fix**, **AI captioning**,...
 
 ![](docs/screenshots/00-diaporama.png)
 
