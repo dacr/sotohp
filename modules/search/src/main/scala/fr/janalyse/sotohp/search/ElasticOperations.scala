@@ -20,6 +20,8 @@ case class ElasticOperations(config: SearchServiceConfig) {
   import com.sksamuel.elastic4s.requests.bulk.BulkResponse
   import com.sksamuel.elastic4s.requests.searches.SearchResponse
   import com.sksamuel.elastic4s.requests.searches.sort.SortOrder.Desc
+  import com.sksamuel.elastic4s.requests.searches.queries.matches.MultiMatchQueryBuilderType
+  import com.sksamuel.elastic4s.requests.searches.queries.Query
   import org.elasticsearch.client.RestClientBuilder.{HttpClientConfigCallback, RequestConfigCallback}
   import org.apache.http.auth.{AuthScope, UsernamePasswordCredentials}
   import org.apache.http.client.config.RequestConfig
@@ -187,11 +189,27 @@ case class ElasticOperations(config: SearchServiceConfig) {
     * the matching document ids (which are the `originalId`s), ranked by relevance then most recent
     * first, capped at `size`. Only ids are fetched back - the API re-reads each media from LMDB.
     *
-    * Each whitespace-separated word becomes its own `must` clause, matched with `best_fields`
-    * across every searched field: so every word has to hit *somewhere*, but different words may
-    * land in different fields (e.g. "beer" in detectedObjects and "brieuc" in identifiedPersons).
-    * A plain multi_match with `operator=and` would instead require all words in the *same* field
-    * and miss that.
+    * Each whitespace-separated word becomes its own `should` clause (`minimumShouldMatch(1)`, so
+    * at least one has to hit), matched with `best_fields` across every searched field: different
+    * words may land in different fields (e.g. "beer" in detectedObjects and "brieuc" in
+    * identifiedPersons) and still count. Because ES sums the score of every clause a document
+    * satisfies, a photo matching *every* word ranks above one matching only some of them, which in
+    * turn still surfaces instead of vanishing - `must` (AND) used to drop the whole search to zero
+    * hits the moment no single photo satisfied every word at once (e.g. "masque japon" found
+    * nothing: the mask photo's caption says "japonais", and separately some Japan-trip photo's
+    * reverse-geocoded country is "Japon", but no one photo had both literal words).
+    *
+    * Each word is actually a `should` of two clauses, not one:
+    *   - a fuzzy `multi_match` for typo tolerance (unchanged from before, see below)
+    *   - for words of 5+ letters, a `phrase_prefix` `multi_match`: does any indexed term *start
+    *     with* this word. A short/root word ("japon") is a prefix of a longer one ("japonais"), not
+    *     a typo of it - no realistic edit-distance budget bridges a 5- to an 8-letter word, but a
+    *     prefix match closes that gap directly, on its own terms. Gated to 5+ letters so short or
+    *     common words don't expand into noise; below that, only the fuzzy clause applies. Note this
+    *     is a pure character-prefix test, with no morphology behind it, so it still occasionally
+    *     pairs up two unrelated words that happen to share their first 5 letters (e.g. "boite" is a
+    *     literal prefix of "boiteux", box vs limping) - a real fix would need a French-stemming
+    *     analyzer (see below), 5 letters is just a cheap way to make the coincidence rarer.
     *
     * Typo tolerance is deliberately conservative - a captioned photo library turns up unrelated
     * words that are a couple of letters away from the query far more often than a hand-typed
@@ -211,18 +229,26 @@ case class ElasticOperations(config: SearchServiceConfig) {
     */
   def searchMediaIds(indexPrefix: String, queryString: String, size: Int): Task[List[String]] = {
     val words = queryString.trim.split("\\s+").iterator.filter(_.nonEmpty).map(foldDiacritics).toList
+
+    def wordQuery(word: String): Query = {
+      val fuzzy = multiMatchQuery(word)
+        .fields(searchFields)
+        .lenient(true)
+        .fuzziness(1) //
+        .prefixLength(2)
+      if (word.length < 5) fuzzy
+      else {
+        val prefix = multiMatchQuery(word)
+          .fields(searchFields)
+          .lenient(true)
+          .matchType(MultiMatchQueryBuilderType.PHRASE_PREFIX)
+        boolQuery().should(fuzzy, prefix).minimumShouldMatch(1)
+      }
+    }
+
     val query =
       if (words.isEmpty) matchAllQuery()
-      else
-        boolQuery().must(
-          words.map(word =>
-            multiMatchQuery(word)
-              .fields(searchFields)
-              .lenient(true)
-              .fuzziness(1) //
-              .prefixLength(2)
-          )
-        )
+      else boolQuery().should(words.map(wordQuery)).minimumShouldMatch(1)
     val request =
       search(s"$indexPrefix-*")
         .query(query)
