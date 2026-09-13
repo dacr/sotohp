@@ -78,8 +78,8 @@ object FaceInference extends CommonsCLI {
   // identified at all, and - the measurement that matters most for a threshold this loose - 2.36% vs 5.08% of faces
   // belonging to someone *not* in the library wrongly given a name. Raising the threshold alone would have tripled
   // that last number; it is the runner-up margin below that pays for the extra reach.
-  val maxMatchDistance        = 0.22
-  val maxIgnoredMatchDistance = 0.20
+  val maxMatchDistance        = 0.25
+  val maxIgnoredMatchDistance = 0.14
 
   // The winning person must be at least this much closer than the *second* person in the candidate list. Lowering it
   // to 0.04 trades some of the safety back for reach (82% identified, 4.76% of strangers misnamed).
@@ -88,6 +88,20 @@ object FaceInference extends CommonsCLI {
   // A person is scored by the mean distance of their closest few faces rather than by their single closest one, so one
   // unusually flattering photo can't win on its own.
   val facesPerPersonConsidered = 3
+
+  // A person with this few confirmed faces gets none of that averaging - the "mean of 3" collapses to "distance to
+  // whichever 1-2 faces they have", so a single so-so photo can keep them out even when they really are the match.
+  // `FaceInferenceEvaluate` measured what happens if such a "bootstrapping" person is judged by a looser threshold and
+  // margin instead: recall for people with exactly 2 confirmed faces nearly doubled (25% -> 43%, still 100% precision
+  // on that slice), while the stranger false-positive rate barely moved (2.51% -> 2.55% over 5374 held-out faces) and
+  // every better-established bucket was untouched - only the *winning* candidate's own face count ever selects these
+  // looser numbers, so someone with plenty of confirmed faces is scored exactly as before whether they win outright
+  // or merely out-margin a bootstrapping runner-up. A person with a single confirmed face is a separate, structurally
+  // unfixable case: with nothing else of them left to compare against, no threshold can recover a match - this only
+  // helps once a person has a second confirmed photo to lean on.
+  val bootstrapMaxFaces          = 2
+  val bootstrapMaxMatchDistance  = 0.32
+  val bootstrapMinRunnerUpMargin = 0.03
 
   // Wide enough that several *people* show up among the candidates - a person with thousands of enrolled faces would
   // otherwise fill the whole list and leave no runner-up to compare against. `ef` matches what the evaluation used, so
@@ -148,7 +162,7 @@ object FaceInference extends CommonsCLI {
     } yield isFreshlyIdentified
   }
 
-  def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
+  def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)], facesPerPerson: Map[PersonId, Int])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     for {
       nearest                                            <- vectorIndex.searchApproximate(faceFeatures.features, k = nearestCandidatesToConsider, ef = Some(candidateSearchEf)).orDieWith(err => new RuntimeException(err.toString))
       // Score each *person* among the candidates rather than each face: whoever owns the closest faces overall, not
@@ -166,11 +180,19 @@ object FaceInference extends CommonsCLI {
         if (isNearIgnoredFace(ignoredFaces)(face, faceFeatures)) None
         else
           rankedPersons.headOption.flatMap { (bestPerson, bestDistance) =>
+            // A person too new to have built up `facesPerPersonConsidered` confirmed faces gets no benefit from the
+            // averaging above - `bestDistance` is really just "distance to their one or two photos" - so they're
+            // judged by a looser threshold/margin instead of the production one, to bootstrap them once they're
+            // clearly the best match. Only the *winner*'s own face count decides this: a well-established person's
+            // numbers are unaffected whether they win outright or merely out-margin a bootstrapping runner-up.
+            val bootstrapping    = facesPerPerson.getOrElse(bestPerson, Int.MaxValue) <= bootstrapMaxFaces
+            val effectiveMax     = if (bootstrapping) bootstrapMaxMatchDistance else maxMatchDistance
+            val effectiveMargin  = if (bootstrapping) bootstrapMinRunnerUpMargin else minRunnerUpMargin
             // Only identify when the runner-up person is clearly further away. Without that gap the face is ambiguous,
             // and abstaining beats guessing - this is what keeps faces of people who aren't in the library at all from
             // being handed a name.
             val runnerUpDistance = rankedPersons.drop(1).headOption.map((_, distance) => distance).getOrElse(Double.MaxValue)
-            Option.when(bestDistance <= maxMatchDistance && (runnerUpDistance - bestDistance) >= minRunnerUpMargin)(bestPerson -> bestDistance)
+            Option.when(bestDistance <= effectiveMax && (runnerUpDistance - bestDistance) >= effectiveMargin)(bestPerson -> bestDistance)
           }
       }
 
@@ -258,6 +280,7 @@ object FaceInference extends CommonsCLI {
       _                                  <- Console.printLine(s"${ignoredFaces.size} ignored faces (used to veto inference)")
       _                                  <- Console.printLine(s"${unknownFaces.size} unknown faces with ${alreadyInferred.size} inferred and unconfirmed")
       knownFaceById                       = knownFaces.map((face, _) => face.faceId -> face).toMap
+      facesPerPerson                      = knownFaces.flatMap((face, _) => face.identifiedPersonId).groupBy(identity).map((personId, occurrences) => personId -> occurrences.size)
       searched                           <- withKnownFacesVectorIndex(knownFaces) { vectorIndex =>
                                               zio.stream.ZStream
                                                 .from(tocheck)
@@ -265,7 +288,7 @@ object FaceInference extends CommonsCLI {
                                                 // .mapZIO((face, faceFeatures) => identifyFace(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
                                                 // One graph walk is single-threaded, so the parallelism has to come from running several
                                                 // faces at once; the LMDB writes they trigger are serialized by the database itself.
-                                                .mapZIOParUnordered(searchParallelism)((face, faceFeatures) => identifyFaceWithConsensus(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
+                                                .mapZIOParUnordered(searchParallelism)((face, faceFeatures) => identifyFaceWithConsensus(vectorIndex, knownFaceById, ignoredFaces, facesPerPerson)(face, faceFeatures))
                                                 .filter(_ == true)
                                                 .runCount
                                                 .timed
