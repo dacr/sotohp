@@ -1,0 +1,17 @@
+# French synonym groups for free-text search query expansion, consumed by FrenchSynonyms and used
+# in ElasticOperations.searchMediaIds. One group per line, comma-separated interchangeable words:
+# searching for any word in a group also searches every other word in that group (through the same
+# fuzzy/prefix treatment as a directly-typed word). Case doesn't matter, but write words already
+# stripped of accents - lookups are diacritics-folded, so an accented entry here would never match.
+#
+# This only ever expands the *query* - the indexed documents are untouched, so editing this file just
+# needs a redeploy, never a reindex. Blank lines and lines starting with # are ignored.
+
+bagnole, voiture, auto, automobile, caisse
+oiseau, piaf
+enfant, gosse, mioche, gamin, gamine
+chien, toutou, cleps
+maison, barraque
+chateau, palais, manoir
+dechet, ordure, poubelle
+photographie, photo, image

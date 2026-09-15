@@ -22,6 +22,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
   import com.sksamuel.elastic4s.requests.searches.sort.SortOrder.Desc
   import com.sksamuel.elastic4s.requests.searches.queries.matches.MultiMatchQueryBuilderType
   import com.sksamuel.elastic4s.requests.searches.queries.Query
+  import com.sksamuel.elastic4s.analysis.{Analysis, CustomAnalyzer}
   import org.elasticsearch.client.RestClientBuilder.{HttpClientConfigCallback, RequestConfigCallback}
   import org.apache.http.auth.{AuthScope, UsernamePasswordCredentials}
   import org.apache.http.client.config.RequestConfig
@@ -101,6 +102,45 @@ case class ElasticOperations(config: SearchServiceConfig) {
   }
 
   // ------------------------------------------------------
+
+  /** Index-wide default analyzer: standard tokenizer + lowercase + `asciifolding` (é/è/ê -> e, ñ ->
+    * n, ...). Applied automatically to every dynamically-mapped text field (no per-field mapping
+    * needed - ES falls back to the index's "default" analyzer for both indexing and search whenever
+    * a field doesn't declare its own), so an accent is folded away on both sides alike: what lands in
+    * the term dictionary is already accent-free, and so is whatever `searchMediaIds` sends as a query
+    * term. That symmetry matters - folding only one side (the query, e.g. via a Scala-side
+    * accent-stripping step applied to the *query* text alone) leaves the other side's accents
+    * intact, and ES's fuzzy `prefixLength` then requires an exact character match over the first N
+    * characters: an accent that falls within that prefix (e.g. "déchets" -> "dé" as the first two
+    * characters) makes the query's folded "de" and the index's accented "dé" mismatch right there,
+    * blocking the match outright regardless of the edit-distance budget - no accent-only fix at the
+    * query layer alone can close that gap. Folding at index time removes the asymmetry entirely: a
+    * search for "déchets" or "dechets" both normalize down to the same "dechets" term as whatever
+    * was indexed from an accented caption, with no edit distance spent on accents at all. `.keyword`
+    * sub-fields (used for anything needing the raw exact value) are untouched - keyword fields don't
+    * go through an analyzer.
+    *
+    * Only takes effect on indices created *after* this was added - existing monthly indices keep
+    * whatever mapping they were dynamically given before. Run `make run-search-reindex` once after
+    * deploying this to rebuild every index (and republish every media) under the new analyzer.
+    */
+  private val defaultAnalysis = Analysis(
+    CustomAnalyzer(name = "default", tokenizer = "standard", tokenFilters = List("lowercase", "asciifolding"))
+  )
+
+  /** Creates `indexName` with [[defaultAnalysis]] if it doesn't already exist - called before
+    * indexing into a name for the first time, since an analyzer can only be set at index-creation
+    * time (changing it on an existing index needs a reindex, which is exactly what
+    * `make run-search-reindex` does). Two callers racing to create the same brand-new index is
+    * harmless: the loser's `resource_already_exists_exception` is treated as success.
+    */
+  private def ensureIndexExists(indexName: String): Task[Unit] =
+    client.execute(createIndex(indexName).analysis(defaultAnalysis)).flatMap { response =>
+      val alreadyExists = response.isError && response.error.`type` == "resource_already_exists_exception"
+      ZIO.cond(response.isSuccess || alreadyExists, (), response.error.asException)
+    }
+
+  // ------------------------------------------------------
   private def streamFromScroll(scrollId: String) = {
     ZStream.paginateChunkZIO(scrollId) { currentScrollId =>
       for {
@@ -175,16 +215,6 @@ case class ElasticOperations(config: SearchServiceConfig) {
     "filePath"          -> 0.1
   )
 
-  /** Strips diacritics (é -> e, ñ -> n, ...) via NFD decomposition + dropping the combining marks.
-    * Applied to query words only - the index keeps whatever accents the source text had. This
-    * takes accents out of the fuzzy-matching problem entirely (a folded "ménuires" either equals
-    * the indexed "menuires" outright or is a plain accent-free typo away from it) rather than
-    * relying on the edit-distance budget to bridge them, which would otherwise compete with the
-    * budget genuine typos need.
-    */
-  private def foldDiacritics(word: String): String =
-    java.text.Normalizer.normalize(word, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
-
   /** Free-text search across the text-bearing fields of every `${indexPrefix}-*` index. Returns
     * the matching document ids (which are the `originalId`s), ranked by relevance then most recent
     * first, capped at `size`. Only ids are fetched back - the API re-reads each media from LMDB.
@@ -221,14 +251,27 @@ case class ElasticOperations(config: SearchServiceConfig) {
     *   - `prefixLength(2)` requires the first two characters to match exactly before that one edit
     *     applies, so an elision like "l'une" (which is otherwise just one inserted character away
     *     from "lune") is rejected at the second character instead of fuzzy-matching a real word.
-    *   - `foldDiacritics` (above) keeps this strict budget from being spent on accents, so
-    *     "ménuires" still finds the (unaccented, geocoded) "menuires" - see its own doc for why.
+    *   - accents never touch this edit-distance budget at all: the index's default analyzer folds
+    *     them away at index time (see `defaultAnalysis`), and multi_match analyzes the query text
+    *     with that same analyzer before comparing, so "ménuires"/"menuires"/"Menuires" all become
+    *     the identical accent-free term on both sides - no fuzziness spent bridging an accent, and
+    *     no risk of an accent landing inside `prefixLength`'s exact-match window and blocking the
+    *     match outright (which is what a query-side-only accent fold used to do here for a word
+    *     like "déchets", accented within its own indexed caption - see `defaultAnalysis` for the
+    *     full story).
     * Exact matches still score highest. Per-field boosts (see `searchFields`) skew relevance
     * within that: `bag` is down-weighted since it describes the whole album rather than any one
     * photo in it.
+    *
+    * Each word is also expanded through `FrenchSynonyms` before the should-clauses above are built
+    * - "bagnole" additionally searches "voiture"/"auto"/"automobile", "piaf" additionally searches
+    * "oiseau", etc (see `synonyms_fr.txt`). This is query-side only: a synonym is just another
+    * `wordQuery` should-clause alongside the original word, so it gets the exact same fuzzy/prefix
+    * treatment and doesn't touch the index - editing the synonyms file needs a redeploy, never a
+    * reindex.
     */
   def searchMediaIds(indexPrefix: String, queryString: String, size: Int): Task[List[String]] = {
-    val words = queryString.trim.split("\\s+").iterator.filter(_.nonEmpty).map(foldDiacritics).toList
+    val words = queryString.trim.split("\\s+").iterator.filter(_.nonEmpty).toList
 
     def wordQuery(word: String): Query = {
       val fuzzy = multiMatchQuery(word)
@@ -246,9 +289,15 @@ case class ElasticOperations(config: SearchServiceConfig) {
       }
     }
 
+    def wordWithSynonymsQuery(word: String): Query = {
+      val synonyms = FrenchSynonyms.expand(word)
+      if (synonyms.isEmpty) wordQuery(word)
+      else boolQuery().should((word :: synonyms.toList).map(wordQuery)).minimumShouldMatch(1)
+    }
+
     val query =
       if (words.isEmpty) matchAllQuery()
-      else boolQuery().should(words.map(wordQuery)).minimumShouldMatch(1)
+      else boolQuery().should(words.map(wordWithSynonymsQuery)).minimumShouldMatch(1)
     val request =
       search(s"$indexPrefix-*")
         .query(query)
@@ -280,15 +329,18 @@ case class ElasticOperations(config: SearchServiceConfig) {
 
   // ------------------------------------------------------
   def upsert[T](indexPrefix: String, documents: Chunk[T])(timestampExtractor: T => OffsetDateTime, idExtractor: T => String)(implicit encoder: JsonEncoder[T]) = {
-    val responseEffect = client.execute {
-      bulk {
-        for { document <- documents } yield {
-          val indexName = indexNameFromTimestamp(indexPrefix, timestampExtractor(document))
-          val id        = idExtractor(document)
-          indexInto(indexName).id(id).doc(document)
+    val indexNames     = documents.map(document => indexNameFromTimestamp(indexPrefix, timestampExtractor(document))).distinct
+    val responseEffect =
+      ZIO.foreachDiscard(indexNames)(ensureIndexExists) *>
+        client.execute {
+          bulk {
+            for { document <- documents } yield {
+              val indexName = indexNameFromTimestamp(indexPrefix, timestampExtractor(document))
+              val id        = idExtractor(document)
+              indexInto(indexName).id(id).doc(document)
+            }
+          }
         }
-      }
-    }
     val upsertEffect   = for {
       response <- responseEffect
                     .mapError(err => List(err))

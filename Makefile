@@ -3,16 +3,16 @@ all: test
 run: run-api
 
 run-api: ui
-	mill --no-server user-interfaces.api.run
+	mill --no-server user-interfaces.api.run --fork-args "-Xms512m -Xmx4g"
 
 openapi-spec:
 	mill --no-server user-interfaces.api.run --just-generate-openapi-specs docs/sotohp-api-docs.json
 
 run-face-inference:
-	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference --fork-args "-Xms512m -Xmx4g"
 
 run-face-inference-evaluate:
-	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInferenceEvaluate
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInferenceEvaluate --fork-args "-Xms512m -Xmx4g"
 
 run-face-fix:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FacesFix
