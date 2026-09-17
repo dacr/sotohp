@@ -39,6 +39,9 @@ function cameraInfo(media: Media): string {
   }
   if (o?.iso) parts.push(`iso${Math.round(o.iso)}`);
   if (o?.focalLength) parts.push(`${Math.round(o.focalLength)}mm`);
+  if (o?.dimension?.width && o?.dimension?.height) {
+    parts.push(`${Math.round((o.dimension.width * o.dimension.height) / 1_000_000)}MP`);
+  }
   if (o?.cameraName) parts.push(o.cameraName);
   return parts.length > 0 ? parts.join(", ") : "-";
 }

@@ -36,6 +36,10 @@ run-compute-media-features:
 run-media-features-clustering:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.MediaFeaturesClustering $(ARGS)
 
+# (Re)build the clusters of visually similar faces. Pass e.g. ARGS="--radius=0.16 --minPts=3".
+run-face-features-clustering:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceFeaturesClustering $(ARGS)
+
 # Backfill image-to-text captions ("auto descriptions"). Needs `ollama serve` + a vision model
 # (`ollama pull qwen3-vl:2b-instruct`) and sotohp.processors.captioner.enabled=true.
 # A vision model costs seconds per photo, so the whole collection is a multi-day run - use the

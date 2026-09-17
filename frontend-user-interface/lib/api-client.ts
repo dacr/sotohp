@@ -9,6 +9,7 @@ export type MediaSelector = components["schemas"]["MediaSelector"];
 export type MediaTimeline = components["schemas"]["MediaTimeline"];
 export type MediaTimelineAnchor = components["schemas"]["MediaTimelineAnchor"];
 export type MediaCluster = components["schemas"]["MediaCluster"];
+export type FaceCluster = components["schemas"]["FaceCluster"];
 export type Original = components["schemas"]["Original"];
 export type Bag = components["schemas"]["Bag"];
 export type BagUpdate = components["schemas"]["BagUpdate"];
@@ -194,6 +195,20 @@ export class ApiClient {
     opts: { signal?: AbortSignal; onItem: (item: Media) => void }
   ): Promise<void> {
     return this.fetchNdjsonStream(`/api/medias/clusters/${clusterId}`, opts.onItem, opts.signal);
+  }
+
+  // Stream every cluster of visually similar faces (largest first). Populated offline by
+  // the FaceFeaturesClustering CLI; empty until that has run. Unlike identified persons, this
+  // is an unsupervised grouping - nobody has named these faces yet.
+  facesClusters(onItem: (item: FaceCluster) => void, signal?: AbortSignal): Promise<void> {
+    return this.fetchNdjsonStream("/api/faces/clusters", onItem, signal);
+  }
+  // Stream the faces belonging to one visual-similarity face cluster.
+  faceCluster(
+    clusterId: number,
+    opts: { signal?: AbortSignal; onItem: (item: DetectedFace) => void }
+  ): Promise<void> {
+    return this.fetchNdjsonStream(`/api/faces/clusters/${clusterId}`, opts.onItem, opts.signal);
   }
 
   // Stream the medias most visually similar to `fromKey`, best match first, the reference

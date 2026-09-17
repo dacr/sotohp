@@ -14,4 +14,4 @@ chien, toutou, cleps
 maison, barraque
 chateau, palais, manoir
 dechet, ordure, poubelle
-photographie, photo, image
+photographie, photo, image, shooting

@@ -215,6 +215,23 @@ trait MediaService {
   def mediaClusterMembers(clusterId: Int): Stream[ServiceStreamIssue, MediaTuple]
 
   // -------------------------------------------------------------------------------------------------------------------
+  // Visual-similarity face clusters (computed offline by the `FaceFeaturesClustering` CLI).
+
+  /** Replaces every face cluster assignment: clears the cluster collection then writes the
+    * given `(faceId, clusterId)` pairs. `clusterId < 0` marks an unclustered face.
+    */
+  def faceClustersReplace(assignments: Iterable[(FaceId, Int)]): IO[ServiceIssue, Unit]
+
+  /** The cluster a face belongs to, if any. */
+  def faceClusterOf(faceId: FaceId): IO[ServiceIssue, Option[Int]]
+
+  /** Every real face cluster as `(clusterId, size)`, largest first (unclustered faces excluded). */
+  def faceClusterList(): IO[ServiceIssue, List[(Int, Long)]]
+
+  /** The faces in one cluster. */
+  def faceClusterMembers(clusterId: Int): Stream[ServiceStreamIssue, Face]
+
+  // -------------------------------------------------------------------------------------------------------------------
   def personList(): Stream[ServiceStreamIssue, Person]
   def personCount(): IO[ServiceIssue, Long]
   def personGet(personId: PersonId): IO[ServiceIssue, Option[Person]]
@@ -460,6 +477,11 @@ object MediaService {
   def mediaClusterOf(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Int]]                   = ZIO.serviceWithZIO(_.mediaClusterOf(originalId))
   def mediaClusterList(): ZIO[MediaService, ServiceIssue, List[(Int, Long)]]                                 = ZIO.serviceWithZIO(_.mediaClusterList())
   def mediaClusterMembers(clusterId: Int): ZStream[MediaService, ServiceStreamIssue, MediaTuple]             = ZStream.serviceWithStream(_.mediaClusterMembers(clusterId))
+
+  def faceClustersReplace(assignments: Iterable[(FaceId, Int)]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.faceClustersReplace(assignments))
+  def faceClusterOf(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[Int]]                       = ZIO.serviceWithZIO(_.faceClusterOf(faceId))
+  def faceClusterList(): ZIO[MediaService, ServiceIssue, List[(Int, Long)]]                             = ZIO.serviceWithZIO(_.faceClusterList())
+  def faceClusterMembers(clusterId: Int): ZStream[MediaService, ServiceStreamIssue, Face]               = ZStream.serviceWithStream(_.faceClusterMembers(clusterId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def personList(): ZStream[MediaService, ServiceStreamIssue, Person]                     = ZStream.serviceWithStream(_.personList())

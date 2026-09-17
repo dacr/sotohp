@@ -156,6 +156,9 @@ main { flex: 1; position: relative; }
 
 .cluster-cover { background: #f3f4f6; }
 .cluster-badge { position: absolute; right: 4px; top: 4px; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 10px; z-index: 2; }
+/* Face clusters only: every face in the cluster identified (green) vs. still some left (orange). */
+.cluster-badge.all-confirmed { background: rgba(22,163,74,0.85); }
+.cluster-badge.pending { background: rgba(249,115,22,0.85); }
 
 /* Hover edit/delete buttons on list tiles (events, etc.) */
 .ev-edit-btn { position: absolute; right: 8px; bottom: 8px; background: rgba(37,99,235,0.92); color: #fff; border: none; border-radius: 16px; padding: 4px 8px; font-size: 12px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity 160ms ease, transform 160ms ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
@@ -352,7 +355,7 @@ main { flex: 1; position: relative; }
 .face-tile:hover .ft-view, .face-tile:focus-within .ft-view { opacity: 1; transform: translateY(0); }
 .face-tile .ft-edit:hover { background: #1d4ed8; }
 .face-tile .ft-view:hover { background: #1d4ed8; }
-.face-badge.inferred { position: absolute; left: 6px; bottom: 6px; background: rgba(245,158,11,0.92); color: #111827; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.face-badge.inferred { position: absolute; left: 6px; bottom: 6px; background: rgba(245,158,11,0.92); color: #111827; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; max-width: calc(100% - 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .face-badge.inferred:hover, .face-badge.inferred:focus { background: rgba(245,158,11,1); }
 .face-tile .ft-ignore { position: absolute; left: 6px; top: 6px; background: rgba(107,114,128,0.92); color: #fff; border: none; border-radius: 14px; padding: 2px 6px; font-size: 11px; line-height: 1; display: inline-flex; align-items: center; cursor: pointer; opacity: 0; transform: translateY(2px); transition: opacity 150ms ease, transform 150ms ease; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .face-tile:hover .ft-ignore, .face-tile:focus-within .ft-ignore { opacity: 1; transform: translateY(0); }
@@ -360,6 +363,10 @@ main { flex: 1; position: relative; }
 .face-tile.face-ignored .face-img { opacity: 0.45; filter: grayscale(0.6); }
 .face-badge.restore { position: absolute; right: 6px; bottom: 6px; background: rgba(75,85,99,0.95); color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .face-badge.restore:hover, .face-badge.restore:focus { background: rgba(55,65,81,1); }
+/* Read-only badges (face clusters view: a name already confirmed, or a dismissed inference) - same
+   footprint as .face-badge.inferred/.restore but not clickable. */
+.face-badge.identified { position: absolute; left: 6px; bottom: 6px; background: rgba(22,163,74,0.92); color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; max-width: calc(100% - 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+.face-badge.ignored { position: absolute; left: 6px; top: 6px; background: rgba(107,114,128,0.85); color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .person-faces-view.size-small .face-tile .ft-ignore { font-size: 10px; padding: 2px 5px; left: 4px; top: 4px; }
 .person-faces-view.size-small .face-badge.restore { font-size: 10px; padding: 2px 6px; right: 4px; bottom: 4px; }
 .person-faces-view .ignore-all, .person-faces-view .ignore-selected { border: 1px solid #4b5563; background: #6b7280; color: #fff; border-radius: 6px; padding: 6px 10px; cursor: pointer; }

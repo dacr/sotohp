@@ -2274,6 +2274,147 @@
         ]
       }
     },
+    "/api/faces/clusters" : {
+      "get" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Stream every cluster of visually similar faces, largest first",
+        "operationId" : "List face clusters",
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one FaceCluster JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FaceCluster"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
+    "/api/faces/clusters/{clusterId}" : {
+      "get" : {
+        "tags" : [
+          "Face"
+        ],
+        "summary" : "Stream the faces belonging to one visual-similarity face cluster",
+        "operationId" : "List faces in a cluster",
+        "parameters" : [
+          {
+            "name" : "clusterId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "NDJSON (one DetectedFace JSON object per line)",
+            "content" : {
+              "application/x-ndjson" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DetectedFace"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: path parameter clusterId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
+      }
+    },
     "/api/persons" : {
       "get" : {
         "tags" : [
@@ -5268,6 +5409,32 @@
           },
           "box" : {
             "$ref" : "#/components/schemas/BoundingBox"
+          }
+        }
+      },
+      "FaceCluster" : {
+        "title" : "FaceCluster",
+        "type" : "object",
+        "required" : [
+          "clusterId",
+          "size",
+          "confirmedCount"
+        ],
+        "properties" : {
+          "clusterId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "coverFaceId" : {
+            "type" : "string"
+          },
+          "confirmedCount" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },

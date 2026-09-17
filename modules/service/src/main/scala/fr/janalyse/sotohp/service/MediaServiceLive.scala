@@ -877,6 +877,44 @@ class MediaServiceLive private (
   }
 
   // -------------------------------------------------------------------------------------------------------------------
+  // Visual-similarity face clusters - rebuilt wholesale by the `FaceFeaturesClustering` CLI.
+
+  override def faceClustersReplace(assignments: Iterable[(FaceId, Int)]): IO[ServiceIssue, Unit] = {
+    val logic = for {
+      _ <- collections.faceClusters.clear()
+      _ <- ZIO.foreachDiscard(assignments) { (faceId, clusterId) =>
+             collections.faceClusters.upsertOverwrite(faceId, DaoFaceCluster(faceId, clusterId))
+           }
+    } yield ()
+    logic
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't replace face clusters : $err"))
+      .uninterruptible
+  }
+
+  override def faceClusterOf(faceId: FaceId): IO[ServiceIssue, Option[Int]] = {
+    collections.faceClusters
+      .fetch(faceId)
+      .map(_.map(_.clusterId))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch face cluster : $err"))
+  }
+
+  override def faceClusterList(): IO[ServiceIssue, List[(Int, Long)]] = {
+    collections.faceClusters
+      .stream()
+      .runFold(Map.empty[Int, Long])((acc, cluster) => acc.updated(cluster.clusterId, acc.getOrElse(cluster.clusterId, 0L) + 1L))
+      .map(_.toList.filter((clusterId, _) => clusterId >= 0).sortBy((_, size) => -size))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't list face clusters : $err"))
+  }
+
+  override def faceClusterMembers(clusterId: Int): Stream[ServiceStreamIssue, Face] = {
+    collections.faceIdByClusterId
+      .indexed(clusterId)
+      .mapZIO((_, faceId) => faceGet(faceId))
+      .collect { case Some(face) => face }
+      .mapError(err => ServiceStreamInternalIssue(s"Couldn't collect face cluster $clusterId members : $err"))
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------
 
   def personList(): Stream[ServiceStreamIssue, Person] = {
     collections.persons
@@ -2339,6 +2377,7 @@ object MediaServiceLive {
   private val mediaFeaturesCollectionName        = "mediaFeatures"
   private val originalMediaFeaturesCollectionName = "originalMediaFeatures"
   private val mediaClustersCollectionName        = "mediaClusters"
+  private val faceClustersCollectionName         = "faceClusters"
   private val captionsCollectionName             = "captions"
   private val objectsCollectionName              = "objects"
   private val miniaturesCollectionName           = "miniatures"
@@ -2363,6 +2402,7 @@ object MediaServiceLive {
     mediaFeaturesCollectionName,
     originalMediaFeaturesCollectionName,
     mediaClustersCollectionName,
+    faceClustersCollectionName,
     captionsCollectionName,
     objectsCollectionName,
     miniaturesCollectionName,
@@ -2381,6 +2421,7 @@ object MediaServiceLive {
     indexOriginalIdByStoreId   <- lmdb.indexCreate[StoreId, OriginalId]("originalIdByStoreId", false)
     indexOriginalIdByLocation  <- lmdb.indexCreate[GEOTools.Location, OriginalId]("originalIdByLocation", false)
     indexOriginalIdByClusterId <- lmdb.indexCreate[Int, OriginalId]("originalIdByClusterId", false)
+    indexFaceIdByClusterId     <- lmdb.indexCreate[Int, FaceId]("faceIdByClusterId", false)
 
     // ----------------------------------------------------------------------------------------
     // COLLECTIONS
@@ -2446,6 +2487,14 @@ object MediaServiceLive {
                                             to = IdxKey.of(IdxKey.primaryKey)
                                           )
                                         )
+    collectionFaceClusters         <- lmdb
+                                        .collectionCreate[FaceId, DaoFaceCluster](faceClustersCollectionName, false)
+                                        .flatMap(
+                                          _.withDeclaredIndex(indexFaceIdByClusterId)(
+                                            from = IdxKey.of(IdxKey.field("clusterId")((_, cluster: DaoFaceCluster) => cluster.clusterId)),
+                                            to = IdxKey.of(IdxKey.primaryKey)
+                                          )
+                                        )
     collectionCaptions             <- lmdb.collectionCreate[OriginalId, DaoOriginalCaption](captionsCollectionName, false)
     collectionObjects              <- lmdb.collectionCreate[OriginalId, DaoOriginalDetectedObjects](objectsCollectionName, false)
     collectionMiniatures           <- lmdb.collectionCreate[OriginalId, DaoOriginalMiniatures](miniaturesCollectionName, false)
@@ -2461,6 +2510,7 @@ object MediaServiceLive {
                                         originalIdByStoreId = indexOriginalIdByStoreId,
                                         originalIdByLocation = indexOriginalIdByLocation,
                                         originalIdByClusterId = indexOriginalIdByClusterId,
+                                        faceIdByClusterId = indexFaceIdByClusterId,
                                         originals = collectionOriginals,
                                         states = collectionStates,
                                         bags = collectionBags,
@@ -2476,6 +2526,7 @@ object MediaServiceLive {
                                         mediaFeatures = collectionMediaFeatures,
                                         originalMediaFeatures = collectionOriginalMediaFeatures,
                                         mediaClusters = collectionMediaClusters,
+                                        faceClusters = collectionFaceClusters,
                                         captions = collectionCaptions,
                                         objects = collectionObjects,
                                         miniatures = collectionMiniatures,

@@ -1481,6 +1481,80 @@ object ApiApp extends ZIOAppDefault {
 
   // -------------------------------------------------------------------------------------------------------------------
 
+  // Visual-similarity face clusters, computed offline by the `FaceFeaturesClustering` CLI.
+
+  def faceClustersListLogic: ZStream[MediaService, Throwable, ApiFaceCluster] = {
+    ZStream
+      .fromIterableZIO(MediaService.faceClusterList())
+      .mapZIO { (clusterId, size) =>
+        MediaService
+          .faceClusterMembers(clusterId)
+          .runFold((Option.empty[FaceId], 0L)) { case ((cover, confirmed), face) =>
+            (cover.orElse(Some(face.faceId)), if (face.identifiedPersonId.isDefined) confirmed + 1 else confirmed)
+          }
+          .map { case (cover, confirmed) =>
+            ApiFaceCluster(clusterId = clusterId, size = size, coverFaceId = cover, confirmedCount = confirmed)
+          }
+      }
+      .mapError(err => ApiInternalError("Couldn't list face clusters"))
+  }
+
+  val faceClustersListEndpoint =
+    secureFaceEndpoint(true)
+      .name("List face clusters")
+      .summary("Stream every cluster of visually similar faces, largest first")
+      .in("clusters")
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiFaceCluster.apiFaceClusterSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one FaceCluster JSON object per line)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        _ =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = faceClustersListLogic
+                           .map(writeToString(_))
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  def faceClusterMembersLogic(clusterId: Int): ZStream[MediaService, Throwable, ApiDetectedFace] = {
+    MediaService
+      .faceClusterMembers(clusterId)
+      .map(face => face.transformInto[ApiDetectedFace])
+      .mapError(err => ApiInternalError("Couldn't stream cluster faces"))
+  }
+
+  val faceClusterGetEndpoint =
+    secureFaceEndpoint(true)
+      .name("List faces in a cluster")
+      .summary("Stream the faces belonging to one visual-similarity face cluster")
+      .in("clusters")
+      .in(path[Int]("clusterId"))
+      .get
+      .out(
+        streamBody(ZioStreams)(ApiDetectedFace.apiDetectedFaceSchema, NdJson, Some(StandardCharsets.UTF_8))
+          .description("NDJSON (one DetectedFace JSON object per line)")
+      )
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv](user =>
+        clusterId =>
+          for {
+            ms        <- ZIO.service[MediaService]
+            byteStream = faceClusterMembersLogic(clusterId)
+                           .map(writeToString(_))
+                           .intersperse("\n")
+                           .via(ZPipeline.utf8Encode)
+                           .provideEnvironment(ZEnvironment(ms))
+          } yield byteStream
+      )
+
+  // -------------------------------------------------------------------------------------------------------------------
+
   val adminSynchronizeEndpoint =
     secureAdminEndpoint
       .name("Synchronize start")
@@ -2222,6 +2296,8 @@ object ApiApp extends ZIOAppDefault {
     faceDeletePersonEndpoint,
     faceIgnoreSetEndpoint,
     faceIgnoreDeleteEndpoint,
+    faceClustersListEndpoint,
+    faceClusterGetEndpoint,
     // -------------------------
     personListEndpoint,
     personCreateEndpoint,

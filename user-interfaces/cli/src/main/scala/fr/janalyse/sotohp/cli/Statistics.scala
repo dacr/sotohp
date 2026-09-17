@@ -158,7 +158,7 @@ object Statistics extends CommonsCLI {
     }
   }
 
-  private def reportStats(stats: Statistics) = {
+  private def reportStats(stats: Statistics, personCount: Long) = {
     import stats.*
     val duplicatedCount = stats.duplicated.count((_, count) => count > 1)
     val bagCount        = bagsCount.count((k, v) => k.isDefined)
@@ -182,6 +182,7 @@ object Statistics extends CommonsCLI {
       _ <- Console.printLine(s"${GREEN}- $digitalShootingMonths months of digital/numerized photography ($digitalShootingYears years)$RESET")
       _ <- Console.printLine(s"${GREEN}  - ${oldestDigitalShootingDate.get} -> ${newestDigitalShootingDate.get}$RESET").when(oldestDigitalShootingDate.isDefined && newestDigitalShootingDate.isDefined)
       _ <- Console.printLine(s"${GREEN}- $facesCount people faces$RESET")
+      _ <- Console.printLine(s"${GREEN}- $personCount identified persons$RESET")
       _ <- Console.printLine(s"${GREEN}- $geoLocalizedCount geolocalized photos $YELLOW(${count - geoLocalizedCount - deductedGeoLocalizedCount} without GPS infos)$RESET")
       _ <- Console.printLine(s"${YELLOW}  - ${deductedGeoLocalizedCount} deducted GPS info from time/space nearby photos$RESET")
       _ <- Console.printLine(s"${YELLOW}- $userFixedLocationCount user-fixed GPS locations (original GPS overridden by the user)$RESET").when(userFixedLocationCount > 0)
@@ -209,9 +210,11 @@ object Statistics extends CommonsCLI {
 
   val logic = ZIO.logSpan("statistics") {
     val mediaStream = MediaService.mediaList()
-    mediaStream
-      .runFoldZIO(Statistics())(updateStats)
-      .flatMap(reportStats)
-      .flatMap(_ => ZIO.logInfo("reported"))
+    for {
+      stats       <- mediaStream.runFoldZIO(Statistics())(updateStats)
+      personCount <- MediaService.personCount()
+      _           <- reportStats(stats, personCount)
+      _           <- ZIO.logInfo("reported")
+    } yield ()
   }
 }
