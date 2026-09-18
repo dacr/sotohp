@@ -22,7 +22,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
   import com.sksamuel.elastic4s.requests.searches.sort.SortOrder.Desc
   import com.sksamuel.elastic4s.requests.searches.queries.matches.MultiMatchQueryBuilderType
   import com.sksamuel.elastic4s.requests.searches.queries.Query
-  import com.sksamuel.elastic4s.analysis.{Analysis, CustomAnalyzer}
+  import com.sksamuel.elastic4s.analysis.{Analysis, CustomAnalyzer, ElisionTokenFilter}
   import org.elasticsearch.client.RestClientBuilder.{HttpClientConfigCallback, RequestConfigCallback}
   import org.apache.http.auth.{AuthScope, UsernamePasswordCredentials}
   import org.apache.http.client.config.RequestConfig
@@ -103,29 +103,46 @@ case class ElasticOperations(config: SearchServiceConfig) {
 
   // ------------------------------------------------------
 
-  /** Index-wide default analyzer: standard tokenizer + lowercase + `asciifolding` (é/è/ê -> e, ñ ->
-    * n, ...). Applied automatically to every dynamically-mapped text field (no per-field mapping
-    * needed - ES falls back to the index's "default" analyzer for both indexing and search whenever
-    * a field doesn't declare its own), so an accent is folded away on both sides alike: what lands in
-    * the term dictionary is already accent-free, and so is whatever `searchMediaIds` sends as a query
-    * term. That symmetry matters - folding only one side (the query, e.g. via a Scala-side
-    * accent-stripping step applied to the *query* text alone) leaves the other side's accents
-    * intact, and ES's fuzzy `prefixLength` then requires an exact character match over the first N
-    * characters: an accent that falls within that prefix (e.g. "déchets" -> "dé" as the first two
-    * characters) makes the query's folded "de" and the index's accented "dé" mismatch right there,
-    * blocking the match outright regardless of the edit-distance budget - no accent-only fix at the
-    * query layer alone can close that gap. Folding at index time removes the asymmetry entirely: a
-    * search for "déchets" or "dechets" both normalize down to the same "dechets" term as whatever
-    * was indexed from an accented caption, with no edit distance spent on accents at all. `.keyword`
-    * sub-fields (used for anything needing the raw exact value) are untouched - keyword fields don't
-    * go through an analyzer.
+  /** Strips a leading French elision - "d'", "l'", "j'", "qu'", ... - off whatever word follows it,
+    * so "d'oie" indexes as the token "oie" instead of the two glued together. Without this, the
+    * standard tokenizer keeps an apostrophe-joined pair as a single token (per Unicode word-break
+    * rules, an apostrophe between two letters doesn't split them), so "tête d'oie" indexes as the
+    * two tokens "tête" and "d'oie" - never bare "oie" - and a search for "oie" alone (3 letters, too
+    * short for the `phrase_prefix` clause in `searchMediaIds`, and far more than 1 edit away from
+    * "d'oie" for the fuzzy clause) finds nothing, even though "tête oie" without the apostrophe
+    * indexes "oie" on its own and matches fine. `articlesCase(true)` matches the article
+    * case-insensitively since this filter runs *before* `lowercase` below (mirrors the order Elastic
+    * uses in its own built-in "french" analyzer). The article list is that same built-in one.
+    */
+  private val frenchElisionFilter = ElisionTokenFilter(name = "french_elision")
+    .articles("l", "m", "t", "qu", "n", "s", "j", "d", "c", "jusqu", "lorsqu", "puisqu", "quoiqu")
+    .articlesCase(true)
+
+  /** Index-wide default analyzer: standard tokenizer + elision-stripping + lowercase + `asciifolding`
+    * (é/è/ê -> e, ñ -> n, ...). Applied automatically to every dynamically-mapped text field (no
+    * per-field mapping needed - ES falls back to the index's "default" analyzer for both indexing and
+    * search whenever a field doesn't declare its own), so both sides of a match are normalized alike:
+    * an elision is stripped the same way on both, and so is an accent. That symmetry matters -
+    * normalizing only one side (e.g. a Scala-side accent-stripping step applied to the *query* text
+    * alone, as this used to work) leaves the other side untouched, and ES's fuzzy `prefixLength` then
+    * requires an exact character match over the first N characters: an accent that falls within that
+    * prefix (e.g. "déchets" -> "dé" as the first two characters) makes the query's folded "de" and
+    * the index's accented "dé" mismatch right there, blocking the match outright regardless of the
+    * edit-distance budget - no one-sided fix can close that gap. Normalizing at index time removes
+    * the asymmetry entirely: a search for "déchets"/"dechets", or "oie" against a caption saying
+    * "d'oie", both normalize down to the same term on both sides, with no edit distance spent
+    * bridging either. `.keyword` sub-fields (used for anything needing the raw exact value) are
+    * untouched - keyword fields don't go through an analyzer.
     *
     * Only takes effect on indices created *after* this was added - existing monthly indices keep
     * whatever mapping they were dynamically given before. Run `make run-search-reindex` once after
     * deploying this to rebuild every index (and republish every media) under the new analyzer.
     */
   private val defaultAnalysis = Analysis(
-    CustomAnalyzer(name = "default", tokenizer = "standard", tokenFilters = List("lowercase", "asciifolding"))
+    analyzers = List(
+      CustomAnalyzer(name = "default", tokenizer = "standard", tokenFilters = List("french_elision", "lowercase", "asciifolding"))
+    ),
+    tokenFilters = List(frenchElisionFilter)
   )
 
   /** Creates `indexName` with [[defaultAnalysis]] if it doesn't already exist - called before
@@ -200,7 +217,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
   // weighted rather than dropped: it should still help find things, just not dominate the score.
   private val searchFields: Map[String, Double] = Map(
     "description"       -> 1.0,
-    "autoDescription"   -> 1.0,
+    "autoDescription"   -> 0.9,
     "keywords"          -> 0.7,
     "bag"               -> 0.3,
     "classifications"   -> 0.8,
@@ -249,16 +266,19 @@ case class ElasticOperations(config: SearchServiceConfig) {
     *   - `fuzziness(1)` caps every word at a single edit, replacing AUTO's 1-for-short/2-for-long
     *     scale, so a chance two-letter-away word never surfaces.
     *   - `prefixLength(2)` requires the first two characters to match exactly before that one edit
-    *     applies, so an elision like "l'une" (which is otherwise just one inserted character away
-    *     from "lune") is rejected at the second character instead of fuzzy-matching a real word.
-    *   - accents never touch this edit-distance budget at all: the index's default analyzer folds
-    *     them away at index time (see `defaultAnalysis`), and multi_match analyzes the query text
-    *     with that same analyzer before comparing, so "ménuires"/"menuires"/"Menuires" all become
-    *     the identical accent-free term on both sides - no fuzziness spent bridging an accent, and
-    *     no risk of an accent landing inside `prefixLength`'s exact-match window and blocking the
-    *     match outright (which is what a query-side-only accent fold used to do here for a word
-    *     like "déchets", accented within its own indexed caption - see `defaultAnalysis` for the
-    *     full story).
+    *     applies, guarding against a word that only coincidentally lands within one edit of an
+    *     unrelated one.
+    *   - neither elisions nor accents touch this edit-distance budget at all: the index's default
+    *     analyzer strips a leading "l'"/"d'"/"qu'"/... and folds accents away, both at index time and
+    *     on the query (`multi_match` analyzes the query text with that same field analyzer before
+    *     comparing) - see `defaultAnalysis`. So a query "l'une" is compared as "une", not literally
+    *     "l'une" (no accidental one-edit-away match onto an unrelated "lune"), and "ménuires" /
+    *     "menuires" / "Menuires" all become the identical accent-free term on both sides - no
+    *     fuzziness spent bridging either, and no risk of an elision or accent landing inside
+    *     `prefixLength`'s exact-match window and blocking the match outright (which is what a
+    *     query-side-only accent fold used to do here for a word like "déchets", accented within its
+    *     own indexed caption, or what an elision fused onto the next word used to do for "d'oie" -
+    *     see `defaultAnalysis` for the full story).
     * Exact matches still score highest. Per-field boosts (see `searchFields`) skew relevance
     * within that: `bag` is down-weighted since it describes the whole album rather than any one
     * photo in it.

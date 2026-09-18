@@ -19,7 +19,7 @@ object FrenchSynonymsSpec extends ZIOSpecDefault {
         assertTrue(FrenchSynonyms.expand("gosse") == Set("enfant", "mioche", "gamin", "gamine"))
       },
       test("an unknown word has no synonyms") {
-        assertTrue(FrenchSynonyms.expand("photographie").isEmpty)
+        assertTrue(FrenchSynonyms.expand("elephant").isEmpty)
       }
     )
 }
