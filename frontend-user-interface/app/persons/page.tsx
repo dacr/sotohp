@@ -122,7 +122,8 @@ function PersonsList({ onOpenPerson, onOpenInferred }: { onOpenPerson: (id: stri
       description: description.trim() || undefined,
     };
     try {
-      if (modal && typeof modal === "object") await updatePerson.mutateAsync({ id: modal.edit.id, body });
+      // person update fully replaces the record, so keep the currently chosen face
+      if (modal && typeof modal === "object") await updatePerson.mutateAsync({ id: modal.edit.id, body: { ...body, chosenFaceId: modal.edit.chosenFaceId ?? undefined } });
       else await createPerson.mutateAsync(body);
     } catch {
       showError(modal && typeof modal === "object" ? "Failed to update person" : "Failed to create person");
@@ -313,6 +314,8 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
           birthDate: editBirthDate ? `${editBirthDate}T00:00:00Z` : undefined,
           email: editEmail.trim() || undefined,
           description: editDescription.trim() || undefined,
+          // person update fully replaces the record, so keep the currently chosen face
+          chosenFaceId: person.chosenFaceId ?? undefined,
         },
       });
     } catch {
