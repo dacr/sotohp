@@ -192,6 +192,7 @@ function PersonsList({ onOpenPerson, onOpenInferred }: { onOpenPerson: (id: stri
               <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} />
               <label className="form-label">Description</label>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+              {modal !== "create" && <ChosenFaceInfo person={modal.edit} />}
             </div>
           </div>
         </Modal>
@@ -208,6 +209,26 @@ function PersonThumb({ person }: { person: Person }) {
     <div className="list-thumb list-thumb-sm">
       <img src={api.faceImageUrl(person.chosenFaceId, faceIdImageVersion(person.chosenFaceId))} alt={personLabel(person)} loading="lazy" decoding="async" />
     </div>
+  );
+}
+
+function ChosenFaceInfo({ person }: { person: Person }) {
+  const { api } = useAuth();
+  const faceIdImageVersion = useFaceIdImageVersion();
+  return (
+    <>
+      <label className="form-label">Chosen face</label>
+      {person.chosenFaceId ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="list-thumb list-thumb-sm">
+            <img src={api.faceImageUrl(person.chosenFaceId, faceIdImageVersion(person.chosenFaceId))} alt={personLabel(person)} loading="lazy" decoding="async" />
+          </div>
+          <code style={{ fontSize: 11, wordBreak: "break-all" }}>{person.chosenFaceId}</code>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: "#555" }}>None</div>
+      )}
+    </>
   );
 }
 
@@ -476,6 +497,7 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
               <input type="text" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
               <label className="form-label">Description</label>
               <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+              <ChosenFaceInfo person={person} />
             </div>
           </div>
         </Modal>
