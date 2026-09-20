@@ -61,7 +61,10 @@ object FaceInference extends CommonsCLI {
                              dimension  = original.flatMap(_.dimension)
                              faceWidth  = dimension.map(_.width.value * detectedFace.box.width.value)
                              faceHeight = dimension.map(_.height.value * detectedFace.box.height.value)
-                             enoughBig  = dimension.isEmpty || (faceWidth.getOrElse(0d) > 70d && faceHeight.getOrElse(0d) > 70d)
+                             enoughBig  = dimension.isEmpty || (
+                                            (faceWidth.getOrElse(0d) != 0d && faceHeight.getOrElse(0d) != 0d) &&
+                                              (faceWidth.getOrElse(0d) >= minimumFaceSize || faceHeight.getOrElse(0d) >= minimumFaceSize)
+                                          )
                              tuple     <- MediaService
                                             .faceFeaturesGet(detectedFace.faceId)
                                             .map(feature => feature.map(detectedFace -> _))
@@ -69,6 +72,9 @@ object FaceInference extends CommonsCLI {
                          }
     } yield featureByFace.flatten
   }
+
+  // do not process very low resolution faces
+  val minimumFaceSize = 64d
 
   // Maximum cosine distance below which two faces are considered close enough to be the same person.
   //
@@ -162,7 +168,10 @@ object FaceInference extends CommonsCLI {
     } yield isFreshlyIdentified
   }
 
-  def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)], facesPerPerson: Map[PersonId, Int])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
+  def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)], facesPerPerson: Map[PersonId, Int])(
+    face: Face,
+    faceFeatures: FaceFeatures
+  ): ZIO[MediaService, Exception, Boolean] = {
     for {
       nearest                                            <- vectorIndex.searchApproximate(faceFeatures.features, k = nearestCandidatesToConsider, ef = Some(candidateSearchEf)).orDieWith(err => new RuntimeException(err.toString))
       // Score each *person* among the candidates rather than each face: whoever owns the closest faces overall, not
