@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.model.{FaceId, PersonId, *}
 import fr.janalyse.sotohp.processor.{
   CaptionIssue,
   CaptionProcessor,
+  CaptionServiceUnavailableIssue,
   ClassificationIssue,
   ClassificationProcessor,
   FaceFeaturesIssue,
@@ -731,9 +732,13 @@ class MediaServiceLive private (
                      .mapError(err => ServiceInternalIssue(s"Unable to get caption processor : $err"))
       computed  <- processor
                      .caption(original)
-                     .mapError(err => ServiceInternalIssue(s"Unable to caption original : $err"))
+                     .mapError {
+                       case err: CaptionServiceUnavailableIssue => ServiceUnavailableIssue(s"Captioner unavailable : ${err.getMessage}")
+                       case err                                 => ServiceInternalIssue(s"Unable to caption original : $err")
+                     }
       // When the captioner is disabled we do not persist the (empty) result, so the step keeps
       // retrying for free once it is turned on. A real run - success or model failure - is stored.
+      // An unreachable server fails above, so the previously stored record is left untouched.
       _         <- collections.captions
                      .upsertOverwrite(originalId, computed.into[DaoOriginalCaption].transform)
                      .mapError(err => ServiceDatabaseIssue(s"Unable to store computed caption : $err"))

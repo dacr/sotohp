@@ -5,6 +5,8 @@ sealed trait ServiceIssue extends Exception
 case class ServiceUserIssue(message: String)     extends Exception(message) with ServiceIssue
 case class ServiceDatabaseIssue(message: String) extends Exception(message) with ServiceIssue
 case class ServiceInternalIssue(message: String) extends Exception(message) with ServiceIssue
+// An external dependency (e.g. the Ollama captioner) could not be reached; nothing was recorded.
+case class ServiceUnavailableIssue(message: String) extends Exception(message) with ServiceIssue
 
 sealed trait ServiceStreamIssue extends Exception
 

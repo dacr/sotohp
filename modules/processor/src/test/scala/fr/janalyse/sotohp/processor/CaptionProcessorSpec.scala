@@ -44,6 +44,15 @@ object CaptionProcessorSpec extends BaseSpecDefault with TestDatasets {
         result.original.id == original.id
       )
     },
+    test("an unreachable server fails the call instead of yielding an unsuccessful caption") {
+      val processor = processorWith(enabled = true) // 127.0.0.1:1 refuses connections
+      for {
+        original <- ZIO.from(originalFromFile(datasetClassesFakeStore, datasetClassesFileLakeForest))
+        result   <- processor.caption(original).exit
+      } yield assertTrue(
+        result.causeOption.flatMap(_.failureOption).exists(_.isInstanceOf[CaptionServiceUnavailableIssue])
+      )
+    },
     test("allocate reads the ambient configuration") {
       for {
         configured <- CaptionerConfig.config

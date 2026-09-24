@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.cli
 
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.{SearchService, SearchServiceConfig}
-import fr.janalyse.sotohp.service.{MediaService, MediaTuple}
+import fr.janalyse.sotohp.service.{MediaService, MediaTuple, ServiceUnavailableIssue}
 import zio.*
 import zio.lmdb.LMDB
 
@@ -59,6 +59,9 @@ import scala.util.Try
   * leaving the index stale until the end. Photos it skipped are left alone - their documents are
   * already in step. Indexing failures are counted and logged, never fatal: the caption is safe in
   * LMDB and `make run-search-reindex` can always catch up.
+  *
+  * If the Ollama server can't be used (unreachable, timeout, HTTP error), the run stops right away
+  * and nothing is recorded for that photo, so an earlier caption is never overwritten by an outage.
   */
 object ComputeCaptions extends CommonsCLI {
 
@@ -210,7 +213,12 @@ object ComputeCaptions extends CommonsCLI {
                               mayBeCaption <- (if (force || retry || recomputeBefore.isDefined)
                                                  MediaService.originalCaptionRecompute(originalId).map(_.caption)
                                                else MediaService.originalCaption(originalId).map(_.flatMap(_.caption)))
-                                                .catchAll(_ => ZIO.succeed(None))
+                                                // An unreachable captioner aborts the whole run (nothing
+                                                // was stored for this photo); other issues only skip it.
+                                                .catchAll {
+                                                  case err: ServiceUnavailableIssue => ZIO.fail(err)
+                                                  case _                            => ZIO.succeed(None)
+                                                }
                               ok            = mayBeCaption.isDefined
                               _            <- ZIO.logInfo(
                                                 s"captioned [$bagName] ${tuple.media.timestamp} -> " +

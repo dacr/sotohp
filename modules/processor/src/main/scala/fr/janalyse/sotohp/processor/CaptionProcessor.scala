@@ -23,6 +23,9 @@ import scala.jdk.CollectionConverters.*
 abstract class CaptionIssue(message: String, mayBeErr: Option[Throwable]) extends Exception(message, mayBeErr.orNull) with CoreIssue
 case class CaptionGeneralIssue(message: String)                extends CaptionIssue(message, None)
 case class CaptionRequestIssue(message: String, err: Throwable) extends CaptionIssue(s"$message: ${err.getMessage}", Some(err))
+// The Ollama server could not be used at all (unreachable, timeout, HTTP error, broken stream). It
+// says nothing about the photo, so callers must not record it as a caption attempt.
+case class CaptionServiceUnavailableIssue(message: String, err: Throwable) extends CaptionIssue(s"$message: ${err.getMessage}", Some(err))
 
 // Ollama /api/generate wire types (only the fields we use).
 private case class OllamaOptions(temperature: Double, num_predict: Int, repeat_penalty: Double)
@@ -113,10 +116,7 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
         }
         sb.toString
       }
-      .mapError {
-        case issue: CaptionIssue => issue
-        case err                 => CaptionRequestIssue(s"Ollama request to ${config.baseUrl} failed", err)
-      }
+      .mapError(err => CaptionServiceUnavailableIssue(s"Ollama request to ${config.baseUrl} failed", err))
   }
 
   // Strips a leading "The image shows " / "Cette photo montre " style preamble, EN or FR.
@@ -172,9 +172,12 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
                          .map(bytes => Base64.getEncoder.encodeToString(bytes))
                          .flatMap(requestCaption)
                          .map(tidy)
-                         // model / server failures must not stop a batch: log the real reason and move on
+                         // A photo-level failure (unreadable image) must not stop a batch: log it
+                         // and record the attempt as unsuccessful. An unusable server is not the
+                         // photo's fault, so it is propagated and nothing gets recorded.
                          .tapError(err => ZIO.logWarning(s"caption failed: ${err.getMessage}"))
-                         .option
+                         .map(Some(_))
+                         .catchSome { case _: CaptionRequestIssue | _: CaptionGeneralIssue => ZIO.none }
                          .map(_.flatten)
           status    = ProcessedStatus(successful = mayBeText.isDefined, timestamp = now)
         } yield OriginalCaption(original, status, mayBeText)
