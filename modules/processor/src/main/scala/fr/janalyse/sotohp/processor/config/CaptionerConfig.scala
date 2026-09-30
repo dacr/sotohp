@@ -5,14 +5,16 @@ import zio.*
 import zio.config.*
 import zio.config.magnolia.*
 
-/** Configuration for the image-to-text captioner, which asks a local Ollama server to
-  * describe each photo.
+/** Configuration for the image-to-text captioner, which asks a local model server to describe
+  * each photo - Ollama, or any OpenAI-compatible server (LocalAI, vLLM, llama.cpp's llama-server).
   *
-  * Disabled by default: it needs an Ollama server running with a vision model pulled
+  * Disabled by default: it needs a server running with a vision model available
   * (`ollama pull qwen2.5vl:3b`). When disabled every caption request is a fast no-op.
   *
   * @param enabled        turn the captioner on
-  * @param baseUrl        Ollama server base URL (no trailing slash)
+  * @param api            wire protocol : "ollama" (native `/api/generate`) or "openai"
+  *                       (`/v1/chat/completions`, which Ollama also serves)
+  * @param baseUrl        server base URL (no trailing slash)
   * @param model          vision model name, e.g. "qwen2.5vl:3b" (multilingual), "llava", "gemma3:4b"
   * @param prompt         instruction sent alongside the image
   * @param timeoutSeconds per-request timeout (a cold model load can be slow)
@@ -21,6 +23,7 @@ import zio.config.magnolia.*
   */
 case class CaptionerConfig(
   enabled: Boolean,
+  api: String,
   baseUrl: String,
   model: String,
   prompt: String,
@@ -29,6 +32,9 @@ case class CaptionerConfig(
 )
 
 object CaptionerConfig {
+  val ollamaApi = "ollama"
+  val openaiApi = "openai"
+
   private val derivedConfig =
     deriveConfig[CaptionerConfig]
       .mapKey(toKebabCase)

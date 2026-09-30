@@ -21,8 +21,14 @@ import zio.lmdb.vector.{HnswParams, LMDBVectorIndex, VectorMetric}
 object FaceInferenceEvaluate extends CommonsCLI {
 
   override def run =
-    logic
-      .provide(
+    (for {
+      args    <- getArgs
+      model   <- MediaService.faceFeaturesModel()
+      profile  = FaceMatchingProfile.forModel(model).withOverrides(args)
+      _       <- Console.printLine(s"face features model: ${model.getOrElse("historical DJL model")} - matching profile: $profile")
+      _       <- logic(EvaluationSetup.forProfile(profile, legacyRules = model.isEmpty && profile == FaceMatchingProfile.legacy))
+    } yield ())
+      .provideSome[ZIOAppArgs](
         LMDB.live,
         SearchService.live,
         MediaService.live,
@@ -47,9 +53,8 @@ object FaceInferenceEvaluate extends CommonsCLI {
   // from dominating a measurement that is really about what happens to somebody new.
   val strangerFacesPerPerson = 30
 
-  // Same values the production job uses, so the "current" line below reflects what is really running.
-  val maxMatchDistance        = 0.16
-  val maxIgnoredMatchDistance = 0.20
+  // The distances themselves (rules thresholds, ignored-face veto, bootstrap values) depend on the embedding model,
+  // see `EvaluationSetup` below.
 
   // -------------------------------------------------------------------------------------------------------------------
   case class GalleryFace(faceId: FaceId, personId: PersonId, originalId: OriginalId, features: Array[Float])
@@ -118,30 +123,89 @@ object FaceInferenceEvaluate extends CommonsCLI {
 
   def mean(values: Iterable[Double]): Double = if (values.isEmpty) Double.MaxValue else values.sum / values.size
 
-  /** The rules to score against each other. Thresholds are varied *within* each rule family on purpose: without that control, a rule change bundled with a threshold change can take credit for what was really just a looser cutoff.
-    */
-  val rules: Vector[(String, Rule)] = Vector(
-    "1-NN (t=0.16)"                          -> nearestRule(0.16),
-    "1-NN (t=0.20)"                          -> nearestRule(0.20),
-    "current: top-2 agree (t=0.16)"          -> topTwoAgreeRule(0.16),
-    "current: top-2 agree (t=0.20)"          -> topTwoAgreeRule(0.20),
-    "current: top-2 agree (t=0.24)"          -> topTwoAgreeRule(0.24),
-    "person margin (t=0.16, m=0.02, best-1)" -> personMarginRule(0.16, 0.02, 1),
-    "person margin (t=0.16, m=0.04, best-1)" -> personMarginRule(0.16, 0.04, 1),
-    "person margin (t=0.20, m=0.02, best-1)" -> personMarginRule(0.20, 0.02, 1),
-    "person margin (t=0.20, m=0.02, best-3)" -> personMarginRule(0.20, 0.02, 3),
-    "person margin (t=0.20, m=0.04, best-3)" -> personMarginRule(0.20, 0.04, 3),
-    "person margin (t=0.24, m=0.04, best-3)" -> personMarginRule(0.24, 0.04, 3),
-    "person margin (t=0.24, m=0.06, best-3)" -> personMarginRule(0.24, 0.06, 3),
-    "person margin (t=0.25, m=0.06, best-3)" -> personMarginRule(0.25, 0.06, 3) // current production rule (FaceInference.scala)
-  )
+  // Same value as `FaceInference.scala`'s `bootstrapMaxFaces`, kept in sync by hand since the two files don't share a
+  // dependency - see the comment there for how it was chosen and what this run measured.
+  val bootstrapMaxFaces = 2
 
-  // Same values as `FaceInference.scala`'s `bootstrapMaxFaces`/`bootstrapMaxMatchDistance`/`bootstrapMinRunnerUpMargin`,
-  // kept in sync by hand since the two files don't share a dependency - see the comment there for how these were
-  // chosen and what this run measured.
-  val bootstrapMaxFaces  = 2
-  val bootstrapThreshold = 0.32
-  val bootstrapMargin    = 0.03
+  /** What one run scores, all of it in the distance scale of one embedding model.
+    *
+    * @param rules          the rules to score against each other. Thresholds are varied *within* each rule family on
+    *                       purpose: without that control, a rule change bundled with a threshold change can take credit
+    *                       for what was really just a looser cutoff.
+    * @param referenceRule  the rule the by-gallery-size table compares the production one with
+    * @param productionRule the rule `FaceInference` runs (its non-bootstrap half)
+    */
+  case class EvaluationSetup(
+    rules: Vector[(String, Rule)],
+    referenceRule: String,
+    productionRule: String,
+    productionThreshold: Double,
+    productionMargin: Double,
+    bootstrapThreshold: Double,
+    bootstrapMargin: Double,
+    ignoredDistance: Double
+  ) {
+    def bootstrapRule(facesPerPerson: Map[PersonId, Int]): Rule =
+      personMarginRuleBootstrap(productionThreshold, productionMargin, 3, bootstrapMaxFaces, bootstrapThreshold, bootstrapMargin, facesPerPerson)
+  }
+
+  object EvaluationSetup {
+
+    /** The historical model's rule set, as it was tuned - kept verbatim so its reports stay comparable with the past ones. */
+    val legacy: EvaluationSetup = EvaluationSetup(
+      rules = Vector(
+        "1-NN (t=0.16)"                          -> nearestRule(0.16),
+        "1-NN (t=0.20)"                          -> nearestRule(0.20),
+        "current: top-2 agree (t=0.16)"          -> topTwoAgreeRule(0.16),
+        "current: top-2 agree (t=0.20)"          -> topTwoAgreeRule(0.20),
+        "current: top-2 agree (t=0.24)"          -> topTwoAgreeRule(0.24),
+        "person margin (t=0.16, m=0.02, best-1)" -> personMarginRule(0.16, 0.02, 1),
+        "person margin (t=0.16, m=0.04, best-1)" -> personMarginRule(0.16, 0.04, 1),
+        "person margin (t=0.20, m=0.02, best-1)" -> personMarginRule(0.20, 0.02, 1),
+        "person margin (t=0.20, m=0.02, best-3)" -> personMarginRule(0.20, 0.02, 3),
+        "person margin (t=0.20, m=0.04, best-3)" -> personMarginRule(0.20, 0.04, 3),
+        "person margin (t=0.24, m=0.04, best-3)" -> personMarginRule(0.24, 0.04, 3),
+        "person margin (t=0.24, m=0.06, best-3)" -> personMarginRule(0.24, 0.06, 3),
+        "person margin (t=0.25, m=0.06, best-3)" -> personMarginRule(0.25, 0.06, 3)
+      ),
+      referenceRule = "current: top-2 agree (t=0.16)",
+      productionRule = "person margin (t=0.25, m=0.06, best-3)",
+      productionThreshold = 0.25,
+      productionMargin = 0.06,
+      bootstrapThreshold = 0.32,
+      bootstrapMargin = 0.03,
+      ignoredDistance = 0.20
+    )
+
+    /** A grid around the profile's values : its threshold x0.8 to x1.2, its margin x0.5 to x1.5 - wide enough to see
+      * which way a model's numbers want to move, which is the whole question for a new model.
+      */
+    def generated(profile: FaceMatchingProfile): EvaluationSetup = {
+      def round(value: Double): Double = math.rint(value * 1000) / 1000
+      val t          = round(profile.maxMatchDistance)
+      val m          = round(profile.minRunnerUpMargin)
+      val thresholds = Vector(0.8, 0.9, 1.0, 1.1, 1.2).map(factor => round(t * factor))
+      val margins    = Vector(0.5, 1.0, 1.5).map(factor => round(m * factor))
+      def marginName(threshold: Double, margin: Double) = s"person margin (t=$threshold, m=$margin, best-3)"
+      val rules      =
+        Vector(0.9, 1.0, 1.1).map(factor => round(t * factor)).map(threshold => s"1-NN (t=$threshold)" -> nearestRule(threshold)) ++
+          Vector(s"top-2 agree (t=$t)" -> topTwoAgreeRule(t)) ++
+          (for { threshold <- thresholds; margin <- margins } yield marginName(threshold, margin) -> personMarginRule(threshold, margin, 3))
+      EvaluationSetup(
+        rules = rules,
+        referenceRule = s"1-NN (t=$t)",
+        productionRule = marginName(t, m),
+        productionThreshold = t,
+        productionMargin = m,
+        bootstrapThreshold = profile.bootstrapMaxMatchDistance,
+        bootstrapMargin = profile.bootstrapMinRunnerUpMargin,
+        ignoredDistance = profile.maxIgnoredMatchDistance
+      )
+    }
+
+    def forProfile(profile: FaceMatchingProfile, legacyRules: Boolean): EvaluationSetup =
+      if (legacyRules) legacy else generated(profile)
+  }
 
   // -------------------------------------------------------------------------------------------------------------------
   case class Tally(decided: Int = 0, correct: Int = 0, abstained: Int = 0) {
@@ -188,7 +252,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
       confirmed <- MediaService.faceList().filter(_.identifiedPersonId.isDefined).runCollect
       gallery   <- ZIO.foreach(confirmed) { face =>
                      MediaService
-                       .faceFeaturesGet(face.faceId)
+                       .faceFeaturesGetCurrent(face.faceId)
                        .map(_.map(features => GalleryFace(face.faceId, face.identifiedPersonId.get, face.originalId, features.features)))
                    }
     } yield gallery.flatten
@@ -196,11 +260,11 @@ object FaceInferenceEvaluate extends CommonsCLI {
   def ignoredFeatures(): ZIO[MediaService, Exception, Chunk[Array[Float]]] =
     for {
       ignored  <- MediaService.faceList().filter(_.inferredIgnore.contains(true)).runCollect
-      features <- ZIO.foreach(ignored)(face => MediaService.faceFeaturesGet(face.faceId).map(_.map(_.features)))
+      features <- ZIO.foreach(ignored)(face => MediaService.faceFeaturesGetCurrent(face.faceId).map(_.map(_.features)))
     } yield features.flatten
 
   // -------------------------------------------------------------------------------------------------------------------
-  val logic = ZIO.logSpan("Evaluate face inference against confirmed faces") {
+  def logic(setup: EvaluationSetup) = ZIO.logSpan("Evaluate face inference against confirmed faces") {
     for {
       gallery       <- confirmedGallery()
       ignored       <- ignoredFeatures()
@@ -213,7 +277,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
                                                for {
                                                  measurements <- zio.stream.ZStream
                                                                    .fromChunk(gallery)
-                                                                   .mapZIOParUnordered(searchParallelism)(subject => measure(index, subject, byFaceId, facesPerPerson, ignored))
+                                                                   .mapZIOParUnordered(searchParallelism)(subject => measure(setup, index, subject, byFaceId, facesPerPerson, ignored))
                                                                    .runCollect
                                                                    .timed
                                                                    .tap((elapsed, _) => ZIO.logInfo(s"${gallery.size} leave-one-out queries in ${elapsed.toSeconds}s"))
@@ -222,10 +286,10 @@ object FaceInferenceEvaluate extends CommonsCLI {
                                              }
       (measurements, approximationQuality) = evaluated
 
-      strangers                                            <- strangerFalsePositives(gallery, facesPerPerson)
+      strangers                                            <- strangerFalsePositives(setup, gallery, facesPerPerson)
       (strangerTallies, strangerBootstrapTally, strangersTried) = strangers
 
-      _ <- report(measurements, gallery.size, approximationQuality, strangerTallies, strangerBootstrapTally, strangersTried)
+      _ <- report(setup, measurements, gallery.size, approximationQuality, strangerTallies, strangerBootstrapTally, strangersTried)
     } yield ()
   }
 
@@ -237,7 +301,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
     * The candidate lists are built by scanning the gallery directly rather than through the index, because a filtered nearest-neighbor query isn't something the index can answer: for a person with thousands of enrolled faces, the nearest few hundred
     * neighbors are all their own, and the strangers only start below that.
     */
-  def strangerFalsePositives(gallery: Chunk[GalleryFace], facesPerPerson: Map[PersonId, Int]): ZIO[Any, Nothing, (Vector[Tally], Tally, Int)] = {
+  def strangerFalsePositives(setup: EvaluationSetup, gallery: Chunk[GalleryFace], facesPerPerson: Map[PersonId, Int]): ZIO[Any, Nothing, (Vector[Tally], Tally, Int)] = {
     val galleryArray = gallery.toArray
     // Capped per person so that the handful of very heavily photographed people don't drown out everybody else: the
     // question here is "what happens when a new face shows up", which is a per-person question.
@@ -250,8 +314,8 @@ object FaceInferenceEvaluate extends CommonsCLI {
                                  val candidates = nearestExcludingPerson(galleryArray, subject, candidateCount)
                                  ZIO.succeed(
                                    (
-                                     rules.map((_, rule) => rule(candidates)),
-                                     personMarginRuleBootstrap(0.25, 0.06, 3, bootstrapMaxFaces, bootstrapThreshold, bootstrapMargin, facesPerPerson)(candidates)
+                                     setup.rules.map((_, rule) => rule(candidates)),
+                                     setup.bootstrapRule(facesPerPerson)(candidates)
                                    )
                                  )
                                }
@@ -259,7 +323,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
                                .timed
       (elapsed, decisions) = timed
       _                   <- ZIO.logInfo(s"${sample.size} stranger queries (whole person held out) in ${elapsed.toSeconds}s")
-      tallies              = rules.indices.map(r => decisions.foldLeft(Tally())((tally, perRule) => tally.recordStranger(perRule._1(r)))).toVector
+      tallies              = setup.rules.indices.map(r => decisions.foldLeft(Tally())((tally, perRule) => tally.recordStranger(perRule._1(r)))).toVector
       bootstrapTally        = decisions.foldLeft(Tally())((tally, perRule) => tally.recordStranger(perRule._2))
     } yield (tallies, bootstrapTally, sample.size)
   }
@@ -319,6 +383,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
 
   /** Runs one leave-one-out query and applies every rule to its result, twice: once with only the face itself removed, and once with every face from the same photo removed too. */
   def measure(
+    setup: EvaluationSetup,
     index: LMDBVectorIndex[FaceId],
     subject: GalleryFace,
     byFaceId: Map[FaceId, GalleryFace],
@@ -337,15 +402,15 @@ object FaceInferenceEvaluate extends CommonsCLI {
         // it is, so the rules are also scored with the subject's whole photo held out.
         val withoutSamePhoto = candidates.filter(_.originalId != subject.originalId)
 
-        val vetoed = ignored.exists(features => VectorMetric.Cosine.distance(subject.features, features) <= maxIgnoredMatchDistance)
+        val vetoed = ignored.exists(features => VectorMetric.Cosine.distance(subject.features, features) <= setup.ignoredDistance)
 
         Measurement(
           bucket = galleryBucket(facesPerPerson.getOrElse(subject.personId, 0)),
           truth = subject.personId,
           vetoed = vetoed,
-          lenient = rules.map((_, rule) => rule(candidates)),
-          strict = rules.map((_, rule) => rule(withoutSamePhoto)),
-          bootstrap = personMarginRuleBootstrap(0.25, 0.06, 3, bootstrapMaxFaces, bootstrapThreshold, bootstrapMargin, facesPerPerson)(candidates)
+          lenient = setup.rules.map((_, rule) => rule(candidates)),
+          strict = setup.rules.map((_, rule) => rule(withoutSamePhoto)),
+          bootstrap = setup.bootstrapRule(facesPerPerson)(candidates)
         )
       }
 
@@ -368,12 +433,12 @@ object FaceInferenceEvaluate extends CommonsCLI {
   }
 
   // -------------------------------------------------------------------------------------------------------------------
-  def report(measurements: Chunk[Measurement], total: Int, approximationQuality: Double, strangerTallies: Vector[Tally], strangerBootstrapTally: Tally, strangersTried: Int): ZIO[Any, java.io.IOException, Unit] = {
-    val lenient = rules.indices.map(r => measurements.foldLeft(Tally())((tally, m) => tally.record(m.lenient(r), m.truth))).toVector
-    val strict  = rules.indices.map(r => measurements.foldLeft(Tally())((tally, m) => tally.record(m.strict(r), m.truth))).toVector
+  def report(setup: EvaluationSetup, measurements: Chunk[Measurement], total: Int, approximationQuality: Double, strangerTallies: Vector[Tally], strangerBootstrapTally: Tally, strangersTried: Int): ZIO[Any, java.io.IOException, Unit] = {
+    val lenient = setup.rules.indices.map(r => measurements.foldLeft(Tally())((tally, m) => tally.record(m.lenient(r), m.truth))).toVector
+    val strict  = setup.rules.indices.map(r => measurements.foldLeft(Tally())((tally, m) => tally.record(m.strict(r), m.truth))).toVector
 
-    val currentRule = rules.indexWhere((name, _) => name == "current: top-2 agree (t=0.16)")
-    val marginRule  = rules.indexWhere((name, _) => name == "person margin (t=0.25, m=0.06, best-3)")
+    val currentRule = setup.rules.indexWhere((name, _) => name == setup.referenceRule)
+    val marginRule  = setup.rules.indexWhere((name, _) => name == setup.productionRule)
 
     val byBucket = buckets.map { bucket =>
       val slice = measurements.filter(_.bucket == bucket)
@@ -392,23 +457,23 @@ object FaceInferenceEvaluate extends CommonsCLI {
       _ <- Console.printLine(s"=== Leave-one-out over $total confirmed faces (k=$candidateCount candidates, ef=$evaluationEf) ===")
       _ <- Console.printLine("")
       _ <- Console.printLine(f"${"rule"}%-40s ${"decided"}%9s ${"correct"}%9s ${"wrong"}%7s ${"abstain"}%9s ${"precision"}%10s ${"recall"}%8s")
-      _ <- ZIO.foreachDiscard(rules.indices)(r => Console.printLine(tallyRow(rules(r)._1, lenient(r), total)))
-      _ <- Console.printLine(tallyRow(s"bootstrap-relaxed (<=$bootstrapMaxFaces: t=$bootstrapThreshold, m=$bootstrapMargin)", measurements.foldLeft(Tally())((tally, m) => tally.record(m.bootstrap, m.truth)), total))
+      _ <- ZIO.foreachDiscard(setup.rules.indices)(r => Console.printLine(tallyRow(setup.rules(r)._1, lenient(r), total)))
+      _ <- Console.printLine(tallyRow(s"bootstrap-relaxed (<=$bootstrapMaxFaces: t=${setup.bootstrapThreshold}, m=${setup.bootstrapMargin})", measurements.foldLeft(Tally())((tally, m) => tally.record(m.bootstrap, m.truth)), total))
       _ <- Console.printLine("")
       _ <- Console.printLine("--- same photo held out too (no burst / re-import leakage) ---")
-      _ <- ZIO.foreachDiscard(rules.indices)(r => Console.printLine(tallyRow(rules(r)._1, strict(r), total)))
+      _ <- ZIO.foreachDiscard(setup.rules.indices)(r => Console.printLine(tallyRow(setup.rules(r)._1, strict(r), total)))
       _ <- Console.printLine("")
       _ <- Console.printLine(s"--- strangers: $strangersTried faces whose person was held out of the gallery entirely (abstaining is the only right answer) ---")
       _ <- Console.printLine(f"${"rule"}%-40s ${"identified"}%11s ${"abstained"}%10s ${"false positive rate"}%20s")
-      _ <- ZIO.foreachDiscard(rules.indices) { r =>
+      _ <- ZIO.foreachDiscard(setup.rules.indices) { r =>
              val tally = strangerTallies(r)
-             Console.printLine(f"${rules(r)._1}%-40s ${tally.decided}%11d ${tally.abstained}%10d ${percent(tally.decided.toDouble / strangersTried)}%20s")
+             Console.printLine(f"${setup.rules(r)._1}%-40s ${tally.decided}%11d ${tally.abstained}%10d ${percent(tally.decided.toDouble / strangersTried)}%20s")
            }
       _ <- Console.printLine(
-             f"${s"bootstrap-relaxed (<=$bootstrapMaxFaces: t=$bootstrapThreshold, m=$bootstrapMargin)"}%-40s ${strangerBootstrapTally.decided}%11d ${strangerBootstrapTally.abstained}%10d ${percent(strangerBootstrapTally.decided.toDouble / strangersTried)}%20s"
+             f"${s"bootstrap-relaxed (<=$bootstrapMaxFaces: t=${setup.bootstrapThreshold}, m=${setup.bootstrapMargin})"}%-40s ${strangerBootstrapTally.decided}%11d ${strangerBootstrapTally.abstained}%10d ${percent(strangerBootstrapTally.decided.toDouble / strangersTried)}%20s"
            )
       _ <- Console.printLine("")
-      _ <- Console.printLine(s"--- by number of confirmed faces the true person has: '${rules(currentRule)._1}' vs '${rules(marginRule)._1}' vs bootstrap-relaxed (<=$bootstrapMaxFaces faces: t=$bootstrapThreshold, m=$bootstrapMargin) ---")
+      _ <- Console.printLine(s"--- by number of confirmed faces the true person has: '${setup.rules(currentRule)._1}' vs '${setup.rules(marginRule)._1}' vs bootstrap-relaxed (<=$bootstrapMaxFaces faces: t=${setup.bootstrapThreshold}, m=${setup.bootstrapMargin}) ---")
       _ <- Console.printLine(f"${"gallery size"}%-14s ${"faces"}%8s ${"current prec"}%13s ${"current rec"}%12s ${"margin prec"}%12s ${"margin rec"}%11s ${"boot prec"}%10s ${"boot rec"}%9s")
       _ <- ZIO.foreachDiscard(byBucket) { (bucket, counts) =>
              val (size, current, margin, bootstrap) = counts
@@ -417,7 +482,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
              )
            }
       _ <- Console.printLine("")
-      _ <- Console.printLine(f"ignore-veto: $vetoed%d of $total%d confirmed faces (${percent(vetoed.toDouble / total)}%s) sit within $maxIgnoredMatchDistance%.2f of an ignored face, and would have their identification suppressed")
+      _ <- Console.printLine(f"ignore-veto: $vetoed%d of $total%d confirmed faces (${percent(vetoed.toDouble / total)}%s) sit within ${setup.ignoredDistance}%.2f of an ignored face, and would have their identification suppressed")
       _ <- Console.printLine(f"approximate index: recall@8 of ${percent(approximationQuality)}%s against an exact scan, at the production efSearch - the share of true neighbors the graph actually returns")
     } yield ()
   }

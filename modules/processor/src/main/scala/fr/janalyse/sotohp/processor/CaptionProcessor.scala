@@ -35,21 +35,37 @@ private case class OllamaStreamChunk(response: String = "", done: Boolean = fals
 private object OllamaGenerateRequest { given JsonValueCodec[OllamaGenerateRequest] = JsonCodecMaker.make }
 private object OllamaStreamChunk     { given JsonValueCodec[OllamaStreamChunk]     = JsonCodecMaker.make }
 
-/** Image-to-text: asks a local Ollama vision model to describe a photo.
+// OpenAI-compatible /v1/chat/completions wire types (only the fields we use), served by LocalAI,
+// vLLM, llama.cpp's llama-server and Ollama itself. `repeat_penalty` is not part of the OpenAI
+// schema, but LocalAI and llama.cpp honour it and the others ignore unknown fields.
+private case class OpenAiImageUrl(url: String)
+private case class OpenAiContentPart(`type`: String, text: Option[String] = None, image_url: Option[OpenAiImageUrl] = None)
+private case class OpenAiMessage(role: String, content: List[OpenAiContentPart])
+private case class OpenAiChatRequest(model: String, messages: List[OpenAiMessage], stream: Boolean, temperature: Double, max_tokens: Int, repeat_penalty: Double)
+private case class OpenAiDelta(content: Option[String] = None)
+private case class OpenAiChoice(delta: OpenAiDelta = OpenAiDelta())
+private case class OpenAiError(message: String = "")
+// One `data: {...}` event of the streamed response, or an `{"error": {...}}` object.
+private case class OpenAiStreamChunk(choices: List[OpenAiChoice] = Nil, error: Option[OpenAiError] = None)
+private object OpenAiChatRequest { given JsonValueCodec[OpenAiChatRequest] = JsonCodecMaker.make }
+private object OpenAiStreamChunk { given JsonValueCodec[OpenAiStreamChunk] = JsonCodecMaker.make }
+
+/** Image-to-text: asks a local vision model to describe a photo, through either Ollama's native
+  * API or the OpenAI-compatible one (`config.api`).
   *
   * A plain HTTP client, not a DJL predictor. When `config.enabled` is false every call is a
   * fast no-op returning an unsuccessful [[OriginalCaption]] (so nothing is stored and the step
   * retries once the captioner is turned on).
   *
-  * The request is streamed (`stream: true`) and the chunks reassembled here: Ollama's
-  * non-streaming responses drop the first output token for some models, which streaming avoids.
+  * The request is streamed and the chunks reassembled here: Ollama's non-streaming responses
+  * drop the first output token for some models, which streaming avoids.
   */
 class CaptionProcessor(config: CaptionerConfig) extends Processor {
 
   val enabled: Boolean = config.enabled
 
-  // Hard cap on a stored caption. A well-behaved model stays well under this; anything longer is
-  // truncated to the first sentence by `tidy`.
+  // Hard cap on the description part of a stored caption. A well-behaved model stays well under
+  // this; anything longer is cut back to the whole sentences that fit by `tidy`.
   private val maxCaptionChars = 400
 
   private lazy val httpClient: HttpClient =
@@ -79,7 +95,52 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
         .mapError(err => CaptionRequestIssue("Couldn't downscale image for captioning", err))
   }
 
-  private def requestCaption(imageBase64: String): IO[CoreIssue, String] = {
+  private def requestCaption(imageBase64: String): IO[CoreIssue, String] =
+    if (config.api == CaptionerConfig.openaiApi) requestCaptionOpenAi(imageBase64)
+    else requestCaptionOllama(imageBase64)
+
+  private def requestCaptionOpenAi(imageBase64: String): IO[CoreIssue, String] = {
+    val payload = OpenAiChatRequest(
+      model = config.model,
+      messages = List(
+        OpenAiMessage(
+          role = "user",
+          content = List(
+            OpenAiContentPart(`type` = "text", text = Some(config.prompt)),
+            OpenAiContentPart(`type` = "image_url", image_url = Some(OpenAiImageUrl(s"data:image/jpeg;base64,$imageBase64")))
+          )
+        )
+      ),
+      stream = true,
+      // same generation caps as the Ollama path, see there
+      temperature = 0d,
+      max_tokens = 120,
+      repeat_penalty = 1.3d
+    )
+    val request = HttpRequest
+      .newBuilder()
+      .uri(URI.create(s"${config.baseUrl.stripSuffix("/")}/v1/chat/completions"))
+      .timeout(Duration.ofSeconds(config.timeoutSeconds.toLong.max(1)))
+      .header("Content-Type", "application/json")
+      .header("Accept", "text/event-stream")
+      .POST(HttpRequest.BodyPublishers.ofByteArray(writeToArray(payload)))
+      .build()
+
+    ZIO
+      .attemptBlocking {
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofLines())
+        if (response.statusCode() / 100 != 2) {
+          val body = response.body().iterator().asScala.take(5).mkString(" ")
+          throw CaptionGeneralIssue(s"server returned HTTP ${response.statusCode()}: ${body.take(300)}")
+        }
+        val sb = new StringBuilder()
+        response.body().iterator().asScala.foreach(line => CaptionProcessor.openAiStreamLineText(line).foreach(sb.append))
+        sb.toString
+      }
+      .mapError(err => CaptionServiceUnavailableIssue(s"OpenAI-compatible request to ${config.baseUrl} failed", err))
+  }
+
+  private def requestCaptionOllama(imageBase64: String): IO[CoreIssue, String] = {
     val payload = OllamaGenerateRequest(
       model = config.model,
       prompt = config.prompt,
@@ -127,36 +188,125 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
       "|on (voit|peut voir|aperçoit)|il y a|voici" +
       ")[:,]?\\s+").r
 
+  // A quoted passage - how the prompt asks the model to transcribe text visible in the photo.
+  private val quotedPattern = "«[^«»]*»|“[^“”]*”|\"[^\"]*\"".r
+  // Empty quotes, which the model writes when there is no text to transcribe, with the space before them.
+  private val emptyQuotes   = "[\\p{Z}\\s]*(«[\\p{Z}\\s]*»|“[\\p{Z}\\s]*”|\"[\\p{Z}\\s]*\")".r
+  // "Aucun texte n'est visible sur la photo." - says nothing about the photo.
+  private val noTextSentence =
+    "(?i)^(aucun texte|il n'y a (pas de|aucun) texte|pas de texte|le texte visible|no (visible )?text|there is no (visible )?text).*".r
+  // Room kept for the transcriptions appended after the description.
+  private val maxTranscriptionChars = 200
+
+  /** The sentences of `text` - split after a `.`, `!` or `?` followed by a space, ignoring those
+    * inside a quoted passage so that a transcription is never cut in the middle. A quote left open
+    * (generation cut by the token cap) runs to the end of the text.
+    */
+  private def sentencesOf(text: String): List[String] = {
+    val sentences             = List.newBuilder[String]
+    var closing: Option[Char] = None // the quote closing character expected, while inside a quote
+    var start                 = 0
+    var i                     = 0
+    while (i < text.length) {
+      val c = text.charAt(i)
+      closing match {
+        case Some(expected) => if (c == expected) closing = None
+        case None           =>
+          c match {
+            case '«'                                                                        => closing = Some('»')
+            case '“'                                                                        => closing = Some('”')
+            case '"'                                                                        => closing = Some('"')
+            case '.' | '!' | '?' if i + 1 == text.length || text.charAt(i + 1).isWhitespace =>
+              sentences += text.substring(start, i + 1).trim
+              start = i + 1
+            case _                                                                          =>
+          }
+      }
+      i += 1
+    }
+    sentences += text.substring(start).trim
+    sentences.result().filter(_.nonEmpty)
+  }
+
+  // Ends like a finished sentence (or a finished quote) - anything else was cut by the token cap.
+  private def complete(sentence: String): Boolean = ".!?»”\"".contains(sentence.last)
+
   /** Turn a raw model answer into a stored caption, or `None` when it is unusable.
     *
     *   - normalises whitespace (incl. NBSP), strips a leading "The image shows " style preamble
     *   - rejects non-Latin output, number / id / coordinate hallucinations, token-repetition
-    *     loops, and one-or-two-word fragments - all failure modes small vision models fall into
-    *   - keeps only the first sentence and caps the length
+    *     loops, and one-or-two-word fragments - all failure modes small vision models fall into.
+    *     Quoted passages are left out of these checks : a transcription of a sign may well be in
+    *     another script, or mostly digits
+    *   - keeps the description's sentences, as many whole ones as the length cap allows, minus an
+    *     unfinished last one (generation cut by the token cap) and the sentences that say nothing
+    *     about the photo ("Aucun texte n'est visible.", "Le texte visible est :" before empty quotes)
+    *   - then appends the text the model transcribed from the photo : the non-empty quoted passages
+    *     the description doesn't already hold, which usually come after it, on their own line.
+    *     Empty quotes, which the model writes when there is no text to transcribe, are dropped.
     */
   private[processor] def tidy(raw: String): Option[String] = {
-    val collapsed   = raw.replaceAll("[\\p{Z}\\s]+", " ").trim.replaceFirst("^[\\p{Z}\\s\\p{Punct}]+", "")
+    val collapsed   = raw.replaceAll("[\\p{Z}\\s]+", " ").trim.replaceFirst("^[\\p{Z}\\s\\p{Punct}&&[^«“\"]]+", "")
     val depreambled = preamble.replaceFirstIn(collapsed, "")
+    val unquoted    = quotedPattern.replaceAllIn(depreambled, " ").replaceAll("\\s+", " ").trim
 
     def rejected: Boolean = {
-      val letters   = depreambled.count(_.isLetter)
-      val nonLatin  = depreambled.count(c => c.isLetter && Character.UnicodeScript.of(c) != Character.UnicodeScript.LATIN)
-      val digitsSym = depreambled.count(c => c.isDigit || "[]{}()=/_|<>~^*".contains(c))
-      val words     = depreambled.split("\\s+").count(_.exists(_.isLetter))
-      val distinct  = depreambled.iterator.filterNot(_.isWhitespace).toSet.size
-      depreambled.isEmpty ||
+      val letters   = unquoted.count(_.isLetter)
+      val nonLatin  = unquoted.count(c => c.isLetter && Character.UnicodeScript.of(c) != Character.UnicodeScript.LATIN)
+      val digitsSym = unquoted.count(c => c.isDigit || "[]{}()=/_|<>~^*".contains(c))
+      val words     = unquoted.split("\\s+").count(_.exists(_.isLetter))
+      val distinct  = unquoted.iterator.filterNot(_.isWhitespace).toSet.size
+      // Repetition loops. A natural sentence uses ~35 distinct characters whatever its length, so
+      // the character threshold must not grow with the length (it used to, and rejected every
+      // legitimate caption past ~420 characters) ; a loop of a whole sentence keeps a natural
+      // alphabet but repeats its words.
+      val wordList  = unquoted.toLowerCase.split("[^\\p{L}\\p{N}]+").filter(_.nonEmpty)
+      val charLoop  = unquoted.length > 120 && distinct < math.max(6, math.min(20, unquoted.length / 12))
+      val wordLoop  = wordList.length >= 20 && wordList.distinct.length.toDouble / wordList.length < 0.4
+      unquoted.isEmpty ||
       letters < 3 ||
       words < 4 ||                                                             // "Ids/sa_14961"
       nonLatin.toDouble / letters > 0.15 ||                                    // Thai / CJK / etc.
       digitsSym > letters ||                                                   // "Ids = [0.39, 0.42, 1.0]"
-      (depreambled.length > 120 && distinct < math.max(6, depreambled.length / 12)) // repetition loop
+      charLoop || wordLoop                                                     // repetition loop
     }
 
     if (rejected) None
     else {
-      val firstSentence = depreambled.split("(?<=[.!?])\\s", 2).headOption.getOrElse(depreambled).trim
-      val bounded       = (if (firstSentence.nonEmpty) firstSentence else depreambled).take(maxCaptionChars).trim
-      val capitalised   = if (bounded.isEmpty) bounded else bounded.head.toUpper.toString + bounded.tail
+      val cleaned        = emptyQuotes.replaceAllIn(depreambled, "").trim
+      val sentences      = sentencesOf(cleaned)
+      val finished       = if (sentences.size > 1 && !complete(sentences.last)) sentences.init else sentences
+      val describing     = finished.filter { sentence =>
+        quotedPattern.replaceAllIn(sentence, "").exists(_.isLetter) && // not just a transcription
+        !sentence.endsWith(":") &&                                     // "Le texte visible est :" whose quotes were empty
+        noTextSentence.findFirstIn(sentence).isEmpty
+      }
+      // whole sentences, as many as fit - at least the first one, cut if it alone is too long
+      val description    = describing match {
+        case Nil           => finished.headOption.getOrElse(cleaned).take(maxCaptionChars).trim
+        case first :: more =>
+          more
+            .foldLeft((List(first.take(maxCaptionChars).trim), false)) { case ((kept, full), sentence) =>
+              if (full || (kept :+ sentence).mkString(" ").length > maxCaptionChars) (kept, true) else (kept :+ sentence, false)
+            }
+            ._1
+            .mkString(" ")
+      }
+      val transcriptions = quotedPattern
+        .findAllIn(cleaned)
+        .map(_.trim)
+        .filter(quote => quote.drop(1).dropRight(1).exists(_.isLetterOrDigit))
+        .filterNot(quote => description.contains(quote))
+        .toList
+        .distinct
+      // whole passages only, as many as fit
+      val appended       = transcriptions
+        .foldLeft(List.empty[String]) { (kept, quote) =>
+          if ((kept :+ quote).mkString(" ").length <= maxTranscriptionChars) kept :+ quote else kept
+        }
+        .mkString(" ")
+      val caption        = (if (appended.isEmpty) description else s"$description $appended").trim
+      val capitalised    = if (caption.isEmpty) caption else caption.head.toUpper.toString + caption.tail
       Option(capitalised).filter(_.nonEmpty)
     }
   }
@@ -193,4 +343,23 @@ object CaptionProcessor {
     CaptionerConfig.config
       .mapError(err => CaptionGeneralIssue(s"Unable to load captioner configuration: $err"))
       .map(CaptionProcessor(_))
+
+  /** The text carried by one line of an OpenAI-style server-sent-events stream : `data: {...}`
+    * events yield their delta content, everything else (blank separators, `data: [DONE]`, SSE
+    * comments and `event:` lines) yields nothing. An error event, or a bare JSON error body some
+    * servers send instead of an event, throws.
+    */
+  private[processor] def openAiStreamLineText(line: String): Option[String] = {
+    val trimmed = line.trim
+    val payload =
+      if (trimmed.startsWith("data:")) Some(trimmed.stripPrefix("data:").trim)
+      else if (trimmed.startsWith("{")) Some(trimmed)
+      else None
+    payload.filter(p => p.nonEmpty && p != "[DONE]").flatMap { json =>
+      val chunk = readFromString[OpenAiStreamChunk](json)
+      chunk.error.foreach(err => throw CaptionGeneralIssue(s"server error: ${err.message}"))
+      val text = chunk.choices.flatMap(_.delta.content).mkString
+      Option(text).filter(_.nonEmpty)
+    }
+  }
 }

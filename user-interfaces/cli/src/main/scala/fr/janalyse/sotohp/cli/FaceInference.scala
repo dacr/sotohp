@@ -24,8 +24,14 @@ import scala.io.AnsiColor.*
 object FaceInference extends CommonsCLI {
 
   override def run =
-    logic
-      .provide(
+    (for {
+      args    <- getArgs
+      model   <- MediaService.faceFeaturesModel()
+      profile  = FaceMatchingProfile.forModel(model).withOverrides(args)
+      _       <- Console.printLine(s"face features model: ${model.getOrElse("historical DJL model")} - matching profile: $profile")
+      _       <- logic(profile)
+    } yield ())
+      .provideSome[ZIOAppArgs](
         LMDB.live,
         SearchService.live,
         MediaService.live,
@@ -46,7 +52,7 @@ object FaceInference extends CommonsCLI {
       identifiedFaces <- MediaService.faceList().filter(_.identifiedPersonId.isDefined).runCollect
       featureByFace   <- ZIO.foreach(identifiedFaces) { detectedFace =>
                            MediaService
-                             .faceFeaturesGet(detectedFace.faceId)
+                             .faceFeaturesGetCurrent(detectedFace.faceId)
                              .map(feature => feature.map(detectedFace -> _))
                          }
     } yield featureByFace.flatten
@@ -66,7 +72,7 @@ object FaceInference extends CommonsCLI {
                                               (faceWidth.getOrElse(0d) >= minimumFaceSize || faceHeight.getOrElse(0d) >= minimumFaceSize)
                                           )
                              tuple     <- MediaService
-                                            .faceFeaturesGet(detectedFace.faceId)
+                                            .faceFeaturesGetCurrent(detectedFace.faceId)
                                             .map(feature => feature.map(detectedFace -> _))
                            } yield tuple.filter(_ => enoughBig)
                          }
@@ -76,20 +82,18 @@ object FaceInference extends CommonsCLI {
   // do not process very low resolution faces
   val minimumFaceSize = 64d
 
-  // Maximum cosine distance below which two faces are considered close enough to be the same person.
+  // The distances below (maximum match distance, runner-up margin, ignored-face veto, bootstrap values) live in
+  // `FaceMatchingProfile`, one set per embedding model, since a distance only means something within one model's
+  // space. For the historical DJL model (`FaceMatchingProfile.legacy`) they come from `FaceInferenceEvaluate`, which
+  // scores a rule against the faces a human has already confirmed. Against the previous setting (0.16, plus "the two
+  // closest faces must name the same person"), 0.20 with a 0.06 runner-up margin won on every axis it measured:
+  // 99.76% vs 98.73% precision on people who are in the library, 76% vs 68% of them identified at all, and - the
+  // measurement that matters most for a threshold this loose - 2.36% vs 5.08% of faces belonging to someone *not* in
+  // the library wrongly given a name. Raising the threshold alone would have tripled that last number; it is the
+  // runner-up margin that pays for the extra reach. Lowering the margin to 0.04 trades some of the safety back for
+  // reach (82% identified, 4.76% of strangers misnamed).
   //
-  // These values come from `FaceInferenceEvaluate`, which scores a rule against the faces a human has already
-  // confirmed. Against the previous setting (0.16, plus "the two closest faces must name the same person"), this one
-  // won on every axis it measured: 99.76% vs 98.73% precision on people who are in the library, 76% vs 68% of them
-  // identified at all, and - the measurement that matters most for a threshold this loose - 2.36% vs 5.08% of faces
-  // belonging to someone *not* in the library wrongly given a name. Raising the threshold alone would have tripled
-  // that last number; it is the runner-up margin below that pays for the extra reach.
-  val maxMatchDistance        = 0.20
-  val maxIgnoredMatchDistance = 0.15
-
-  // The winning person must be at least this much closer than the *second* person in the candidate list. Lowering it
-  // to 0.04 trades some of the safety back for reach (82% identified, 4.76% of strangers misnamed).
-  val minRunnerUpMargin = 0.06
+  // Any of them can be overridden from the command line, see `FaceMatchingProfile.withOverrides`.
 
   // A person is scored by the mean distance of their closest few faces rather than by their single closest one, so one
   // unusually flattering photo can't win on its own.
@@ -104,10 +108,9 @@ object FaceInference extends CommonsCLI {
   // looser numbers, so someone with plenty of confirmed faces is scored exactly as before whether they win outright
   // or merely out-margin a bootstrapping runner-up. A person with a single confirmed face is a separate, structurally
   // unfixable case: with nothing else of them left to compare against, no threshold can recover a match - this only
-  // helps once a person has a second confirmed photo to lean on.
-  val bootstrapMaxFaces          = 2
-  val bootstrapMaxMatchDistance  = 0.32
-  val bootstrapMinRunnerUpMargin = 0.03
+  // helps once a person has a second confirmed photo to lean on. (The measured values above are the legacy profile's
+  // 0.32 / 0.03, the looser threshold/margin themselves live in `FaceMatchingProfile`.)
+  val bootstrapMaxFaces = 2
 
   // Wide enough that several *people* show up among the candidates - a person with thousands of enrolled faces would
   // otherwise fill the whole list and leave no runner-up to compare against. `ef` matches what the evaluation used, so
@@ -125,7 +128,7 @@ object FaceInference extends CommonsCLI {
       ignoredFaces  <- MediaService.faceList().filter(_.inferredIgnore.contains(true)).runCollect
       featureByFace <- ZIO.foreach(ignoredFaces) { detectedFace =>
                          MediaService
-                           .faceFeaturesGet(detectedFace.faceId)
+                           .faceFeaturesGetCurrent(detectedFace.faceId)
                            .map(feature => feature.map(detectedFace -> _))
                        }
     } yield featureByFace.flatten
@@ -135,21 +138,21 @@ object FaceInference extends CommonsCLI {
 
   // A face is "too near an ignored face" when its features are within the match distance of any ignored face.
   // Only ~900 entries in practice, so a plain scan stays cheap - not worth indexing.
-  def isNearIgnoredFace(ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): Boolean = {
+  def isNearIgnoredFace(profile: FaceMatchingProfile, ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): Boolean = {
     ignoredFaces.exists { (ignoredFace, ignoredFeatures) =>
-      ignoredFace.faceId != face.faceId && VectorMetric.Cosine.distance(faceFeatures.features, ignoredFeatures.features) <= maxIgnoredMatchDistance
+      ignoredFace.faceId != face.faceId && VectorMetric.Cosine.distance(faceFeatures.features, ignoredFeatures.features) <= profile.maxIgnoredMatchDistance
     }
   }
 
-  def identifyFace(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
+  def identifyFace(profile: FaceMatchingProfile, vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)])(face: Face, faceFeatures: FaceFeatures): ZIO[MediaService, Exception, Boolean] = {
     for {
       nearest            <- vectorIndex.searchNearest(faceFeatures.features, k = 1).orDieWith(err => new RuntimeException(err.toString))
       now                <- Clock.currentDateTime
       inferredPersonId    = nearest.headOption
                               .flatMap { (nearestFaceId, foundDistance) =>
-                                knownFaceById(nearestFaceId).identifiedPersonId.filter(_ => foundDistance < maxMatchDistance)
+                                knownFaceById(nearestFaceId).identifiedPersonId.filter(_ => foundDistance < profile.maxMatchDistance)
                               }
-                              .filterNot(_ => isNearIgnoredFace(ignoredFaces)(face, faceFeatures))
+                              .filterNot(_ => isNearIgnoredFace(profile, ignoredFaces)(face, faceFeatures))
       updatedFace         = face.copy(
                               inferredIdentifiedPersonId = inferredPersonId,
                               inferredTimestamp = inferredPersonId.map(_ => now)
@@ -168,7 +171,7 @@ object FaceInference extends CommonsCLI {
     } yield isFreshlyIdentified
   }
 
-  def identifyFaceWithConsensus(vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)], facesPerPerson: Map[PersonId, Int])(
+  def identifyFaceWithConsensus(profile: FaceMatchingProfile, vectorIndex: LMDBVectorIndex[FaceId], knownFaceById: Map[FaceId, Face], ignoredFaces: Chunk[(Face, FaceFeatures)], facesPerPerson: Map[PersonId, Int])(
     face: Face,
     faceFeatures: FaceFeatures
   ): ZIO[MediaService, Exception, Boolean] = {
@@ -186,7 +189,7 @@ object FaceInference extends CommonsCLI {
 
       bestCandidate: Option[(id: PersonId, dist: Double)] = {
         // veto inference when the face is too near a face the user marked as ignored
-        if (isNearIgnoredFace(ignoredFaces)(face, faceFeatures)) None
+        if (isNearIgnoredFace(profile, ignoredFaces)(face, faceFeatures)) None
         else
           rankedPersons.headOption.flatMap { (bestPerson, bestDistance) =>
             // A person too new to have built up `facesPerPersonConsidered` confirmed faces gets no benefit from the
@@ -195,8 +198,8 @@ object FaceInference extends CommonsCLI {
             // clearly the best match. Only the *winner*'s own face count decides this: a well-established person's
             // numbers are unaffected whether they win outright or merely out-margin a bootstrapping runner-up.
             val bootstrapping    = facesPerPerson.getOrElse(bestPerson, Int.MaxValue) <= bootstrapMaxFaces
-            val effectiveMax     = if (bootstrapping) bootstrapMaxMatchDistance else maxMatchDistance
-            val effectiveMargin  = if (bootstrapping) bootstrapMinRunnerUpMargin else minRunnerUpMargin
+            val effectiveMax     = if (bootstrapping) profile.bootstrapMaxMatchDistance else profile.maxMatchDistance
+            val effectiveMargin  = if (bootstrapping) profile.bootstrapMinRunnerUpMargin else profile.minRunnerUpMargin
             // Only identify when the runner-up person is clearly further away. Without that gap the face is ambiguous,
             // and abstaining beats guessing - this is what keeps faces of people who aren't in the library at all from
             // being handed a name.
@@ -265,7 +268,7 @@ object FaceInference extends CommonsCLI {
   case class VectorIndexAcquireFailure(message: String) extends Exception(message)
 
   // -------------------------------------------------------------------------------------------------------------------
-  val logic = ZIO.logSpan("Infer person identification from faces features and already identified faces") {
+  def logic(profile: FaceMatchingProfile) = ZIO.logSpan("Infer person identification from faces features and already identified faces") {
     for {
       // _              <- fixFaceWithMissingFeatures()
       // _                  <- ZIO.attemptBlocking(Thread.sleep(120.minutes)) // TODO temporary hack top be removed
@@ -294,10 +297,10 @@ object FaceInference extends CommonsCLI {
                                               zio.stream.ZStream
                                                 .from(tocheck)
                                                 // .filter((face, _) => face.inferredIdentifiedPersonId.isEmpty) // avoid recompute, comment to force recompute
-                                                // .mapZIO((face, faceFeatures) => identifyFace(vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
+                                                // .mapZIO((face, faceFeatures) => identifyFace(profile, vectorIndex, knownFaceById, ignoredFaces)(face, faceFeatures))
                                                 // One graph walk is single-threaded, so the parallelism has to come from running several
                                                 // faces at once; the LMDB writes they trigger are serialized by the database itself.
-                                                .mapZIOParUnordered(searchParallelism)((face, faceFeatures) => identifyFaceWithConsensus(vectorIndex, knownFaceById, ignoredFaces, facesPerPerson)(face, faceFeatures))
+                                                .mapZIOParUnordered(searchParallelism)((face, faceFeatures) => identifyFaceWithConsensus(profile, vectorIndex, knownFaceById, ignoredFaces, facesPerPerson)(face, faceFeatures))
                                                 .filter(_ == true)
                                                 .runCount
                                                 .timed
@@ -305,8 +308,33 @@ object FaceInference extends CommonsCLI {
       (searchElapsed, newIdentifiedCount) = searched
       _                                  <- ZIO.logInfo(s"${tocheck.size} faces matched against the index in ${searchElapsed.toSeconds}s")
       _                                  <- Console.printLine(s"$newIdentifiedCount new faces inferred")
+      evaluatedFaceIds                    = unknownFaces.map((face, _) => face.faceId).toSet
+      clearedCount                       <- clearStaleInferences(evaluatedFaceIds)
+      _                                  <- Console.printLine(s"$clearedCount stale inferences cleared (faces this run could not evaluate: no vector from the current model, or too small)")
       _                                  <- ZIO.logInfo(s"done")
     } yield ()
   }
+
+  /** Clears the inferred person of every unconfirmed face this run could not evaluate - no vector from the current
+    * model (the face recognizer found no face in its crop, often a false detection, or the face is below its minimum
+    * size), or below `minimumFaceSize`. Such a guess was made by an earlier run, possibly with another model, and
+    * nothing supports it anymore : left alone it would sit in the review queue forever, since inference never
+    * revisits that face. Only the guess goes (person, confidence, date) : `inferredIgnore` is the user's own decision
+    * and stays, and confirmed identifications are never touched.
+    */
+  def clearStaleInferences(evaluatedFaceIds: Set[FaceId]): ZIO[MediaService, Exception, Int] =
+    for {
+      // collected first : the faces collection is not walked while it is being written to
+      stale <- MediaService
+                 .faceList()
+                 .filter(face => face.identifiedPersonId.isEmpty && face.inferredIdentifiedPersonId.isDefined && !evaluatedFaceIds.contains(face.faceId))
+                 .runCollect
+      _     <- ZIO.foreachDiscard(stale) { face =>
+                 MediaService.faceUpdate(
+                   face.faceId,
+                   face.copy(inferredIdentifiedPersonId = None, inferredIdentifiedPersonConfidence = None, inferredTimestamp = None)
+                 )
+               }
+    } yield stale.size
 
 }

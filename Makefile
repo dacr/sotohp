@@ -9,10 +9,10 @@ openapi-spec:
 	mill --no-server user-interfaces.api.run --just-generate-openapi-specs docs/sotohp-api-docs.json
 
 run-face-inference:
-	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference --fork-args "-Xms512m -Xmx4g"
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInference --fork-args "-Xms512m -Xmx4g" $(ARGS)
 
 run-face-inference-evaluate:
-	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInferenceEvaluate --fork-args "-Xms512m -Xmx4g"
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceInferenceEvaluate --fork-args "-Xms512m -Xmx4g" $(ARGS)
 
 run-face-fix:
 	mill user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FacesFix
@@ -36,7 +36,30 @@ run-compute-media-features:
 run-media-features-clustering:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.MediaFeaturesClustering $(ARGS)
 
-# (Re)build the clusters of visually similar faces. Pass e.g. ARGS="--radius=0.16 --minPts=3".
+# Face embeddings with a dedicated face recognition model served by LocalAI (ArcFace, aligned on the
+# face landmarks server side) instead of the historical in-process model. Needs a LocalAI server
+# with a face model installed, and PHOTOS_FACE_FEATURES_ENGINE=localai (see reference.conf,
+# sotohp.processors.face-features). Vectors are tagged with the model that computed them and never
+# compared across models, so after switching, in this order:
+#   make run-face-embedding-drift        compare both engines on your own faces (read-only)
+#   make run-face-inference-evaluate     BEFORE the backfill, with the old engine: the baseline
+#   make run-compute-face-features       re-embed every face (resumable, stop/relaunch at will)
+#   make run-face-inference-evaluate     retune: ARGS="--max-distance=0.5 --margin=0.08 ..."
+#   make run-face-inference              with the retuned values (same ARGS)
+#   make run-face-features-clustering    ARGS="--radius=..."
+# Stop the API server first: these write to the same LMDB environment (the drift one excepted).
+# run-compute-face-features ARGS: --force, --since=YYYY[-MM-DD], --limit=N, --parallelism=N
+run-compute-face-features:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.ComputeFaceFeatures $(ARGS)
+
+# Robustness of the face engines to head roll, sideways/upside-down photos and low resolution, on a
+# sample of confirmed faces. ARGS="--engines=djl,localai --persons=40 --faces-per-person=4"
+run-face-embedding-drift:
+	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceEmbeddingDrift $(ARGS)
+
+# (Re)build the clusters of visually similar faces. Pass e.g. ARGS="--radius=0.27 --minPts=3" (default radius
+# comes from the model's FaceMatchingProfile). ARGS="--radii=0.24,0.27,0.30" compares radii without storing
+# anything, scoring purity and cohesion against the confirmed faces.
 run-face-features-clustering:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceFeaturesClustering $(ARGS)
 

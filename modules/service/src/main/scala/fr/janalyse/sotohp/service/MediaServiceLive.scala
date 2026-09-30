@@ -639,6 +639,30 @@ class MediaServiceLive private (
       .mapError(err => ServiceDatabaseIssue(s"Couldn't fetch face features : $err"))
   }
 
+  override def faceFeaturesModel(): IO[ServiceIssue, Option[String]] =
+    FaceFeaturesProcessor.configuredModelTag
+      .mapError(err => ServiceInternalIssue(s"Couldn't get the configured face features model : $err"))
+
+  override def faceFeaturesListCurrent(): Stream[ServiceStreamIssue, FaceFeatures] =
+    ZStream
+      .fromZIO(faceFeaturesModel().mapError(err => ServiceStreamInternalIssue(s"Couldn't get the configured face features model : $err")))
+      .flatMap(current => faceFeaturesList().filter(_.model == current))
+
+  override def faceFeaturesGetCurrent(faceId: FaceId): IO[ServiceIssue, Option[FaceFeatures]] =
+    for {
+      current  <- faceFeaturesModel()
+      features <- faceFeaturesGet(faceId)
+    } yield features.filter(_.model == current)
+
+  override def faceFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalFaceFeatures] =
+    computeFaceFeatures(originalId)
+
+  override def originalFacesFeaturesStatus(originalId: OriginalId): IO[ServiceIssue, Option[(successful: Boolean, model: Option[String], timestamp: OffsetDateTime)]] =
+    collections.originalFaceFeatures
+      .fetch(originalId)
+      .map(_.map(dao => (successful = dao.status.successful, model = dao.model, timestamp = dao.status.timestamp)))
+      .mapError(err => ServiceDatabaseIssue(s"Couldn't check face features status : $err"))
+
   // -------------------------------------------------------------------------------------------------------------------
   // Whole-image feature vectors (embeddings) - visual similarity search + clustering.
 
@@ -1115,8 +1139,17 @@ class MediaServiceLive private (
                          .someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
       processor     <- processors.faceFeatures
                          .mapError(err => ServiceInternalIssue(s"Unable to get original detected faces features processor : $err"))
-      computed      <- processor
-                         .extractFaceFeatures(originalFaces)
+      mediaTuple    <- mediaGet(originalId).mapError(err => ServiceInternalIssue(s"Couldn't get media for original : $err"))
+      // Stored boxes are expressed in the media's effective frame. The processor's own image loading
+      // only knows the original's EXIF orientation, so a media the user turned by hand gets the image
+      // at its effective rotation handed over instead - otherwise the boxes would cut the wrong pixels.
+      extraRotation  = normalizedExtraRotationDegrees(mediaTuple, originalFaces.original)
+      computed      <- (if (extraRotation == 0) processor.extractFaceFeatures(originalFaces)
+                        else
+                          processors.faces
+                            .mapError(err => ServiceInternalIssue(s"Unable to get faces processor : $err"))
+                            .flatMap(_.getOriginalBufferedImage(originalFaces.original, effectiveRotationDegrees(mediaTuple, originalFaces.original)))
+                            .flatMap(rotatedImage => processor.extractFaceFeatures(originalFaces, rotatedImage)))
                          .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces features : $err"))
       _             <- ZIO.foreachDiscard(computed.features)(face =>
                          collections.faceFeatures

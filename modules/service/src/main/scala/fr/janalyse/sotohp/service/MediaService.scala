@@ -182,8 +182,36 @@ trait MediaService {
   def faceRead(faceId: FaceId): Stream[ServiceStreamIssue, Byte]
 
   // -------------------------------------------------------------------------------------------------------------------
+  /** Every stored face vector, whatever model computed it - see `faceFeaturesListCurrent`. */
   def faceFeaturesList(): Stream[ServiceStreamIssue, FaceFeatures]
+
+  /** The stored face vector, whatever model computed it - see `faceFeaturesGetCurrent`. */
   def faceFeaturesGet(faceId: FaceId): IO[ServiceIssue, Option[FaceFeatures]]
+
+  /** The model tag the configured face features engine stores with its vectors (`None` = the
+    * historical DJL model).
+    */
+  def faceFeaturesModel(): IO[ServiceIssue, Option[String]]
+
+  /** The stored face vectors computed by the currently configured model only. Vectors of different
+    * models live in different spaces - the same dimension doesn't make them comparable - so anything
+    * measuring distances between faces must read through these.
+    */
+  def faceFeaturesListCurrent(): Stream[ServiceStreamIssue, FaceFeatures]
+  def faceFeaturesGetCurrent(faceId: FaceId): IO[ServiceIssue, Option[FaceFeatures]]
+
+  /** Recomputes the features of every face of the original with the configured engine, from the
+    * image at the media's effective rotation, and overwrites the stored ones. Faces, boxes, crops and
+    * identifications are untouched. A face the engine finds nothing in keeps its previous vector,
+    * which the `*Current` readers then ignore if it comes from another model.
+    */
+  def faceFeaturesRecompute(originalId: OriginalId): IO[ServiceIssue, OriginalFaceFeatures]
+
+  /** How the face features of an original were last computed, straight from the stored record - no
+    * computation triggered, unlike `originalFacesFeatures`. `model` is the tag of the engine that ran
+    * (`None` = the historical DJL model), which is what a backfill resumes on.
+    */
+  def originalFacesFeaturesStatus(originalId: OriginalId): IO[ServiceIssue, Option[(successful: Boolean, model: Option[String], timestamp: OffsetDateTime)]]
 
   // -------------------------------------------------------------------------------------------------------------------
   /** Streams every stored whole-image feature vector (one per photo). */
@@ -467,6 +495,12 @@ object MediaService {
   // -------------------------------------------------------------------------------------------------------------------
   def faceFeaturesList(): ZStream[MediaService, ServiceStreamIssue, FaceFeatures]            = ZStream.serviceWithStream(_.faceFeaturesList())
   def faceFeaturesGet(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[FaceFeatures]] = ZIO.serviceWithZIO(_.faceFeaturesGet(faceId))
+  def faceFeaturesModel(): ZIO[MediaService, ServiceIssue, Option[String]]                   = ZIO.serviceWithZIO(_.faceFeaturesModel())
+  def faceFeaturesListCurrent(): ZStream[MediaService, ServiceStreamIssue, FaceFeatures]     = ZStream.serviceWithStream(_.faceFeaturesListCurrent())
+  def faceFeaturesGetCurrent(faceId: FaceId): ZIO[MediaService, ServiceIssue, Option[FaceFeatures]] = ZIO.serviceWithZIO(_.faceFeaturesGetCurrent(faceId))
+  def faceFeaturesRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, OriginalFaceFeatures] = ZIO.serviceWithZIO(_.faceFeaturesRecompute(originalId))
+  def originalFacesFeaturesStatus(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[(successful: Boolean, model: Option[String], timestamp: OffsetDateTime)]] =
+    ZIO.serviceWithZIO(_.originalFacesFeaturesStatus(originalId))
 
   // -------------------------------------------------------------------------------------------------------------------
   def mediaFeaturesList(): ZStream[MediaService, ServiceStreamIssue, MediaFeatures]                       = ZStream.serviceWithStream(_.mediaFeaturesList())
