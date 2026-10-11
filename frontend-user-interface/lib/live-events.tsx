@@ -8,7 +8,7 @@
 // content out from under the viewer, which is worse than a slightly stale tile.
 import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { syncFaceFromServer } from "../hooks/useFaces";
+import { createFaceEventSync } from "../hooks/useFaces";
 import { useAuth } from "./keycloak-auth";
 import { clearMapCache } from "./map-cache";
 import { connectEvents, type ApiEvent } from "./sse";
@@ -51,10 +51,11 @@ export function LiveEventsProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!ready) return;
+    const syncFace = createFaceEventSync(queryClient, api);
     return connectEvents(getToken, (event) => {
       // Faces are the one entity whose list is far too big to reload per event — reconcile the
-      // single face the frame names instead (hooks/useFaces.ts).
-      if (event.entity === "face" && event.id) void syncFaceFromServer(queryClient, api, event.id, event.action);
+      // faces the frames name instead, a burst at a time (hooks/useFaces.ts).
+      if (event.entity === "face" && event.id) syncFace(event.id, event.action);
       for (const queryKey of queryKeysForEvent(event)) {
         queryClient.invalidateQueries({ queryKey });
       }

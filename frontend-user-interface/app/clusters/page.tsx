@@ -21,8 +21,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { FaceEditModal } from "../../components/FaceEditModal";
+import { FacePhotoPreview, useFacePhotoPreview } from "../../components/FacePhotoPreview";
 import { MosaicTile } from "../../components/MosaicTile";
-import { useFaceImageVersion, useSetFacePerson } from "../../hooks/useFaces";
+import { SizeControl, useSizeClass } from "../../components/SizeControl";
+import { identifiedPatch, useFaceImageVersion, useIgnoreFace, useRestoreFace, useSetFacePerson } from "../../hooks/useFaces";
 import { usePersonsMap } from "../../hooks/usePersons";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
 import { useAuth } from "../../lib/keycloak-auth";
@@ -211,6 +213,7 @@ function ClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: numbe
     return () => ctrl.abort();
   }, [api, clusterId]);
 
+  const [size, setSize] = useSizeClass("clusters.photos.size");
   const scrollRef = useScrollRestoration<HTMLDivElement>(`clusters:photos:members:${clusterId}`);
 
   return (
@@ -221,6 +224,7 @@ function ClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: numbe
             ← all clusters
           </button>
           <span className="similar-kicker">Cluster {clusterId}</span>
+          <SizeControl size={size} onChange={setSize} label="Photo size" />
         </div>
         <div className="similar-status">
           {status === "loading" && <span className="mosaic-busy" aria-label="loading" />}
@@ -233,7 +237,7 @@ function ClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: numbe
 
       {status === "error" && <div className="similar-empty">Couldn’t load this cluster.</div>}
       {members.length > 0 && (
-        <div className="similar-grid" ref={scrollRef}>
+        <div className={`similar-grid size-${size}`} ref={scrollRef}>
           {members.map((m, i) => (
             <MosaicTile key={m.accessKey} media={m} offset={i} />
           ))}
@@ -249,8 +253,8 @@ function ClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: numbe
 // merely inferred, already confirmed, even ones dismissed - so the members view surfaces that
 // state and lets it be acted on directly, the same as the Persons tab's face grids do: a green
 // name badge once confirmed (click to re-open FaceEditModal and change/remove it), an amber one
-// while only inferred (click to confirm outright), and a grey "ignored" flag for faces someone
-// already dismissed the inference on.
+// while only inferred (click to confirm outright), and on any face not yet confirmed the same 🚫
+// ignore button as the Persons tab, or a "↩ restore" badge once ignored.
 // ---------------------------------------------------------------------------
 
 function FaceClusterList({ api, view, onSwitchView, onOpen }: { api: Api; view: View; onSwitchView: (v: View) => void; onOpen: (id: number) => void }) {
@@ -360,6 +364,10 @@ function FaceClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: n
   const personsMap = usePersonsMap();
   const faceImageVersion = useFaceImageVersion();
   const setFacePerson = useSetFacePerson();
+  const ignoreFace = useIgnoreFace();
+  const restoreFace = useRestoreFace();
+  const [size, setSize] = useSizeClass("clusters.faces.size");
+  const photoPreview = useFacePhotoPreview();
   const [members, setMembers] = useState<DetectedFace[]>([]);
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
   const [truncated, setTruncated] = useState(false);
@@ -440,12 +448,50 @@ function FaceClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: n
     return p ? `${p.firstName || ""} ${p.lastName || ""}`.trim() : "";
   }
 
+  // A cluster mixes persons, so the popup names whoever the face is (or might be) - the same amber
+  // "Inferred:" line as the Persons tab's cross-person view, and a green one once confirmed.
+  function previewDetails(face: DetectedFace | undefined) {
+    if (!face) return null;
+    if (face.identifiedPersonId) {
+      const name = personName(face.identifiedPersonId);
+      return name && <div style={{ color: "#4ade80", fontWeight: 600 }}>{name}</div>;
+    }
+    const inferred = personName(face.inferredIdentifiedPersonId);
+    return inferred && <div style={{ color: "#fbbf24", fontWeight: 600 }}>Inferred: {inferred}</div>;
+  }
+
+  // The members are streamed into local state rather than read from the shared face caches that
+  // the mutations patch (hooks/useFaces.ts), so each action mirrors its outcome here too -
+  // otherwise a confirmed face keeps showing its inferred badge until the cluster is reopened.
+  function patchMember(faceId: string, patch: Partial<DetectedFace>) {
+    setMembers((prev) => prev.map((f) => (f.faceId === faceId ? { ...f, ...patch } : f)));
+  }
+
   async function confirmInferred(face: DetectedFace) {
     if (!face.inferredIdentifiedPersonId) return;
     try {
       await setFacePerson.mutateAsync({ faceId: face.faceId, personId: face.inferredIdentifiedPersonId });
+      patchMember(face.faceId, identifiedPatch(face.inferredIdentifiedPersonId));
     } catch {
       showError("Failed to confirm identification");
+    }
+  }
+
+  async function ignore(face: DetectedFace) {
+    try {
+      await ignoreFace.mutateAsync(face.faceId);
+      patchMember(face.faceId, { inferredIgnore: true });
+    } catch {
+      showError("Failed to ignore face");
+    }
+  }
+
+  async function restore(face: DetectedFace) {
+    try {
+      await restoreFace.mutateAsync(face.faceId);
+      patchMember(face.faceId, { inferredIgnore: undefined });
+    } catch {
+      showError("Failed to restore face");
     }
   }
 
@@ -466,6 +512,7 @@ function FaceClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: n
             ← all clusters
           </button>
           <span className="similar-kicker">Face cluster {clusterId}</span>
+          <SizeControl size={size} onChange={setSize} label="Face size" />
           <label className="pf-show-ignored">
             <input type="checkbox" checked={hideConfirmed} onChange={(e) => persistHideConfirmed(e.target.checked)} /> Hide confirmed
           </label>
@@ -484,7 +531,7 @@ function FaceClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: n
         <div className="similar-empty">Every loaded face here is already confirmed.</div>
       )}
       {visibleMembers.length > 0 && (
-        <div className="similar-grid" ref={scrollRef}>
+        <div className={`similar-grid size-${size}`} ref={scrollRef}>
           {visibleMembers.map((f) => {
             const identifiedName = personName(f.identifiedPersonId);
             const showInferredBadge = !f.identifiedPersonId && !!f.inferredIdentifiedPersonId;
@@ -495,7 +542,6 @@ function FaceClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: n
                 role="button"
                 tabIndex={0}
                 className={`face-tile${f.inferredIgnore ? " face-ignored" : ""}`}
-                title="Open photo"
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest("button")) return;
                   openFace(f);
@@ -507,7 +553,16 @@ function FaceClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: n
                   }
                 }}
               >
-                <img className="face-img" src={api.faceImageUrl(f.faceId, faceImageVersion(f))} loading="lazy" decoding="async" alt="" />
+                <img
+                  className="face-img"
+                  src={api.faceImageUrl(f.faceId, faceImageVersion(f))}
+                  loading="lazy"
+                  decoding="async"
+                  alt=""
+                  onMouseEnter={(e) => photoPreview.onMouseEnter(e, f)}
+                  onMouseMove={(e) => photoPreview.onMouseMove(e, f)}
+                  onMouseLeave={photoPreview.onMouseLeave}
+                />
                 <button type="button" className="ft-edit" title="Edit identification" aria-label="Edit" onClick={() => setEditingFace(f)}>
                   ✎
                 </button>
@@ -521,16 +576,23 @@ function FaceClusterMembers({ api, clusterId, onBack }: { api: Api; clusterId: n
                     {inferredName || "inferred"}
                   </button>
                 )}
-                {f.inferredIgnore && (
-                  <span className="face-badge ignored" title="Ignored — excluded from inference review">
-                    ignored
-                  </span>
-                )}
+                {!f.identifiedPersonId &&
+                  (f.inferredIgnore ? (
+                    <button type="button" className="face-badge restore" title="Restore this ignored face" onClick={() => restore(f)}>
+                      ↩ restore
+                    </button>
+                  ) : (
+                    <button type="button" className="ft-ignore" title="Ignore this face" onClick={() => ignore(f)}>
+                      🚫
+                    </button>
+                  ))}
               </div>
             );
           })}
         </div>
       )}
+
+      <FacePhotoPreview preview={photoPreview.preview} hint="Click to open in Viewer" details={previewDetails(photoPreview.preview?.face)} />
 
       {editingFace && (
         <FaceEditModal

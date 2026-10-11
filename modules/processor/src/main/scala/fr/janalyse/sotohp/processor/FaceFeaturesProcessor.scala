@@ -24,13 +24,18 @@ import javax.imageio.{IIOImage, ImageIO, ImageWriteParam}
 abstract class FaceFeaturesIssue(message: String, mayByErr: Option[Throwable]) extends Exception(message, mayByErr.orNull) with CoreIssue
 case class FaceFeaturesGeneralIssue(message: String)                  extends FaceFeaturesIssue(message, None)
 case class FaceFeaturesExtractIssue(message: String, err: Throwable)  extends FaceFeaturesIssue(message, Some(err))
+// The embedding server could not be used at all (unreachable, timeout, server-side error, unknown
+// model). It says nothing about the photo, so callers must not record it as a features attempt.
+case class FaceFeaturesServiceUnavailableIssue(message: String, err: Option[Throwable] = None) extends FaceFeaturesIssue(message, err)
 
 /** Computes one embedding per detected face.
   *
   * The engine is chosen by configuration (see [[FaceFeaturesConfig]]) ; both share the same
-  * shape : pick the faces worth embedding, cut each one out of the image, embed the cut. On any
-  * failure the whole original is reported unsuccessful with no features, so a batch sync is never
-  * stopped by one bad photo and the step is retried later.
+  * shape : pick the faces worth embedding, cut each one out of the image, embed the cut. On a
+  * photo-level failure the whole original is reported unsuccessful with no features, so a batch
+  * sync is never stopped by one bad photo and the step is retried later. An unusable embedding
+  * server ([[FaceFeaturesServiceUnavailableIssue]]) is not the photo's fault : it is propagated so
+  * that nothing gets recorded.
   */
 trait FaceFeaturesProcessor extends Processor {
 
@@ -86,9 +91,11 @@ trait FaceFeaturesProcessor extends Processor {
                                  @@ annotated("faceId" -> face.faceId.toString)
                              }
                              .map(_.flatten)
-                             .logError("Face features issue")
-                             .mapError(err => FaceFeaturesGeneralIssue(s"Unable to compute face features: $err"))
-                             .option
+                             .map(Some(_))
+                             .catchAll {
+                               case err: FaceFeaturesServiceUnavailableIssue => ZIO.fail(err)
+                               case err                                      => ZIO.logWarning(s"Unable to compute face features: $err").as(None)
+                             }
       status             = ProcessedStatus(successful = mayBeFaceFeatures.isDefined, timestamp = now)
       features           = mayBeFaceFeatures.getOrElse(Nil)
     } yield OriginalFaceFeatures(faces.original, status, features, modelTag)
@@ -297,7 +304,7 @@ class LocalAIFaceFeaturesProcessor(config: FaceFeaturesConfig) extends FaceFeatu
 
     ZIO
       .attemptBlocking(httpClient.send(request, HttpResponse.BodyHandlers.ofString()))
-      .mapError(err => FaceFeaturesExtractIssue(s"LocalAI request to ${config.baseUrl} failed", err))
+      .mapError(err => FaceFeaturesServiceUnavailableIssue(s"LocalAI request to ${config.baseUrl} failed: ${err.getMessage}", Some(err)))
       .flatMap { response =>
         val body = Option(response.body()).getOrElse("")
         if (response.statusCode() / 100 == 2)
@@ -309,6 +316,8 @@ class LocalAIFaceFeaturesProcessor(config: FaceFeaturesConfig) extends FaceFeatu
           // The server's detector found no face in our crop (profile, occlusion, a false positive of
           // our own detector) - nothing to embed, but nothing wrong either.
           ZIO.logDebug(s"LocalAI found no face in the crop : ${body.take(200)}").as(None)
+        else if (LocalAIFaceFeaturesProcessor.isServiceFailure(response.statusCode()))
+          ZIO.fail(FaceFeaturesServiceUnavailableIssue(s"LocalAI returned HTTP ${response.statusCode()}: ${body.take(300)}"))
         else
           ZIO.fail(FaceFeaturesGeneralIssue(s"LocalAI returned HTTP ${response.statusCode()}: ${body.take(300)}"))
       }
@@ -329,6 +338,13 @@ object LocalAIFaceFeaturesProcessor {
   private[processor] def isNoFaceAnswer(status: Int, body: String): Boolean =
     noFacePattern.findFirstIn(body).isDefined ||
       (status == 404 && body.contains("Resource not found"))
+
+  /** Whether a failed `/v1/face/embed` answer (no-face answers set aside) means the server can't be
+    * used for any photo right now - server-side error, unknown model (404), missing credentials,
+    * throttling - rather than something wrong with the crop we sent (400, 413, ...).
+    */
+  private[processor] def isServiceFailure(status: Int): Boolean =
+    status >= 500 || Set(401, 403, 404, 408, 429).contains(status)
 
   /** The detector box, grown by `margin` (a fraction of the box size) on each side, in pixels of a
     * `width` x `height` image and clamped to stay inside it.

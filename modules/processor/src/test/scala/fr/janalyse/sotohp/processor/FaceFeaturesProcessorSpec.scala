@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.processor
 
 import fr.janalyse.sotohp.model.*
+import fr.janalyse.sotohp.processor.config.FaceFeaturesConfig
 import zio.*
 import zio.test.*
 
@@ -35,6 +36,25 @@ object FaceFeaturesProcessorSpec extends BaseSpecDefault {
         LocalAIFaceFeaturesProcessor.isNoFaceAnswer(500, """{"error":{"code":500,"message":"rpc error: code = NotFound desc = no face detected","type":""}}"""),
         !LocalAIFaceFeaturesProcessor.isNoFaceAnswer(400, """{"error":{"code":400,"message":"invalid image input","type":""}}"""),
         !LocalAIFaceFeaturesProcessor.isNoFaceAnswer(500, "connection refused")
+      )
+    },
+    test("LocalAI answers that make the server unusable are told apart from crop-level failures") {
+      assertTrue(
+        LocalAIFaceFeaturesProcessor.isServiceFailure(500),
+        LocalAIFaceFeaturesProcessor.isServiceFailure(503),
+        LocalAIFaceFeaturesProcessor.isServiceFailure(404), // unknown model, once no-face answers are set aside
+        LocalAIFaceFeaturesProcessor.isServiceFailure(429),
+        !LocalAIFaceFeaturesProcessor.isServiceFailure(400),
+        !LocalAIFaceFeaturesProcessor.isServiceFailure(413)
+      )
+    },
+    test("an unreachable server fails with a service unavailable issue") {
+      val config    = FaceFeaturesConfig(engine = "localai", baseUrl = "http://127.0.0.1:1", model = "any", timeoutSeconds = 2, cropMargin = 0.3, minFaceSize = 64)
+      val processor = LocalAIFaceFeaturesProcessor(config) // 127.0.0.1:1 refuses connections
+      for {
+        result <- processor.embedCrop(new BufferedImage(64, 64, BufferedImage.TYPE_INT_RGB)).exit
+      } yield assertTrue(
+        result.causeOption.flatMap(_.failureOption).exists(_.isInstanceOf[FaceFeaturesServiceUnavailableIssue])
       )
     },
     test("an image with an alpha channel is encoded as JPEG") {

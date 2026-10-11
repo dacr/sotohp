@@ -130,12 +130,31 @@ object CaptionProcessorSpec extends BaseSpecDefault with TestDatasets {
           .exists(caption => caption.length <= 400 && caption.endsWith(".") && caption.startsWith("Une longue rue"))
       )
     },
+    test("an answer cut short keeps only its finished sentences, and is rejected without any") {
+      val processor = processorWith(enabled = false)
+      assertTrue(
+        // fragments actually stored when concurrent requests exhausted the shared context - the server
+        // still reported a normal "stop" for them
+        processor.tidy("Un homme âgé, vêtu d'un costume formel").isEmpty,
+        processor.tidy("Un enfant est assis sur un meuble orn").isEmpty,
+        processor
+          .tidy("Un homme en uniforme militaire pose avec une épée devant un rideau. Il porte une casquette et une")
+          .contains("Un homme en uniforme militaire pose avec une épée devant un rideau."),
+        // cut right after a finished sentence : nothing lost
+        processor
+          .tidy("Une femme âgée, vêtue d'une tenue sombre, regarde l'objectif dans un portrait sépia.")
+          .contains("Une femme âgée, vêtue d'une tenue sombre, regarde l'objectif dans un portrait sépia."),
+        processor.tidy("Un vieil escalier de pierre mène à une porte close…").contains("Un vieil escalier de pierre mène à une porte close…")
+      )
+    },
     test("tidy cleans, de-preambles and rejects model garbage") {
       val processor = processorWith(enabled = false)
       assertTrue(
         processor.tidy("  \n The image shows a red barn in a field. It is sunny.").contains("A red barn in a field. It is sunny."),
         processor.tidy("Cette photo montre un chat assis sur une table en bois.").contains("Un chat assis sur une table en bois."),
-        processor.tidy("- a cat sitting on a wooden table").contains("A cat sitting on a wooden table"),
+        processor.tidy("- a cat sitting on a wooden table.").contains("A cat sitting on a wooden table."),
+        // no finished sentence : can't be told apart from an answer cut short (see above), rejected
+        processor.tidy("- a cat sitting on a wooden table").isEmpty,
         processor.tidy(" Une foret d'arbres couverts de neige un jour ensoleille.").contains("Une foret d'arbres couverts de neige un jour ensoleille."),
         // rejections (unusable model output)
         processor.tidy(loopText).isEmpty,                     // repetition loop

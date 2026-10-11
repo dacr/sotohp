@@ -229,7 +229,7 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
   }
 
   // Ends like a finished sentence (or a finished quote) - anything else was cut by the token cap.
-  private def complete(sentence: String): Boolean = ".!?»”\"".contains(sentence.last)
+  private def complete(sentence: String): Boolean = ".!?…»”\"".contains(sentence.last)
 
   /** Turn a raw model answer into a stored caption, or `None` when it is unusable.
     *
@@ -271,11 +271,16 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
       charLoop || wordLoop                                                     // repetition loop
     }
 
-    if (rejected) None
+    val cleaned   = emptyQuotes.replaceAllIn(depreambled, "").trim
+    val sentences = sentencesOf(cleaned)
+    // An unfinished last sentence was cut short - by the token cap, or because the server ran out of
+    // context (concurrent requests sharing it, which the server still reports as a normal "stop").
+    // It goes even when it is the only one : storing "Un homme âgé, vêtu d'un costume formel" as a
+    // caption is worse than recording a failed attempt, which `--retry` redoes.
+    val finished  = if (sentences.nonEmpty && !complete(sentences.last)) sentences.init else sentences
+
+    if (rejected || finished.isEmpty) None
     else {
-      val cleaned        = emptyQuotes.replaceAllIn(depreambled, "").trim
-      val sentences      = sentencesOf(cleaned)
-      val finished       = if (sentences.size > 1 && !complete(sentences.last)) sentences.init else sentences
       val describing     = finished.filter { sentence =>
         quotedPattern.replaceAllIn(sentence, "").exists(_.isLetter) && // not just a transcription
         !sentence.endsWith(":") &&                                     // "Le texte visible est :" whose quotes were empty
@@ -362,4 +367,5 @@ object CaptionProcessor {
       Option(text).filter(_.nonEmpty)
     }
   }
+
 }

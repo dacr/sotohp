@@ -134,8 +134,17 @@ main { flex: 1; position: relative; }
 /* Fixed square cells: an aspect-ratio grid item in an `auto` row track does not feed its
    height back into the track, so `1fr` columns + auto rows collapse every row onto the
    previous one. Explicit column AND row sizing avoids that entirely. */
-.similar-grid { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.75rem 1rem; display: grid; grid-template-columns: repeat(auto-fill, 168px); grid-auto-rows: 168px; gap: 8px; justify-content: center; align-content: start; }
-.similar-grid > * { width: 168px; height: 168px; }
+.similar-grid { --tile: 168px; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.75rem 1rem; display: grid; grid-template-columns: repeat(auto-fill, var(--tile)); grid-auto-rows: var(--tile); gap: 8px; justify-content: center; align-content: start; }
+.similar-grid > * { width: var(--tile); height: var(--tile); }
+/* Size toggle of the clusters members views (components/SizeControl.tsx); Maximum is the default size above. */
+.similar-grid.size-small { --tile: 96px; gap: 6px; }
+.similar-grid.size-medium { --tile: 128px; }
+.similar-grid.size-small .face-tile .ft-edit, .similar-grid.size-small .face-tile .ft-ignore { font-size: 10px; padding: 2px 5px; top: 4px; }
+.similar-grid.size-small .face-tile .ft-edit { right: 4px; }
+.similar-grid.size-small .face-tile .ft-ignore { left: 4px; }
+.similar-grid.size-small .face-badge { font-size: 10px; padding: 2px 6px; }
+.similar-grid.size-small .face-badge.inferred, .similar-grid.size-small .face-badge.identified { left: 4px; bottom: 4px; }
+.similar-grid.size-small .face-badge.restore { right: 4px; bottom: 4px; }
 /* Search view — Google-style text box on top, compact grid of MosaicTiles below (ranked by
    relevance then most recent). Before the first search the box sits centred; once results are
    in it stays pinned to the top and the grid takes over the rest of the height. */
@@ -363,10 +372,8 @@ main { flex: 1; position: relative; }
 .face-tile.face-ignored .face-img { opacity: 0.45; filter: grayscale(0.6); }
 .face-badge.restore { position: absolute; right: 6px; bottom: 6px; background: rgba(75,85,99,0.95); color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .face-badge.restore:hover, .face-badge.restore:focus { background: rgba(55,65,81,1); }
-/* Read-only badges (face clusters view: a name already confirmed, or a dismissed inference) - same
-   footprint as .face-badge.inferred/.restore but not clickable. */
+/* Face clusters view: a name already confirmed - same footprint as .face-badge.inferred. */
 .face-badge.identified { position: absolute; left: 6px; bottom: 6px; background: rgba(22,163,74,0.92); color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; max-width: calc(100% - 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
-.face-badge.ignored { position: absolute; left: 6px; top: 6px; background: rgba(107,114,128,0.85); color: #fff; border: none; border-radius: 12px; padding: 2px 8px; font-size: 11px; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 .person-faces-view.size-small .face-tile .ft-ignore { font-size: 10px; padding: 2px 5px; left: 4px; top: 4px; }
 .person-faces-view.size-small .face-badge.restore { font-size: 10px; padding: 2px 6px; right: 4px; bottom: 4px; }
 .person-faces-view .ignore-all, .person-faces-view .ignore-selected { border: 1px solid #4b5563; background: #6b7280; color: #fff; border-radius: 6px; padding: 6px 10px; cursor: pointer; }

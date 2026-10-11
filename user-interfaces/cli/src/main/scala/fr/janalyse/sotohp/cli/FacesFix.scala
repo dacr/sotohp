@@ -83,16 +83,18 @@ object FacesFix extends CommonsCLI {
 
   // -------------------------------------------------------------------------------------------------------------------
 
-  def checkFaceIsInOriginalFaces(originalId: OriginalId, foundFaces: Chunk[Face]): ZIO[MediaService, ServiceIssue, Unit] = {
+  // Whether the original's faces identifiers had to be updated
+  def checkFaceIsInOriginalFaces(originalId: OriginalId, foundFaces: Chunk[Face]): ZIO[MediaService, ServiceIssue, Boolean] = {
     for {
       currentFaces   <- MediaService.originalFaces(originalId).map(_.map(_.faces).getOrElse(Nil))
       currentFacesIds = currentFaces.map(_.faceId)
       foundFacesIds   = foundFaces.map(_.faceId).toList
+      updated         = currentFacesIds.size != foundFacesIds.size
       _              <- MediaService
                           .originalFacesUpdate(originalId, foundFacesIds)
                           .tap(_ => ZIO.logInfo(s"Original faces identifiers updated $originalId - ${currentFacesIds.size}->${foundFacesIds.size} faces"))
-                          .when(currentFacesIds.size != foundFacesIds.size)
-    } yield ()
+                          .when(updated)
+    } yield updated
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -104,17 +106,25 @@ object FacesFix extends CommonsCLI {
       facesByOriginal = faces.groupBy(_.originalId)
       _              <- ZIO.logInfo("----------- Originals faces data coherency -----------")
       originalsIds    = faces.map(_.originalId).distinct
-      _              <- ZIO.foreachDiscard(facesByOriginal) { (id, faces) =>
-                          checkFaceIsInOriginalFaces(id, faces)
-                        }
+      updatedIds     <- ZIO
+                          .foreach(facesByOriginal.toList) { (id, faces) =>
+                            checkFaceIsInOriginalFaces(id, faces).map(updated => Option.when(updated)(id))
+                          }
+                          .map(_.flatten.toSet)
       _              <- ZIO.logInfo("----------- Faces path coherency -----------")
       _              <- ZIO.foreachDiscard(faces.filterNot(_.path.path.toFile.exists())) { face =>
                           ZIO.logInfo(s"Face ${face.faceId} is orphan of its file : ${face.path.path}") *>
                             MediaService.faceDelete(face.faceId)
                         }
       _              <- ZIO.logInfo("----------- Faces features fix -----------")
+      // re-embed the originals whose faces list was just fixed, and those never (successfully) embedded
       _              <- ZIO.foreachDiscard(originalsIds) { originalId =>
-                          MediaService.originalFacesFeatures(originalId)
+                          for {
+                            status <- MediaService.originalFacesFeaturesStatus(originalId)
+                            _      <- MediaService
+                                        .faceFeaturesRecompute(originalId)
+                                        .when(updatedIds.contains(originalId) || status.forall(!_.successful))
+                          } yield ()
                         }
     } yield ()
   }

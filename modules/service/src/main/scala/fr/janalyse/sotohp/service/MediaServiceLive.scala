@@ -10,6 +10,7 @@ import fr.janalyse.sotohp.processor.{
   ClassificationProcessor,
   FaceFeaturesIssue,
   FaceFeaturesProcessor,
+  FaceFeaturesServiceUnavailableIssue,
   FacesDetectionIssue,
   FacesProcessor,
   GeoPlaceResolver,
@@ -564,7 +565,7 @@ class MediaServiceLive private (
       originalFaces       <- originalFaces(original.id)
       updatedOriginalFaces = builtFace.faceId :: originalFaces.map(_.faces.map(_.faceId)).getOrElse(Nil)
       _                   <- originalFacesUpdate(originalId, updatedOriginalFaces)
-      _                   <- originalFacesFeatures(originalId)
+      _                   <- faceFeaturesRefreshAfterEdit(originalId) // the new face needs its vector
     } yield builtFace
   }
 
@@ -1150,7 +1151,11 @@ class MediaServiceLive private (
                             .mapError(err => ServiceInternalIssue(s"Unable to get faces processor : $err"))
                             .flatMap(_.getOriginalBufferedImage(originalFaces.original, effectiveRotationDegrees(mediaTuple, originalFaces.original)))
                             .flatMap(rotatedImage => processor.extractFaceFeatures(originalFaces, rotatedImage)))
-                         .mapError(err => ServiceInternalIssue(s"Unable to extract original detected faces features : $err"))
+                         .mapError {
+                           case err: FaceFeaturesServiceUnavailableIssue => ServiceUnavailableIssue(s"Face features server unavailable : ${err.getMessage}")
+                           case err                                      => ServiceInternalIssue(s"Unable to extract original detected faces features : $err")
+                         }
+      // An unreachable server fails above, so the previously stored record is left untouched.
       _             <- ZIO.foreachDiscard(computed.features)(face =>
                          collections.faceFeatures
                            .upsertOverwrite(face.faceId, face.into[DaoFaceFeatures].transform)
@@ -1182,19 +1187,37 @@ class MediaServiceLive private (
     } yield result
   }
 
+  private def originalFacesFeaturesGet(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]] =
+    collections.originalFaceFeatures
+      .fetch(originalId)
+      .flatMap(gotten => ZIO.foreach(gotten)(daoFacesFeaturesToFacesFeatures))
+      .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
+
   override def originalFacesFeatures(originalId: OriginalId): IO[ServiceIssue, Option[OriginalFaceFeatures]] = {
     for {
-      faceIds            <- originalFaces(originalId).map(_.map(_.faces.map(_.faceId).toSet).getOrElse(Set.empty))
-      faceFeatures       <- collections.originalFaceFeatures
-                              .fetch(originalId)
-                              .flatMap(gotten => ZIO.foreach(gotten)(daoFacesFeaturesToFacesFeatures))
-                              .mapError(err => ServiceDatabaseIssue(s"Unable to fetch faces from database: $err"))
-      faceFeaturesFaceIds = faceFeatures.map(_.features.map(_.faceId).toSet).getOrElse(Set.empty)
-      result             <- computeFaceFeatures(originalId)
-                              .tap(feats => ZIO.logInfo(s"Computed face features for original $originalId : ${feats.features.size}"))
-                              .when(faceFeatures.isEmpty || faceFeaturesFaceIds != faceIds)
-    } yield faceFeatures.orElse(result)
+      // A stored record - successful or not - means this photo has already been through the model.
+      // Some faces may legitimately carry no vector (too small, no face found by the server), so the
+      // record is not compared against the detected faces : that would re-embed such photos on every
+      // call. `faceFeaturesRecompute` (or the ComputeFaceFeatures CLI) is the way to try again.
+      stored <- originalFacesFeaturesGet(originalId)
+      result <- computeFaceFeatures(originalId)
+                  .tap(feats => ZIO.logInfo(s"Computed face features for original $originalId : ${feats.features.size}"))
+                  .when(stored.isEmpty)
+    } yield result.orElse(stored)
   }
+
+  /** Re-embeds an original's faces after they were edited by hand. The edit itself is already
+    * stored, so an unusable embedding server must not fail it : the stored status is flipped to
+    * unsuccessful instead, so that the ComputeFaceFeatures CLI picks the original up later.
+    */
+  private def faceFeaturesRefreshAfterEdit(originalId: OriginalId): IO[ServiceIssue, Unit] =
+    computeFaceFeatures(originalId).unit.catchSome { case err: ServiceUnavailableIssue =>
+      ZIO.logWarning(s"Face features of original $originalId left to recompute later : ${err.getMessage}") *>
+        collections.originalFaceFeatures
+          .update(originalId, previous => previous.copy(status = previous.status.copy(successful = false)))
+          .mapError(err => ServiceDatabaseIssue(s"Unable to flag face features for recompute : $err"))
+          .unit
+    }
 
   override def facesDetectPreview(originalId: OriginalId, rotationDegrees: Int): IO[ServiceIssue, List[BoundingBox]] = {
     for {
@@ -1257,6 +1280,14 @@ class MediaServiceLive private (
                                 // this does not touch identifiedPersonId, which lives on the Face record above, untouched.
                                 computed          <- featuresProcessor
                                                        .extractFaceFeatures(remappedOriginal, rotatedImage)
+                                                       // The stored vectors describe the crops as they were before the turn : with the
+                                                       // server down, record the step as failed so the ComputeFaceFeatures CLI redoes it,
+                                                       // rather than failing the rotation which is already stored.
+                                                       .catchSome { case err: FaceFeaturesServiceUnavailableIssue =>
+                                                         ZIO
+                                                           .logWarning(s"Face features of original $originalId left to recompute later : ${err.getMessage}")
+                                                           .as(OriginalFaceFeatures(original, ProcessedStatus(successful = false, timestamp = now), Nil, featuresProcessor.modelTag))
+                                                       }
                                                        .mapError(err => ServiceInternalIssue(s"Unable to extract remapped faces features : $err"))
                                 _                 <- ZIO.foreachDiscard(computed.features) { face =>
                                                        collections.faceFeatures
@@ -1905,16 +1936,58 @@ class MediaServiceLive private (
     logic @@ annotated("originalId" -> input.original.id.toString, "originalMediaPath" -> input.original.absoluteMediaPath.toString)
   }
 
-  private def synchronizeProcessors(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    val logic = for {
-      _                         <- originalNormalized(input.media.original.id)                   // required to optimize AI work so not launched in background
-      fiberMiniaturesFiber      <- originalMiniatures(input.media.original.id)                   // .fork
-      fiberFacesFiber           <- originalFaces(input.media.original.id).ignoreLogged           // .fork
-      fiberFeaturesFiber        <- originalFacesFeatures(input.media.original.id).ignoreLogged   // .fork
-      fiberMediaFeaturesFiber   <- originalMediaFeatures(input.media.original.id).ignoreLogged   // .fork
-      fiberCaptionFiber         <- originalCaption(input.media.original.id).ignoreLogged         // .fork (no-op unless the captioner is enabled)
-      fiberClassificationsFiber <- originalClassifications(input.media.original.id).ignoreLogged // .fork
-      fiberObjectsFiber         <- originalObjects(input.media.original.id).ignoreLogged         // .fork
+  /** Remote processors (served by an external AI server) get skipped for the rest of a sync run once
+    * they were found unavailable that many times in a row, so a server that is down costs a few
+    * timeouts instead of one per photo. The photos synchronized meanwhile have no record for that
+    * step : the dedicated CLI (ComputeCaptions, ComputeFaceFeatures) fills them in later.
+    */
+  private val remoteStepMaxConsecutiveUnavailable = 3
+
+  /** Runs one remote processor step for the sync, never failing it. `reachedServer` tells from the
+    * step's result whether the server really answered - only that resets the unavailability count,
+    * since a step with nothing to do (e.g. no face in the photo) proves nothing about the server.
+    */
+  private def synchronizeRemoteStep[A](breaker: Ref[Map[String, Int]], name: String, originalId: OriginalId)(
+    step: IO[ServiceIssue, A]
+  )(reachedServer: A => Boolean): UIO[Unit] =
+    breaker.get.flatMap { counts =>
+      if (counts.getOrElse(name, 0) >= remoteStepMaxConsecutiveUnavailable) ZIO.unit
+      else
+        step.foldZIO(
+          {
+            case err: ServiceUnavailableIssue =>
+              for {
+                count <- breaker.modify { current =>
+                           val count = current.getOrElse(name, 0) + 1
+                           (count, current.updated(name, count))
+                         }
+                _     <- ZIO.logWarning(s"$name unavailable for original $originalId ($count in a row) : ${err.getMessage}")
+                _     <- ZIO
+                           .logError(s"$name skipped for the rest of this synchronization, its server looks down - use the dedicated CLI to fill the gaps later")
+                           .when(count == remoteStepMaxConsecutiveUnavailable)
+              } yield ()
+            case err                          =>
+              ZIO.logWarning(s"$name failed for original $originalId : ${err.getMessage}")
+          },
+          result => breaker.update(_.updated(name, 0)).when(reachedServer(result)).unit
+        )
+    }
+
+  private def synchronizeProcessors(breaker: Ref[Map[String, Int]])(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
+    val originalId = input.media.original.id
+    val logic      = for {
+      _                         <- originalNormalized(originalId).ignoreLogged                   // required to optimize AI work so not launched in background
+      fiberMiniaturesFiber      <- originalMiniatures(originalId).ignoreLogged                   // .fork
+      fiberFacesFiber           <- originalFaces(originalId).ignoreLogged                        // .fork
+      fiberFeaturesFiber        <- synchronizeRemoteStep(breaker, "Face features", originalId)(originalFacesFeatures(originalId))(
+                                     _.exists(_.features.nonEmpty)
+                                   )                                                             // .fork
+      fiberMediaFeaturesFiber   <- originalMediaFeatures(originalId).ignoreLogged                // .fork
+      fiberCaptionFiber         <- synchronizeRemoteStep(breaker, "Caption", originalId)(originalCaption(originalId))(
+                                     _.exists(_.status.successful)
+                                   )                                                             // .fork (no-op unless the captioner is enabled)
+      fiberClassificationsFiber <- originalClassifications(originalId).ignoreLogged              // .fork
+      fiberObjectsFiber         <- originalObjects(originalId).ignoreLogged                      // .fork
       // TODO investigate why this is not working
       // _                         <- fiberMiniaturesFiber.join
       // _                         <- fiberFacesFiber.join
@@ -2017,17 +2090,28 @@ class MediaServiceLive private (
     logic.catchAll(err => ZIO.logWarning(s"Search re-publish failed for original ${current.original.id.asString} : $err"))
   }
 
+  // Pure reads of stored processor results : unlike `originalXxx`, never compute a missing one.
+  private def storedProcessed[D, A](collection: String, fetch: IO[Any, Option[D]])(convert: D => IO[ServiceIssue, A]): IO[ServiceIssue, Option[A]] =
+    fetch
+      .mapError(err => ServiceDatabaseIssue(s"Unable to fetch $collection from database: $err"))
+      .flatMap(mayBeFound => ZIO.foreach(mayBeFound)(convert))
+
   /** Assembles the search-engine payload for one media by joining in every processor result the
     * `SaoMedia` document needs.
+    *
+    * Only reads what is stored : a processor that failed during the sync (it is logged and ignored
+    * there) must not be retried here, where a second failure would abort the whole publish batch -
+    * the media is published without that result instead.
     */
-  private def buildMediaBag(media: Media, state: State): IO[ServiceIssue, MediaBag] =
+  private def buildMediaBag(media: Media, state: State): IO[ServiceIssue, MediaBag] = {
+    val originalId = media.original.id
     for {
-      classifications <- originalClassifications(media.original.id)
-      objects         <- originalObjects(media.original.id)
-      miniatures      <- originalMiniatures(media.original.id)
-      faces           <- originalFaces(media.original.id)
-      normalized      <- originalNormalized(media.original.id)
-      autoDescription <- mediaCaptionGet(media.original.id) // pure read: never triggers a (slow) model call here
+      classifications <- storedProcessed("classifications", collections.classifications.fetch(originalId))(daoClassificationsToClassifications)
+      objects         <- storedProcessed("objects", collections.objects.fetch(originalId))(daoDetectedObjectsToDetectedObjects)
+      miniatures      <- storedProcessed("miniatures", collections.miniatures.fetch(originalId))(daoMiniaturesToMiniatures)
+      faces           <- storedProcessed("faces", collections.originalFaces.fetch(originalId))(daoFacesToFaces)
+      normalized      <- storedProcessed("normalized", collections.normalized.fetch(originalId))(daoNormalizedToNormalized)
+      autoDescription <- mediaCaptionGet(originalId) // pure read: never triggers a (slow) model call here
       personIds        = faces.toList.flatMap(_.faces).flatMap(_.identifiedPersonId).distinct
       persons         <- ZIO.foreach(personIds)(personGet).map(_.flatten)
     } yield MediaBag(
@@ -2041,6 +2125,7 @@ class MediaServiceLive private (
       autoDescription = autoDescription,
       persons = persons
     )
+  }
 
   private def synchronizeSearchEngine(inputs: Chunk[(media: Media, state: State)]): IO[ServiceIssue, Chunk[MediaBag]] = {
     val logic = for {
@@ -2107,6 +2192,7 @@ class MediaServiceLive private (
         serviceConfig  <- ServiceConfig.config
                             .mapError(err => ServiceInternalIssue(s"Unable to retrieve service configuration : $err"))
         searchConfig    = serviceConfig.fileSystemSearch.toCoreConfig
+        remoteBreaker  <- Ref.make(Map.empty[String, Int]) // per run : a new sync tries the remote servers again
         originalsStream = ZStream
                             .from(stores)
                             .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store, searchConfig, Some(searchFilter))))
@@ -2121,7 +2207,7 @@ class MediaServiceLive private (
                             .mapZIO(input => ZIO.blocking(synchronizeMedia(input)))
                             .filter(_.state.mediaLastSynchronized.isEmpty)
                             .tap(input => ZIO.logInfo(s"Synchronizing ${input.media.original.mediaPath}"))
-                            .mapZIO(input => ZIO.blocking(synchronizeProcessors(input).uninterruptible))
+                            .mapZIO(input => ZIO.blocking(synchronizeProcessors(remoteBreaker)(input).uninterruptible))
                             .mapZIO(input => ZIO.blocking(locationInduction(input).uninterruptible))
                             .mapZIO(input => ZIO.blocking(placeResolution(input).uninterruptible))
                             .grouped(50)

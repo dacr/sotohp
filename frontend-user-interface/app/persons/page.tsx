@@ -6,7 +6,8 @@ import { FaceEditModal } from "../../components/FaceEditModal";
 import { FaceGrid } from "../../components/FaceGrid";
 import { LazyThumb } from "../../components/LazyThumb";
 import { Modal } from "../../components/Modal";
-import { useAllFaces, useFaceIdImageVersion, useIgnoreFace, useRestoreFace, useSetFacePerson } from "../../hooks/useFaces";
+import { SizeControl, useSizeClass } from "../../components/SizeControl";
+import { useAllFaces, useConfirmFaces, useFaceIdImageVersion, useIgnoreFaces, useRestoreFace, type BulkFaceResult } from "../../hooks/useFaces";
 import { useMediaAccessKey } from "../../hooks/useMediaAccessKey";
 import { usePersistedSet } from "../../hooks/usePersistedSet";
 import { useScrollRestoration } from "../../hooks/useScrollRestoration";
@@ -17,7 +18,6 @@ import { pushRecentPersonId } from "../../lib/recent-persons";
 import { showError, showSuccess, showWarning } from "../../lib/toast";
 import type { DetectedFace, Person } from "../../lib/api-client";
 
-type SizeKey = "small" | "medium" | "max";
 type SortKey = "person" | "person_confidence" | "confidence" | "inferred_date";
 
 function personLabel(p: Person): string {
@@ -237,39 +237,6 @@ function ChosenFaceInfo({ person }: { person: Person }) {
 // the per-person detail view and the cross-person "all inferred faces" queue.
 // ---------------------------------------------------------------------------
 
-function useSizeClass(storageKey: string): [SizeKey, (s: SizeKey) => void] {
-  const [size, setSize] = useState<SizeKey>("max");
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(storageKey) as SizeKey | null;
-      if (saved) setSize(saved);
-    } catch {
-      /* ignore */
-    }
-  }, [storageKey]);
-  function persist(s: SizeKey) {
-    setSize(s);
-    try {
-      sessionStorage.setItem(storageKey, s);
-    } catch {
-      /* ignore */
-    }
-  }
-  return [size, persist];
-}
-
-function SizeControl({ size, onChange }: { size: SizeKey; onChange: (s: SizeKey) => void }) {
-  return (
-    <div className="pf-size" role="group" aria-label="Face size">
-      {(["small", "medium", "max"] as SizeKey[]).map((s) => (
-        <button key={s} type="button" className={size === s ? "active" : ""} onClick={() => onChange(s)}>
-          {s === "max" ? "Maximum" : s[0].toUpperCase() + s.slice(1)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 async function goToViewerForFace(api: ReturnType<typeof useAuth>["api"], router: ReturnType<typeof useRouter>, face: DetectedFace) {
   try {
     const state = await api.getState(face.originalId);
@@ -283,14 +250,27 @@ async function goToViewerForFace(api: ReturnType<typeof useAuth>["api"], router:
   }
 }
 
+function withoutFaces(selected: Set<string>, faces: DetectedFace[]): Set<string> {
+  const next = new Set(selected);
+  faces.forEach((f) => next.delete(f.faceId));
+  return next;
+}
+
+// The failed faces are already back in the view (the bulk mutation re-reads them), so this only
+// has to say how many there were.
+function reportBulk({ succeeded, failed }: BulkFaceResult, done: string, verb: string) {
+  if (succeeded > 0) showSuccess(`${done} ${succeeded} face(s)`);
+  if (failed > 0) showError(`Failed to ${verb} ${failed} face(s)`);
+}
+
 function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { api } = useAuth();
   const { data: allFaces = [], isLoading: facesLoading } = usePersonFaces(person.id);
   const deletePerson = useDeletePerson();
-  const setFacePerson = useSetFacePerson();
-  const ignoreFace = useIgnoreFace();
+  const confirmFacesMutation = useConfirmFaces();
+  const ignoreFacesMutation = useIgnoreFaces();
   const restoreFace = useRestoreFace();
   const personsMap = usePersonsMap();
   // Lives in the URL (like every other "which view" bit on this page) rather than a plain
@@ -353,40 +333,22 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
   const identifiedForPerson = useMemo(() => allFaces.filter((f) => f.identifiedPersonId === person.id), [allFaces, person.id]);
   const displayed = mode === "validate" ? inferredForPerson : identifiedForPerson;
 
-  // Each mutation splices its own outcome into the cached face lists (hooks/useFaces.ts), so a
-  // confirmed face leaves the "to validate" queue as its call returns and stays gone across tab
-  // navigation - no local "already handled" bookkeeping, and no full-list refetch, needed here.
+  // The bulk mutations splice the whole batch into the cached face lists up front
+  // (hooks/useFaces.ts), so every handled face leaves the "to validate" queue at once and stays
+  // gone across tab navigation - no local "already handled" bookkeeping, and no full-list refetch,
+  // needed here. The selection is dropped just as early, for the same reason.
   async function confirmFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    try {
-      for (const f of faces) await setFacePerson.mutateAsync({ faceId: f.faceId, personId: person.id });
-      pushRecentPersonId(person.id);
-      showSuccess(`Confirmed ${faces.length} face(s)`);
-    } catch {
-      showError("Failed to confirm faces");
-    } finally {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        faces.forEach((f) => next.delete(f.faceId));
-        return next;
-      });
-    }
+    setSelected((prev) => withoutFaces(prev, faces));
+    const result = await confirmFacesMutation.mutateAsync(faces.map((f) => ({ faceId: f.faceId, personId: person.id })));
+    if (result.succeeded > 0) pushRecentPersonId(person.id);
+    reportBulk(result, "Confirmed", "confirm");
   }
 
   async function ignoreFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    try {
-      for (const f of faces) await ignoreFace.mutateAsync(f.faceId);
-      showSuccess(`Ignored ${faces.length} face(s)`);
-    } catch {
-      showError("Failed to ignore faces");
-    } finally {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        faces.forEach((f) => next.delete(f.faceId));
-        return next;
-      });
-    }
+    setSelected((prev) => withoutFaces(prev, faces));
+    reportBulk(await ignoreFacesMutation.mutateAsync(faces.map((f) => ({ faceId: f.faceId }))), "Ignored", "ignore");
   }
 
   const selectedFaces = displayed.filter((f) => selected.has(f.faceId));
@@ -404,7 +366,7 @@ function PersonFacesDetail({ person, onBack }: { person: Person; onBack: () => v
           <div className="spacer" />
           <div className="pf-actions">
             <div className="pf-left-actions">
-              <SizeControl size={size} onChange={setSize} />
+              <SizeControl size={size} onChange={setSize} label="Face size" />
               {mode === "validate" && (
                 <>
                   <button className="btn btn-success btn-sm" disabled={inferredForPerson.length === 0} onClick={() => confirm(`Confirm all ${inferredForPerson.length} inferred face(s) for ${pname}?`) && confirmFaces(inferredForPerson)}>
@@ -511,8 +473,8 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
   const { api } = useAuth();
   const { data: allFaces = [], isLoading: facesLoading } = useAllFaces();
   const personsMap = usePersonsMap();
-  const setFacePerson = useSetFacePerson();
-  const ignoreFace = useIgnoreFace();
+  const confirmFacesMutation = useConfirmFaces();
+  const ignoreFacesMutation = useIgnoreFaces();
   const restoreFace = useRestoreFace();
   const [size, setSize] = useSizeClass("personFaces.size");
   const [sort, setSort] = useState<SortKey>("person");
@@ -585,43 +547,15 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
   // face, so it stays dropped after leaving the tab and coming back.
   async function confirmFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    let ok = 0;
-    try {
-      for (const f of faces) {
-        if (!f.inferredIdentifiedPersonId) continue;
-        await setFacePerson.mutateAsync({ faceId: f.faceId, personId: f.inferredIdentifiedPersonId });
-        ok++;
-      }
-      if (ok > 0) showSuccess(`Confirmed ${ok} face(s)`);
-    } catch {
-      showError("Failed to confirm faces");
-    } finally {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        faces.forEach((f) => next.delete(f.faceId));
-        return next;
-      });
-    }
+    setSelected((prev) => withoutFaces(prev, faces));
+    const items = faces.flatMap((f) => (f.inferredIdentifiedPersonId ? [{ faceId: f.faceId, personId: f.inferredIdentifiedPersonId }] : []));
+    reportBulk(await confirmFacesMutation.mutateAsync(items), "Confirmed", "confirm");
   }
 
   async function ignoreFaces(faces: DetectedFace[]) {
     if (faces.length === 0) return;
-    let ok = 0;
-    try {
-      for (const f of faces) {
-        await ignoreFace.mutateAsync(f.faceId);
-        ok++;
-      }
-      if (ok > 0) showSuccess(`Ignored ${ok} face(s)`);
-    } catch {
-      showError("Failed to ignore faces");
-    } finally {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        faces.forEach((f) => next.delete(f.faceId));
-        return next;
-      });
-    }
+    setSelected((prev) => withoutFaces(prev, faces));
+    reportBulk(await ignoreFacesMutation.mutateAsync(faces.map((f) => ({ faceId: f.faceId }))), "Ignored", "ignore");
   }
 
   const selectedFaces = pending.filter((f) => selected.has(f.faceId));
@@ -637,7 +571,7 @@ function InferredFacesView({ onBack }: { onBack: () => void }) {
           <div className="spacer" />
           <div className="pf-actions">
             <div className="pf-left-actions">
-              <SizeControl size={size} onChange={setSize} />
+              <SizeControl size={size} onChange={setSize} label="Face size" />
               <input type="text" className="pf-filter-input" placeholder="Filter people (name, description)…" style={{ marginLeft: 8, padding: 4, borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }} value={filter} onChange={(e) => setFilter(e.target.value)} />
               <select className="pf-sort-select" style={{ marginLeft: 8, padding: 4, borderRadius: 6, border: "1px solid #ccc", fontSize: 13 }} value={sort} onChange={(e) => persistSort(e.target.value as SortKey)}>
                 <option value="person">Sort: Person, Date</option>

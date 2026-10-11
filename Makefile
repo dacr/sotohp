@@ -48,7 +48,7 @@ run-media-features-clustering:
 #   make run-face-inference              with the retuned values (same ARGS)
 #   make run-face-features-clustering    ARGS="--radius=..."
 # Stop the API server first: these write to the same LMDB environment (the drift one excepted).
-# run-compute-face-features ARGS: --force, --since=YYYY[-MM-DD], --limit=N, --parallelism=N
+# run-compute-face-features ARGS: --force, --missing, --dry-run, --since=YYYY[-MM-DD], --limit=N, --parallelism=N
 run-compute-face-features:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.ComputeFaceFeatures $(ARGS)
 
@@ -63,7 +63,7 @@ run-face-embedding-drift:
 run-face-features-clustering:
 	mill --no-server user-interfaces.cli.runMain fr.janalyse.sotohp.cli.FaceFeaturesClustering $(ARGS)
 
-# Backfill image-to-text captions ("auto descriptions"). Needs `ollama serve` + a vision model
+# Backfill image-to-text captions ("auto descriptions").    Needs `ollama serve` + a vision model
 # (`ollama pull qwen3-vl:2b-instruct`) and sotohp.processors.captioner.enabled=true.
 # A vision model costs seconds per photo, so the whole collection is a multi-day run - use the
 # selection flags for an affordable first pass. Photos are visited oldest first.
