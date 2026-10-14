@@ -230,7 +230,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
     "placeSubRegion"    -> 1.0,
     "placeRegion"       -> 1.0,
     "placeCountry"      -> 1.0,
-    "placeCountryCode"  -> 1.0,
+    "placeCountryCode"  -> 0.3,
     "filePath"          -> 0.1
   )
 
