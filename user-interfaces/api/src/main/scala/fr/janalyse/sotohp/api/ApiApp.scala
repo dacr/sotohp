@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.api
 import com.typesafe.config.ConfigFactory
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import com.github.plokhotnyuk.jsoniter_scala.core.writeToString
 import sttp.apispec.openapi.Info
 import sttp.model.{Header, MediaType, StatusCode}
@@ -11,9 +12,7 @@ import sttp.tapir.json.jsoniter.*
 import sttp.tapir.server.ziohttp.ZioHttpInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import sttp.tapir.ztapir.*
-import zio.logging.consoleLogger
-//import zio.logging.backend.SLF4J
-import zio.logging.LogFormat
+import zio.logging.{ConsoleLoggerConfig, consoleLogger}
 import fr.janalyse.sotohp.service.{MediaService, MediaTuple, ServiceStreamIssue}
 import fr.janalyse.sotohp.api.protocol.*
 import fr.janalyse.sotohp.model.*
@@ -64,11 +63,11 @@ object ApiApp extends ZIOAppDefault {
   val configProviderLayer = Runtime.setConfigProvider(configProvider)
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
-    // val fmt = LogFormat.level |-| LogFormat.annotations |-| LogFormat.line
-    // val fmt     = LogFormat.annotations |-| LogFormat.line
-    // val loggingLayer = Runtime.removeDefaultLoggers >>> SLF4J.slf4j(format = fmt)
-    // val loggingLayer = zio.logging.slf4j.bridge.Slf4jBridge.initialize
-    val loggingLayer = Runtime.removeDefaultLoggers >>> consoleLogger()
+    // The logger configuration is explicitly read through the typesafe provider : the bootstrap layers are built
+    // concurrently, so relying on configProviderLayer would silently fall back to the default format (no annotations)
+    val loggingLayer =
+      Runtime.removeDefaultLoggers >>>
+        ZLayer.fromZIO(ZIO.withConfigProvider(configProvider)(ConsoleLoggerConfig.load())).flatMap(env => consoleLogger(env.get))
 
     loggingLayer
       ++ configProviderLayer
@@ -2381,7 +2380,7 @@ object ApiApp extends ZIOAppDefault {
                        .toString
                    )
                    .logError("Issue with the user interface resources path")
-    _         <- ZIO.logInfo(s"User interface resources path: $uiBaseDir")
+    _         <- (ZIO.logInfo("User interface resources path") @@ LogContext.kv("uiBaseDir" -> uiBaseDir))
   } yield {
     htmlStaticAssets(uiBaseDir)
   }
@@ -2467,7 +2466,7 @@ object ApiApp extends ZIOAppDefault {
         case _                                                  =>
           for {
             config <- ApiConfig.config
-            _      <- ZIO.logInfo(s"Authentication enabled: ${config.auth.enabled}")
+            _      <- (ZIO.logInfo("Authentication configuration") @@ LogContext.kv("authEnabled" -> config.auth.enabled))
             _      <- server
                         .provide(
                           LMDB.live,

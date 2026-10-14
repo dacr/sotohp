@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.search
 
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.json.*
 import zio.stream.*
 
@@ -83,8 +84,8 @@ case class ElasticOperations(config: SearchServiceConfig) {
   private val timeout         = 20.seconds
   private val retrySchedule   = (Schedule.exponential(500.millis, 2).jittered && Schedule.recurs(5)).onDecision((state, out, decision) =>
     decision match {
-      case Schedule.Decision.Done               => ZIO.logInfo("No more retry attempt !")
-      case Schedule.Decision.Continue(interval) => ZIO.logInfo(s"Will retry at ${interval.start}")
+      case Schedule.Decision.Done               => ZIO.logInfo("No more retry attempt")
+      case Schedule.Decision.Continue(interval) => ZIO.logInfo("Will retry") @@ LogContext.kv("retryAt" -> interval.start)
     }
   )
   val upsertGrouping          = 50
@@ -164,7 +165,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
         response    <- client.execute(searchScroll(currentScrollId).keepAlive(scrollKeepAlive))
         nextScrollId = response.result.scrollId
         results      = Chunk.fromArray(response.result.hits.hits.map(_.sourceAsString))
-        _           <- ZIO.log(s"Got ${results.size} more documents")
+        _           <- ZIO.logDebug("Got more documents") @@ LogContext.kv("count" -> results.size)
       } yield results -> (if (results.size > 0) nextScrollId else None)
     }
   }
@@ -205,7 +206,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
                      client.execute(deleteIndex(batch)).flatMap(response => ZIO.cond(response.isSuccess, (), response.error.asException))
                    }
                    .when(names.nonEmpty)
-      _       <- ZIO.log(s"Deleted ${names.size} search indexes matching $indexPrefix-*")
+      _       <- ZIO.logInfo("Search indexes deleted") @@ LogContext.kv("count" -> names.size, "indexPrefix" -> indexPrefix)
     } yield names.size
   }
 
@@ -340,7 +341,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
       response         <- client.execute(search(Index(indexName)).size(searchPageSize).scroll(scrollKeepAlive))
       scrollId         <- ZIO.fromOption(response.result.scrollId).orElseFail(new Exception("No scrollId returned"))
       firstResults      = Chunk.fromArray(response.result.hits.hits.map(_.sourceAsString))
-      _                <- ZIO.log(s"Got ${firstResults.size} first documents")
+      _                <- ZIO.logDebug("Got first documents") @@ LogContext.kv("count" -> firstResults.size, "indexName" -> indexName)
       nextResultsStream = streamFromScroll(scrollId)
     } yield ZStream.fromChunk(firstResults) ++ nextResultsStream
 
@@ -370,7 +371,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
     upsertEffect
       .timeout(timeout)
       .retry(retrySchedule)
-      .logError(s"Couldn't upsert ${documents.size} document into elasticsearch")
+      .logError("Couldn't upsert documents into elasticsearch") @@ LogContext.kv("count" -> documents.size)
   }
 
 }

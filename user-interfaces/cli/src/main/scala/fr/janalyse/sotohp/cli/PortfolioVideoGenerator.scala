@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 
 import java.awt.image.BufferedImage
@@ -478,7 +479,7 @@ object PortfolioVideoGenerator extends CommonsCLI {
     } yield (mediaTuple.media.timestamp, photo)
     step
       .map(Some(_))
-      .catchAll(err => ZIO.logWarning(s"Skipping asset ${asset.originalId.asString} : ${err.getMessage}").as(None))
+      .catchAll(err => (ZIO.logWarning("Skipping asset") @@ LogContext.originalId(asset.originalId) @@ LogContext.kv("error" -> err.getMessage)).as(None))
   }
 
   private def fileNameFor(portfolio: Portfolio): String =
@@ -506,7 +507,7 @@ object PortfolioVideoGenerator extends CommonsCLI {
         totalSeconds   = config.totalSeconds(segments.size)
         _             <- ZIO.logInfo(f"'${portfolio.name.text}' : encoding ${photos.size} photos, ~$totalSeconds%.0fs of video, this can take a while...")
         _             <- runFfmpeg(segments, config, workDirectory, outputFile)
-        _             <- ZIO.logInfo(s"'${portfolio.name.text}' : video written to $outputFile")
+        _             <- (ZIO.logInfo("Video written") @@ LogContext.kv("portfolioName" -> portfolio.name.text, "outputFile" -> outputFile))
       } yield ()
     }.catchAll(err => ZIO.logWarning(err.getMessage))
 

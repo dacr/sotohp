@@ -60,12 +60,12 @@ object SearchForPeople extends CommonsCLI {
     MediaService
       .mediaList()
       .filterZIO(mediaTuple => matchesPeople(peopleToLookFor, containsMode)(mediaTuple))
-      .tap(mediaTuple => ZIO.logInfo(s"Found media with specified people : ${mediaTuple.media.original.mediaPath.path}"))
+      .tap(mediaTuple => (ZIO.logInfo("Found media with specified people") @@ LogContext.media(mediaTuple.media)))
   }
 
   def FindPeopleAndCheck(peopleToLookFor: Set[PersonId], containsMode: Boolean) = {
     searchForPeople(peopleToLookFor, containsMode).runCount
-      .flatMap(count => ZIO.logInfo(s"Found $count media matching the specified people (check only, nothing copied)"))
+      .flatMap(count => (ZIO.logInfo("Media matching the specified people (check only, nothing copied)") @@ LogContext.kv("count" -> count)))
   }
 
   /** Sanitize a bag name so it can be used as a file name prefix : lower-cased, and every character which is not a letter or a digit is replaced by a minus. */

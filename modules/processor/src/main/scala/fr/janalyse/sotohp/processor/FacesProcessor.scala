@@ -16,7 +16,7 @@ import ai.djl.repository.zoo.ModelZoo
 import ai.djl.repository.zoo.ZooModel
 import ai.djl.training.util.ProgressBar
 import ai.djl.modality.Classifications.Classification
-import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.core.{CoreIssue, LogContext}
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 
 import java.nio.file.Path
@@ -140,15 +140,14 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
       now        <- Clock.currentDateTime
       input      <- getOriginalBestInputFileForProcessors(original)
       mayBeFaces <- doDetectFaces(original, input)
-                      .tap(faces => ZIO.log(s"found ${faces.size} faces"))
+                      .tap(faces => ZIO.logInfo("Faces detected") @@ LogContext.kv("facesCount" -> faces.size))
                       .logError("Faces detection issue")
                       .option
       status      = ProcessedStatus(successful = mayBeFaces.isDefined, timestamp = now)
       faces       = mayBeFaces.getOrElse(Nil)
     } yield OriginalFaces(original, status, faces)
     logic
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
   }
 
   /** Detects faces using the provided buffered image instead of loading via the normalized cache.
@@ -158,15 +157,14 @@ class FacesProcessor(facesPredictor: Predictor[Image, DetectedObjects]) extends 
     val logic = for {
       now        <- Clock.currentDateTime
       mayBeFaces <- doDetectFaces(original, originalImage)
-                      .tap(faces => ZIO.log(s"found ${faces.size} faces"))
+                      .tap(faces => ZIO.logInfo("Faces detected") @@ LogContext.kv("facesCount" -> faces.size))
                       .logError("Faces detection issue")
                       .option
       status      = ProcessedStatus(successful = mayBeFaces.isDefined, timestamp = now)
       faces       = mayBeFaces.getOrElse(Nil)
     } yield OriginalFaces(original, status, faces)
     logic
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
   }
 
   /** Runs the face detector and returns raw bounding boxes only - no Face records, no faceId

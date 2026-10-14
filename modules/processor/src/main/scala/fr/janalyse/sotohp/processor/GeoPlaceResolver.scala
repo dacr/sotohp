@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.processor
 
-import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.core.{CoreIssue, LogContext}
 import fr.janalyse.sotohp.model.Place
 import fr.janalyse.sotohp.processor.config.GeocodingConfig
 import zio.*
@@ -114,10 +114,8 @@ object GeoPlaceResolver {
 
     val logic =
       if (!Files.isReadable(citiesPath))
-        ZIO
-          .logWarning(
-            s"GeoNames cities file not found at $citiesPath - textual places will not be deduced (run 'make download-geonames')"
-          )
+        (ZIO.logWarning("GeoNames cities file not found - textual places will not be deduced (run 'make download-geonames')")
+          @@ LogContext.kv("citiesPath" -> citiesPath))
           .as(empty(config.maxDistanceKm))
       else
         ZIO.attemptBlocking {
@@ -172,9 +170,9 @@ object GeoPlaceResolver {
             maxDistanceKm = config.maxDistanceKm
           )
         }.mapError(err => GeocodingLoadIssue(s"Unable to load GeoNames dump from ${config.geonamesDirectory}", err))
-          .tap(resolver => ZIO.logInfo(s"GeoNames reverse-geocoder ready with ${resolver.size} places from $citiesPath"))
+          .tap(resolver => ZIO.logInfo("GeoNames reverse-geocoder ready") @@ LogContext.kv("placesCount" -> resolver.size, "citiesPath" -> citiesPath))
 
-    logic @@ annotated("geonamesDirectory" -> config.geonamesDirectory)
+    logic @@ LogContext.kv("geonamesDirectory" -> config.geonamesDirectory)
   }
 
   /** Parses a GeoNames tab-separated `key -> value` file into a map. */

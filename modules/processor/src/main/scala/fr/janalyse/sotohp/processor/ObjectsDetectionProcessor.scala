@@ -6,7 +6,7 @@ import ai.djl.modality.Classifications
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.modality.cv.output.DetectedObjects
 import ai.djl.repository.zoo.{Criteria, ModelZoo}
-import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.core.{CoreIssue, LogContext}
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.model.*
 import zio.*
@@ -64,7 +64,7 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
       mayBeObjects <- ZIO
                         .attempt(doDetectObjects(input))
                         .mapError(th => ObjectsDetectionIssue("Unable to recognize objects", th))
-                        .tap(objs => ZIO.log(s"found objects : ${objs.mkString(",")}"))
+                        .tap(objs => ZIO.logInfo("Objects found") @@ LogContext.kv("objectsCount" -> objs.size, "objects" -> objs.map(o => s"${o.name}(${(o.probability * 100).toInt}%)").mkString(",")))
                         .logError("Objects detection issue")
                         .option
       status        = ProcessedStatus(successful = mayBeObjects.isDefined, timestamp = now)
@@ -72,8 +72,7 @@ class ObjectsDetectionProcessor(objectDetectionPredictor: Predictor[Image, Detec
     } yield OriginalDetectedObjects(original, status, objects)
 
     logic
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
   }
 
 }

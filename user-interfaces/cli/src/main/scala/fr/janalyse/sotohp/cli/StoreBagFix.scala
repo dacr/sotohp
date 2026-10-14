@@ -44,7 +44,7 @@ object StoreBagFix extends CommonsCLI {
                           keywords = bag.keywords
                         )
                         .when(selectedMedia.isDefined)
-      _            <- ZIO.logInfo(s"fixing bag ${bag.id} ${bag.name}").when(selectedMedia.isDefined)
+      _            <- (ZIO.logInfo("Fixing bag") @@ LogContext.kv("bagId" -> bag.id, "bagName" -> bag.name)).when(selectedMedia.isDefined)
     } yield ()
   }
 

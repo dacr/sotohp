@@ -251,7 +251,7 @@ object FaceInference extends CommonsCLI {
               .foreachDiscard(knownFaces) { (face, features) => index.insert(face.faceId, features.features) }
               .orDieWith(err => new RuntimeException(err.toString))
               .timed
-              .flatMap((elapsed, _) => ZIO.logInfo(s"vector index loaded with ${knownFaces.size} known faces in ${elapsed.toSeconds}s"))
+              .flatMap((elapsed, _) => (ZIO.logInfo("Vector index loaded") @@ LogContext.kv("knownFacesCount" -> knownFaces.size, "elapsedSeconds" -> elapsed.toSeconds)))
           )
           // `tocheck` runs one search per unknown face against this same, now-static set of known faces - far more searches
           // than there are vectors - so an approximate index pays for its build many times over.
@@ -260,7 +260,7 @@ object FaceInference extends CommonsCLI {
               .buildApproximateIndex(HnswParams(m = 16, efConstruction = 100, efSearch = 64))
               .orDieWith(err => new RuntimeException(err.toString))
               .timed
-              .flatMap((elapsed, _) => ZIO.logInfo(s"approximate (HNSW) index built in ${elapsed.toSeconds}s"))
+              .flatMap((elapsed, _) => (ZIO.logInfo("Approximate (HNSW) index built") @@ LogContext.kv("elapsedSeconds" -> elapsed.toSeconds)))
           )
     )(index => LMDB.collectionDrop(index.collection.name).orDieWith(err => new RuntimeException(err.toString)))(use)
   }
@@ -277,7 +277,7 @@ object FaceInference extends CommonsCLI {
       unknownFaces   <- featuresForUnknowFaces()
       ignoredFaces   <- featuresForIgnoredFaces()
       loadFinished   <- Clock.nanoTime
-      _              <- ZIO.logInfo(s"faces and features loaded from the database in ${(loadFinished - loadStarted) / 1000000000L}s")
+      _              <- (ZIO.logInfo("Faces and features loaded from the database") @@ LogContext.kv("elapsedSeconds" -> (loadFinished - loadStarted) / 1000000000L))
       now            <- Clock.currentDateTime
       alreadyInferred = unknownFaces
                           .filter((face, _) => face.inferredIdentifiedPersonId.isDefined)
@@ -306,12 +306,12 @@ object FaceInference extends CommonsCLI {
                                                 .timed
                                             }
       (searchElapsed, newIdentifiedCount) = searched
-      _                                  <- ZIO.logInfo(s"${tocheck.size} faces matched against the index in ${searchElapsed.toSeconds}s")
+      _                                  <- (ZIO.logInfo("Faces matched against the index") @@ LogContext.kv("count" -> tocheck.size, "elapsedSeconds" -> searchElapsed.toSeconds))
       _                                  <- Console.printLine(s"$newIdentifiedCount new faces inferred")
       evaluatedFaceIds                    = unknownFaces.map((face, _) => face.faceId).toSet
       clearedCount                       <- clearStaleInferences(evaluatedFaceIds)
       _                                  <- Console.printLine(s"$clearedCount stale inferences cleared (faces this run could not evaluate: no vector from the current model, or too small)")
-      _                                  <- ZIO.logInfo(s"done")
+      _                                  <- ZIO.logInfo("Done")
     } yield ()
   }
 

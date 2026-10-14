@@ -15,3 +15,4 @@ maison, barraque
 chateau, palais, manoir
 dechet, ordure, poubelle
 photographie, photo, image, shooting
+velo, bicyclette, velocipede, biclou

@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.processor
 
 import com.github.plokhotnyuk.jsoniter_scala.core.*
 import com.github.plokhotnyuk.jsoniter_scala.macros.*
-import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.core.{CoreIssue, LogContext}
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.config.CaptionerConfig
@@ -327,10 +327,15 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
                          .map(bytes => Base64.getEncoder.encodeToString(bytes))
                          .flatMap(requestCaption)
                          .map(tidy)
+                         .tap {
+                           // key/values are rendered unquoted : quote the sentence to keep the log line readable
+                           case Some(text) => ZIO.logInfo("Caption generated") @@ LogContext.kv("caption" -> s"\"${text.replace("\"", "'")}\"")
+                           case None       => ZIO.logInfo("Caption empty")
+                         }
                          // A photo-level failure (unreadable image) must not stop a batch: log it
                          // and record the attempt as unsuccessful. An unusable server is not the
                          // photo's fault, so it is propagated and nothing gets recorded.
-                         .tapError(err => ZIO.logWarning(s"caption failed: ${err.getMessage}"))
+                         .tapError(err => ZIO.logWarning("Caption failed") @@ LogContext.kv("error" -> err.getMessage))
                          .map(Some(_))
                          .catchSome { case _: CaptionRequestIssue | _: CaptionGeneralIssue => ZIO.none }
                          .map(_.flatten)
@@ -338,8 +343,7 @@ class CaptionProcessor(config: CaptionerConfig) extends Processor {
         } yield OriginalCaption(original, status, mayBeText)
 
     logic
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
   }
 }
 

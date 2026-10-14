@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import fr.janalyse.sotohp.service.MediaServiceLive.given // brings `KeyCodec[OriginalId]` into scope for `LMDBVectorIndex.create[OriginalId]`
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 import zio.lmdb.vector.{HnswParams, LMDBVectorIndex, VectorMetric}
 
@@ -89,7 +90,7 @@ object MediaFeaturesClustering extends CommonsCLI {
       loadStart   <- Clock.nanoTime
       features    <- MediaService.mediaFeaturesList().runCollect
       loadEnd     <- Clock.nanoTime
-      _           <- ZIO.logInfo(s"${features.size} feature vectors loaded in ${(loadEnd - loadStart) / 1000000000L}s")
+      _           <- (ZIO.logInfo("Feature vectors loaded") @@ LogContext.kv("count" -> features.size, "elapsedSeconds" -> (loadEnd - loadStart) / 1000000000L))
       _           <- ZIO.fail(new RuntimeException("no feature vectors - run ComputeMediaFeatures first")).when(features.isEmpty)
       dimension    = features.head.features.length
       indexById    = features.map(_.originalId).zipWithIndex.toMap
@@ -107,7 +108,7 @@ object MediaFeaturesClustering extends CommonsCLI {
                                            .buildApproximateIndex(HnswParams(m = 16, efConstruction = 100, efSearch = 64))
                                            .orDieWith(err => new RuntimeException(err.toString))
                                            .timed
-                                           .flatMap((elapsed, _) => ZIO.logInfo(s"approximate (HNSW) index built in ${elapsed.toSeconds}s"))
+                                           .flatMap((elapsed, _) => (ZIO.logInfo("Approximate (HNSW) index built") @@ LogContext.kv("elapsedSeconds" -> elapsed.toSeconds)))
                          neighborLists <- ZIO
                                             .foreachPar(features.toVector) { mf =>
                                               index

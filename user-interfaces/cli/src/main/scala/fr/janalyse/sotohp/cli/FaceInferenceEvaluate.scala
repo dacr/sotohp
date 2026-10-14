@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import fr.janalyse.sotohp.service.MediaServiceLive.given // brings `KeyCodec[FaceId]` into scope, needed by `LMDBVectorIndex.create[FaceId]`
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 import zio.lmdb.vector.{HnswParams, LMDBVectorIndex, VectorMetric}
 
@@ -280,7 +281,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
                                                                    .mapZIOParUnordered(searchParallelism)(subject => measure(setup, index, subject, byFaceId, facesPerPerson, ignored))
                                                                    .runCollect
                                                                    .timed
-                                                                   .tap((elapsed, _) => ZIO.logInfo(s"${gallery.size} leave-one-out queries in ${elapsed.toSeconds}s"))
+                                                                   .tap((elapsed, _) => (ZIO.logInfo("Leave-one-out queries done") @@ LogContext.kv("count" -> gallery.size, "elapsedSeconds" -> elapsed.toSeconds)))
                                                  recall       <- approximationRecall(index, gallery)
                                                } yield (measurements._2, recall)
                                              }
@@ -322,7 +323,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
                                .runCollect
                                .timed
       (elapsed, decisions) = timed
-      _                   <- ZIO.logInfo(s"${sample.size} stranger queries (whole person held out) in ${elapsed.toSeconds}s")
+      _                   <- (ZIO.logInfo("Stranger queries (whole person held out) done") @@ LogContext.kv("count" -> sample.size, "elapsedSeconds" -> elapsed.toSeconds))
       tallies              = setup.rules.indices.map(r => decisions.foldLeft(Tally())((tally, perRule) => tally.recordStranger(perRule._1(r)))).toVector
       bootstrapTally        = decisions.foldLeft(Tally())((tally, perRule) => tally.recordStranger(perRule._2))
     } yield (tallies, bootstrapTally, sample.size)
@@ -377,7 +378,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
       }
       .map(recalls => if (recalls.isEmpty) 1d else recalls.sum / recalls.size)
       .timed
-      .tap((elapsed, _) => ZIO.logInfo(s"approximation check over ${sample.size} sampled faces in ${elapsed.toSeconds}s"))
+      .tap((elapsed, _) => (ZIO.logInfo("Approximation check done") @@ LogContext.kv("count" -> sample.size, "elapsedSeconds" -> elapsed.toSeconds)))
       .map((_, recall) => recall)
   }
 
@@ -427,7 +428,7 @@ object FaceInferenceEvaluate extends CommonsCLI {
             index
               .buildApproximateIndex(HnswParams(m = 16, efConstruction = 100, efSearch = 64))
               .timed
-              .flatMap((elapsed, _) => ZIO.logInfo(s"approximate index over ${gallery.size} confirmed faces built in ${elapsed.toSeconds}s"))
+              .flatMap((elapsed, _) => (ZIO.logInfo("Approximate index over confirmed faces built") @@ LogContext.kv("count" -> gallery.size, "elapsedSeconds" -> elapsed.toSeconds)))
           )).orDieWith(err => new RuntimeException(err.toString))
     )(index => LMDB.collectionDrop(index.collection.name).orDieWith(err => new RuntimeException(err.toString)))(use)
   }

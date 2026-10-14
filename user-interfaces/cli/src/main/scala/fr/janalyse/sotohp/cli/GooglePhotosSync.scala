@@ -13,6 +13,7 @@ import org.apache.commons.imaging.formats.tiff.constants.{ExifTagConstants, Tiff
 import sttp.client4.*
 import sttp.client4.httpclient.zio.HttpClientZioBackend
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 import zio.stream.ZSink
 
@@ -629,7 +630,7 @@ object GooglePhotosSync extends CommonsCLI {
                           )
                       )
     } yield (repaired, lostPairs)
-    repair.catchAll(err => ZIO.logWarning(s"'$portfolioName' : couldn't check the album content on the Google Photos side : ${err.getMessage}").as((state, Map.empty)))
+    repair.catchAll(err => (ZIO.logWarning("Couldn't check the album content on the Google Photos side") @@ LogContext.kv("portfolioName" -> portfolioName, "error" -> err.getMessage)).as((state, Map.empty)))
   }
 
   /** Google Photos albums have no "sort by date" through the API : an album only has a manual order and
@@ -662,7 +663,7 @@ object GooglePhotosSync extends CommonsCLI {
                           // a batch is rejected as a whole when any of its ids is invalid (media item deleted from
                           // the Google Photos library since) : retry one by one to isolate and drop the invalid ones
                           .catchAll(err =>
-                            ZIO.logWarning(s"'$portfolioName' : a batch couldn't be added back as a whole, isolating the failing items : ${err.getMessage}") *>
+                            (ZIO.logWarning("A batch couldn't be added back as a whole, isolating the failing items") @@ LogContext.kv("portfolioName" -> portfolioName, "error" -> err.getMessage)) *>
                               ZIO.foldLeft(ids)(added)((added, id) => client.mediaItemsBatchAdd(albumId, List(id)).as(added :+ id).catchAll(_ => ZIO.succeed(added)))
                           )
                       }
@@ -675,7 +676,7 @@ object GooglePhotosSync extends CommonsCLI {
                         albumOrder = appended
                       )
       _            <- saveState(done)
-      _            <- ZIO.logInfo(s"'$portfolioName' : album re-arranged to portfolio order (${appended.size} items, oldest first)")
+      _            <- (ZIO.logInfo("Album re-arranged to portfolio order (oldest first)") @@ LogContext.kv("portfolioName" -> portfolioName, "count" -> appended.size))
       _            <- ZIO.when(lostOriginals.nonEmpty)(
                         ZIO.logWarning(
                           s"'$portfolioName' : ${lostOriginals.size} previously uploaded medias no longer exist on Google Photos" +
@@ -683,7 +684,7 @@ object GooglePhotosSync extends CommonsCLI {
                         )
                       )
     } yield done
-    steps.catchAll(err => ZIO.logWarning(s"'$portfolioName' : couldn't re-arrange the album (${err.getMessage}), will retry on the next run").as(cleared))
+    steps.catchAll(err => (ZIO.logWarning("Couldn't re-arrange the album, will retry on the next run") @@ LogContext.kv("portfolioName" -> portfolioName, "error" -> err.getMessage)).as(cleared))
   }
 
   /** Find the album for a portfolio : from the saved state first, else by title among app-created albums,
@@ -701,9 +702,9 @@ object GooglePhotosSync extends CommonsCLI {
         client.appCreatedAlbums
           .map(_.find(_.title.contains(portfolio.name.text)))
           .flatMap {
-            case Some(album)          => ZIO.logInfo(s"Reusing app-created album '${portfolio.name.text}'").as(Some(album))
-            case None if executeMode  => client.albumCreate(portfolio.name.text).asSome <* ZIO.logInfo(s"Created album '${portfolio.name.text}'")
-            case None                 => ZIO.logInfo(s"Would create album '${portfolio.name.text}'").as(None)
+            case Some(album)          => (ZIO.logInfo("Reusing app-created album") @@ LogContext.kv("portfolioName" -> portfolio.name.text)).as(Some(album))
+            case None if executeMode  => client.albumCreate(portfolio.name.text).asSome <* (ZIO.logInfo("Album created") @@ LogContext.kv("portfolioName" -> portfolio.name.text))
+            case None                 => (ZIO.logInfo("Would create album") @@ LogContext.kv("portfolioName" -> portfolio.name.text)).as(None)
           }
     }
 
@@ -731,7 +732,7 @@ object GooglePhotosSync extends CommonsCLI {
     } yield asset.originalId.asString -> NewMediaItem(assetDescriptionOf(asset), SimpleMediaItem(uploadName, token))
     step
       .map(Some(_))
-      .catchAll(err => ZIO.logWarning(s"Skipping asset ${asset.originalId.asString} : ${err.getMessage}").as(None))
+      .catchAll(err => (ZIO.logWarning("Skipping asset") @@ LogContext.originalId(asset.originalId) @@ LogContext.kv("error" -> err.getMessage)).as(None))
   }
 
   /** Synchronize one portfolio, returns the updated sync state for it (unchanged in dry-run mode). */
@@ -780,8 +781,8 @@ object GooglePhotosSync extends CommonsCLI {
                                      client
                                        .albumAddText(album.id, text)
                                        .as(initial.copy(albumDescription = Some(text)))
-                                       .tap(state => saveState(state) *> ZIO.logInfo(s"'${portfolio.name.text}' : portfolio description added as an album text block"))
-                                       .catchAll(err => ZIO.logWarning(s"'${portfolio.name.text}' : couldn't add the album description : ${err.getMessage}").as(initial))
+                                       .tap(state => saveState(state) *> (ZIO.logInfo("Portfolio description added as an album text block") @@ LogContext.kv("portfolioName" -> portfolio.name.text)))
+                                       .catchAll(err => (ZIO.logWarning("Couldn't add the album description") @@ LogContext.kv("portfolioName" -> portfolio.name.text, "error" -> err.getMessage)).as(initial))
                                  }
                      driftResult          <- albumDriftRepair(client, album.id, portfolio.name.text, withDesc, saveState)
                      (checked, lostPairs)  = driftResult
@@ -800,7 +801,7 @@ object GooglePhotosSync extends CommonsCLI {
                                     val staleItemIds = changedIds.flatMap(checked.uploaded.get)
                                     ZIO
                                       .foreachDiscard(staleItemIds.grouped(batchCreateMaxSize).toList)(ids => client.mediaItemsBatchRemove(album.id, ids))
-                                      .catchAll(err => ZIO.logWarning(s"'${portfolio.name.text}' : couldn't remove the outdated renders from the album (${err.getMessage}), duplicates may appear"))
+                                      .catchAll(err => (ZIO.logWarning("Couldn't remove the outdated renders from the album, duplicates may appear") @@ LogContext.kv("portfolioName" -> portfolio.name.text, "error" -> err.getMessage)))
                                       .as(
                                         checked.copy(
                                           uploaded = checked.uploaded -- changedIds,
@@ -810,7 +811,7 @@ object GooglePhotosSync extends CommonsCLI {
                                         )
                                       )
                                       .tap(saveState)
-                                      .tap(_ => ZIO.logInfo(s"'${portfolio.name.text}' : ${cropChangedNow.size} crop changes, outdated renders removed from the album (they stay in the Google Photos library)"))
+                                      .tap(_ => (ZIO.logInfo("Crop changes, outdated renders removed from the album (they stay in the Google Photos library)") @@ LogContext.kv("portfolioName" -> portfolio.name.text, "count" -> cropChangedNow.size)))
                                   }
                      synced   <- ZIO.foldLeft((missingNow ++ cropChangedNow).grouped(batchCreateMaxSize).toList)(recropped) { (state, assetsBatch) =>
                                    for {
@@ -849,7 +850,7 @@ object GooglePhotosSync extends CommonsCLI {
                                                         albumOrder = state.albumOrder ++ confirmed.map { case (_, _, created) => created.id }
                                                       )
                                      _             <- saveState(nextState) // crash-safe : persist progress after every batch
-                                     _             <- ZIO.logInfo(s"'${portfolio.name.text}' : ${confirmed.size}/${assetsBatch.size} medias uploaded and added to the album")
+                                     _             <- (ZIO.logInfo("Medias uploaded and added to the album") @@ LogContext.kv("portfolioName" -> portfolio.name.text, "count" -> confirmed.size, "batchSize" -> assetsBatch.size))
                                    } yield nextState
                                  }
                      updates   = descriptionUpdates(portfolio, effectiveForDescriptions(synced))
@@ -857,9 +858,9 @@ object GooglePhotosSync extends CommonsCLI {
                                    client
                                      .mediaItemSetDescription(mediaItemId, description)
                                      .as(state.copy(descriptions = state.descriptions + (originalId -> description)))
-                                     .catchAll(err => ZIO.logWarning(s"Couldn't update the description of media item $mediaItemId : ${err.getMessage}").as(state))
+                                     .catchAll(err => (ZIO.logWarning("Couldn't update the description of a media item") @@ LogContext.kv("mediaItemId" -> mediaItemId, "error" -> err.getMessage)).as(state))
                                  }
-                     _        <- ZIO.when(updates.nonEmpty)(saveState(patched) *> ZIO.logInfo(s"'${portfolio.name.text}' : ${updates.size} media descriptions updated"))
+                     _        <- ZIO.when(updates.nonEmpty)(saveState(patched) *> (ZIO.logInfo("Media descriptions updated") @@ LogContext.kv("portfolioName" -> portfolio.name.text, "count" -> updates.size)))
                      pruned   <- if (pruneMode && removedEntries.nonEmpty) {
                                    ZIO
                                      .foreachDiscard(removedEntries.values.toList.grouped(batchCreateMaxSize).toList)(ids => client.mediaItemsBatchRemove(album.id, ids))
@@ -871,7 +872,7 @@ object GooglePhotosSync extends CommonsCLI {
                                          albumOrder = patched.albumOrder.filterNot(removedEntries.values.toSet)
                                        )
                                      )
-                                     .tap(_ => ZIO.logInfo(s"'${portfolio.name.text}' : ${removedEntries.size} items removed from the album (still in the Google Photos library)"))
+                                     .tap(_ => (ZIO.logInfo("Items removed from the album (still in the Google Photos library)") @@ LogContext.kv("portfolioName" -> portfolio.name.text, "count" -> removedEntries.size)))
                                  } else ZIO.succeed(patched)
                      ordered  <- {
                                    val wantedOrder = desiredAlbumOrder(portfolio, pruned)
@@ -946,7 +947,7 @@ object GooglePhotosSync extends CommonsCLI {
                           .portfolioList()
                           .runCollect
                           .map(_.toList.filter(p => portfolioFilter.forall(f => p.name.text.toLowerCase.contains(f))).sortBy(_.name.text))
-      _              <- ZIO.logInfo(s"${portfolios.size} portfolios to synchronize")
+      _              <- (ZIO.logInfo("Portfolios to synchronize") @@ LogContext.kv("count" -> portfolios.size))
       _              <- ZIO.foreachDiscard(portfolios) { portfolio =>
                           val saveState = (portfolioState: PortfolioSyncState) =>
                             stateRef
@@ -956,7 +957,7 @@ object GooglePhotosSync extends CommonsCLI {
                         }
       finalState     <- stateRef.get
       totalUploaded   = finalState.portfolios.values.map(_.uploaded.size).sum
-      _              <- if (executeMode) ZIO.logInfo(s"Synchronization done : $totalUploaded medias mirrored across ${finalState.portfolios.size} albums (state in $stateFilePath)")
+      _              <- if (executeMode) (ZIO.logInfo("Synchronization done") @@ LogContext.kv("uploadedCount" -> totalUploaded, "albumsCount" -> finalState.portfolios.size, "stateFile" -> stateFilePath))
                         else ZIO.logInfo("Dry-run done, rerun with --execute to apply")
     } yield ()
   }

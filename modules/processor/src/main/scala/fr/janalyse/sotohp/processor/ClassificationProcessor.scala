@@ -54,7 +54,7 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, DJL
       mayBeClasses <- ZIO
                         .attempt(doClassifyImage(input))
                         .mapError(th => ClassificationIssue("Unable to compute classifications", th))
-                        .tap(cls => ZIO.log(s"found classes : ${cls.mkString(",")}"))
+                        .tap(cls => ZIO.logInfo("Classes found") @@ LogContext.kv("classesCount" -> cls.size, "classes" -> cls.map(c => s"${c.name}(${(c.probability * 100).toInt}%)").mkString(",")))
                         .logError("Classification issue")
                         .option
       status        = ProcessedStatus(successful = mayBeClasses.isDefined, timestamp = now)
@@ -62,8 +62,7 @@ class ClassificationProcessor(imageClassificationPredictor: Predictor[Image, DJL
     } yield OriginalClassifications(original, status, classes)
 
     logic
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
 
   }
 }

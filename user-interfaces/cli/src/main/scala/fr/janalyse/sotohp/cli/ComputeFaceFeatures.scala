@@ -7,6 +7,7 @@ import fr.janalyse.sotohp.processor.config.FaceFeaturesConfig
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 
 /** Backfill : (re)computes the face embeddings of the existing collection with the configured face
@@ -117,7 +118,7 @@ object ComputeFaceFeatures extends CommonsCLI {
                              _        <- toDoRef.update(_ + 1).when(selected)
                            } yield selected
                            keep
-                             .catchAll(err => ZIO.logWarning(s"Couldn't check original $originalId : $err").as(false))
+                             .catchAll(err => (ZIO.logWarning("Couldn't check original") @@ LogContext.originalId(originalId) @@ LogContext.kv("error" -> err)).as(false))
                          }
                          .filter(_ => !dryRun) // counted above, nothing recomputed
                          .take(limit.map(_.toLong).getOrElse(Long.MaxValue))
@@ -126,7 +127,7 @@ object ComputeFaceFeatures extends CommonsCLI {
                            MediaService
                              .faceFeaturesRecompute(originalId)
                              .map(computed => (successful = computed.status.successful, faces = computed.features.size))
-                             .catchAll(err => ZIO.logWarning(s"Couldn't compute face features of $originalId : $err").as((successful = false, faces = 0)))
+                             .catchAll(err => (ZIO.logWarning("Couldn't compute face features") @@ LogContext.originalId(originalId) @@ LogContext.kv("error" -> err)).as((successful = false, faces = 0)))
                          }
                          .mapZIO { result =>
                            for {

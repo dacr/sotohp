@@ -297,18 +297,18 @@ object GpsLocationFix extends CommonsCLI {
       byCamera          = located.groupBy(_.camera).filter { case (camera, _) => cameraFilter.forall(f => camera.text.toLowerCase.contains(f)) }
       consideredCount   = byCamera.valuesIterator.map(_.size).sum
       outliers          = byCamera.toVector.flatMap { case (_, group) => findOutliers(group.sortBy(_.epoch), maxDistanceMeters, windowSeconds, minNeighbours, minSupportRatio) }
-      _                <- ZIO.logInfo(s"Scanned ${allMedia.size} medias, $consideredCount with a defined original GPS across ${byCamera.size} cameras")
+      _                <- (ZIO.logInfo("Medias scanned") @@ LogContext.kv("count" -> allMedia.size, "withGpsCount" -> consideredCount, "camerasCount" -> byCamera.size))
       _                <- Console.printLine("-----------------------------------------------------------------------------------------")
       _                <- ZIO.foreachDiscard(outliers.sortBy(o => (o.bad.camera.text, o.bad.epoch)))(reportOutlier)
       _                <- Console.printLine("-----------------------------------------------------------------------------------------")
       byCameraCount     = outliers.groupBy(_.bad.camera.text).view.mapValues(_.size).toList.sortBy { case (cam, count) => (-count, cam) }
       _                <- ZIO.foreachDiscard(byCameraCount) { case (cam, count) => Console.printLine(f"$YELLOW$count%5d invalid GPS locations for camera $cam$RESET") }
-      _                <- if (fixMode) ZIO.foreachDiscard(outliers)(applyFix) *> ZIO.logInfo(s"Fixed ${outliers.size} invalid GPS locations (set userDefinedLocation)")
-                          else ZIO.logInfo(s"Found ${outliers.size} invalid GPS locations (run with --fix to correct them)")
+      _                <- if (fixMode) ZIO.foreachDiscard(outliers)(applyFix) *> (ZIO.logInfo("Invalid GPS locations fixed (set userDefinedLocation)") @@ LogContext.kv("count" -> outliers.size))
+                          else (ZIO.logInfo("Invalid GPS locations found (run with --fix to correct them)") @@ LogContext.kv("count" -> outliers.size))
       generatedAt      <- Clock.currentDateTime
       report            = buildReport(generatedAt, fixMode, cameraFilter, maxDistanceMeters, windowSeconds, minNeighbours, minSupportRatio, allMedia.size, consideredCount, byCamera.size, outliers)
       reportPath       <- writeReport(report, generatedAt).mapError(err => ServiceInternalIssue(s"Couldn't write report : $err"))
-      _                <- ZIO.logInfo(s"Summary report written to ${reportPath.toAbsolutePath}")
+      _                <- (ZIO.logInfo("Summary report written") @@ LogContext.kv("reportPath" -> reportPath.toAbsolutePath))
     } yield ()
   }
 

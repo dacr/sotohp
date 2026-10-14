@@ -5,6 +5,7 @@ import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import fr.janalyse.sotohp.service.MediaServiceLive.given // brings `KeyCodec[FaceId]` into scope for `LMDBVectorIndex.create[FaceId]`
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 import zio.lmdb.vector.{HnswParams, LMDBVectorIndex, VectorMetric}
 
@@ -102,7 +103,7 @@ object FaceFeaturesClustering extends CommonsCLI {
       features    <- MediaService.faceFeaturesListCurrent().runCollect
       confirmed   <- MediaService.faceList().filter(_.identifiedPersonId.isDefined).runCollect.map(_.map(face => face.faceId -> face.identifiedPersonId.get).toMap)
       loadEnd     <- Clock.nanoTime
-      _           <- ZIO.logInfo(s"${features.size} face feature vectors loaded in ${(loadEnd - loadStart) / 1000000000L}s")
+      _           <- (ZIO.logInfo("Face feature vectors loaded") @@ LogContext.kv("count" -> features.size, "elapsedSeconds" -> (loadEnd - loadStart) / 1000000000L))
       _           <- ZIO.fail(new RuntimeException("no face feature vectors computed by the configured model - run make run-compute-face-features first")).when(features.isEmpty)
       dimension    = features.head.features.length
       indexById    = features.map(_.faceId).zipWithIndex.toMap
@@ -122,7 +123,7 @@ object FaceFeaturesClustering extends CommonsCLI {
                                            .buildApproximateIndex(HnswParams(m = 16, efConstruction = 100, efSearch = 64))
                                            .orDieWith(err => new RuntimeException(err.toString))
                                            .timed
-                                           .flatMap((elapsed, _) => ZIO.logInfo(s"approximate (HNSW) index built in ${elapsed.toSeconds}s"))
+                                           .flatMap((elapsed, _) => (ZIO.logInfo("Approximate (HNSW) index built") @@ LogContext.kv("elapsedSeconds" -> elapsed.toSeconds)))
                          neighborLists <- ZIO
                                             .foreachPar(features.toVector) { ff =>
                                               index

@@ -4,6 +4,7 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.{SearchService, SearchServiceConfig}
 import fr.janalyse.sotohp.service.{MediaService, MediaTuple, ServiceUnavailableIssue}
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 
 import java.time.{LocalDate, OffsetDateTime, ZoneOffset}
@@ -230,7 +231,7 @@ object ComputeCaptions extends CommonsCLI {
                               _         <- MediaService
                                              .searchPublish(originalId)
                                              .foldZIO(
-                                               err => indexFailedRef.update(_ + 1) *> ZIO.logWarning(s"search publish failed for $originalId : $err"),
+                                               err => indexFailedRef.update(_ + 1) *> (ZIO.logWarning("Search publish failed") @@ LogContext.originalId(originalId) @@ LogContext.kv("error" -> err)),
                                                _ => indexedRef.update(_ + 1)
                                              )
                                              .when(indexing)

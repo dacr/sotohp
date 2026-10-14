@@ -1,18 +1,18 @@
 package fr.janalyse.sotohp.cli
 
 import zio.*
-import zio.Runtime.removeDefaultLoggers
 import zio.config.typesafe.TypesafeConfigProvider
-import zio.logging.{LogFormat, consoleLogger}
-//import zio.logging.backend.SLF4J
+import zio.logging.{ConsoleLoggerConfig, consoleLogger}
 
 abstract class CommonsCLI extends ZIOAppDefault {
-  val configProvider = TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load())
+  val configProvider      = TypesafeConfigProvider.fromTypesafeConfig(com.typesafe.config.ConfigFactory.load())
   val configProviderLayer = Runtime.setConfigProvider(configProvider)
 
-  //val loggingLayer = removeDefaultLoggers >>> SLF4J.slf4j(format = LogFormat.colored)
-  //val loggingLayer = zio.logging.slf4j.bridge.Slf4jBridge.initialize
-  val loggingLayer = Runtime.removeDefaultLoggers >>> consoleLogger()
+  // The logger configuration is explicitly read through the typesafe provider : the bootstrap layers are built
+  // concurrently, so relying on configProviderLayer would silently fall back to the default format (no annotations)
+  val loggingLayer =
+    Runtime.removeDefaultLoggers >>>
+      ZLayer.fromZIO(ZIO.withConfigProvider(configProvider)(ConsoleLoggerConfig.load())).flatMap(env => consoleLogger(env.get))
 
   override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] = {
     loggingLayer ++ configProviderLayer

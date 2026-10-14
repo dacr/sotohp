@@ -1,6 +1,7 @@
 package fr.janalyse.sotohp.search
 
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import fr.janalyse.sotohp.model.{Media, MediaAccessKey, State}
 import fr.janalyse.sotohp.search.model.MediaBag
 import fr.janalyse.sotohp.search.sao.SaoMedia
@@ -34,10 +35,10 @@ object SearchService {
   val live = ZLayer.fromZIO(
     for {
       config            <- SearchServiceConfig.config
-      _                 <- ZIO.logInfo(config.toString)
+      _                 <- ZIO.logInfo("Search engine configuration") @@ LogContext.kv("enabled" -> config.enabled, "elasticUrl" -> config.elasticUrl, "indexPrefix" -> config.indexPrefix)
       elasticOperations <- ZIO
                              .attempt(ElasticOperations(config))
-                             .tapError(err => ZIO.logError(err.toString))
+                             .tapError(err => ZIO.logError("Couldn't initialize search engine") @@ LogContext.kv("error" -> err))
                              .mapError(th => SearchServiceIssue(s"Couldn't initialize search engine configuration", Nil))
                              .option
                              .when(config.enabled)
@@ -82,8 +83,9 @@ class SearchServiceLive(mayBeElasticOperations: Option[ElasticOperations], confi
       case Some(elasticOperations)  =>
         elasticOperations
           .searchMediaIds(config.indexPrefix, trimmed, count)
-          .logError(s"Couldn't run search query '$trimmed'")
+          .logError("Couldn't run search query")
           .mapError(err => SearchServiceIssue(s"Couldn't run search query", err :: Nil))
+          @@ LogContext.kv("query" -> trimmed)
     }
   }
 
@@ -95,8 +97,9 @@ class SearchServiceLive(mayBeElasticOperations: Option[ElasticOperations], confi
           .delete(config.indexPrefix, media.original.id.asString, media.timestamp)
           .when(config.enabled)
           .map(_ => ())
-          .logError(s"Couldn't unpublish ${media.original.id.asString} ${media.timestamp}")
+          .logError("Couldn't unpublish media")
           .mapError(err => SearchServiceIssue(s"Couldn't unpublish ${media.original.id.asString} ${media.timestamp}", err :: Nil))
+          @@ LogContext.media(media)
     }
   }
 }

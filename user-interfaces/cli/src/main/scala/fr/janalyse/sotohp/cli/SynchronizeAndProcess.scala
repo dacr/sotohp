@@ -30,7 +30,7 @@ object SynchronizeAndProcess extends CommonsCLI {
       _     <- MediaService.synchronizeStart(Some(42))
       _     <- MediaService.synchronizeWait()
       count <- MediaService.originalCount()
-      _     <- ZIO.logInfo(s"$count photos synchronized")
+      _     <- (ZIO.logInfo("Photos synchronized") @@ LogContext.kv("count" -> count))
       _     <- GoogleTakeoutTooling.logic
     } yield ()
   }

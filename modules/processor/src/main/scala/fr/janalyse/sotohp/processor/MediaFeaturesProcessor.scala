@@ -4,7 +4,7 @@ import ai.djl.Application
 import ai.djl.inference.Predictor
 import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.repository.zoo.{Criteria, ZooModel}
-import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.core.{CoreIssue, LogContext}
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.model.*
@@ -61,8 +61,7 @@ class MediaFeaturesProcessor(predictor: Predictor[Image, Array[Float]]) extends 
     } yield OriginalMediaFeatures(original, status, features)
 
     logic
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
   }
 
 }

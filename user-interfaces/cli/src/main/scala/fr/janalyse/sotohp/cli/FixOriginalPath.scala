@@ -6,6 +6,7 @@ import fr.janalyse.sotohp.processor.NormalizeProcessor
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.config.typesafe.*
 import zio.lmdb.LMDB
 
@@ -35,8 +36,7 @@ object FixOriginalPath extends CommonsCLI {
       relativeMediaPath = if (currentMediaPath.path.isAbsolute)
                             original.store.baseDirectory.path.relativize(currentMediaPath.path)
                           else currentMediaPath.path
-      _                <- ZIO
-                            .logInfo(s"Fix media path ${original.mediaPath.path} -> $relativeMediaPath")
+      _                <- (ZIO.logInfo("Fix media path") @@ LogContext.original(original) @@ LogContext.kv("newMediaPath" -> relativeMediaPath))
                             .when(currentMediaPath.path.isAbsolute)
       _                <- MediaService
                             .originalUpsert(original.copy(mediaPath = OriginalPath(relativeMediaPath)))

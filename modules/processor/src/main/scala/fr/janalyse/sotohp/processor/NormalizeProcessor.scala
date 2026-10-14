@@ -2,7 +2,7 @@ package fr.janalyse.sotohp.processor
 
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
-import fr.janalyse.sotohp.core.{ConfigInvalid, CoreIssue}
+import fr.janalyse.sotohp.core.{ConfigInvalid, CoreIssue, LogContext}
 import fr.janalyse.sotohp.processor.config.NormalizerConfig
 import fr.janalyse.sotohp.processor.model.*
 import zio.*
@@ -31,7 +31,7 @@ object NormalizeProcessor extends Processor {
                         .attemptBlocking(
                           BasicImaging.reshapeImage(input, output, referenceSize, orientation.map(_.rotationDegrees), Some(config.quality))
                         )
-                        .zipLeft(ZIO.logInfo(s"Normalize"))
+                        .tap(d => ZIO.logInfo("Photo normalized") @@ LogContext.kv("referenceSize" -> referenceSize, "width" -> d.width, "height" -> d.height))
                         .mapError(th => NormalizeIssue(s"Couldn't generate normalized photo $input with reference size $referenceSize", th))
                         .uninterruptible
     } yield newDimension
@@ -59,8 +59,7 @@ object NormalizeProcessor extends Processor {
 
     logic
       .logError(s"Normalization issue")
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
   }
 
 }

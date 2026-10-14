@@ -24,7 +24,7 @@ object MiniaturizeProcessor extends Processor {
                           BasicImaging.reshapeImage(input, output, referenceSize, None, Some(config.quality))
                         )
                         .mapError(th => MiniaturizeIssue("Couldn't generate miniature photo", th))
-                        .zipLeft(ZIO.logInfo("Miniaturize"))
+                        .tap(d => ZIO.logInfo("Miniature generated") @@ LogContext.kv("width" -> d.width, "height" -> d.height))
                         .uninterruptible
                         .logError
     } yield newDimension
@@ -38,7 +38,7 @@ object MiniaturizeProcessor extends Processor {
                      .attemptBlocking(output.getParent.toFile.mkdirs())
                      .mapError(th => MiniaturizeIssue("Couldn't target path", th))
       dimension <- miniaturizePhoto(size, input, output)
-                     @@ annotated("inputFile" -> input.toString)
+                     @@ LogContext.kv("inputFile" -> input)
     } yield MiniatureCharacteristics(size = size, dimension = Dimension(Width(dimension.width), Height(dimension.height)))
   }
 
@@ -59,7 +59,7 @@ object MiniaturizeProcessor extends Processor {
                            .foreach(referencesSizes) { referenceSize =>
                              buildMiniature(original, referenceSize)
                                .logError(s"Miniaturization issue")
-                               @@ annotated("referenceSize" -> referenceSize.toString)
+                               @@ LogContext.kv("referenceSize" -> referenceSize)
                            }
                            .option
       status           = ProcessedStatus(successful = mayBeMiniatures.isDefined, timestamp = now)
@@ -68,8 +68,7 @@ object MiniaturizeProcessor extends Processor {
 
     logic
       .logError(s"Miniaturization issue")
-      @@ annotated("originalId" -> original.id.asString)
-      @@ annotated("originalPath" -> original.absoluteMediaPath.toString)
+      @@ LogContext.original(original)
   }
 
 }

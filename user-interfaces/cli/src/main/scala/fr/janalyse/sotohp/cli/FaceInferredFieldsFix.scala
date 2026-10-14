@@ -4,6 +4,7 @@ import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 
 /*
@@ -50,7 +51,7 @@ object FaceInferredFieldsFix extends CommonsCLI {
                        )
                      )
                  }
-      _     <- ZIO.logInfo(s"${stats.scanned} faces scanned, ${stats.identified} identified, ${stats.cleaned} cleaned up")
+      _     <- (ZIO.logInfo("Inference leftovers cleaned") @@ LogContext.kv("scannedCount" -> stats.scanned, "identifiedCount" -> stats.identified, "cleanedCount" -> stats.cleaned))
     } yield ()
   }
 }

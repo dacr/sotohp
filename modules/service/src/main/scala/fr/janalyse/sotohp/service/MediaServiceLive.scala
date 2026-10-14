@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, MediaBuilder, OriginalBuilder, SearchFilter}
+import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, LogContext, MediaBuilder, OriginalBuilder, SearchFilter}
 import fr.janalyse.sotohp.model.{FaceId, PersonId, *}
 import fr.janalyse.sotohp.processor.{
   CaptionIssue,
@@ -36,7 +36,6 @@ import zio.lmdb.keycodecs.{KeyCodec, KeyCodecError, KeyTypeId}
 import zio.lmdb.vector.VectorMetric
 import zio.stream.{Stream, ZStream}
 import io.scalaland.chimney.dsl.*
-import zio.ZIOAspect.annotated
 
 import java.net.URL
 import java.nio.ByteBuffer
@@ -187,7 +186,7 @@ class MediaServiceLive private (
           .flatMap(daoMediaToMediaTuple)
       }
       .unsome
-      .logError(s"Couldn't get previous media near $nearKey")
+      .logError("Couldn't get previous media") @@ LogContext.kv("nearKey" -> nearKey)
   }
 
   override def mediaNext(nearKey: MediaAccessKey): IO[ServiceIssue, Option[MediaTuple]] = {
@@ -203,7 +202,7 @@ class MediaServiceLive private (
           .flatMap(daoMediaToMediaTuple)
       }
       .unsome
-      .logError(s"Couldn't get next media near $nearKey")
+      .logError("Couldn't get next media") @@ LogContext.kv("nearKey" -> nearKey)
   }
 
   override def mediaLast(): IO[ServiceIssue, Option[MediaTuple]] = {
@@ -308,7 +307,7 @@ class MediaServiceLive private (
       .some
       .flatMap(daoMediaToMediaTuple)
       .unsome
-      .logError(s"Couldn't fetch media for key ${key.asString}")
+      .logError("Couldn't fetch media") @@ LogContext.kv("mediaAccessKey" -> key.asString)
   }
 
   def mediaGet(id: OriginalId): IO[ServiceIssue, Option[MediaTuple]] = {
@@ -318,7 +317,7 @@ class MediaServiceLive private (
       .some
       .flatMap(daoMediaToMediaTuple)
       .unsome
-      .logError(s"Couldn't fetch media for id $id")
+      .logError("Couldn't fetch media") @@ LogContext.originalId(id)
   }
 
   // Atomically allocate the next position slot for a newly inserted media.
@@ -359,7 +358,7 @@ class MediaServiceLive private (
           .flatMap(daoMediaToMediaTuple)
       }
       .unsome
-      .logError(s"Couldn't fetch at $position media")
+      .logError("Couldn't fetch media at position") @@ LogContext.kv("position" -> position)
   }
 
   override def mediaUpdate(
@@ -542,7 +541,7 @@ class MediaServiceLive private (
     for {
       original            <- originalGet(originalId)
                                .someOrFail(ServiceDatabaseIssue(s"Couldn't find original : $originalId"))
-                               .logError(s"Couldn't find original : $originalId")
+                               .logError("Couldn't find original") @@ LogContext.originalId(originalId)
       mediaTuple          <- mediaGet(originalId)
                                .mapError(err => ServiceInternalIssue(s"Couldn't get media for original : $err"))
       // The box was measured by the caller against the *displayed* image, which is rotated to the
@@ -602,7 +601,7 @@ class MediaServiceLive private (
                   .when(before.flatMap(_.identifiedPersonId) != f.identifiedPersonId) {
                     mediaGet(f.originalId)
                       .flatMap(t => ZIO.foreachDiscard(t)(tuple => searchRepublish(tuple.media, None)))
-                      .catchAll(err => ZIO.logWarning(s"Search re-publish (face ${f.faceId.asString}) skipped : $err"))
+                      .catchAll(err => ZIO.logWarning("Search re-publish skipped") @@ LogContext.face(f.faceId) @@ LogContext.originalId(f.originalId) @@ LogContext.kv("error" -> err))
                   }
     } yield f
   }
@@ -1170,8 +1169,11 @@ class MediaServiceLive private (
                              .transform
                          )
                          .mapError(err => ServiceDatabaseIssue(s"Unable to store computed faces : $err"))
+      _             <- ZIO.logInfo("Face features computed")
+                         @@ LogContext.original(computed.original)
+                         @@ LogContext.kv("facesFeaturesCount" -> computed.features.size, "model" -> computed.model.getOrElse("none"))
     } yield computed
-    logic.uninterruptible
+    logic.uninterruptible @@ LogContext.originalId(originalId)
   }
 
   def daoFacesFeaturesToFacesFeatures(input: DaoOriginalFaceFeatures): IO[ServiceIssue, OriginalFaceFeatures] = {
@@ -1200,9 +1202,7 @@ class MediaServiceLive private (
       // record is not compared against the detected faces : that would re-embed such photos on every
       // call. `faceFeaturesRecompute` (or the ComputeFaceFeatures CLI) is the way to try again.
       stored <- originalFacesFeaturesGet(originalId)
-      result <- computeFaceFeatures(originalId)
-                  .tap(feats => ZIO.logInfo(s"Computed face features for original $originalId : ${feats.features.size}"))
-                  .when(stored.isEmpty)
+      result <- computeFaceFeatures(originalId).when(stored.isEmpty)
     } yield result.orElse(stored)
   }
 
@@ -1212,7 +1212,7 @@ class MediaServiceLive private (
     */
   private def faceFeaturesRefreshAfterEdit(originalId: OriginalId): IO[ServiceIssue, Unit] =
     computeFaceFeatures(originalId).unit.catchSome { case err: ServiceUnavailableIssue =>
-      ZIO.logWarning(s"Face features of original $originalId left to recompute later : ${err.getMessage}") *>
+      (ZIO.logWarning("Face features left to recompute later") @@ LogContext.originalId(originalId) @@ LogContext.kv("error" -> err.getMessage)) *>
         collections.originalFaceFeatures
           .update(originalId, previous => previous.copy(status = previous.status.copy(successful = false)))
           .mapError(err => ServiceDatabaseIssue(s"Unable to flag face features for recompute : $err"))
@@ -1284,8 +1284,7 @@ class MediaServiceLive private (
                                                        // server down, record the step as failed so the ComputeFaceFeatures CLI redoes it,
                                                        // rather than failing the rotation which is already stored.
                                                        .catchSome { case err: FaceFeaturesServiceUnavailableIssue =>
-                                                         ZIO
-                                                           .logWarning(s"Face features of original $originalId left to recompute later : ${err.getMessage}")
+                                                         (ZIO.logWarning("Face features left to recompute later") @@ LogContext.original(original) @@ LogContext.kv("error" -> err.getMessage))
                                                            .as(OriginalFaceFeatures(original, ProcessedStatus(successful = false, timestamp = now), Nil, featuresProcessor.modelTag))
                                                        }
                                                        .mapError(err => ServiceInternalIssue(s"Unable to extract remapped faces features : $err"))
@@ -1835,7 +1834,7 @@ class MediaServiceLive private (
       available <- originalExists(original.id)
       _         <- originalUpsert(original).when(!available)
     } yield original
-    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
+    logic @@ LogContext.original(original)
   }
 
   private def getBagForAttachment(attachment: BagAttachment): IO[ServiceIssue, Option[Bag]] = {
@@ -1898,7 +1897,7 @@ class MediaServiceLive private (
                         )
       state        <- stateUpsert(original.id, updatedState)
     } yield (original, state)
-    logic @@ annotated("originalId" -> original.id.toString, "originalMediaPath" -> original.absoluteMediaPath.toString)
+    logic @@ LogContext.original(original)
   }
 
   private def synchronizeMedia(input: (original: Original, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
@@ -1933,7 +1932,7 @@ class MediaServiceLive private (
                                  .mapError(err => ServiceDatabaseIssue(s"Couldn't create media : $err"))
                              }
     } yield (currentMediaTuple.media, input.state)
-    logic @@ annotated("originalId" -> input.original.id.toString, "originalMediaPath" -> input.original.absoluteMediaPath.toString)
+    logic @@ LogContext.original(input.original)
   }
 
   /** Remote processors (served by an external AI server) get skipped for the rest of a sync run once
@@ -1947,7 +1946,7 @@ class MediaServiceLive private (
     * step's result whether the server really answered - only that resets the unavailability count,
     * since a step with nothing to do (e.g. no face in the photo) proves nothing about the server.
     */
-  private def synchronizeRemoteStep[A](breaker: Ref[Map[String, Int]], name: String, originalId: OriginalId)(
+  private def synchronizeRemoteStep[A](breaker: Ref[Map[String, Int]], name: String)(
     step: IO[ServiceIssue, A]
   )(reachedServer: A => Boolean): UIO[Unit] =
     breaker.get.flatMap { counts =>
@@ -1961,13 +1960,12 @@ class MediaServiceLive private (
                            val count = current.getOrElse(name, 0) + 1
                            (count, current.updated(name, count))
                          }
-                _     <- ZIO.logWarning(s"$name unavailable for original $originalId ($count in a row) : ${err.getMessage}")
-                _     <- ZIO
-                           .logError(s"$name skipped for the rest of this synchronization, its server looks down - use the dedicated CLI to fill the gaps later")
+                _     <- ZIO.logWarning("Remote step unavailable") @@ LogContext.kv("step" -> name, "consecutiveUnavailable" -> count, "error" -> err.getMessage)
+                _     <- (ZIO.logError("Remote step skipped for the rest of this synchronization, its server looks down - use the dedicated CLI to fill the gaps later") @@ LogContext.kv("step" -> name))
                            .when(count == remoteStepMaxConsecutiveUnavailable)
               } yield ()
             case err                          =>
-              ZIO.logWarning(s"$name failed for original $originalId : ${err.getMessage}")
+              ZIO.logWarning("Remote step failed") @@ LogContext.kv("step" -> name, "error" -> err.getMessage)
           },
           result => breaker.update(_.updated(name, 0)).when(reachedServer(result)).unit
         )
@@ -1979,11 +1977,11 @@ class MediaServiceLive private (
       _                         <- originalNormalized(originalId).ignoreLogged                   // required to optimize AI work so not launched in background
       fiberMiniaturesFiber      <- originalMiniatures(originalId).ignoreLogged                   // .fork
       fiberFacesFiber           <- originalFaces(originalId).ignoreLogged                        // .fork
-      fiberFeaturesFiber        <- synchronizeRemoteStep(breaker, "Face features", originalId)(originalFacesFeatures(originalId))(
+      fiberFeaturesFiber        <- synchronizeRemoteStep(breaker, "Face features")(originalFacesFeatures(originalId))(
                                      _.exists(_.features.nonEmpty)
                                    )                                                             // .fork
       fiberMediaFeaturesFiber   <- originalMediaFeatures(originalId).ignoreLogged                // .fork
-      fiberCaptionFiber         <- synchronizeRemoteStep(breaker, "Caption", originalId)(originalCaption(originalId))(
+      fiberCaptionFiber         <- synchronizeRemoteStep(breaker, "Caption")(originalCaption(originalId))(
                                      _.exists(_.status.successful)
                                    )                                                             // .fork (no-op unless the captioner is enabled)
       fiberClassificationsFiber <- originalClassifications(originalId).ignoreLogged              // .fork
@@ -1996,7 +1994,7 @@ class MediaServiceLive private (
     } yield input
 
     // TODO AI processors may fail, but we don't want to stop the whole synchronization => check the added `.ignoreLogged`
-    logic @@ annotated("originalId" -> input.media.original.id.toString, "originalMediaPath" -> input.media.original.absoluteMediaPath.toString)
+    logic @@ LogContext.media(input.media)
   }
 
   // TODO generic utility function
@@ -2087,7 +2085,7 @@ class MediaServiceLive private (
         mayState <- stateGet(current.original.id)
         _        <- ZIO.foreachDiscard(mayState)(state => buildMediaBag(current, state).flatMap(bag => search.publish(Chunk.single(bag))))
       } yield ()
-    logic.catchAll(err => ZIO.logWarning(s"Search re-publish failed for original ${current.original.id.asString} : $err"))
+    logic.catchAll(err => ZIO.logWarning("Search re-publish failed") @@ LogContext.media(current) @@ LogContext.kv("error" -> err))
   }
 
   // Pure reads of stored processor results : unlike `originalXxx`, never compute a missing one.
@@ -2187,7 +2185,7 @@ class MediaServiceLive private (
     }
     val syncLogic    = {
       for {
-        _              <- ZIO.log(s"Synchronization started addedThoseLastDays=$addedThoseLastDays")
+        _              <- ZIO.logInfo("Synchronization started") @@ LogContext.kv("addedThoseLastDays" -> addedThoseLastDays.getOrElse("all"))
         stores         <- storeList().runCollect
         serviceConfig  <- ServiceConfig.config
                             .mapError(err => ServiceInternalIssue(s"Unable to retrieve service configuration : $err"))
@@ -2206,7 +2204,7 @@ class MediaServiceLive private (
                             .mapZIO(original => ZIO.blocking(synchronizeState(original)))
                             .mapZIO(input => ZIO.blocking(synchronizeMedia(input)))
                             .filter(_.state.mediaLastSynchronized.isEmpty)
-                            .tap(input => ZIO.logInfo(s"Synchronizing ${input.media.original.mediaPath}"))
+                            .tap(input => ZIO.logInfo("Synchronizing media") @@ LogContext.media(input.media))
                             .mapZIO(input => ZIO.blocking(synchronizeProcessors(remoteBreaker)(input).uninterruptible))
                             .mapZIO(input => ZIO.blocking(locationInduction(input).uninterruptible))
                             .mapZIO(input => ZIO.blocking(placeResolution(input).uninterruptible))
@@ -2215,8 +2213,8 @@ class MediaServiceLive private (
                             .mapZIO(input => ZIO.blocking(updateSynchronizeProcessedStatus(input).uninterruptible))
                             .runDrain
                             .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
-                            .catchAll(e => ZIO.logError(s"Sync failed: $e"))
-                            .tap(_ => ZIO.log("Synchronization finished !"))
+                            .catchAll(e => ZIO.logError("Synchronization failed") @@ LogContext.kv("error" -> e))
+                            .tap(_ => ZIO.logInfo("Synchronization finished"))
                             .tap(_ => finishedLogic) // TODO not sure it's the best place to do this
       } yield ()
     }
@@ -2236,7 +2234,7 @@ class MediaServiceLive private (
                          )
                        )
       fiber       <- syncLogic
-                       .tapError(err => ZIO.logError(s"Couldn't synchronize : $err"))
+                       .tapError(err => ZIO.logError("Couldn't synchronize") @@ LogContext.kv("error" -> err))
                        .forkDaemon
       _           <- synchronizeFiberRef
                        .update {

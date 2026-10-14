@@ -92,7 +92,7 @@ object FacesFix extends CommonsCLI {
       updated         = currentFacesIds.size != foundFacesIds.size
       _              <- MediaService
                           .originalFacesUpdate(originalId, foundFacesIds)
-                          .tap(_ => ZIO.logInfo(s"Original faces identifiers updated $originalId - ${currentFacesIds.size}->${foundFacesIds.size} faces"))
+                          .tap(_ => (ZIO.logInfo("Original faces identifiers updated") @@ LogContext.originalId(originalId) @@ LogContext.kv("previousFacesCount" -> currentFacesIds.size, "facesCount" -> foundFacesIds.size)))
                           .when(updated)
     } yield updated
   }
@@ -113,7 +113,7 @@ object FacesFix extends CommonsCLI {
                           .map(_.flatten.toSet)
       _              <- ZIO.logInfo("----------- Faces path coherency -----------")
       _              <- ZIO.foreachDiscard(faces.filterNot(_.path.path.toFile.exists())) { face =>
-                          ZIO.logInfo(s"Face ${face.faceId} is orphan of its file : ${face.path.path}") *>
+                          (ZIO.logInfo("Face is orphan of its file") @@ LogContext.face(face.faceId) @@ LogContext.kv("facePath" -> face.path.path)) *>
                             MediaService.faceDelete(face.faceId)
                         }
       _              <- ZIO.logInfo("----------- Faces features fix -----------")

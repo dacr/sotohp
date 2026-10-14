@@ -6,6 +6,7 @@ import fr.janalyse.sotohp.processor.FacesProcessor
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 
 import scala.io.AnsiColor.*
@@ -172,7 +173,7 @@ object FaceOrientationAudit extends CommonsCLI {
                          )
                        )
     } yield result)
-      .catchAll(err => ZIO.logWarning(s"Couldn't audit original ${original.id.asString} : $err").as(None))
+      .catchAll(err => (ZIO.logWarning("Couldn't audit original") @@ LogContext.original(original) @@ LogContext.kv("error" -> err)).as(None))
   }
 
   private def report(v: Verdict): UIO[Unit] = {
@@ -192,16 +193,16 @@ object FaceOrientationAudit extends CommonsCLI {
 
   private def applyFix(v: Verdict): ZIO[MediaService, Nothing, Unit] = v.classification match {
     case "stuck-at-original" =>
-      ZIO.logInfo(s"Remapping ${v.originalId.asString} : ${v.originalRotation}° -> ${v.effectiveRotation}°") *>
+      (ZIO.logInfo("Remapping face boxes") @@ LogContext.originalId(v.originalId) @@ LogContext.kv("fromRotation" -> v.originalRotation, "toRotation" -> v.effectiveRotation)) *>
         MediaService
           .facesRemapForRotation(v.originalId, v.originalRotation, v.effectiveRotation)
-          .tapError(err => ZIO.logError(s"Failed to remap ${v.originalId.asString} : $err"))
+          .tapError(err => (ZIO.logError("Failed to remap face boxes") @@ LogContext.originalId(v.originalId) @@ LogContext.kv("error" -> err)))
           .ignoreLogged
     case "stale-crops"       =>
-      ZIO.logInfo(s"Re-cropping ${v.originalId.asString} at ${v.effectiveRotation}° (${v.staleCrops} stale crop(s), boxes untouched)") *>
+      (ZIO.logInfo("Re-cropping faces (boxes untouched)") @@ LogContext.originalId(v.originalId) @@ LogContext.kv("rotation" -> v.effectiveRotation, "staleCropsCount" -> v.staleCrops)) *>
         MediaService
           .facesRecropForEffectiveRotation(v.originalId)
-          .tapError(err => ZIO.logError(s"Failed to re-crop ${v.originalId.asString} : $err"))
+          .tapError(err => (ZIO.logError("Failed to re-crop faces") @@ LogContext.originalId(v.originalId) @@ LogContext.kv("error" -> err)))
           .ignoreLogged
     case _                   => ZIO.unit
   }
@@ -231,11 +232,10 @@ object FaceOrientationAudit extends CommonsCLI {
                               s"${alreadyCorrect.size} already correct, ${stuck.size} with boxes stuck at the original rotation, " +
                               s"${staleCrops.size} with crops cut at the wrong rotation (${staleCrops.map(_.staleCrops).sum} faces), ${ambiguous.size} ambiguous"
                           )
-      _                <- ZIO
-                            .logInfo(s"$undecidable crop(s) could not be checked - a 180° rotation leaves the crop size unchanged, so nothing can be told from it")
+      _                <- (ZIO.logInfo("Crops could not be checked - a 180° rotation leaves the crop size unchanged, so nothing can be told from it") @@ LogContext.kv("count" -> undecidable))
                             .when(undecidable > 0)
       _                <- ZIO.foreachDiscard(stuck ++ staleCrops)(applyFix).when(fixMode)
-      _                <- ZIO.logInfo(s"${ambiguous.size} originals need manual review (couldn't confidently tell which rotation their boxes are in)").when(ambiguous.nonEmpty)
+      _                <- (ZIO.logInfo("Originals need manual review (couldn't confidently tell which rotation their boxes are in)") @@ LogContext.kv("count" -> ambiguous.size)).when(ambiguous.nonEmpty)
       _                <- ZIO.logInfo(if (fixMode) "Done - repairs applied" else "Done - report only, nothing was changed (pass --fix to apply)")
     } yield ()
   }

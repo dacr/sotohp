@@ -7,6 +7,7 @@ import fr.janalyse.sotohp.processor.config.FaceFeaturesConfig
 import fr.janalyse.sotohp.search.SearchService
 import fr.janalyse.sotohp.service.MediaService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 import zio.lmdb.vector.VectorMetric
 
@@ -124,7 +125,7 @@ object FaceEmbeddingDrift extends CommonsCLI {
       rotation  = media.flatMap(_.media.orientation).orElse(original.orientation).map(_.rotationDegrees).getOrElse(0)
       image    <- ZIO.attemptBlocking(BasicImaging.rotate(BasicImaging.load(original.absoluteMediaPath), rotation.toDouble))
     } yield Option.when(faceSize(face, image) >= minFaceSize)(framed(face, image)))
-      .catchAll(err => ZIO.logWarning(s"skipping face ${face.faceId} : $err").as(None))
+      .catchAll(err => (ZIO.logWarning("Skipping face") @@ LogContext.face(face.faceId) @@ LogContext.kv("error" -> err)).as(None))
 
   private def framed(face: Face, image: BufferedImage): (Face, BufferedImage) = {
     val (left, top, width, height) = LocalAIFaceFeaturesProcessor.marginRectangle(face.box, image.getWidth, image.getHeight, 1.0d)
@@ -159,9 +160,9 @@ object FaceEmbeddingDrift extends CommonsCLI {
                         ZIO
                           .attemptBlocking(transformation.apply(crop, size))
                           .flatMap(processor.embedCrop)
-                          .catchAll(err => ZIO.logWarning(s"${transformation.name} of face ${entry.face.faceId} : $err").as(None))
+                          .catchAll(err => (ZIO.logWarning("Face transformation failed") @@ LogContext.face(entry.face.faceId) @@ LogContext.kv("transformation" -> transformation.name, "error" -> err)).as(None))
                       }
-        } yield vectors).catchAll(err => ZIO.logWarning(s"face ${entry.face.faceId} : $err").as(Vector.fill(transformations.size)(None)))
+        } yield vectors).catchAll(err => (ZIO.logWarning("Face embedding failed") @@ LogContext.face(entry.face.faceId) @@ LogContext.kv("error" -> err)).as(Vector.fill(transformations.size)(None)))
       }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -225,7 +226,7 @@ object FaceEmbeddingDrift extends CommonsCLI {
       _       <- ZIO.foreachDiscard(params.engines) { engine =>
                    ZIO.acquireReleaseWith(FaceFeaturesProcessor.allocate(engine))(processor => ZIO.succeed(processor.close())) { processor =>
                      embedAll(processor, sampled).timed.flatMap { (elapsed, vectors) =>
-                       ZIO.logInfo(s"$engine : ${sampled.size * transformations.size} embeddings in ${elapsed.toSeconds}s") *>
+                       (ZIO.logInfo("Embeddings computed") @@ LogContext.kv("engine" -> engine, "count" -> sampled.size * transformations.size, "elapsedSeconds" -> elapsed.toSeconds)) *>
                          report(engine, sampled, vectors)
                      }
                    }

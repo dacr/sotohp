@@ -404,7 +404,7 @@ object MediaService {
       lmdb             <- ZIO.service[LMDB]
       searchService    <- ZIO.service[SearchService]
       mediaServiceLive <- MediaServiceLive.setup(lmdb, searchService).logError("MediaServiceLive setup error")
-      _                <- ZIO.logInfo(s"MediaServiceLive layer ready")
+      _                <- ZIO.logInfo("MediaServiceLive layer ready")
     } yield mediaServiceLive
   }
 

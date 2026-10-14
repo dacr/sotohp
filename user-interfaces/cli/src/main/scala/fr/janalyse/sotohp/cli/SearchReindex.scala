@@ -3,6 +3,7 @@ package fr.janalyse.sotohp.cli
 import fr.janalyse.sotohp.service.MediaService
 import fr.janalyse.sotohp.search.SearchService
 import zio.*
+import fr.janalyse.sotohp.core.LogContext
 import zio.lmdb.LMDB
 
 /** Re-publishes every stored media to the search engine.
@@ -28,7 +29,7 @@ object SearchReindex extends CommonsCLI {
     for {
       _     <- ZIO.logInfo("Clearing the search indexes, then re-publishing every media...")
       count <- MediaService.searchReindexAll()
-      _     <- ZIO.logInfo(s"Search reindex completed - $count medias published.")
+      _     <- (ZIO.logInfo("Search reindex completed") @@ LogContext.kv("publishedCount" -> count))
     } yield ()
   }
 }

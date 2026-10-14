@@ -5,7 +5,7 @@ import ai.djl.modality.cv.{Image, ImageFactory}
 import ai.djl.repository.zoo.{Criteria, ZooModel}
 import com.github.plokhotnyuk.jsoniter_scala.core.*
 import com.github.plokhotnyuk.jsoniter_scala.macros.*
-import fr.janalyse.sotohp.core.CoreIssue
+import fr.janalyse.sotohp.core.{CoreIssue, LogContext}
 import fr.janalyse.sotohp.media.imaging.BasicImaging
 import fr.janalyse.sotohp.model.*
 import fr.janalyse.sotohp.processor.config.FaceFeaturesConfig
@@ -88,13 +88,13 @@ trait FaceFeaturesProcessor extends Processor {
                                faceCrop(face, originalImage)
                                  .flatMap(embedCrop)
                                  .map(_.map(vector => FaceFeatures(faceId = face.faceId, features = vector, model = modelTag)))
-                                 @@ annotated("faceId" -> face.faceId.toString)
+                                 @@ LogContext.face(face.faceId)
                              }
                              .map(_.flatten)
                              .map(Some(_))
                              .catchAll {
                                case err: FaceFeaturesServiceUnavailableIssue => ZIO.fail(err)
-                               case err                                      => ZIO.logWarning(s"Unable to compute face features: $err").as(None)
+                               case err                                      => (ZIO.logWarning("Unable to compute face features") @@ LogContext.kv("error" -> err)).as(None)
                              }
       status             = ProcessedStatus(successful = mayBeFaceFeatures.isDefined, timestamp = now)
       features           = mayBeFaceFeatures.getOrElse(Nil)
@@ -102,8 +102,7 @@ trait FaceFeaturesProcessor extends Processor {
 
     logic
       .logError("Face features issue")
-      @@ annotated("originalId" -> faces.original.id.asString)
-      @@ annotated("originalPath" -> faces.original.absoluteMediaPath.toString)
+      @@ LogContext.original(faces.original)
   }
 }
 
@@ -264,7 +263,7 @@ class LocalAIFaceFeaturesProcessor(config: FaceFeaturesConfig) extends FaceFeatu
         val image = BasicImaging.load(original.absoluteMediaPath)
         BasicImaging.rotate(image, original.orientation.map(_.rotationDegrees).getOrElse(0).toDouble)
       }
-      .tapError(err => ZIO.logWarning(s"Couldn't load full resolution original, using the normalized rendition : ${err.getMessage}"))
+      .tapError(err => ZIO.logWarning("Couldn't load full resolution original, using the normalized rendition") @@ LogContext.kv("error" -> err.getMessage))
       .orElse(loadOriginalBestInputFileForProcessors(original))
 
   override protected def selectable(face: Face, image: BufferedImage): Boolean = {
@@ -315,7 +314,7 @@ class LocalAIFaceFeaturesProcessor(config: FaceFeaturesConfig) extends FaceFeatu
         else if (LocalAIFaceFeaturesProcessor.isNoFaceAnswer(response.statusCode(), body))
           // The server's detector found no face in our crop (profile, occlusion, a false positive of
           // our own detector) - nothing to embed, but nothing wrong either.
-          ZIO.logDebug(s"LocalAI found no face in the crop : ${body.take(200)}").as(None)
+          (ZIO.logDebug("LocalAI found no face in the crop") @@ LogContext.kv("response" -> body.take(200))).as(None)
         else if (LocalAIFaceFeaturesProcessor.isServiceFailure(response.statusCode()))
           ZIO.fail(FaceFeaturesServiceUnavailableIssue(s"LocalAI returned HTTP ${response.statusCode()}: ${body.take(300)}"))
         else
