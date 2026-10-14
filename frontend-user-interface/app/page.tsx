@@ -778,7 +778,7 @@ function ViewerPageInner() {
   let locLabel = "No";
   if (media?.location) {
     const place = media.userDefinedPlace ?? media.deductedPlace;
-    const placeLabel = [place?.town, place?.region, place?.country].filter(Boolean).join(", ");
+    const placeLabel = [place?.town, place?.subRegion, place?.region, place?.country].filter(Boolean).join(", ");
     const fromPhotoGps = isValidLocation(media.original.location) && !isValidLocation(media.userDefinedLocation) && !isValidLocation(media.deductedLocation);
     if (fromPhotoGps) {
       pinColor = "#10b981";
