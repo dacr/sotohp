@@ -42,6 +42,7 @@ case class SaoMedia(
   // ----------------- PLACE (reverse-geocoded from GPS) -----------------
   placeStreet: Option[String],
   placeTown: Option[String],
+  placeSubRegion: Option[String],
   placeRegion: Option[String],
   placeCountry: Option[String],
   placeCountryCode: Option[String],
@@ -97,9 +98,10 @@ object SaoMedia {
       // ----------------- GPS -----------------
       place = location.map(loc => SaoGeoPoint(lat = loc.latitude.doubleValue, lon = loc.longitude.doubleValue)),
       placeAltitude = location.flatMap(_.altitude.map(_.value)),
-      placeDeducted = if (media.userDefinedLocation.isEmpty && media.deductedLocation.isDefined) Some(true) else None,
+      placeDeducted = if (!media.userDefinedLocation.exists(_.isValid) && media.deductedLocation.exists(_.isValid)) Some(true) else None,
       placeStreet = place.flatMap(_.street),
       placeTown = place.flatMap(_.town),
+      placeSubRegion = place.flatMap(_.subRegion),
       placeRegion = place.flatMap(_.region),
       placeCountry = place.flatMap(_.country),
       placeCountryCode = place.flatMap(_.countryCode),

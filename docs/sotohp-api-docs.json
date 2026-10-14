@@ -5978,6 +5978,9 @@
           "town" : {
             "type" : "string"
           },
+          "subRegion" : {
+            "type" : "string"
+          },
           "region" : {
             "type" : "string"
           },

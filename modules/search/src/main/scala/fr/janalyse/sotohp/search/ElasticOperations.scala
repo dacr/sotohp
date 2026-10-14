@@ -227,6 +227,7 @@ case class ElasticOperations(config: SearchServiceConfig) {
     "camera"            -> 0.2,
     "placeStreet"       -> 1.0,
     "placeTown"         -> 1.0,
+    "placeSubRegion"    -> 1.0,
     "placeRegion"       -> 1.0,
     "placeCountry"      -> 1.0,
     "placeCountryCode"  -> 1.0,

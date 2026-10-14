@@ -2007,7 +2007,7 @@ class MediaServiceLive private (
   // may need several executions to fully be able to induce locations
   // TODO of course too slow (but simpler than keeping a buffer window : for all 114795 photos, 17m30s with induction 10m41s without )
   private def locationInduction(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    if (input.media.original.hasLocation || input.media.deductedLocation.isDefined) ZIO.succeed(input)
+    if (input.media.original.hasLocation || input.media.deductedLocation.exists(_.isValid)) ZIO.succeed(input)
     else {
       def acceptable(current: MediaTuple): Boolean = {
         val sameUser       = current.media.original.store.ownerId.asULID == input.media.original.store.ownerId
@@ -2044,7 +2044,8 @@ class MediaServiceLive private (
                                     else None
         inductedLocation          = inductedLocationFirstShot.orElse(inductedLocationInMiddle)
         updatedMedia              = input.media.copy(deductedLocation = inductedLocation)
-        _                        <- mediaUpdate(input.media.original.id, updatedMedia).when(inductedLocation.isDefined)
+        // also clears a legacy (0, 0) deduction when nothing better can be induced
+        _                        <- mediaUpdate(input.media.original.id, updatedMedia).when(inductedLocation != input.media.deductedLocation)
       } yield (updatedMedia, input.state)
     }
   }
@@ -2700,6 +2701,9 @@ object MediaServiceLive {
     mediaServiceDatabase       <- setupMediaServiceDatabase(lmdb)
     _                          <- backfillPositionalIndex(mediaServiceDatabase)
     processors                 <- setupProcessors()
+    // Background warm-up: downloads the missing GeoNames files then loads them. `geoPlace` is
+    // memoized, so whoever needs places meanwhile waits on this same allocation.
+    _                          <- processors.geoPlace.ignoreLogged.forkDaemon
     synchronizeStatusReference <- Ref.make(SynchronizeStatus.empty)
     synchronizeFiberReference  <- Ref.make(Option.empty[Fiber[ServiceIssue, Unit]])
   } yield new MediaServiceLive(

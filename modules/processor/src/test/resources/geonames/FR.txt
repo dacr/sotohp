@@ -1,0 +1,7 @@
+2992240	Montmirail	Montmirail	Montmirail	48.87214	3.53797	P	PPL	FR		44	51	512	51380	3742		190	Europe/Paris	2016-02-18
+2992241	Montmirail	Montmirail	Montmirail	48.1032	0.79117	P	PPL	FR		52	72	722	72208	486		220	Europe/Paris	2020-12-10
+2992242	Montmirail	Montmirail		46.245	2.8915	P	PPL	FR		84	63	634	63187	0		530	Europe/Paris	2016-02-18
+2996030	Marchais-en-Brie	Marchais-en-Brie	Marchais,Marchais-en-Brie	48.88357	3.48548	P	PPL	FR		32	02	021	02458	240		198	Europe/Paris	2016-02-18
+6425027	Dhuys et Morin-en-Brie	Dhuys et Morin-en-Brie	02458,Dhuys et Morin-en-Brie,Marshe-an-Bri,ma er xie ang bu li,Марше-ан-Бри,Марше-ан-Брі,马尔谢昂布里	48.88333	3.48333	A	ADM4	FR		32	02	021	02458	814		188	Europe/Paris	2019-03-29
+12318227	Le Tremblay	Le Tremblay	Le Tremblay	48.8858	3.49545	P	PPL	FR		32	02	021	02458	0		203	Europe/Paris	2021-09-11
+12318312	Faubourg Pavé	Faubourg Pave	Faubourg Pave,Faubourg Pavé	49.16152	5.40197	P	PPL	FR		44	55	553	55545	0		201	Europe/Paris	2021-09-11

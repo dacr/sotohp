@@ -50,6 +50,12 @@ object Location {
   }
 
   extension (from: Location) {
+    /** Legacy data stored "no location" as a (0, 0) point (photos, bags and older location
+      * inductions), so any point with a zero coordinate is treated as missing.
+      */
+    def isValid: Boolean =
+      from.latitude.doubleValue != 0d && from.longitude.doubleValue != 0d
+
     def distanceTo(to: Location): Double = {
       val earthRadius    = 6371000d
       val deltaLatitude  = to.latitude.toRadians - from.latitude.toRadians

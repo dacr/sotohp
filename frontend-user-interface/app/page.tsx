@@ -3,8 +3,10 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { AddToPortfolioModal } from "../components/AddToPortfolioModal";
+import { CopyButton } from "../components/CopyButton";
 import { FaceEditModal } from "../components/FaceEditModal";
 import { FacesOverlay, type ImageRect } from "../components/FacesOverlay";
+import { GotoMediaButton } from "../components/GotoMediaButton";
 import { LocationPin } from "../components/LocationPin";
 import { MediaEditModal } from "../components/MediaEditModal";
 import { useCurrentMedia } from "../hooks/useCurrentMedia";
@@ -769,16 +771,34 @@ function ViewerPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideshowPlaying]);
 
-  const hasLoc = !!(media?.location || media?.userDefinedLocation || media?.deductedLocation);
+  // `media.location` is the effective location (user-defined > deducted > photo GPS > bag), already
+  // cleared of legacy (0, 0) points. Only the photo's own GPS counts as known; anything else is an
+  // estimate.
   let pinColor = "#ef4444";
   let locLabel = "No";
   if (media?.location) {
-    pinColor = "#10b981";
-    locLabel = "Known";
-  } else if (media?.userDefinedLocation || media?.deductedLocation) {
-    pinColor = "#f59e0b";
-    locLabel = "Estimated";
+    const place = media.userDefinedPlace ?? media.deductedPlace;
+    const placeLabel = [place?.town, place?.region, place?.country].filter(Boolean).join(", ");
+    const fromPhotoGps = isValidLocation(media.original.location) && !isValidLocation(media.userDefinedLocation) && !isValidLocation(media.deductedLocation);
+    if (fromPhotoGps) {
+      pinColor = "#10b981";
+      locLabel = placeLabel || "Known";
+    } else {
+      pinColor = "#f59e0b";
+      locLabel = placeLabel ? `${placeLabel} (estimated)` : "Estimated";
+    }
   }
+
+  async function gotoMediaById(id: string) {
+    try {
+      const { mediaAccessKey } = await api.getState(id);
+      if (!mediaAccessKey) throw new Error("no media for this original");
+      await loadByKey(mediaAccessKey);
+    } catch {
+      showError(`No photo found with id ${id}`);
+    }
+  }
+
   const dateTs = media?.shootDateTime || media?.original.cameraShootDateTime || null;
 
   const imgStyle: CSSProperties = {
@@ -949,7 +969,15 @@ function ViewerPageInner() {
             </div>
             <div>
               <strong>Location:</strong>{" "}
-              <span style={media?.location ? { cursor: "pointer" } : undefined} title={media?.location ? "Show on map" : ""} onClick={media?.location ? () => router.push("/map/") : undefined}>
+              <span style={media?.location ? { cursor: "pointer" } : undefined} title={media?.location ? "Show on map" : ""} onClick={
+                  media?.location
+                    ? () =>
+                        router.push(
+                          `/map/?media=${encodeURIComponent(media.accessKey)}&lat=${media.location!.latitude}&lon=${media.location!.longitude}`,
+                        )
+                    : undefined
+                }
+              >
                 <LocationPin color={pinColor} /> {locLabel}
               </span>
             </div>
@@ -972,6 +1000,12 @@ function ViewerPageInner() {
               ) : (
                 <span>-</span>
               )}
+            </div>
+            <div>
+              <strong>Id:</strong>{" "}
+              <span style={{ fontFamily: "monospace" }}>{media?.original.id ?? "-"}</span>
+              {media && <CopyButton value={media.original.id} label="Copy original id" />}
+              <GotoMediaButton onGoto={gotoMediaById} />
             </div>
           </div>
         </div>
@@ -998,4 +1032,9 @@ function ViewerPageInner() {
       )}
     </section>
   );
+}
+
+// Legacy data stored "no location" as a (0, 0) point - same rule as the backend's Location.isValid.
+function isValidLocation(location: { latitude: number; longitude: number } | undefined | null): boolean {
+  return !!location && location.latitude !== 0 && location.longitude !== 0;
 }

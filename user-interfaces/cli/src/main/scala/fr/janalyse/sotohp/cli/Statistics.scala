@@ -71,7 +71,7 @@ object Statistics extends CommonsCLI {
     } yield {
       val updatedCount                     = stats.count + 1
       val updatedGeolocalizedCount         = stats.geoLocalizedCount + (if (place.isDefined) 1 else 0)
-      val updatedDeductedGeoLocalizedCount = stats.deductedGeoLocalizedCount + (if (media.deductedLocation.isDefined) 1 else 0)
+      val updatedDeductedGeoLocalizedCount = stats.deductedGeoLocalizedCount + (if (media.deductedLocation.exists(_.isValid)) 1 else 0)
 
       // a location is considered "fixed" when the original carried its own GPS and the user overrode it
       val isUserFixedLocation                    = media.original.location.isDefined && media.userDefinedLocation.isDefined

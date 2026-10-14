@@ -12,6 +12,7 @@ import zio.lmdb.schema.LMDBSchema
 case class DaoPlace(
   street: Option[String],
   town: Option[String],
+  subRegion: Option[String],
   region: Option[String],
   country: Option[String],
   countryCode: Option[String]

@@ -4,7 +4,7 @@ package fr.janalyse.sotohp.model
   * entered/corrected by the user (`Media.userDefinedPlace`).
   *
   * The default deduction is fully offline (nearest populated place in a GeoNames dump), so it fills
-  * `town` / `region` / `country` / `countryCode` but never `street` - that field is only ever set
+  * `town` / `subRegion` / `region` / `country` / `countryCode` but never `street` - that field is only ever set
   * on a user-defined place.
   *
   * Plain `String` fields on purpose: these are free-text geographic labels coming from a
@@ -14,17 +14,18 @@ package fr.janalyse.sotohp.model
 case class Place(
   street: Option[String],
   town: Option[String],
+  subRegion: Option[String],   // GeoNames second-level administrative division (département / county / ...)
   region: Option[String],      // GeoNames first-level administrative division (state / région / ...)
   country: Option[String],
   countryCode: Option[String]  // ISO 3166-1 alpha-2
 )
 
 object Place {
-  val empty: Place = Place(None, None, None, None, None)
+  val empty: Place = Place(None, None, None, None, None, None)
 
   extension (place: Place) {
     /** True when every field is empty - nothing worth storing. */
     def isEmpty: Boolean =
-      place.street.isEmpty && place.town.isEmpty && place.region.isEmpty && place.country.isEmpty && place.countryCode.isEmpty
+      place.street.isEmpty && place.town.isEmpty && place.subRegion.isEmpty && place.region.isEmpty && place.country.isEmpty && place.countryCode.isEmpty
   }
 }

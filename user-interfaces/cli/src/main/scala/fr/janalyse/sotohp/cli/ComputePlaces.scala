@@ -13,8 +13,8 @@ import zio.lmdb.LMDB
   *   - `--force` recomputes even when a `deductedPlace` is already stored (needed after a GeoNames
   *     dump refresh or a bulk location change). A user-defined place is always left untouched.
   *
-  * The GeoNames dump must be in place first (`make download-geonames`); without it every photo is
-  * simply visited and left unchanged.
+  * The GeoNames dump is downloaded automatically when missing (`sotohp.processors.geocoding`
+  * settings); if that fails every photo is simply visited and left unchanged.
   *
   * The search documents carry the place, so run `make run-search-reindex` afterwards to make it
   * searchable on the existing collection (`make run-reindex` only rebuilds the LMDB indexes).

@@ -1,0 +1,3 @@
+2969288	Viels-Maisons	Viels-Maisons	Viels-Maisons	48.89667	3.39643	P	PPL	FR		32	02	021	02798	970		179	Europe/Paris	2016-02-18
+2969958	Verdun	Verdun	Ferdun,GMG,Verdan,Verdehn,Verden,Verdena,Verdenas,Verdjun,Verdun,Verdun-sur-Meuse,Verduno,Verdún,Virodunum,beleudoeng,fan er deng,frdan,verdeni,vuerudan,wrdn,wrdwn,Вердан,Верден,Вердэн,Вердюн,Վերդեն,ורדן,فردان,وردون,ვერდენი,ヴェルダン,凡尔登,베르됭	49.15964	5.3829	P	PPLA3	FR		44	55	553	55545	21798		220	Europe/Paris	2024-11-21
+2992240	Montmirail	Montmirail	Montmirail	48.87214	3.53797	P	PPL	FR		44	51	512	51380	3742		190	Europe/Paris	2016-02-18

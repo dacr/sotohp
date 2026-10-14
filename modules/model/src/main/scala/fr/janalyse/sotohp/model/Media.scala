@@ -19,12 +19,13 @@ case class Media(
 
   def place: Option[Place] = userDefinedPlace.orElse(deductedPlace)
 
+  // Each source is checked on its own, so a legacy (0, 0) point never hides a valid fallback.
   def location: Option[Location] =
     userDefinedLocation
-      .orElse(deductedLocation)
-      .orElse(original.location)
-      .orElse(bag.flatMap(_.location))
-      .filter(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d) // TODO fix location data
+      .filter(_.isValid)
+      .orElse(deductedLocation.filter(_.isValid))
+      .orElse(original.location.filter(_.isValid))
+      .orElse(bag.flatMap(_.location).filter(_.isValid))
 
   def allKeywords: Set[Keyword] = keywords ++ bag.toList.flatMap(_.keywords)
 }

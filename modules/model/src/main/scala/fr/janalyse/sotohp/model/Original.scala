@@ -28,7 +28,7 @@ case class Original(
       .getOrElse(fileLastModified.offsetDateTime)
       
   def hasLocation: Boolean =
-    location.isDefined && location.exists(l => l.latitude.doubleValue != 0d && l.longitude.doubleValue != 0d) // TODO fix location data
+    location.exists(_.isValid)
 
   def relativeMediaPath: Path = mediaPath.path
   def absoluteMediaPath: Path = store.baseDirectory.path.resolve(relativeMediaPath)

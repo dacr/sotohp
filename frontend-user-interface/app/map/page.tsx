@@ -4,8 +4,8 @@
 // how it already worked — this is imperative logic (batched marker loading, lazily-resolved
 // popups) that doesn't fit a declarative React-Leaflet wrapper any better than it fit vanilla DOM
 // updates. Only the library import moved, from CDN globals to npm packages.
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
 import type { Media, MediaLocation } from "../../lib/api-client";
 import { useAuth } from "../../lib/keycloak-auth";
@@ -16,10 +16,26 @@ import { displayRotationDegrees, rotatedImageBox } from "../../lib/orientation";
 const MARKER_BATCH_SIZE = 200;
 const MARKER_BATCH_INTERVAL_MS = 250;
 const POPUP_IMAGE_WIDTH = 200;
+const FOCUS_ZOOM = 16;
+
+type Focus = { key: string; lat: number | null; lon: number | null };
 
 export default function MapPage() {
+  // useSearchParams needs a Suspense boundary for the static export.
+  return (
+    <Suspense fallback={<section className="page map-page" />}>
+      <MapPageContent />
+    </Suspense>
+  );
+}
+
+function MapPageContent() {
   const { api } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusKey = searchParams.get("media");
+  const focusLat = parseCoordinate(searchParams.get("lat"));
+  const focusLon = parseCoordinate(searchParams.get("lon"));
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const clusterRef = useRef<Leaflet.MarkerClusterGroup | null>(null);
@@ -29,6 +45,19 @@ export default function MapPage() {
   const mediaCacheRef = useRef<Map<string, Promise<Media | null>>>(new Map());
   const loadingRef = useRef(false);
   const [status, setStatus] = useState("");
+  // Media requested through `?media=` (e.g. from the viewer's Location link): once its marker is in
+  // the cluster, zoom down to it and open its popup. Cleared after the first successful focus.
+  const focusRef = useRef<Focus | null>(null);
+
+  function tryFocus() {
+    const focus = focusRef.current;
+    const cluster = clusterRef.current;
+    if (!focus || !cluster) return;
+    const marker = markersByKeyRef.current.get(focus.key);
+    if (!marker || !cluster.hasLayer(marker)) return;
+    focusRef.current = null;
+    cluster.zoomToShowLayer(marker, () => marker.openPopup());
+  }
 
   async function getBagNameCached(bagId: string | undefined): Promise<string> {
     if (!bagId) return "";
@@ -121,6 +150,7 @@ export default function MapPage() {
     if (cached) {
       const markers = cached.map((m) => addMarker(L, m)).filter((m): m is Leaflet.Marker => !!m);
       cluster.addLayers(markers);
+      tryFocus();
       setStatus(`Done. Markers: ${addedKeysRef.current.size} (cached)`);
       return;
     }
@@ -135,6 +165,7 @@ export default function MapPage() {
       const batch = pendingBatch;
       pendingBatch = [];
       cluster.addLayers(batch);
+      tryFocus();
       lastFlush = performance.now();
       setStatus(`Loaded ${addedKeysRef.current.size} markers…`);
     };
@@ -161,6 +192,16 @@ export default function MapPage() {
       });
   }
 
+  // Declared before the map-init effect so a deep link's focus is known when the map is created.
+  useEffect(() => {
+    if (!focusKey) return;
+    focusRef.current = { key: focusKey, lat: focusLat, lon: focusLon };
+    const map = mapRef.current;
+    if (map && focusLat !== null && focusLon !== null) map.setView([focusLat, focusLon], FOCUS_ZOOM);
+    tryFocus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, focusLat, focusLon]);
+
   useEffect(() => {
     let disposed = false;
     (async () => {
@@ -168,7 +209,10 @@ export default function MapPage() {
       fixLeafletDefaultIcon(L);
       await import("leaflet.markercluster");
       if (disposed || !mapDivRef.current) return;
-      const map = L.map(mapDivRef.current).setView([20, 0], 2);
+      const focus = focusRef.current;
+      const map = L.map(mapDivRef.current);
+      if (focus && focus.lat !== null && focus.lon !== null) map.setView([focus.lat, focus.lon], FOCUS_ZOOM);
+      else map.setView([20, 0], 2);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap" }).addTo(map);
       const cluster = (L as unknown as { markerClusterGroup: () => Leaflet.MarkerClusterGroup }).markerClusterGroup();
       map.addLayer(cluster);
@@ -203,4 +247,10 @@ export default function MapPage() {
       <div className="status">{status}</div>
     </section>
   );
+}
+
+function parseCoordinate(value: string | null): number | null {
+  if (value === null || value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
