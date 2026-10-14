@@ -126,9 +126,11 @@ object GeoPlaceResolver {
           .as(empty(config.maxDistanceKm))
       else
         ZIO.attemptBlocking {
-          val countryNames   = parseKeyValue(dir.resolve("countryInfo.txt"), keyColumn = 0, valueColumn = 4, skipCommentLines = true)
-          val regionNames    = parseKeyValue(dir.resolve("admin1CodesASCII.txt"), keyColumn = 0, valueColumn = 1, skipCommentLines = false)
-          val subRegionNames = parseKeyValue(dir.resolve("admin2Codes.txt"), keyColumn = 0, valueColumn = 1, skipCommentLines = false)
+          val countryPaths    = countryFilePaths(config).filter(Files.isReadable)
+          val localAdminNames = countryPaths.map(adminFeatureNames).foldLeft(Map.empty[String, String])(_ ++ _)
+          val countryNames    = parseKeyValue(dir.resolve("countryInfo.txt"), keyColumn = 0, valueColumn = 4, skipCommentLines = true)
+          val regionNames     = parseAdminNames(dir.resolve("admin1CodesASCII.txt"), localAdminNames)
+          val subRegionNames  = parseAdminNames(dir.resolve("admin2Codes.txt"), localAdminNames)
 
           val xs         = mutable.ArrayBuilder.make[Double]
           val ys         = mutable.ArrayBuilder.make[Double]
@@ -171,7 +173,7 @@ object GeoPlaceResolver {
             }
 
           loadPlaces(citiesPath, townsOnly = false)
-          countryFilePaths(config).filter(Files.isReadable).foreach(path => loadPlaces(path, townsOnly = true))
+          countryPaths.foreach(path => loadPlaces(path, townsOnly = true))
 
           val xa = xs.result()
           new GeoPlaceResolver(
@@ -211,6 +213,41 @@ object GeoPlaceResolver {
       seatFeatureCodes.contains(featureCode) ||
         (featureCode == "PPL" && populationText.toLongOption.exists(_ > 0))
     )
+
+  /** Local names of the first and second-level divisions listed in a country dump, by geonameid
+    * ("Bretagne", "Finistère", ...).
+    */
+  private def adminFeatureNames(path: Path): Map[String, String] =
+    Using.resource(Source.fromFile(path.toFile, StandardCharsets.UTF_8.name())) { source =>
+      source
+        .getLines()
+        .map(_.split("\t", -1))
+        .filter(cols => cols.length >= 8 && cols(6) == "A" && (cols(7) == "ADM1" || cols(7) == "ADM2"))
+        .map(cols => cols(0).trim -> cols(1).trim)
+        .filter((id, name) => id.nonEmpty && name.nonEmpty)
+        .toMap
+    }
+
+  /** Parses `admin1CodesASCII.txt` / `admin2Codes.txt` (`code, name, ascii name, geonameid`) into
+    * `code -> name`. Their names are English ("Brittany") and sometimes outdated ("Rhône-Alpes"),
+    * so the division's own name from a loaded country dump wins when there is one.
+    */
+  private def parseAdminNames(path: Path, localNames: Map[String, String]): Map[String, String] = {
+    if (!Files.isReadable(path)) Map.empty
+    else
+      Using.resource(Source.fromFile(path.toFile, StandardCharsets.UTF_8.name())) { source =>
+        source
+          .getLines()
+          .map(_.split("\t", -1))
+          .filter(_.length >= 4)
+          .flatMap { cols =>
+            val code = cols(0).trim
+            val name = localNames.getOrElse(cols(3).trim, cols(1).trim)
+            if (code.nonEmpty && name.nonEmpty) Some(code -> name) else None
+          }
+          .toMap
+      }
+  }
 
   /** Parses a GeoNames tab-separated `key -> value` file into a map. */
   private def parseKeyValue(path: Path, keyColumn: Int, valueColumn: Int, skipCommentLines: Boolean): Map[String, String] = {

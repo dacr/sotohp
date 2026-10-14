@@ -1,2 +1,3 @@
 FR.44	Grand Est	Grand Est	11071622
 FR.32	Hauts-de-France	Hauts-de-France	11071624
+FR.53	Brittany	Brittany	3030293

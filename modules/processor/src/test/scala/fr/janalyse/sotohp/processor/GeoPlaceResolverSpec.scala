@@ -65,6 +65,17 @@ object GeoPlaceResolverSpec extends BaseSpecDefault {
         nearFaubourg.flatMap(_.subRegion).contains("Meuse")
       )
     },
+    test("division names come from the country dump when loaded, English GeoNames names otherwise") {
+      for {
+        english <- resolverWith(countryFiles = "").flatMap(_.resolve(47.996, -4.098))   // Quimper
+        local   <- resolverWith(countryFiles = "FR.txt").flatMap(_.resolve(47.996, -4.098))
+      } yield assertTrue(
+        english.flatMap(_.region).contains("Brittany"),
+        local.flatMap(_.region).contains("Bretagne"),
+        local.flatMap(_.subRegion).contains("Finistère"),
+        local.flatMap(_.town).contains("Quimper")
+      )
+    },
     test("a missing country dump is skipped") {
       for {
         resolver <- resolverWith(countryFiles = "XX.txt")

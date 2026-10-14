@@ -1,3 +1,4 @@
 FR.44.55	Meuse	Meuse	2994106
 FR.44.51	Marne	Marne	2995603
 FR.32.02	Aisne	Aisne	3038375
+FR.53.29	Finistère	Finistere	3018471
