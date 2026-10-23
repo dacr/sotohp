@@ -39,13 +39,9 @@ export type Asset = components["schemas"]["Asset"];
 export type BoundingBox = components["schemas"]["BoundingBox"];
 export type State = components["schemas"]["State"];
 export type Location = components["schemas"]["Location"];
-export type SynchronizeStatus = {
-  running: boolean;
-  lastUpdated?: string;
-  checkedCount: number;
-  processedCount: number;
-  startedAt?: string;
-};
+export type SynchronizeStatus = components["schemas"]["SynchronizeStatus"];
+export type SynchronizeProblem = components["schemas"]["SynchronizeProblem"];
+export type SynchronizeRun = components["schemas"]["SynchronizeRun"];
 export type ClientConfig = components["schemas"]["ApiClientConfig"];
 
 export interface MediaUpdateBody {
@@ -383,6 +379,10 @@ export class ApiClient {
     }
     const qs = params.toString();
     return this.request(`/api/admin/synchronize${qs ? `?${qs}` : ""}`, { method: "PUT" });
+  }
+  // Asks the running sync to stop once the media in progress is done - the status tells when it did.
+  synchronizeStop(): Promise<void> {
+    return this.request("/api/admin/synchronize", { method: "DELETE" });
   }
 
   // -- NDJSON helpers -------------------------------------------------------------------------

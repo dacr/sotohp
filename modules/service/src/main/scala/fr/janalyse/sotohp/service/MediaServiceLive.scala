@@ -1,6 +1,6 @@
 package fr.janalyse.sotohp.service
 
-import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, LogContext, MediaBuilder, OriginalBuilder, SearchFilter}
+import fr.janalyse.sotohp.core.{CoreIssue, FileSystemSearch, FileSystemSearchCoreConfig, HashOperations, LogContext, MediaBuilder, OriginalBuilder, OriginalIssue, SearchFilter}
 import fr.janalyse.sotohp.model.{FaceId, PersonId, *}
 import fr.janalyse.sotohp.processor.{
   CaptionIssue,
@@ -53,6 +53,9 @@ import zio.lmdb.keycodecs.geo.GEOTools
 
 type LMDBIssues = StorageUserError | StorageSystemError | IndexErrors
 
+/** The synchronization run in progress, and how to ask it to stop at the next media. */
+private[service] case class SynchronizeRunHandle(fiber: Fiber[Nothing, Unit], stop: Promise[Nothing, Unit])
+
 class MediaServiceLive private (
   lmdb: LMDB,
   search: SearchService,
@@ -60,7 +63,8 @@ class MediaServiceLive private (
   processors: MediaServiceProcessors,
   // ------------------------
   synchronizeStatusRef: Ref[SynchronizeStatus],
-  synchronizeFiberRef: Ref[Option[Fiber[ServiceIssue, Unit]]]
+  synchronizeCompletionsRef: Ref[Chunk[Long]], // processing phase start then completed medias, epoch millis
+  synchronizeRunRef: Ref.Synchronized[Option[SynchronizeRunHandle]]
 ) extends MediaService {
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -1946,7 +1950,7 @@ class MediaServiceLive private (
     * step's result whether the server really answered - only that resets the unavailability count,
     * since a step with nothing to do (e.g. no face in the photo) proves nothing about the server.
     */
-  private def synchronizeRemoteStep[A](breaker: Ref[Map[String, Int]], name: String)(
+  private def synchronizeRemoteStep[A](breaker: Ref[Map[String, Int]], name: String, original: Original)(
     step: IO[ServiceIssue, A]
   )(reachedServer: A => Boolean): UIO[Unit] =
     breaker.get.flatMap { counts =>
@@ -1961,41 +1965,57 @@ class MediaServiceLive private (
                            (count, current.updated(name, count))
                          }
                 _     <- ZIO.logWarning("Remote step unavailable") @@ LogContext.kv("step" -> name, "consecutiveUnavailable" -> count, "error" -> err.getMessage)
-                _     <- (ZIO.logError("Remote step skipped for the rest of this synchronization, its server looks down - use the dedicated CLI to fill the gaps later") @@ LogContext.kv("step" -> name))
+                _     <- ((ZIO.logError("Remote step skipped for the rest of this synchronization, its server looks down - use the dedicated CLI to fill the gaps later") @@ LogContext.kv("step" -> name)) *>
+                           synchronizeStatusUpdate(s => s.copy(unavailableSteps = (s.unavailableSteps :+ name).distinct)) *>
+                           synchronizeProblem(s"$name skipped for the rest of this synchronization, its server looks down : ${err.getMessage}", None))
                            .when(count == remoteStepMaxConsecutiveUnavailable)
               } yield ()
             case err                          =>
-              ZIO.logWarning("Remote step failed") @@ LogContext.kv("step" -> name, "error" -> err.getMessage)
+              (ZIO.logWarning("Remote step failed") @@ LogContext.kv("step" -> name, "error" -> err.getMessage)) *>
+                synchronizeProblem(s"$name failed : ${err.getMessage}", Some(original.mediaPath.path.toString))
           },
           result => breaker.update(_.updated(name, 0)).when(reachedServer(result)).unit
         )
     }
 
-  private def synchronizeProcessors(breaker: Ref[Map[String, Int]])(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    val originalId = input.media.original.id
-    val logic      = for {
-      _                         <- originalNormalized(originalId).ignoreLogged                   // required to optimize AI work so not launched in background
-      fiberMiniaturesFiber      <- originalMiniatures(originalId).ignoreLogged                   // .fork
-      fiberFacesFiber           <- originalFaces(originalId).ignoreLogged                        // .fork
-      fiberFeaturesFiber        <- synchronizeRemoteStep(breaker, "Face features")(originalFacesFeatures(originalId))(
-                                     _.exists(_.features.nonEmpty)
-                                   )                                                             // .fork
-      fiberMediaFeaturesFiber   <- originalMediaFeatures(originalId).ignoreLogged                // .fork
-      fiberCaptionFiber         <- synchronizeRemoteStep(breaker, "Caption")(originalCaption(originalId))(
-                                     _.exists(_.status.successful)
-                                   )                                                             // .fork (no-op unless the captioner is enabled)
-      fiberClassificationsFiber <- originalClassifications(originalId).ignoreLogged              // .fork
-      fiberObjectsFiber         <- originalObjects(originalId).ignoreLogged                      // .fork
-      // TODO investigate why this is not working
-      // _                         <- fiberMiniaturesFiber.join
-      // _                         <- fiberFacesFiber.join
-      // _                         <- fiberClassificationsFiber.join
-      // _                         <- fiberObjectsFiber.join
-    } yield input
+  /** Runs one local processor step for the sync, never failing it : a photo a processor can't handle
+    * must not stop the others, it is reported in the synchronization status instead.
+    */
+  private def synchronizeLocalStep(name: String, original: Original)(step: IO[ServiceIssue, Any]): UIO[Unit] = {
+    def report(message: String) =
+      (ZIO.logWarning("Processor step failed") @@ LogContext.kv("step" -> name, "error" -> message)) *>
+        synchronizeProblem(s"$name failed : $message", Some(original.mediaPath.path.toString))
+    step.unit
+      .catchAll(err => report(err.getMessage))
+      .catchAllDefect(defect => report(Option(defect.getMessage).getOrElse(defect.getClass.getSimpleName)))
+  }
 
-    // TODO AI processors may fail, but we don't want to stop the whole synchronization => check the added `.ignoreLogged`
+  private def synchronizeProcessors(breaker: Ref[Map[String, Int]])(input: (media: Media, state: State)): UIO[(media: Media, state: State)] = {
+    val original   = input.media.original
+    val originalId = original.id
+    val logic      = for {
+      _ <- synchronizeLocalStep("Normalization", original)(originalNormalized(originalId)) // first, the other processors work from the normalized rendition
+      _ <- synchronizeLocalStep("Miniatures", original)(originalMiniatures(originalId))
+      _ <- synchronizeLocalStep("Faces detection", original)(originalFaces(originalId))
+      _ <- synchronizeRemoteStep(breaker, "Face features", original)(originalFacesFeatures(originalId))(_.exists(_.features.nonEmpty))
+      _ <- synchronizeLocalStep("Media features", original)(originalMediaFeatures(originalId))
+      _ <- synchronizeRemoteStep(breaker, "Caption", original)(originalCaption(originalId))(_.exists(_.status.successful)) // no-op unless the captioner is enabled
+      _ <- synchronizeLocalStep("Classifications", original)(originalClassifications(originalId))
+      _ <- synchronizeLocalStep("Objects detection", original)(originalObjects(originalId))
+    } yield input
     logic @@ LogContext.media(input.media)
   }
+
+  /** Location induction and place resolution enrich a media from its neighbours or from its
+    * coordinates : when that fails the media is still published, without the enrichment.
+    */
+  private def synchronizeEnrichment(name: String)(
+    step: ((media: Media, state: State)) => IO[ServiceIssue, (media: Media, state: State)]
+  )(input: (media: Media, state: State)): UIO[(media: Media, state: State)] =
+    step(input).catchAll(err =>
+      (ZIO.logWarning("Enrichment step failed") @@ LogContext.media(input.media) @@ LogContext.kv("step" -> name, "error" -> err.getMessage)) *>
+        synchronizeProblem(s"$name failed : ${err.getMessage}", Some(input.media.original.mediaPath.path.toString)).as(input)
+    )
 
   // TODO generic utility function
   def zstreamGenerator[R, E, A](first: ZIO[R, E, Option[A]])(next: A => ZIO[R, E, Option[A]]): ZStream[R, E, A] =
@@ -2165,110 +2185,219 @@ class MediaServiceLive private (
       .mapError(err => ServiceInternalIssue(s"Search reindex failed : $err"))
   }
 
-  override def synchronizeStart(addedThoseLastDays: Option[Int]): IO[ServiceIssue, Unit] = {
-    val finishedLogic =
-      for {
-        currentDate <- Clock.currentDateTime
-        _           <- synchronizeStatusRef
-                         .update(status =>
-                           status.copy(
-                             running = false,
-                             lastUpdated = Some(currentDate),
-                             startedAt = None
-                           )
-                         )
-        _           <- synchronizeFiberRef
-                         .update(_ => None)
-      } yield ()
+  // -------------------------------------------------------------------------------------------------------------------
+  // Synchronization runs : at most one at a time, in a daemon fiber, followed through `synchronizeStatusRef`.
 
-    val searchFilter = new SearchFilter {
-      override def fileLastModifiedCriteria: FileLastModified => Boolean = fileLastModified => addedThoseLastDays.isEmpty || fileLastModified.offsetDateTime.isAfter(OffsetDateTime.now().minusDays(addedThoseLastDays.get))
-    }
-    val syncLogic    = {
-      for {
-        _              <- ZIO.logInfo("Synchronization started") @@ LogContext.kv("addedThoseLastDays" -> addedThoseLastDays.getOrElse("all"))
-        stores         <- storeList().runCollect
-        serviceConfig  <- ServiceConfig.config
-                            .mapError(err => ServiceInternalIssue(s"Unable to retrieve service configuration : $err"))
-        searchConfig    = serviceConfig.fileSystemSearch.toCoreConfig
-        remoteBreaker  <- Ref.make(Map.empty[String, Int]) // per run : a new sync tries the remote servers again
-        originalsStream = ZStream
-                            .from(stores)
-                            .mapZIO(store => ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store, searchConfig, Some(searchFilter))))
-                            .absolve
-                            .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
-                            .right
-        _              <- originalsStream
-                            // .tap(original => ZIO.logInfo(s"Checking ${original.mediaPath}"))
-                            .tap(_ => updateSynchronizeCheckedStatus())
-                            .mapZIO(original => ZIO.blocking(synchronizeOriginal(original)))
-                            .mapZIO(original => ZIO.blocking(synchronizeState(original)))
-                            .mapZIO(input => ZIO.blocking(synchronizeMedia(input)))
-                            .filter(_.state.mediaLastSynchronized.isEmpty)
-                            .tap(input => ZIO.logInfo("Synchronizing media") @@ LogContext.media(input.media))
-                            .mapZIO(input => ZIO.blocking(synchronizeProcessors(remoteBreaker)(input).uninterruptible))
-                            .mapZIO(input => ZIO.blocking(locationInduction(input).uninterruptible))
-                            .mapZIO(input => ZIO.blocking(placeResolution(input).uninterruptible))
-                            .grouped(50)
-                            .mapZIO(input => ZIO.blocking(synchronizeSearchEngine(input).uninterruptible))
-                            .mapZIO(input => ZIO.blocking(updateSynchronizeProcessedStatus(input).uninterruptible))
-                            .runDrain
-                            .mapError(err => ServiceInternalIssue(s"Unable to synchronize : $err"))
-                            .catchAll(e => ZIO.logError("Synchronization failed") @@ LogContext.kv("error" -> e))
-                            .tap(_ => ZIO.logInfo("Synchronization finished"))
-                            .tap(_ => finishedLogic) // TODO not sure it's the best place to do this
-      } yield ()
+  /** How many completed medias the remaining time estimation looks back at. */
+  private val synchronizeEtaWindow = 100
+
+  /** Medias are published to the search engine (and marked synchronized) by groups of that size. */
+  private val synchronizePublishGroupSize = 50
+
+  private def synchronizeStatusUpdate(f: SynchronizeStatus => SynchronizeStatus): UIO[Unit] =
+    Clock.currentDateTime.flatMap(now => synchronizeStatusRef.update(status => f(status).copy(lastUpdated = Some(now))))
+
+  private def synchronizeProblem(message: String, path: Option[String]): UIO[Unit] =
+    Clock.currentDateTime.flatMap(now =>
+      synchronizeStatusRef.update(status =>
+        status.copy(
+          lastUpdated = Some(now),
+          problemCount = status.problemCount + 1,
+          problems = (SynchronizeProblem(now, message, path) :: status.problems).take(SynchronizeStatus.maxProblems)
+        )
+      )
+    )
+
+  private def describeIssue(issue: Throwable): String =
+    (Option(issue.getMessage).toList ++ Option(issue.getCause).flatMap(cause => Option(cause.getMessage)).toList).distinct match {
+      case Nil      => issue.getClass.getSimpleName
+      case messages => messages.mkString(" : ")
     }
 
-    // TODO temporary quick & dirty implementation
+  private def storeLabel(store: Store): String = store.name.map(_.text).getOrElse(store.baseDirectory.path.toString)
 
-    val startLogic = for {
-      currentDate <- Clock.currentDateTime
-      _           <- synchronizeStatusRef
-                       .update(status =>
-                         status.copy(
-                           running = true,
-                           lastUpdated = Some(currentDate),
-                           startedAt = Some(currentDate),
-                           checkedCount = 0,
-                           processedCount = 0
-                         )
+  /** Every file found in the stores gets its original, state and media records, then the ones never
+    * synchronized are returned for the processing phase. A store that can't be walked (missing
+    * directory, unreadable sub-directory...) is reported and skipped, the others are still scanned.
+    */
+  private def synchronizeScan(stores: Chunk[Store], searchConfig: FileSystemSearchCoreConfig, searchFilter: SearchFilter, stop: Promise[Nothing, Unit]): IO[ServiceIssue, Chunk[OriginalId]] = {
+    def storeOriginals(store: Store, index: Int): ZStream[Any, Nothing, Either[OriginalIssue, Original]] = {
+      val label = storeLabel(store)
+      ZStream.fromZIO(synchronizeStatusUpdate(_.copy(storeIndex = index + 1, currentStore = Some(label)))).drain ++
+        ZStream
+          .acquireReleaseWith(ZIO.attemptBlocking(FileSystemSearch.originalsStreamFromSearchRoot(store, searchConfig, Some(searchFilter))).absolve)(javaStream =>
+            ZIO.succeed(javaStream.close())
+          )
+          .flatMap(javaStream => ZStream.fromJavaStream(javaStream))
+          .catchAll(err =>
+            ZStream.fromZIO(
+              (ZIO.logError("Store scan failed") @@ LogContext.kv("store" -> label, "error" -> describeIssue(err))) *>
+                synchronizeProblem(s"Store $label not fully scanned : ${describeIssue(err)}", Some(store.baseDirectory.path.toString))
+            ).drain
+          )
+    }
+
+    def scanned(found: Either[OriginalIssue, Original]): IO[ServiceIssue, Option[OriginalId]] = found match {
+      case Left(issue)     =>
+        (ZIO.logWarning("Unreadable file") @@ LogContext.kv("path" -> issue.path, "error" -> describeIssue(issue))) *>
+          synchronizeStatusUpdate(s => s.copy(checkedCount = s.checkedCount + 1, unreadableCount = s.unreadableCount + 1)) *>
+          synchronizeProblem(s"Unreadable file : ${describeIssue(issue)}", Some(issue.path.toString)).as(None)
+      case Right(original) =>
+        for {
+          _     <- synchronizeStatusUpdate(s => s.copy(checkedCount = s.checkedCount + 1))
+          input <- ZIO.blocking(synchronizeOriginal(original).flatMap(synchronizeState).flatMap(synchronizeMedia))
+          isNew  = input.state.mediaLastSynchronized.isEmpty
+          _     <- synchronizeStatusUpdate(s => s.copy(toProcessCount = s.toProcessCount + 1)).when(isNew)
+        } yield Option.when(isNew)(original.id)
+    }
+
+    ZStream
+      .fromIterable(stores.zipWithIndex)
+      .flatMap(storeOriginals)
+      .rechunk(1) // so a stop request is seen between two files
+      .haltWhen(stop)
+      .mapZIO(scanned)
+      .collectSome
+      .runCollect
+  }
+
+  /** Runs the processors on the medias found never synchronized, then publishes them to the search
+    * engine by groups, which also marks them synchronized. A stop request lets the media in progress
+    * finish and the group being built get published, a later run takes care of the others.
+    */
+  private def synchronizeProcess(toProcess: Chunk[OriginalId], stop: Promise[Nothing, Unit]): IO[ServiceIssue, Unit] = {
+    def load(originalId: OriginalId): IO[ServiceIssue, Option[(media: Media, state: State)]] =
+      for {
+        mayBeTuple <- mediaGet(originalId)
+        mayBeState <- stateGet(originalId)
+      } yield mayBeTuple.zip(mayBeState).map((tuple, state) => (media = tuple.media, state = state))
+
+    def processed(input: (media: Media, state: State)): UIO[Unit] =
+      for {
+        nowMillis <- Clock.currentTime(java.util.concurrent.TimeUnit.MILLISECONDS)
+        _         <- synchronizeCompletionsRef.update(completions => (completions :+ nowMillis).takeRight(synchronizeEtaWindow + 1))
+        _         <- synchronizeStatusUpdate(s => s.copy(processedCount = s.processedCount + 1))
+      } yield ()
+
+    for {
+      breaker   <- Ref.make(Map.empty[String, Int]) // per run : a new sync tries the remote servers again
+      now       <- Clock.currentDateTime
+      nowMillis <- Clock.currentTime(java.util.concurrent.TimeUnit.MILLISECONDS)
+      _         <- synchronizeCompletionsRef.set(Chunk.single(nowMillis))
+      _         <- synchronizeStatusUpdate(_.copy(phase = SynchronizePhase.Processing, processingStartedAt = Some(now), currentStore = None))
+      _         <- ZStream
+                     .fromChunk(toProcess)
+                     .rechunk(1)
+                     .haltWhen(stop)
+                     .mapZIO(originalId => ZIO.blocking(load(originalId)))
+                     .collectSome
+                     .tap(input =>
+                       (ZIO.logInfo("Synchronizing media") @@ LogContext.media(input.media)) *>
+                         synchronizeStatusUpdate(_.copy(currentMedia = Some(SynchronizeCurrentMedia(buildMediaAccessKey(input.media), input.media.original.mediaPath.path.toString))))
+                     )
+                     .mapZIO(input =>
+                       ZIO.blocking(
+                         synchronizeProcessors(breaker)(input)
+                           .flatMap(synchronizeEnrichment("Location induction")(locationInduction))
+                           .flatMap(synchronizeEnrichment("Place resolution")(placeResolution))
+                           .tap(processed)
+                           .uninterruptible
                        )
-      fiber       <- syncLogic
-                       .tapError(err => ZIO.logError("Couldn't synchronize") @@ LogContext.kv("error" -> err))
-                       .forkDaemon
-      _           <- synchronizeFiberRef
-                       .update {
-                         case None      => Some(fiber)
-                         case something => something // already running
-                       }
-    } yield ()
-
-    for { // TODO need refactoring - temporary unsatisfying implementation
-      current <- synchronizeStatusRef.get
-      _       <- startLogic.when(!current.running)
+                     )
+                     .grouped(synchronizePublishGroupSize)
+                     .mapZIO(group =>
+                       ZIO.blocking(synchronizeSearchEngine(group).uninterruptible) *>
+                         synchronizeStatusUpdate(s => s.copy(indexedCount = s.indexedCount + group.size))
+                     )
+                     .runDrain
     } yield ()
   }
 
-  override def synchronizeWait(): IO[ServiceIssue, Unit] = {
-    for { // TODO need refactoring - temporary unsatisfying implementation
-      fiber <- synchronizeFiberRef.get
-      _     <- ZIO.foreachDiscard(fiber)(f => f.join)
+  private def synchronizeRun(addedThoseLastDays: Option[Int], stop: Promise[Nothing, Unit]): IO[ServiceIssue, Unit] = {
+    val searchFilter = new SearchFilter {
+      private val since                                                  = OffsetDateTime.now().minusDays(addedThoseLastDays.getOrElse(0).toLong)
+      override def fileLastModifiedCriteria: FileLastModified => Boolean = fileLastModified => addedThoseLastDays.isEmpty || fileLastModified.offsetDateTime.isAfter(since)
+    }
+    for {
+      _             <- ZIO.logInfo("Synchronization started") @@ LogContext.kv("addedThoseLastDays" -> addedThoseLastDays.getOrElse("all"))
+      stores        <- storeList().runCollect
+      serviceConfig <- ServiceConfig.config.mapError(err => ServiceInternalIssue(s"Unable to retrieve service configuration : $err"))
+      _             <- synchronizeStatusUpdate(_.copy(storeCount = stores.size))
+      toProcess     <- synchronizeScan(stores, serviceConfig.fileSystemSearch.toCoreConfig, searchFilter, stop)
+      _             <- ZIO.logInfo("Synchronization scan done") @@ LogContext.kv("toProcess" -> toProcess.size)
+      stopped       <- stop.isDone
+      _             <- synchronizeProcess(toProcess, stop).unless(stopped)
+    } yield ()
+  }
+
+  private def synchronizeFinished(exit: Exit[ServiceIssue, Unit], stop: Promise[Nothing, Unit]): UIO[Unit] =
+    for {
+      now     <- Clock.currentDateTime
+      stopped <- stop.isDone
+      failure  = exit.causeOption.filterNot(_.isInterruptedOnly).map(cause => describeIssue(cause.squash))
+      outcome  = if (failure.isDefined) SynchronizeOutcome.Failed else if (stopped || exit.isInterrupted) SynchronizeOutcome.Stopped else SynchronizeOutcome.Completed
+      status  <- synchronizeStatusRef.get
+      run      = SynchronizeRun(
+                   addedThoseLastDays = status.addedThoseLastDays,
+                   startedAt = status.startedAt.getOrElse(now),
+                   finishedAt = now,
+                   outcome = outcome,
+                   checkedCount = status.checkedCount,
+                   toProcessCount = status.toProcessCount,
+                   processedCount = status.processedCount,
+                   problemCount = status.problemCount,
+                   failure = failure
+                 )
+      _       <- synchronizeStatusUpdate(_.copy(running = false, phase = SynchronizePhase.Idle, currentStore = None, currentMedia = None, lastRun = Some(run)))
+      _       <- failure match {
+                   case Some(message) => ZIO.logError("Synchronization failed") @@ LogContext.kv("error" -> message)
+                   case None          => ZIO.logInfo("Synchronization finished") @@ LogContext.kv("outcome" -> outcome, "processed" -> status.processedCount)
+                 }
     } yield ()
 
-  }
+  override def synchronizeStart(addedThoseLastDays: Option[Int]): IO[ServiceIssue, Unit] =
+    synchronizeRunRef.updateZIO {
+      case running @ Some(_) => ZIO.succeed(running) // already running
+      case None              =>
+        for {
+          now   <- Clock.currentDateTime
+          stop  <- Promise.make[Nothing, Unit]
+          _     <- synchronizeCompletionsRef.set(Chunk.empty)
+          _     <- synchronizeStatusRef.update(previous =>
+                     SynchronizeStatus.empty.copy(
+                       running = true,
+                       phase = SynchronizePhase.Scanning,
+                       addedThoseLastDays = addedThoseLastDays,
+                       startedAt = Some(now),
+                       lastUpdated = Some(now),
+                       lastRun = previous.lastRun
+                     )
+                   )
+          fiber <- synchronizeRun(addedThoseLastDays, stop)
+                     .onExit(exit => synchronizeFinished(exit, stop) *> synchronizeRunRef.set(None))
+                     .ignore
+                     .forkDaemon
+        } yield Some(SynchronizeRunHandle(fiber, stop))
+    }
 
-  override def synchronizeStop(): IO[ServiceIssue, Unit] = {
-    for { // TODO need refactoring - temporary unsatisfying implementation
-      fiber <- synchronizeFiberRef.get
-      _     <- ZIO.foreachDiscard(fiber)(f => f.interrupt)
-      _     <- ZIO.foreachDiscard(fiber)(f => f.join)
-    } yield ()
-  }
+  override def synchronizeWait(): IO[ServiceIssue, Unit] =
+    synchronizeRunRef.get.flatMap(ZIO.foreachDiscard(_)(_.fiber.join))
 
-  override def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus] = {
-    synchronizeStatusRef.get
-  }
+  override def synchronizeStop(): IO[ServiceIssue, Unit] =
+    synchronizeRunRef.get.flatMap(
+      ZIO.foreachDiscard(_)(handle =>
+        (ZIO.logInfo("Synchronization stop requested") *>
+          synchronizeStatusUpdate(s => if (s.running) s.copy(phase = SynchronizePhase.Stopping) else s) *>
+          handle.stop.succeed(())).unlessZIO(handle.stop.isDone)
+      )
+    )
+
+  override def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus] =
+    for {
+      status      <- synchronizeStatusRef.get
+      completions <- synchronizeCompletionsRef.get
+      nowMillis   <- Clock.currentTime(java.util.concurrent.TimeUnit.MILLISECONDS)
+    } yield status.copy(remainingSeconds = SynchronizeStatus.estimateRemainingSeconds(status, completions, nowMillis))
 
   override def reindexAll(): IO[ServiceIssue, Unit] = {
     // The positional index is not attached via withIndexFull because assigning a
@@ -2330,31 +2459,6 @@ class MediaServiceLive private (
       .logError("Reindex failed")
       .mapError(err => ServiceDatabaseIssue(s"Reindex failed: $err"))
       .unit
-  }
-
-  def updateSynchronizeProcessedStatus(input: Chunk[MediaBag]): UIO[Chunk[MediaBag]] = {
-    for {
-      currentDate <- Clock.currentDateTime
-      _           <- synchronizeStatusRef
-                       .update(status =>
-                         status.copy(
-                           lastUpdated = Some(currentDate),
-                           processedCount = status.processedCount + input.size
-                         )
-                       )
-    } yield input
-  }
-
-  def updateSynchronizeCheckedStatus(): UIO[Unit] = {
-    for {
-      currentDate <- Clock.currentDateTime
-      _           <- synchronizeStatusRef
-                       .update(status =>
-                         status.copy(
-                           checkedCount = status.checkedCount + 1
-                         )
-                       )
-    } yield ()
   }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -2705,7 +2809,8 @@ object MediaServiceLive {
     // memoized, so whoever needs places meanwhile waits on this same allocation.
     _                          <- processors.geoPlace.ignoreLogged.forkDaemon
     synchronizeStatusReference <- Ref.make(SynchronizeStatus.empty)
-    synchronizeFiberReference  <- Ref.make(Option.empty[Fiber[ServiceIssue, Unit]])
+    synchronizeCompletionsRef  <- Ref.make(Chunk.empty[Long])
+    synchronizeRunReference    <- Ref.Synchronized.make(Option.empty[SynchronizeRunHandle])
   } yield new MediaServiceLive(
     lmdb,
     search,
@@ -2713,7 +2818,8 @@ object MediaServiceLive {
     processors,
     // ------------------------
     synchronizeStatusReference,
-    synchronizeFiberReference
+    synchronizeCompletionsRef,
+    synchronizeRunReference
   )
 
   // -------------------------------------------------------------------------------------------------------------------

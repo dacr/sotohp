@@ -1580,8 +1580,22 @@ object ApiApp extends ZIOAppDefault {
       .serverLogic[ApiEnv] { user => _ =>
         MediaService
           .synchronizeStatus()
-          .map(_.transformInto[ApiSynchronizeStatus])
+          .map(ApiSynchronizeStatus.fromStatus)
           .mapError(err => ApiInternalError("Couldn't get synchronize status"))
+      }
+
+  val adminSynchronizeStopEndpoint =
+    secureAdminEndpoint
+      .name("Synchronize stop")
+      .summary("Ask the running synchronize operations to stop, once the media in progress is done")
+      .delete
+      .in("synchronize")
+      .errorOutVariantPrepend(statusForApiInternalError)
+      .serverLogic[ApiEnv] { user => _ =>
+        MediaService
+          .synchronizeStop()
+          .mapError(err => ApiInternalError("Couldn't stop synchronize"))
+          <* EventBusService.publish(ApiEvent("sync", None, ApiEventAction.updated))
       }
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -2335,6 +2349,7 @@ object ApiApp extends ZIOAppDefault {
     // -------------------------
     adminSynchronizeEndpoint,
     adminSynchronizeStatusEndpoint,
+    adminSynchronizeStopEndpoint,
     // -------------------------
     serviceStatusEndpoint,
     serviceInfoEndpoint,

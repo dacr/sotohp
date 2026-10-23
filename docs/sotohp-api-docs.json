@@ -4967,6 +4967,57 @@
             ]
           }
         ]
+      },
+      "delete" : {
+        "tags" : [
+          "Admin"
+        ],
+        "summary" : "Ask the running synchronize operations to stop, once the media in progress is done",
+        "operationId" : "Synchronize stop",
+        "responses" : {
+          "200" : {
+            "description" : ""
+          },
+          "401" : {
+            "description" : "Authentication failed",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Insufficient permissions",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorSecurity"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Something went wrong with the backend",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInternal"
+                }
+              }
+            }
+          }
+        },
+        "security" : [
+          {
+            
+          },
+          {
+            "httpAuth" : [
+            ]
+          }
+        ]
       }
     },
     "/api/system/status" : {
@@ -6162,23 +6213,75 @@
           }
         }
       },
-      "SynchronizeStatus" : {
-        "title" : "SynchronizeStatus",
+      "SynchronizeCurrentMedia" : {
+        "title" : "SynchronizeCurrentMedia",
         "type" : "object",
         "required" : [
-          "running",
-          "checkedCount",
-          "processedCount"
+          "accessKey",
+          "path"
         ],
         "properties" : {
-          "running" : {
-            "type" : "boolean"
+          "accessKey" : {
+            "type" : "string"
           },
-          "lastUpdated" : {
+          "path" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SynchronizeProblem" : {
+        "title" : "SynchronizeProblem",
+        "type" : "object",
+        "required" : [
+          "at",
+          "message"
+        ],
+        "properties" : {
+          "at" : {
             "type" : "string",
             "format" : "date-time"
           },
+          "message" : {
+            "type" : "string"
+          },
+          "path" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SynchronizeRun" : {
+        "title" : "SynchronizeRun",
+        "type" : "object",
+        "required" : [
+          "startedAt",
+          "finishedAt",
+          "outcome",
+          "checkedCount",
+          "toProcessCount",
+          "processedCount",
+          "problemCount"
+        ],
+        "properties" : {
+          "addedThoseLastDays" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "startedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "finishedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
           "checkedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "toProcessCount" : {
             "type" : "integer",
             "format" : "int64"
           },
@@ -6186,9 +6289,109 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "problemCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "failure" : {
+            "type" : "string"
+          }
+        }
+      },
+      "SynchronizeStatus" : {
+        "title" : "SynchronizeStatus",
+        "type" : "object",
+        "required" : [
+          "running",
+          "phase",
+          "storeCount",
+          "storeIndex",
+          "checkedCount",
+          "unreadableCount",
+          "toProcessCount",
+          "processedCount",
+          "indexedCount",
+          "problemCount"
+        ],
+        "properties" : {
+          "running" : {
+            "type" : "boolean"
+          },
+          "phase" : {
+            "type" : "string"
+          },
+          "addedThoseLastDays" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
           "startedAt" : {
             "type" : "string",
             "format" : "date-time"
+          },
+          "lastUpdated" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "storeCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "storeIndex" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "currentStore" : {
+            "type" : "string"
+          },
+          "checkedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "unreadableCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "toProcessCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "processedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "indexedCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "processingStartedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "remainingSeconds" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "currentMedia" : {
+            "$ref" : "#/components/schemas/SynchronizeCurrentMedia"
+          },
+          "unavailableSteps" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "problemCount" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "problems" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SynchronizeProblem"
+            }
+          },
+          "lastRun" : {
+            "$ref" : "#/components/schemas/SynchronizeRun"
           }
         }
       }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/keycloak-auth";
+import { SyncStatusPill } from "./SyncStatusPill";
 
 // next.config.ts sets trailingSlash: true, so usePathname() returns "/mosaic/" while TABS below
 // uses "/mosaic" (no slash) — an exact-match comparison against a raw pathname only ever succeeds
@@ -114,6 +115,7 @@ export function NavHeader() {
         <img src="/favicon.svg" alt="" width={20} height={20} />
         Sotohp
       </h1>
+      <SyncStatusPill />
       <nav className="tabs">
         {TABS.map((tab) => (
           <Link key={tab.href} href={tabMemory[tab.href] ?? tab.href} className={normalizePath(pathname) === tab.href ? "active" : ""} title={`${tab.label} (next tab: Alt+Page Down · previous tab: Alt+Page Up)`}>

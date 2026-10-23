@@ -358,9 +358,24 @@ trait MediaService {
   ): IO[ServiceIssue, Option[Store]]
 
   // -------------------------------------------------------------------------------------------------------------------
+  /** Starts a synchronization run in the background, unless one is already running : every store is
+    * scanned for new files (only those modified during the last `addedThoseLastDays` days when
+    * given), then the medias never synchronized go through the processors and get published to the
+    * search engine. Follow it with [[synchronizeStatus]].
+    */
   def synchronizeStart(addedThoseLastDays: Option[Int]): IO[ServiceIssue, Unit]
+
+  /** Waits for the end of the running synchronization, if any. */
   def synchronizeWait(): IO[ServiceIssue, Unit]
+
+  /** Asks the running synchronization, if any, to stop : the media in progress is finished and
+    * published first, so it may take a little while - use [[synchronizeWait]] to wait for it.
+    */
   def synchronizeStop(): IO[ServiceIssue, Unit]
+
+  /** Progress of the running synchronization (with an estimation of its remaining time while it
+    * processes medias), its recent problems, and the summary of the last finished one.
+    */
   def synchronizeStatus(): IO[ServiceIssue, SynchronizeStatus]
 
   /** Rebuilds the LMDB indexes (medias, originals, detectedFaces, positional). Does NOT touch the
