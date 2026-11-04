@@ -12,11 +12,20 @@ import type { Location, Media } from "../lib/api-client";
 
 export function MediaEditModal({ media, onClose, onSaved }: { media: Media; onClose: () => void; onSaved: (updated: Media) => void }) {
   const { api } = useAuth();
+  const originalTimestamp = media.shootDateTime || media.original.cameraShootDateTime;
   const [description, setDescription] = useState(media.description || "");
-  const [timestamp, setTimestamp] = useState(toLocalInputValue(media.shootDateTime || media.original.cameraShootDateTime));
+  const [timestamp, setTimestamp] = useState(toLocalInputValue(originalTimestamp, true));
   const [keywords, setKeywords] = useState<string[]>(media.keywords || []);
   const [location, setLocation] = useState<Location | null>(media.userDefinedLocation || null);
   const [showAddToPortfolio, setShowAddToPortfolio] = useState(false);
+  const [edited, setEdited] = useState(false);
+
+  // Other fields (keywords, description, location) don't carry second-level precision,
+  // so editing any of them snaps the displayed seconds to :00 rather than keeping stale EXIF seconds.
+  function markOtherEdit() {
+    setEdited(true);
+    setTimestamp((t) => (t.length >= 19 ? t.slice(0, 17) + "00" : t));
+  }
 
   async function handleSetBagCover() {
     if (!media.bag) {
@@ -53,7 +62,7 @@ export function MediaEditModal({ media, onClose, onSaved }: { media: Media; onCl
     const body = {
       starred: !!media.starred,
       description: description.trim() || undefined,
-      shootDateTime: fromLocalInputValue(timestamp),
+      shootDateTime: edited ? fromLocalInputValue(timestamp) : originalTimestamp || undefined,
       keywords,
       orientation: media.orientation,
       userDefinedLocation: location || undefined,
@@ -91,15 +100,45 @@ export function MediaEditModal({ media, onClose, onSaved }: { media: Media; onCl
         <div className="row">
           <div>
             <label>Description</label>
-            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} autoFocus />
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                markOtherEdit();
+              }}
+              autoFocus
+            />
             <label className="form-label">Shoot date/time</label>
-            <input type="datetime-local" value={timestamp} onChange={(e) => setTimestamp(e.target.value)} />
+            <input
+              type="datetime-local"
+              step="1"
+              value={timestamp}
+              onChange={(e) => {
+                setTimestamp(e.target.value);
+                setEdited(true);
+              }}
+            />
             <label className="form-label">Keywords</label>
-            <KeywordChips value={keywords} onChange={setKeywords} />
+            <KeywordChips
+              value={keywords}
+              onChange={(next) => {
+                setKeywords(next);
+                markOtherEdit();
+              }}
+            />
           </div>
           <div>
             <label>User-defined location</label>
-            <LocationPicker value={location} onChange={setLocation} mediaLocation={media.original.location} fallbackLocation={media.bag?.location} />
+            <LocationPicker
+              value={location}
+              onChange={(next) => {
+                setLocation(next);
+                markOtherEdit();
+              }}
+              mediaLocation={media.original.location}
+              fallbackLocation={media.bag?.location}
+            />
           </div>
         </div>
       </Modal>

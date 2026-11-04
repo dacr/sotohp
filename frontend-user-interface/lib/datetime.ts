@@ -4,12 +4,13 @@
  * `fromLocalInputValue` parses the input value back to an ISO string.
  */
 
-export function toLocalInputValue(iso: string | undefined | null): string {
+export function toLocalInputValue(iso: string | undefined | null, includeSeconds = false): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return includeSeconds ? `${base}:${pad(d.getSeconds())}` : base;
 }
 
 export function fromLocalInputValue(val: string | undefined | null): string | undefined {
