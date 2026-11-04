@@ -719,6 +719,7 @@ object ApiApp extends ZIOAppDefault {
       original         = mediaTuple.media.original
       previousRotation = mediaTuple.media.orientation.orElse(original.orientation).map(_.rotationDegrees).getOrElse(0)
       newRotation      = toUpdate.orientation.orElse(original.orientation).map(_.rotationDegrees).getOrElse(0)
+      newLocation      = toUpdate.userDefinedLocation.transformInto[Option[Location]]
       _               <- MediaService
                            .mediaUpdate(
                              accessKey,
@@ -728,12 +729,19 @@ object ApiApp extends ZIOAppDefault {
                                keywords = toUpdate.keywords,
                                orientation = toUpdate.orientation,
                                shootDateTime = toUpdate.shootDateTime,
-                               userDefinedLocation = toUpdate.userDefinedLocation.transformInto[Option[Location]],
+                               userDefinedLocation = newLocation,
                                userDefinedPlace = toUpdate.userDefinedPlace.transformInto[Option[Place]]
                              )
                            )
                            .logError("Couldn't update media")
                            .mapError(err => ApiInternalError("Couldn't update media"))
+      // Neighbours without GPS may have deduced their location from this media's previous one (a
+      // corrected wrong GPS fix typically) - and its own deducted place is now stale too.
+      _               <- MediaService
+                           .locationInductionRefreshAround(original.id)
+                           .logError("Couldn't refresh the deduced locations around the media")
+                           .mapError(err => ApiInternalError("Couldn't refresh the deduced locations around the media"))
+                           .when(newLocation != mediaTuple.media.userDefinedLocation)
       // The orientation just changed : existing face boxes/thumbnails were computed against the
       // previous rotation and are now misaligned - remap them (in place, no data loss) rather than
       // leaving stale faces behind.

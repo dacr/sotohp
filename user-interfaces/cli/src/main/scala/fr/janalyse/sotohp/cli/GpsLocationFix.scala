@@ -192,9 +192,11 @@ object GpsLocationFix extends CommonsCLI {
   private def applyFix(outlier: Outlier) = {
     val bad     = outlier.bad
     val updated = bad.media.copy(userDefinedLocation = Some(outlier.replacement.location))
+    // then the neighbours without GPS that deduced their location from the wrong reading
     MediaService
       .mediaUpdate(bad.key, updated)
       .uninterruptible
+      .zipRight(MediaService.locationInductionRefreshAround(bad.media.original.id))
       .as(())
   }
 

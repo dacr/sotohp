@@ -166,6 +166,28 @@ trait MediaService {
     */
   def placeRecompute(originalId: OriginalId): IO[ServiceIssue, Option[Place]]
 
+  /** The location the induction would deduce right now for this media from its time neighbours with
+    * GPS (their user-corrected position when there is one) - pure read, nothing is stored. `None` when
+    * the media has its own GPS reading or when no neighbour qualifies.
+    */
+  def locationInduce(originalId: OriginalId): IO[ServiceIssue, Option[Location]]
+
+  /** Recomputes and stores `deductedLocation` (and the deducted place when the effective location
+    * moved), where the synchronization only fills a missing one. Yields true when the media changed.
+    */
+  def locationInductionRefresh(originalId: OriginalId): IO[ServiceIssue, Boolean]
+
+  /** The medias whose deducted location may come from this one - empty unless it has GPS - with the
+    * location induced for them now. Pure read.
+    */
+  def locationInductionAround(originalId: OriginalId): IO[ServiceIssue, Chunk[(media: MediaTuple, induced: Option[Location])]]
+
+  /** To call once the user-defined location of a media changed : refreshes its deducted place, and -
+    * for a media with GPS, whose correction is what gets propagated - the deductions of every neighbour
+    * that may have been induced from it. Yields the number of medias changed.
+    */
+  def locationInductionRefreshAround(originalId: OriginalId): IO[ServiceIssue, Int]
+
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): IO[ServiceIssue, Unit]
 
   // -------------------------------------------------------------------------------------------------------------------
@@ -487,6 +509,10 @@ object MediaService {
   def mediaCaptionGet(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[String]]                         = ZIO.serviceWithZIO(_.mediaCaptionGet(originalId))
   def placeResolve(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                             = ZIO.serviceWithZIO(_.placeResolve(originalId))
   def placeRecompute(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Place]]                           = ZIO.serviceWithZIO(_.placeRecompute(originalId))
+  def locationInduce(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Option[Location]]                        = ZIO.serviceWithZIO(_.locationInduce(originalId))
+  def locationInductionRefresh(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Boolean]                       = ZIO.serviceWithZIO(_.locationInductionRefresh(originalId))
+  def locationInductionAround(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Chunk[(media: MediaTuple, induced: Option[Location])]] = ZIO.serviceWithZIO(_.locationInductionAround(originalId))
+  def locationInductionRefreshAround(originalId: OriginalId): ZIO[MediaService, ServiceIssue, Int]                     = ZIO.serviceWithZIO(_.locationInductionRefreshAround(originalId))
 
   def originalFacesUpdate(originalId: OriginalId, facesIds: List[FaceId]): ZIO[MediaService, ServiceIssue, Unit] = ZIO.serviceWithZIO(_.originalFacesUpdate(originalId, facesIds))
 

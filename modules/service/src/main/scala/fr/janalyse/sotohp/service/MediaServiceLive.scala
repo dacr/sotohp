@@ -2024,51 +2024,184 @@ class MediaServiceLive private (
       case Some(start) => ZStream.paginateZIO(start)(a => next(a).map(n => (a, n)))
     }
 
-  // may need several executions to fully be able to induce locations
-  // TODO of course too slow (but simpler than keeping a buffer window : for all 114795 photos, 17m30s with induction 10m41s without )
-  private def locationInduction(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
-    if (input.media.original.hasLocation || input.media.deductedLocation.exists(_.isValid)) ZIO.succeed(input)
-    else {
-      def acceptable(current: MediaTuple): Boolean = {
-        val sameUser       = current.media.original.store.ownerId.asULID == input.media.original.store.ownerId
-        val elapsedSeconds = Math.abs(current.media.timestamp.toEpochSecond - input.media.timestamp.toEpochSecond)
-        (elapsedSeconds < 3 * 3600) && sameUser
+  private val locationInductionWindowSeconds = 3 * 3600
+
+  /** Only media with a GPS reading are deduction sources (a user-defined location alone is not - on
+    * scans, the date is often a placeholder shared by unrelated photos), but a user correction of that
+    * reading (a wrong fix) is what gets propagated. Deductions are never chained.
+    */
+  private def sourceLocation(media: Media): Option[Location] =
+    if (!media.original.hasLocation) None
+    else media.userDefinedLocation.filter(_.isValid).orElse(media.original.location)
+
+  private def inductionNeighbour(center: Media)(current: Media): Boolean = {
+    val sameUser       = current.original.store.ownerId == center.original.store.ownerId
+    val elapsedSeconds = Math.abs(current.timestamp.toEpochSecond - center.timestamp.toEpochSecond)
+    (elapsedSeconds < locationInductionWindowSeconds) && sameUser
+  }
+
+  /** Walks the timeline index from the media, by the index's own keys : a media whose timestamp moved
+    * since it was last written (a bag or date edit) is still indexed at its former one, and resuming from
+    * its recomputed key would silently skip the medias in between.
+    */
+  private def timelineWalk(media: Media, backward: Boolean): ZStream[Any, ServiceIssue, MediaTuple] =
+    ZStream
+      .unfoldZIO(buildMediaAccessKey(media).toNative) { key =>
+        (if (backward) collections.originalIdByTimestamp.previous(key) else collections.originalIdByTimestamp.next(key))
+          .mapError(err => ServiceDatabaseIssue(s"Couldn't walk the timeline index: $err"))
+          .flatMap(ZIO.foreach(_)((indexKey, originalId) => mediaGet(originalId).map(found => (found, indexKey))))
       }
+      .collectSome
 
-      def prevCandidates =
-        zstreamGenerator(mediaPrevious(buildMediaAccessKey(input.media)))(prev => mediaPrevious(buildMediaAccessKey(prev.media)))
-          .takeWhile(acceptable)
-          .filter(_.media.original.hasLocation)
+  private def previousMedias(media: Media): ZStream[Any, ServiceIssue, MediaTuple] = timelineWalk(media, backward = true)
 
-      def nextCandidates =
-        zstreamGenerator(mediaNext(buildMediaAccessKey(input.media)))(next => mediaNext(buildMediaAccessKey(next.media)))
-          .takeWhile(acceptable)
-          .filter(_.media.original.hasLocation)
+  private def nextMedias(media: Media): ZStream[Any, ServiceIssue, MediaTuple] = timelineWalk(media, backward = false)
+
+  private type InductionSource = (media: Media, location: Location)
+
+  /** Given the closest sources before and after the media (each within the induction window) */
+  private def inductionFrom(media: Media, firstPrev: Option[InductionSource], firstNext: Option[InductionSource]): Option[Location] = {
+    val validDistance             = firstPrev
+      .flatMap(fp => firstNext.map(fn => fp.location.distanceTo(fn.location)))
+      .exists(_ < 750) // meters // TODO add config parameter
+    val inductedLocationInMiddle  = if (validDistance) firstPrev.map(_.location) else None
+    val inductedLocationFirstShot =
+      if (
+        firstPrev.isEmpty
+        && firstNext.exists(fn => fn.media.timestamp.toEpochSecond - media.timestamp.toEpochSecond < 30 * 60) // 30 minutes // TODO add config parameter
+      )
+        firstNext.map(_.location)
+      else None
+    inductedLocationFirstShot.orElse(inductedLocationInMiddle)
+  }
+
+  // TODO of course too slow (but simpler than keeping a buffer window : for all 114795 photos, 17m30s with induction 10m41s without )
+  private def induceLocation(media: Media): IO[ServiceIssue, Option[Location]] = {
+    if (media.original.hasLocation) ZIO.none
+    else {
+      def firstLocated(neighbours: ZStream[Any, ServiceIssue, MediaTuple]) =
+        neighbours
+          .map(_.media)
+          .takeWhile(inductionNeighbour(media))
+          .map(neighbour => sourceLocation(neighbour).map(location => (media = neighbour, location = location)))
+          .collectSome
+          .runHead
 
       for {
-        firstPrev    <- prevCandidates.runHead
-        firstNext    <- nextCandidates.runHead
-        validDistance = firstPrev
-                          .flatMap(_.media.original.location)
-                          .flatMap(fp => firstNext.flatMap(_.media.original.location).map(fn => fp.distanceTo(fn)))
-                          .exists(_ < 750) // meters // TODO add config parameter
-        inductedLocationInMiddle  = if (validDistance)
-                                      firstPrev.flatMap(_.media.original.location)
-                                    else None
-        inductedLocationFirstShot = if (
-                                      firstPrev.isEmpty
-                                      && firstNext.isDefined
-                                      && firstNext.exists(fn => fn.media.timestamp.toEpochSecond - input.media.timestamp.toEpochSecond < 30 * 60) // 30 minutes // TODO add config parameter
-                                    )
-                                      firstNext.flatMap(_.media.original.location)
-                                    else None
-        inductedLocation          = inductedLocationFirstShot.orElse(inductedLocationInMiddle)
-        updatedMedia              = input.media.copy(deductedLocation = inductedLocation)
-        // also clears a legacy (0, 0) deduction when nothing better can be induced
-        _                        <- mediaUpdate(input.media.original.id, updatedMedia).when(inductedLocation != input.media.deductedLocation)
-      } yield (updatedMedia, input.state)
+        firstPrev <- firstLocated(previousMedias(media))
+        firstNext <- firstLocated(nextMedias(media))
+      } yield inductionFrom(media, firstPrev, firstNext)
     }
   }
+
+  /** `induceLocation` for the media at `index` of a timeline-ordered window covering its whole induction
+    * window - no database access.
+    */
+  private def induceLocationIn(window: IndexedSeq[Media], index: Int): Option[Location] = {
+    val media = window(index)
+    if (media.original.hasLocation) None
+    else {
+      def firstLocated(indexes: Range): Option[InductionSource] =
+        indexes.iterator
+          .map(window)
+          .takeWhile(inductionNeighbour(media))
+          .flatMap(neighbour => sourceLocation(neighbour).map(location => (media = neighbour, location = location)))
+          .nextOption()
+      inductionFrom(media, firstLocated(index - 1 to 0 by -1), firstLocated(index + 1 until window.size))
+    }
+  }
+
+  // may need several executions to fully be able to induce locations
+  private def locationInduction(input: (media: Media, state: State)): IO[ServiceIssue, (media: Media, state: State)] = {
+    if (input.media.original.hasLocation || input.media.deductedLocation.exists(_.isValid)) ZIO.succeed(input)
+    else
+      for {
+        inductedLocation <- induceLocation(input.media)
+        updatedMedia      = input.media.copy(deductedLocation = inductedLocation)
+        // also clears a legacy (0, 0) deduction when nothing better can be induced
+        _                <- mediaUpdate(input.media.original.id, updatedMedia).when(inductedLocation != input.media.deductedLocation)
+      } yield (updatedMedia, input.state)
+  }
+
+  override def locationInduce(originalId: OriginalId): IO[ServiceIssue, Option[Location]] =
+    mediaGet(originalId)
+      .someOrFail(ServiceDatabaseIssue(s"Couldn't find media : $originalId"))
+      .flatMap(tuple => induceLocation(tuple.media))
+
+  /** Stores the given deduction, and re-resolves the deducted place when the effective location moved
+    * (or always with `forcePlace`, for a media whose own location was just changed). Goes through the
+    * key-based `mediaUpdate` so the search document follows.
+    */
+  private def storeDeductions(tuple: MediaTuple, inductedLocation: Option[Location], forcePlace: Boolean): IO[ServiceIssue, Boolean] = {
+    val media        = tuple.media
+    val withLocation = media.copy(deductedLocation = inductedLocation)
+    val resolvePlace = media.userDefinedPlace.isEmpty && (forcePlace || withLocation.location != media.location)
+    val logic        = for {
+      deductedPlace <- if (!resolvePlace) ZIO.succeed(media.deductedPlace)
+                       else
+                         ZIO
+                           .foreach(withLocation.location)(loc =>
+                             processors.geoPlace
+                               .flatMap(_.resolve(loc.latitude.doubleValue, loc.longitude.doubleValue))
+                               .mapError(err => ServiceInternalIssue(s"Unable to reverse-geocode : $err"))
+                           )
+                           .map(_.flatten)
+      updatedMedia   = withLocation.copy(deductedPlace = deductedPlace)
+      changed        = updatedMedia != media
+      _             <- mediaUpdate(tuple.key, updatedMedia).when(changed)
+    } yield changed
+    logic.uninterruptible
+  }
+
+  override def locationInductionRefresh(originalId: OriginalId): IO[ServiceIssue, Boolean] =
+    for {
+      tuple   <- mediaGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find media : $originalId"))
+      induced <- induceLocation(tuple.media)
+      changed <- storeDeductions(tuple, induced, forcePlace = false)
+    } yield changed
+
+  /** The center and every media whose induction window overlaps its own, in timeline order - loaded
+    * once, so that a whole run of photos without GPS is induced without walking the timeline again for
+    * each of them.
+    */
+  private def inductionWindow(center: MediaTuple): IO[ServiceIssue, (window: Chunk[MediaTuple], centerIndex: Int)] = {
+    def around(neighbours: ZStream[Any, ServiceIssue, MediaTuple]) =
+      neighbours
+        .takeWhile(tuple => Math.abs(tuple.media.timestamp.toEpochSecond - center.media.timestamp.toEpochSecond) < 2 * locationInductionWindowSeconds)
+        .runCollect
+    for {
+      before <- around(previousMedias(center.media))
+      after  <- around(nextMedias(center.media))
+    } yield (window = (before.reverse :+ center) ++ after, centerIndex = before.size)
+  }
+
+  /** A source's location is only ever used by the medias without GPS lying between it and the next
+    * source, on each side, within the induction window - with the location induced for them now. None
+    * for a media which is not a source.
+    */
+  private def inductionDependents(center: MediaTuple): IO[ServiceIssue, Chunk[(media: MediaTuple, induced: Option[Location])]] =
+    if (!center.media.original.hasLocation) ZIO.succeed(Chunk.empty)
+    else
+      inductionWindow(center).map { (window, centerIndex) =>
+        val medias = window.map(_.media)
+        def segment(indexes: Range) =
+          indexes.takeWhile(i => inductionNeighbour(center.media)(medias(i)) && !medias(i).original.hasLocation)
+        val dependents = segment(centerIndex - 1 to 0 by -1).reverse ++ segment(centerIndex + 1 until medias.size)
+        Chunk.from(dependents).map(i => (media = window(i), induced = induceLocationIn(medias, i)))
+      }
+
+  override def locationInductionAround(originalId: OriginalId): IO[ServiceIssue, Chunk[(media: MediaTuple, induced: Option[Location])]] =
+    mediaGet(originalId)
+      .someOrFail(ServiceDatabaseIssue(s"Couldn't find media : $originalId"))
+      .flatMap(inductionDependents)
+
+  override def locationInductionRefreshAround(originalId: OriginalId): IO[ServiceIssue, Int] =
+    for {
+      center     <- mediaGet(originalId).someOrFail(ServiceDatabaseIssue(s"Couldn't find media : $originalId"))
+      dependents <- inductionDependents(center)
+      changed    <- storeDeductions(center, center.media.deductedLocation, forcePlace = true) // only its place follows its own correction
+      refreshed  <- ZIO.foreach(dependents)(dependent => storeDeductions(dependent.media, dependent.induced, forcePlace = false))
+    } yield (changed +: refreshed).count(identity)
 
   /** Fills `deductedPlace` from the media's effective location (offline reverse-geocoding), once,
     * right after `locationInduction` so an induced location is taken into account. Never overwrites
